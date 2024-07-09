@@ -29,7 +29,7 @@ func newStorageSyncInconsistentImpl() scenario.Scenario {
 	sc := &storageSyncInconsistentImpl{
 		Scenario: *NewScenario(
 			"storage-sync-inconsistent",
-			NewTestClient().WithScenario(SimpleKeyValueScenarioRepeated),
+			NewTestClient().WithScenario(SimpleRepeatedScenario),
 		),
 	}
 	sc.Scenario.debugNoRandomInitialEpoch = true // I give up.

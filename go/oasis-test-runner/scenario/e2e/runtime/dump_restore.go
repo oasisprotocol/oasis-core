@@ -54,7 +54,7 @@ func newDumpRestoreImpl(
 	sc := &dumpRestoreImpl{
 		Scenario: *NewScenario(
 			name,
-			NewTestClient().WithScenario(InsertKeyValueScenario),
+			NewTestClient().WithScenario(InsertScenario),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -188,6 +188,6 @@ func (sc *dumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveScenario)
 	return sc.Scenario.Run(ctx, childEnv)
 }

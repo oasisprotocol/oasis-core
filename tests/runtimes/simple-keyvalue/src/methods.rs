@@ -2,7 +2,7 @@
 use std::{collections::BTreeMap, convert::TryInto};
 
 use super::{crypto::EncryptionContext, types::*, Context, TxContext};
-use oasis_core_keymanager::crypto::KeyPairId;
+use oasis_core_keymanager::crypto::{KeyPairId, StateKey};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -199,7 +199,7 @@ impl Methods {
     }
 
     /// Insert a key/value pair.
-    pub fn insert(ctx: &mut TxContext, args: KeyValue) -> Result<Option<String>, String> {
+    pub fn insert(ctx: &mut TxContext, args: Insert) -> Result<Option<String>, String> {
         if args.value.as_bytes().len() > 128 {
             return Err("Value too big to be inserted.".to_string());
         }
@@ -224,7 +224,7 @@ impl Methods {
     }
 
     /// Retrieve a key/value pair.
-    pub fn get(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn get(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -239,7 +239,7 @@ impl Methods {
     }
 
     /// Remove a key/value pair.
-    pub fn remove(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn remove(ctx: &mut TxContext, args: Remove) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -253,41 +253,57 @@ impl Methods {
             .map_err(|err| err.to_string())
     }
 
-    /// Helper for doing encrypted MKVS operations.
-    fn get_encryption_context(
+    /// Fetches state key derived from a master secret.
+    fn state_key_from_secrets(
         ctx: &mut TxContext,
         key: &[u8],
         generation: u64,
-    ) -> Result<EncryptionContext, String> {
+    ) -> Result<StateKey, String> {
         // Derive key pair ID based on key.
         let key_pair_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
         // Fetch encryption keys.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_or_create_keys(key_pair_id, generation);
-        let key = tokio::runtime::Handle::current()
-            .block_on(result)
-            .map_err(|err| err.to_string())?;
+        let key = block_on(future).map_err(|err| err.to_string())?;
 
-        Ok(EncryptionContext::new(key.state_key.as_ref()))
+        Ok(key.state_key)
     }
 
-    /// (encrypted) Insert a key/value pair.
-    pub fn enc_insert(ctx: &mut TxContext, args: KeyValue) -> Result<Option<String>, String> {
-        if ctx.is_check_only() {
-            return Ok(None);
-        }
+    /// Fetches state key derived from a CHURP secret.
+    fn state_key_from_churp(
+        ctx: &mut TxContext,
+        key: &[u8],
+        churp_id: u8,
+    ) -> Result<StateKey, String> {
+        // Derive key ID based on key.
+        let key_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
+
+        // Fetch encryption key.
+        let future = ctx.parent.key_manager.churp_state_key(churp_id, key_id);
+        let state_key = block_on(future).map_err(|err| err.to_string())?;
+
+        Ok(state_key)
+    }
+
+    /// Encrypts a key/value pair and inserts it into the runtime state.
+    fn enc_insert(
+        ctx: &mut TxContext,
+        key: String,
+        value: String,
+        state_key: StateKey,
+    ) -> Result<Option<String>, String> {
         // NOTE: This is only for example purposes, the correct way would be
         //       to also generate a (deterministic) nonce.
         let nonce = [0u8; NONCE_SIZE];
 
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
+        let enc_ctx = EncryptionContext::new(state_key.as_ref());
         let existing = enc_ctx.insert(
             ctx.parent.core.runtime_state,
-            args.key.as_bytes(),
-            args.value.as_bytes(),
+            key.as_bytes(),
+            value.as_bytes(),
             &nonce,
         );
         existing
@@ -296,30 +312,110 @@ impl Methods {
             .map_err(|err| err.to_string())
     }
 
-    /// (encrypted) Retrieve a key/value pair.
-    pub fn enc_get(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        if ctx.is_check_only() {
-            return Ok(None);
-        }
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
-        let existing = enc_ctx.get(ctx.parent.core.runtime_state, args.key.as_bytes());
+    /// Retrieves and decrypts a key/value from the runtime state.
+    fn enc_get(
+        ctx: &mut TxContext,
+        key: String,
+        state_key: StateKey,
+    ) -> Result<Option<String>, String> {
+        let enc_ctx = EncryptionContext::new(state_key.as_ref());
+        let existing = enc_ctx.get(ctx.parent.core.runtime_state, key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
             .map_err(|err| err.to_string())
     }
 
-    /// (encrypted) Remove a key/value pair.
-    pub fn enc_remove(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        if ctx.is_check_only() {
-            return Ok(None);
-        }
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
-        let existing = enc_ctx.remove(ctx.parent.core.runtime_state, args.key.as_bytes());
+    /// Removes encrypted key/value from the runtime state.
+    fn enc_remove(
+        ctx: &mut TxContext,
+        key: String,
+        state_key: StateKey,
+    ) -> Result<Option<String>, String> {
+        let enc_ctx = EncryptionContext::new(state_key.as_ref());
+        let existing = enc_ctx.remove(ctx.parent.core.runtime_state, key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
             .map_err(|err| err.to_string())
+    }
+
+    /// Encrypts a key/value pair and inserts it into the runtime state
+    /// using master secrets.
+    pub fn enc_insert_using_secrets(
+        ctx: &mut TxContext,
+        args: Insert,
+    ) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_secrets(ctx, args.key.as_bytes(), args.generation)?;
+        Self::enc_insert(ctx, args.key, args.value, state_key)
+    }
+
+    /// Retrieves and decrypts a key/value pair from the runtime state
+    /// using master secrets.
+    pub fn enc_get_using_secrets(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_secrets(ctx, args.key.as_bytes(), args.generation)?;
+        Self::enc_get(ctx, args.key, state_key)
+    }
+
+    /// Removes encrypted key/value pair from the runtime state
+    /// using master secrets.
+    pub fn enc_remove_using_secrets(
+        ctx: &mut TxContext,
+        args: Remove,
+    ) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_secrets(ctx, args.key.as_bytes(), args.generation)?;
+        Self::enc_remove(ctx, args.key, state_key)
+    }
+
+    /// Encrypts a key/value pair and inserts it into the runtime state
+    /// using CHURP secrets.
+    pub fn enc_insert_using_churp(
+        ctx: &mut TxContext,
+        args: Insert,
+    ) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_churp(ctx, args.key.as_bytes(), args.churp_id)?;
+        Self::enc_insert(ctx, args.key, args.value, state_key)
+    }
+
+    /// Retrieves and decrypts a key/value from the runtime state
+    /// using CHURP secrets.
+    pub fn enc_get_using_churp(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_churp(ctx, args.key.as_bytes(), args.churp_id)?;
+        Self::enc_get(ctx, args.key, state_key)
+    }
+
+    /// Removes encrypted key/value from the runtime state
+    /// using CHURP secret.
+    pub fn enc_remove_using_churp(
+        ctx: &mut TxContext,
+        args: Remove,
+    ) -> Result<Option<String>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        let state_key = Self::state_key_from_churp(ctx, args.key.as_bytes(), args.churp_id)?;
+        Self::enc_remove(ctx, args.key, state_key)
     }
 
     /// ElGamal encryption.
@@ -333,13 +429,11 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch public key.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_public_ephemeral_key(key_pair_id, args.epoch);
-        let long_term_pk = tokio::runtime::Handle::current()
-            .block_on(result)
-            .map_err(|err| err.to_string())?;
+        let long_term_pk = block_on(future).map_err(|err| err.to_string())?;
 
         // Generate ephemeral key. Not secure, but good enough for testing purposes.
         let ephemeral_sk = x25519::PrivateKey::from(hash);
@@ -373,12 +467,11 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch private key.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_or_create_ephemeral_keys(key_pair_id, args.epoch);
-        let long_term_sk = tokio::runtime::Handle::current()
-            .block_on(result)
+        let long_term_sk = block_on(future)
             .map_err(|err| format!("private ephemeral key not available: {err}"))?;
 
         // Decode ephemeral_pk || ciphertext.

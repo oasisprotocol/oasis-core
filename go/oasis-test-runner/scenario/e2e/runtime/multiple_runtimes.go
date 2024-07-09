@@ -163,7 +163,7 @@ func (sc *multipleRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
 				"runtime_id", rt.ID,
 			)
 
-			if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), false, 0); err != nil {
+			if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), 0, 0, plaintextTxKind); err != nil {
 				return err
 			}
 		}

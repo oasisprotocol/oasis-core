@@ -12,10 +12,6 @@ use group::{Group, GroupEncoding};
 use rand::rngs::OsRng;
 use sp800_185::KMac;
 
-#[cfg(target_env = "sgx")]
-use oasis_core_runtime::{
-    common::sgx::EnclaveIdentity, consensus::keymanager::churp::SignedPolicySGX,
-};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -23,10 +19,11 @@ use oasis_core_runtime::{
             signature::{PublicKey, Signer},
         },
         namespace::Namespace,
+        sgx::EnclaveIdentity,
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::churp::{Status, SuiteId},
+        keymanager::churp::{SignedPolicySGX, Status, SuiteId},
         verifier::Verifier,
     },
     enclave_rpc::Context as RpcContext,
@@ -37,7 +34,8 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, Shareholder, ShareholderId, VerifiableSecretShare},
+    churp::{encode_shareholder, Dealer, Handoff, HandoffKind, Shareholder, VerifiableSecretShare},
+    kdc::KeySharer,
     suites::{p384, Suite},
     vss::{
         matrix::VerificationMatrix,
@@ -52,9 +50,10 @@ use crate::{
 };
 
 use super::{
-    storage::Storage, ApplicationRequest, ConfirmationRequest, EncodedVerifiableSecretShare, Error,
-    FetchRequest, FetchResponse, HandoffRequest, QueryRequest, SignedApplicationRequest,
-    SignedConfirmationRequest, State as ChurpState, VerifiedPolicies,
+    storage::Storage, ApplicationRequest, ConfirmationRequest, EncodedEncryptedPoint,
+    EncodedVerifiableSecretShare, Error, FetchRequest, FetchResponse, HandoffRequest,
+    KeyShareRequest, QueryRequest, SignedApplicationRequest, SignedConfirmationRequest,
+    State as ChurpState, VerifiedPolicies,
 };
 
 /// A handoff interval that disables handoffs.
@@ -71,6 +70,35 @@ const CONFIRMATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
 /// Custom KMAC domain separation for checksums of verification matrices.
 const CHECKSUM_VERIFICATION_MATRIX_CUSTOM: &[u8] =
     b"oasis-core/keymanager/churp: verification matrix";
+
+/// Domain separation tag for encoding shareholder identifiers.
+const ENCODE_SHAREHOLDER_CONTEXT: &[u8] = b"oasis-core/keymanager/churp: encode shareholder";
+
+/// Domain separation tag for encoding key identifiers for key share derivation
+/// approved by an SGX policy.
+///
+/// SGX policies specify which enclave identities are authorized to access
+/// runtime key shares.
+const ENCODE_SGX_POLICY_KEY_ID_CONTEXT: &[u8] =
+    b"oasis-core/keymanager/churp: encode SGX policy key ID";
+
+/// Domain separation tag for encoding key identifiers for key share derivation
+/// approved by a custom policy.
+///
+/// Custom policies allow access to key shares only for clients that submit
+/// a proof, which can be validated against the policy. The hash of the policy
+/// is part of the key identifier and is integral to the key derivation process.
+#[allow(dead_code)]
+const ENCODE_CUSTOM_POLICY_KEY_ID_CONTEXT: &[u8] =
+    b"oasis-core/keymanager/churp: encode custom policy key ID";
+
+/// The runtime separator used to add additional domain separation based
+/// on the runtime ID.
+const RUNTIME_CONTEXT_SEPARATOR: &[u8] = b" for runtime ";
+
+/// The churp separator used to add additional domain separation based
+/// on the churp ID.
+const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 
 /// Data associated with a handoff.
 struct HandoffData {
@@ -105,7 +133,6 @@ pub struct Churp {
     /// Verified churp state.
     churp_state: ChurpState,
     /// Verified registry state.
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     registry_state: RegistryState,
 
     /// Shareholders with secret shares for the last successfully completed
@@ -117,7 +144,6 @@ pub struct Churp {
     handoffs: Mutex<HashMap<u8, HandoffData>>,
 
     /// Cached verified policies.
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     policies: VerifiedPolicies,
 }
 
@@ -222,7 +248,7 @@ impl Churp {
     /// needs to be kept secret and generated only for authorized nodes.
     pub fn share_reduction_switch_point(
         &self,
-        _ctx: &RpcContext,
+        ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
@@ -236,11 +262,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(ctx, node_id)?;
+        self.verify_km_enclave(ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -257,7 +281,8 @@ impl Churp {
     where
         S: Suite,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
         let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
@@ -301,11 +326,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(_ctx, node_id)?;
+        self.verify_km_enclave(_ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -322,7 +345,8 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
         let point = shareholder.switch_point(&x);
@@ -364,11 +388,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(_ctx, node_id)?;
+        self.verify_km_enclave(_ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -385,7 +407,8 @@ impl Churp {
     where
         S: Suite,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let kind = Self::handoff_kind(status);
         let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
         let share = dealer.make_share(x, kind);
@@ -396,6 +419,42 @@ impl Churp {
             share,
             verification_matrix,
         })
+    }
+
+    /// Returns the key share for the given key ID generated by the key
+    /// derivation center.
+    ///
+    /// Key share:
+    /// ```text
+    ///     KS_i = s_i * H(key_id)
+    /// ```
+    ///
+    /// WARNING: This method must be called over a secure channel as the key
+    /// share needs to be kept secret and generated only for authorized nodes.
+    pub fn sgx_policy_key_share(
+        &self,
+        ctx: &RpcContext,
+        req: &KeyShareRequest,
+    ) -> Result<EncodedEncryptedPoint> {
+        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
+
+        match status.suite_id {
+            SuiteId::NistP384Sha3_384 => {
+                self.make_key_share::<p384::Sha3_384>(&req.key_id.0, &status)
+            }
+        }
+    }
+
+    fn make_key_share<S>(&self, key_id: &[u8], status: &Status) -> Result<EncodedEncryptedPoint>
+    where
+        S: Suite,
+    {
+        let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
+        let dst = self.domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, status.id);
+        let point = shareholder.make_key_share::<S>(key_id, &dst)?;
+        Ok((&point).into())
     }
 
     /// Prepare CHURP for participation in the given handoff of the protocol.
@@ -534,23 +593,23 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_share_reduction_switch_point(&id)? {
+        if !handoff.needs_share_reduction_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let me = id.encode::<S>()?;
             let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
-            let point = shareholder.switch_point(&me);
+            let point = shareholder.switch_point(&x);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
@@ -558,7 +617,7 @@ impl Churp {
                 handoff.set_verification_matrix(vm)?;
             }
 
-            return handoff.add_share_reduction_switch_point(id, point);
+            return handoff.add_share_reduction_switch_point(x, point);
         }
 
         // Fetch from the remote node.
@@ -566,7 +625,7 @@ impl Churp {
 
         if handoff.needs_verification_matrix()? {
             // The remote verification matrix needs to be verified.
-            let vm = block_on(client.verification_matrix(status.id, status.handoff))?;
+            let vm = block_on(client.churp_verification_matrix(status.id, status.handoff))?;
             let checksum = Self::checksum_verification_matrix_bytes(
                 &vm,
                 self.runtime_id,
@@ -583,11 +642,14 @@ impl Churp {
             handoff.set_verification_matrix(vm)?;
         }
 
-        let point =
-            block_on(client.share_reduction_point(status.id, status.next_handoff, self.node_id))?;
+        let point = block_on(client.churp_share_reduction_point(
+            status.id,
+            status.next_handoff,
+            self.node_id,
+        ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
-        handoff.add_share_reduction_switch_point(id, point)
+        handoff.add_share_reduction_switch_point(x, point)
     }
 
     /// Tries to fetch switch data points for full share distribution from
@@ -638,37 +700,37 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_full_share_distribution_switch_point(&id)? {
+        if !handoff.needs_full_share_distribution_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let me = id.encode::<S>()?;
             let shareholder = handoff.get_reduced_shareholder()?;
-            let point = shareholder.switch_point(&me);
+            let point = shareholder.switch_point(&x);
 
-            return handoff.add_full_share_distribution_switch_point(id, point);
+            return handoff.add_full_share_distribution_switch_point(x, point);
         }
 
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
-        let point = block_on(client.share_distribution_point(
+        let point = block_on(client.churp_share_distribution_point(
             status.id,
             status.next_handoff,
             self.node_id,
         ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
-        handoff.add_full_share_distribution_switch_point(id, point)
+        handoff.add_full_share_distribution_switch_point(x, point)
     }
 
     /// Tries to fetch proactive bivariate shares from the given nodes.
@@ -713,33 +775,34 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_bivariate_share(&id)? {
+        if !handoff.needs_bivariate_share(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let x = id.encode::<S>()?;
             let kind = Self::handoff_kind(status);
             let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
             let share = dealer.make_share(x, kind);
             let vm = dealer.verification_matrix().clone();
             let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-            return handoff.add_bivariate_share(id, verifiable_share);
+            return handoff.add_bivariate_share(&x, verifiable_share);
         }
 
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
-        let share = block_on(client.bivariate_share(status.id, status.next_handoff, self.node_id))?;
+        let share =
+            block_on(client.churp_bivariate_share(status.id, status.next_handoff, self.node_id))?;
 
         // The remote verification matrix needs to be verified.
         let checksum = Self::checksum_verification_matrix_bytes(
@@ -759,7 +822,7 @@ impl Churp {
 
         let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
 
-        handoff.add_bivariate_share(id, verifiable_share)
+        handoff.add_bivariate_share(&x, verifiable_share)
     }
 
     /// Returns a signed confirmation request containing the checksum
@@ -920,8 +983,9 @@ impl Churp {
         let share = share.ok_or(Error::ShareholderNotFound)?;
 
         // Verify that the host hasn't changed.
-        let me = ShareholderId(self.node_id.0).encode::<S>()?;
-        if share.secret_share().coordinate_x() != &me {
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, churp_id);
+        let x = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        if share.secret_share().coordinate_x() != &x {
             return Err(Error::InvalidHost.into());
         }
 
@@ -1094,20 +1158,20 @@ impl Churp {
     }
 
     /// Returns the handoff for the specified scheme and handoff epoch.
-    fn get_handoff<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<S>>>
+    fn get_handoff<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
-        self._get_or_create_handoff(churp_id, epoch, None)
+        self._get_or_create_handoff::<S>(churp_id, epoch, None)
     }
 
     /// Returns the handoff for the specified scheme and the next handoff epoch.
     /// If the handoff doesn't exist, a new one is created.
-    fn get_or_create_handoff<S>(&self, status: &Status) -> Result<Arc<Handoff<S>>>
+    fn get_or_create_handoff<S>(&self, status: &Status) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
-        self._get_or_create_handoff(status.id, status.next_handoff, Some(status))
+        self._get_or_create_handoff::<S>(status.id, status.next_handoff, Some(status))
     }
 
     fn _get_or_create_handoff<S>(
@@ -1115,7 +1179,7 @@ impl Churp {
         churp_id: u8,
         epoch: EpochTime,
         status: Option<&Status>,
-    ) -> Result<Arc<Handoff<S>>>
+    ) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
@@ -1132,7 +1196,7 @@ impl Churp {
                     let handoff = data
                         .object
                         .clone()
-                        .downcast::<Handoff<S>>()
+                        .downcast::<Handoff<S::Group>>()
                         .or(Err(Error::HandoffDowncastFailed))?;
 
                     return Ok(handoff);
@@ -1146,13 +1210,13 @@ impl Churp {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let me = ShareholderId(self.node_id.0);
-        let shareholders = status
-            .applications
-            .keys()
-            .cloned()
-            .map(|id| ShareholderId(id.0))
-            .collect();
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let me = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        let mut shareholders = Vec::with_capacity(status.applications.len());
+        for id in status.applications.keys() {
+            let x = encode_shareholder::<S>(&id.0, &dst)?;
+            shareholders.push(x);
+        }
         let kind = Self::handoff_kind(status);
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
 
@@ -1234,28 +1298,30 @@ impl Churp {
 
     /// Verifies the node ID by comparing the session's runtime attestation
     /// key (RAK) with the one published in the consensus layer.
-    #[cfg(target_env = "sgx")]
     fn verify_node_id(&self, ctx: &RpcContext, node_id: &PublicKey) -> Result<()> {
-        let si = ctx.session_info.as_ref();
-        let si = si.ok_or(Error::NotAuthenticated)?;
-        let session_rak = si.rak_binding.rak_pub();
+        if !cfg!(any(target_env = "sgx", feature = "debug-mock-sgx")) {
+            // Skip verification in non-SGX environments because those
+            // nodes do not publish RAK in the consensus nor do they
+            // send RAK binding when establishing Noise sessions.
+            return Ok(());
+        }
 
+        let remote_rak = Self::remote_rak(ctx)?;
         let rak = self
             .registry_state
             .rak(node_id, &self.runtime_id)?
             .ok_or(Error::NotAuthenticated)?;
 
-        if session_rak != rak {
+        if remote_rak != rak {
             return Err(Error::NotAuthorized.into());
         }
 
         Ok(())
     }
 
-    /// Authorizes the remote enclave so that secret data is never revealed
-    /// to an unauthorized enclave.
-    #[cfg(target_env = "sgx")]
-    fn verify_enclave(&self, ctx: &RpcContext, policy: &SignedPolicySGX) -> Result<()> {
+    /// Authorizes the remote key manager enclave so that secret data is never
+    /// revealed to an unauthorized enclave.
+    fn verify_km_enclave(&self, ctx: &RpcContext, policy: &SignedPolicySGX) -> Result<()> {
         if Self::ignore_policy() {
             return Ok(());
         }
@@ -1267,8 +1333,33 @@ impl Churp {
         Ok(())
     }
 
+    /// Authorizes the remote runtime enclave so that secret data is never
+    /// revealed to an unauthorized enclave.
+    fn verify_rt_enclave(
+        &self,
+        ctx: &RpcContext,
+        policy: &SignedPolicySGX,
+        runtime_id: &Namespace,
+    ) -> Result<()> {
+        if Self::ignore_policy() {
+            return Ok(());
+        }
+        let remote_enclave = Self::remote_enclave(ctx)?;
+        let policy = self.policies.verify(policy)?;
+        if !policy.may_query(remote_enclave, runtime_id) {
+            return Err(Error::NotAuthorized.into());
+        }
+        Ok(())
+    }
+
+    /// Returns the session RAK of the remote enclave.
+    fn remote_rak(ctx: &RpcContext) -> Result<PublicKey> {
+        let si = ctx.session_info.as_ref();
+        let si = si.ok_or(Error::NotAuthenticated)?;
+        Ok(si.rak_binding.rak_pub())
+    }
+
     /// Returns the identity of the remote enclave.
-    #[cfg(target_env = "sgx")]
     fn remote_enclave(ctx: &RpcContext) -> Result<&EnclaveIdentity> {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(Error::NotAuthenticated)?;
@@ -1276,22 +1367,18 @@ impl Churp {
     }
 
     /// Returns true if key manager policies should be ignored.
-    #[cfg(target_env = "sgx")]
     fn ignore_policy() -> bool {
         option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
     }
 
     /// Returns a key manager client that connects only to enclaves eligible
     /// to form a new committee or to enclaves belonging the old committee.
-    fn key_manager_client(&self, _status: &Status, _new_committee: bool) -> Result<RemoteClient> {
-        #[cfg(not(target_env = "sgx"))]
-        let enclaves = None;
-        #[cfg(target_env = "sgx")]
+    fn key_manager_client(&self, status: &Status, new_committee: bool) -> Result<RemoteClient> {
         let enclaves = if Self::ignore_policy() {
             None
         } else {
-            let policy = self.policies.verify(&_status.policy)?;
-            let enclaves = match _new_committee {
+            let policy = self.policies.verify(&status.policy)?;
+            let enclaves = match new_committee {
                 true => policy.may_join.clone(),
                 false => policy.may_share.clone(),
             };
@@ -1359,6 +1446,17 @@ impl Churp {
             return HandoffKind::CommitteeUnchanged;
         }
         HandoffKind::CommitteeChanged
+    }
+
+    /// Extends the given domain separation tag with key manager runtime ID
+    /// and churp ID.
+    fn domain_separation_tag(&self, context: &[u8], churp_id: u8) -> Vec<u8> {
+        let mut dst = context.to_vec();
+        dst.extend(RUNTIME_CONTEXT_SEPARATOR);
+        dst.extend(&self.runtime_id.0);
+        dst.extend(CHURP_CONTEXT_SEPARATOR);
+        dst.extend(&[churp_id]);
+        dst
     }
 }
 

@@ -27,7 +27,7 @@ func newKmDumpRestoreImpl() scenario.Scenario {
 	return &kmDumpRestoreImpl{
 		Scenario: *NewScenario(
 			"keymanager-dump-restore",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }

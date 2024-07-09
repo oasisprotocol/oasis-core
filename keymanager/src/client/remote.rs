@@ -1,28 +1,43 @@
 //! Key manager client which talks to a remote key manager enclave.
 use std::{
     collections::HashSet,
+    convert::TryInto,
     iter::FromIterator,
     num::NonZeroUsize,
     sync::{Arc, RwLock},
 };
 
+use anyhow::anyhow;
 use async_trait::async_trait;
+use group::GroupEncoding;
 use lru::LruCache;
+use rand::{prelude::SliceRandom, rngs::OsRng};
 
 use oasis_core_runtime::{
     common::{
         crypto::signature::{self, PublicKey},
-        namespace::Namespace,
+        namespace::{Namespace, NAMESPACE_SIZE},
         sgx::{EnclaveIdentity, QuotePolicy},
     },
     consensus::{
         beacon::EpochTime,
-        state::{beacon::ImmutableState as BeaconState, keymanager::Status as KeyManagerStatus},
+        keymanager::churp::{self, Status as ChurpStatus, SuiteId},
+        state::{
+            beacon::ImmutableState as BeaconState,
+            keymanager::{churp::ImmutableState as ChurpState, Status as KeyManagerStatus},
+            registry::ImmutableState as RegistryState,
+        },
         verifier::Verifier,
     },
     enclave_rpc::{client::RpcClient, session},
     identity::Identity,
     protocol::Protocol,
+};
+use secret_sharing::{
+    churp::{HandoffKind, Player},
+    kdc::KeyRecoverer,
+    suites::{p384, Suite},
+    vss::polynomial::EncryptedPoint,
 };
 
 use crate::{
@@ -34,10 +49,13 @@ use crate::{
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     churp::{
-        EncodedVerifiableSecretShare, QueryRequest, METHOD_BIVARIATE_SHARE,
-        METHOD_SHARE_DISTRIBUTION_POINT, METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
+        EncodedEncryptedPoint, EncodedVerifiableSecretShare, Kdf, KeyShareRequest, QueryRequest,
+        METHOD_BIVARIATE_SHARE, METHOD_SGX_POLICY_KEY_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
+        METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
     },
-    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
+    crypto::{
+        KeyPair, KeyPairId, Secret, SignedPublicKey, StateKey, VerifiableSecret, KEY_PAIR_ID_SIZE,
+    },
     policy::{set_trusted_signers, verify_data_and_trusted_signers, Policy, TrustedSigners},
 };
 
@@ -62,6 +80,8 @@ pub struct RemoteClient {
     ephemeral_private_keys: RwLock<LruCache<(KeyPairId, EpochTime), KeyPair>>,
     /// Local cache for the ephemeral public keys.
     ephemeral_public_keys: RwLock<LruCache<(KeyPairId, EpochTime), SignedPublicKey>>,
+    /// Local cache for the state keys.
+    state_keys: RwLock<LruCache<(KeyPairId, u8), StateKey>>,
     /// Key manager's runtime signing key.
     rsk: RwLock<Option<PublicKey>>,
 }
@@ -83,6 +103,7 @@ impl RemoteClient {
             longterm_public_keys: RwLock::new(LruCache::new(cap)),
             ephemeral_private_keys: RwLock::new(LruCache::new(cap)),
             ephemeral_public_keys: RwLock::new(LruCache::new(cap)),
+            state_keys: RwLock::new(LruCache::new(cap)),
             rsk: RwLock::new(None),
         }
     }
@@ -217,6 +238,85 @@ impl RemoteClient {
 
         key.verify(self.runtime_id, key_pair_id, epoch, now, pk)
             .map_err(KeyManagerError::InvalidSignature)
+    }
+
+    async fn churp_recover_state_key<S: Suite>(
+        &self,
+        key_id: KeyPairId,
+        status: churp::Status,
+    ) -> Result<StateKey, KeyManagerError> {
+        // Fault detection and blame assignment are not supported,
+        // so the minimal number of key shares will suffice.
+        let kind = HandoffKind::CommitteeUnchanged;
+        let player = Player::new(status.threshold, kind);
+        let min_shares = player.min_shares();
+        let mut shares = Vec::with_capacity(min_shares);
+
+        // Fetch key shares in random order.
+        // TODO: Optimize by fetching key shares concurrently.
+        let mut committee = status.committee;
+        committee.shuffle(&mut OsRng);
+
+        for node_id in committee {
+            // Stop fetching when enough shares are received.
+            if shares.len() == min_shares {
+                break;
+            }
+
+            // Fetch key share from the current node.
+            self.rpc_client
+                .update_nodes_async(vec![node_id])
+                .await
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            let response = self
+                .rpc_client
+                .secure_call(
+                    METHOD_SGX_POLICY_KEY_SHARE,
+                    KeyShareRequest {
+                        id: status.id,
+                        runtime_id: status.runtime_id,
+                        epoch: status.handoff,
+                        key_runtime_id: self.runtime_id,
+                        key_id,
+                    },
+                )
+                .await
+                .into_result_with_feedback()
+                .await;
+
+            // Decode the response.
+            let encoded_share: EncodedEncryptedPoint = match response {
+                Ok(encoded_share) => encoded_share,
+                Err(_) => continue, // Ignore error and skip this share.
+            };
+            let share: EncryptedPoint<S::Group> = match encoded_share.try_into() {
+                Ok(share) => share,
+                Err(_) => continue, // Ignore error and skip this share.
+            };
+
+            shares.push(share);
+        }
+
+        // Abort if we don't have enough shares.
+        if shares.len() != min_shares {
+            return Err(KeyManagerError::InsufficientKeyShares);
+        }
+
+        // Prepare salt for key derivation (runtime id || churp id || key id).
+        let mut salt = [0; NAMESPACE_SIZE + 1 + KEY_PAIR_ID_SIZE];
+        salt[..NAMESPACE_SIZE].copy_from_slice(&status.runtime_id.0);
+        salt[NAMESPACE_SIZE] = status.id;
+        salt[NAMESPACE_SIZE + 1..].copy_from_slice(&key_id.0);
+
+        // Recover the secret and derive the state key from it.
+        // NOTE: Elliptic curve points in projective form are first converted
+        // to affine form, and then encoded to bytes using point compression.
+        let key = player.recover_key(&shares)?;
+        let secret = key.to_bytes();
+        let state_key = Kdf::state_key(secret.as_ref(), &salt);
+
+        Ok(state_key)
     }
 }
 
@@ -498,7 +598,7 @@ impl KeyManagerClient for RemoteClient {
             .map(|rsp: ReplicateEphemeralSecretResponse| rsp.ephemeral_secret)
     }
 
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -519,7 +619,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn share_reduction_point(
+    async fn churp_share_reduction_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -541,7 +641,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn share_distribution_point(
+    async fn churp_share_distribution_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -563,7 +663,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn bivariate_share(
+    async fn churp_bivariate_share(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -583,5 +683,52 @@ impl KeyManagerClient for RemoteClient {
             .into_result_with_feedback()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))
+    }
+
+    async fn churp_state_key(
+        &self,
+        churp_id: u8,
+        key_id: KeyPairId,
+    ) -> Result<StateKey, KeyManagerError> {
+        let id = (key_id, churp_id);
+
+        // First try to fetch from cache.
+        {
+            let mut cache = self.state_keys.write().unwrap();
+            if let Some(key) = cache.get(&id) {
+                return Ok(key.clone());
+            }
+        }
+
+        // No entry in cache, fetch from key manager.
+        let consensus_state = self.consensus_verifier.latest_state().await?;
+        let registry_state = RegistryState::new(&consensus_state);
+        let churp_state = ChurpState::new(&consensus_state);
+
+        let status = tokio::task::block_in_place(move || -> Result<ChurpStatus, anyhow::Error> {
+            let runtime = registry_state
+                .runtime(&self.runtime_id)?
+                .ok_or(anyhow!("missing runtime descriptor"))?;
+            let key_manager_id = runtime
+                .key_manager
+                .ok_or(anyhow!("runtime doesn't use key manager"))?;
+            let status = churp_state
+                .status(key_manager_id, churp_id)?
+                .ok_or(anyhow!("churp status not found"))?;
+            Ok(status)
+        })?;
+
+        let state_key = match status.suite_id {
+            SuiteId::NistP384Sha3_384 => {
+                self.churp_recover_state_key::<p384::Sha3_384>(key_id, status)
+                    .await?
+            }
+        };
+
+        // Cache key.
+        let mut cache = self.state_keys.write().unwrap();
+        cache.put(id, state_key.clone());
+
+        Ok(state_key)
     }
 }

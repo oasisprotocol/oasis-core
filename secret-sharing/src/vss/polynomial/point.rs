@@ -32,4 +32,14 @@ impl<G: Group> EncryptedPoint<G> {
     pub fn new(x: G::Scalar, z: G) -> Self {
         Self { x, z }
     }
+
+    /// Returns the x-coordinate of the point.
+    pub fn x(&self) -> &G::Scalar {
+        &self.x
+    }
+
+    /// Returns the y-coordinate of the point in encrypted form.
+    pub fn z(&self) -> &G {
+        &self.z
+    }
 }

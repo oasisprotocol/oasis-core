@@ -43,7 +43,7 @@ func newSentryImpl() scenario.Scenario {
 	return &sentryImpl{
 		Scenario: *NewScenario(
 			"sentry",
-			NewTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleScenario),
 		),
 	}
 }
@@ -186,9 +186,6 @@ func (s *sentryImpl) Run(ctx context.Context, childEnv *env.Env) error { // noli
 	}
 
 	validator2 := s.Net.Validators()[2]
-	if err != nil {
-		return fmt.Errorf("sentry: error loading validator node identity: %w", err)
-	}
 	validator2Ctrl, err := oasis.NewController(validator2.SocketPath())
 	if err != nil {
 		return err

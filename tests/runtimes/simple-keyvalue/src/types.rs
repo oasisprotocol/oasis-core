@@ -29,19 +29,32 @@ pub enum CallOutput {
     Error(String),
 }
 
+/// Get key-value pair call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct Key {
+pub struct Get {
     pub key: String,
     pub generation: u64,
+    pub churp_id: u8,
 }
 
+/// Remove key-value pair call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct KeyValue {
+pub struct Remove {
+    pub key: String,
+    pub generation: u64,
+    pub churp_id: u8,
+}
+
+/// Insert key-value pair call.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct Insert {
     pub key: String,
     pub value: String,
     pub generation: u64,
+    pub churp_id: u8,
 }
 
+/// Encrypt plaintext call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Encrypt {
     pub epoch: u64,
@@ -49,6 +62,7 @@ pub struct Encrypt {
     pub plaintext: Vec<u8>,
 }
 
+/// Decrypt plaintext call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Decrypt {
     pub epoch: u64,
@@ -56,26 +70,31 @@ pub struct Decrypt {
     pub ciphertext: Vec<u8>,
 }
 
+/// Withdraw call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
     pub withdraw: staking::Withdraw,
 }
 
+/// Transfer call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Transfer {
     pub transfer: staking::Transfer,
 }
 
+/// Add escrow call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct AddEscrow {
     pub escrow: staking::Escrow,
 }
 
+/// Reclaim escrow call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ReclaimEscrow {
     pub reclaim_escrow: staking::ReclaimEscrow,
 }
 
+/// Update runtime call.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,

@@ -16,10 +16,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -56,6 +58,7 @@ type TxTestSuite struct {
 	state      *churpState.MutableState
 	regState   *registryState.MutableState
 	stakeState *stakingState.MutableState
+	consState  *consensusState.MutableState
 
 	nodes              []*testNode
 	computeRuntimes    []*registry.Runtime
@@ -79,6 +82,7 @@ func (s *TxTestSuite) SetupTest() {
 	s.state = churpState.NewMutableState(s.ctx.State())
 	s.regState = registryState.NewMutableState(s.ctx.State())
 	s.stakeState = stakingState.NewMutableState(s.ctx.State())
+	s.consState = consensusState.NewMutableState(s.ctx.State())
 
 	// Set up default consensus parameters.
 	err := s.state.SetConsensusParameters(s.ctx, &churp.DefaultConsensusParameters)
@@ -86,6 +90,8 @@ func (s *TxTestSuite) SetupTest() {
 	err = s.regState.SetConsensusParameters(s.ctx, &registry.ConsensusParameters{})
 	require.NoError(s.T(), err)
 	err = s.stakeState.SetConsensusParameters(s.ctx, &staking.ConsensusParameters{})
+	require.NoError(s.T(), err)
+	err = s.consState.SetConsensusParameters(s.ctx, &consensusGenesis.Parameters{})
 	require.NoError(s.T(), err)
 
 	// Prepare nodes.

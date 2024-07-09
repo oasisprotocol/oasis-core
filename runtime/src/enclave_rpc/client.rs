@@ -556,6 +556,17 @@ impl RpcClient {
             .unwrap();
     }
 
+    /// Update allowed nodes.
+    pub async fn update_nodes_async(
+        &self,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Result<(), RpcClientError> {
+        self.cmdq
+            .send(Command::UpdateNodes(nodes))
+            .await
+            .map_err(|_| RpcClientError::Dropped)
+    }
+
     /// Wait for the controller to process all queued messages.
     #[cfg(test)]
     async fn flush_cmd_queue(&self) -> Result<(), RpcClientError> {

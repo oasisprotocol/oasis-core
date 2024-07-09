@@ -35,6 +35,9 @@ var (
 
 	// RPCMethodBivariateShare is the name of the `bivariate_share` method.
 	RPCMethodBivariateShare = "churp/bivariate_share"
+
+	// RPCMethodSGXPolicyKeyShare is the name of the `sgx_policy_key_share` method.
+	RPCMethodSGXPolicyKeyShare = "churp/sgx_policy_key_share"
 )
 
 // HandoffRequest represents a handoff request.

@@ -16,7 +16,7 @@ import (
 // TrustRoot is the consensus trust root verification scenario.
 var TrustRoot scenario.Scenario = NewTrustRootImpl(
 	"simple",
-	NewTestClient().WithScenario(SimpleKeyValueEncScenario),
+	NewTestClient().WithScenario(SimpleEncWithSecretsScenario),
 )
 
 type TrustRootImpl struct {
@@ -190,7 +190,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 
 		// Use non-encrypted transactions, as queries don't support decryption.
 		queries = append(queries,
-			InsertKeyValueTx{key, value, "", false, 0},
+			InsertKeyValueTx{key, value, "", 0, 0, plaintextTxKind},
 			KeyValueQuery{key, value, roothash.RoundLatest},
 		)
 	}

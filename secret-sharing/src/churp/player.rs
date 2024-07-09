@@ -147,8 +147,8 @@ mod tests {
         for kind in test_cases.into_iter() {
             // Prepare scheme.
             let threshold = 2;
-            let key_id = b"key identifier";
-            let dst = b"shamir secret sharing scheme";
+            let key_id = b"key id";
+            let dst = b"encode key share";
             let secret = PrimeField::from_u64(100);
             let hash = Suite::hash_to_group(key_id, dst).unwrap();
             let key = hash * secret;
