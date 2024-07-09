@@ -263,13 +263,11 @@ impl Methods {
         let key_pair_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
         // Fetch encryption keys.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_or_create_keys(key_pair_id, generation);
-        let key = tokio::runtime::Handle::current()
-            .block_on(result)
-            .map_err(|err| err.to_string())?;
+        let key = block_on(future).map_err(|err| err.to_string())?;
 
         Ok(key.state_key)
     }
@@ -284,10 +282,8 @@ impl Methods {
         let key_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
         // Fetch encryption key.
-        let result = ctx.parent.key_manager.churp_state_key(churp_id, key_id);
-        let state_key = tokio::runtime::Handle::current()
-            .block_on(result)
-            .map_err(|err| err.to_string())?;
+        let future = ctx.parent.key_manager.churp_state_key(churp_id, key_id);
+        let state_key = block_on(future).map_err(|err| err.to_string())?;
 
         Ok(state_key)
     }
@@ -433,13 +429,11 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch public key.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_public_ephemeral_key(key_pair_id, args.epoch);
-        let long_term_pk = tokio::runtime::Handle::current()
-            .block_on(result)
-            .map_err(|err| err.to_string())?;
+        let long_term_pk = block_on(future).map_err(|err| err.to_string())?;
 
         // Generate ephemeral key. Not secure, but good enough for testing purposes.
         let ephemeral_sk = x25519::PrivateKey::from(hash);
@@ -473,12 +467,11 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch private key.
-        let result = ctx
+        let future = ctx
             .parent
             .key_manager
             .get_or_create_ephemeral_keys(key_pair_id, args.epoch);
-        let long_term_sk = tokio::runtime::Handle::current()
-            .block_on(result)
+        let long_term_sk = block_on(future)
             .map_err(|err| format!("private ephemeral key not available: {err}"))?;
 
         // Decode ephemeral_pk || ciphertext.

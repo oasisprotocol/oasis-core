@@ -178,7 +178,7 @@ func (w *churpWorker) authorizeNode(ctx context.Context, peerID core.PeerID) err
 				}
 			}
 		}
-		return fmt.Errorf("request not allowed")
+		return fmt.Errorf("query not allowed")
 	default:
 		return fmt.Errorf("unsupported hardware: %s", rt.TEEHardware)
 	}
