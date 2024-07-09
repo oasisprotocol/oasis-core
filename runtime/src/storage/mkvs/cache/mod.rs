@@ -14,6 +14,7 @@ use crate::storage::mkvs::{
 
 /// Statistics about the contents of the cache.
 #[derive(Debug, Default)]
+#[cfg(test)]
 pub struct CacheStats {
     /// Count of internal nodes held by the cache.
     pub internal_node_count: usize,

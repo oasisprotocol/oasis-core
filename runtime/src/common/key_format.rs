@@ -57,7 +57,7 @@ pub trait KeyFormat {
     where
         Self: Sized,
     {
-        self.encode_partial(usize::max_value())
+        self.encode_partial(usize::MAX)
     }
 
     /// Decode the given key format from data.

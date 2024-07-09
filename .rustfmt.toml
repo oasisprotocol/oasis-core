@@ -53,7 +53,6 @@ color = "Auto"
 unstable_features = false
 disable_all_formatting = false
 skip_children = false
-hide_parse_errors = false
 error_on_line_overflow = false
 error_on_unformatted = false
 ignore = []
