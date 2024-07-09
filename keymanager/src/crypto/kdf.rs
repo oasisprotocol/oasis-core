@@ -341,9 +341,9 @@ impl Kdf {
     ///
     /// WARNINGS:
     /// - Once master secrets have been persisted to disk, it is intended that manual
-    /// intervention by the operator is required to remove/alter them.
+    ///   intervention by the operator is required to remove/alter them.
     /// - The first initialization can take a very long time, especially if all generations
-    /// of the master secret must be replicated from other enclaves.
+    ///   of the master secret must be replicated from other enclaves.
     #[allow(clippy::too_many_arguments)]
     pub fn init(
         &self,

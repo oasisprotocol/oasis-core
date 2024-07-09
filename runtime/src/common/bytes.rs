@@ -53,7 +53,6 @@ macro_rules! impl_bytes {
                 H: ::core::hash::Hasher,
             {
                 state.write(&self.0);
-                state.finish();
             }
         }
 

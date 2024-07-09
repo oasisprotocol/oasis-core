@@ -39,10 +39,7 @@ key_format!(
     0x54,
     (Address, Address, EpochTime)
 );
-key_format!(DebondingQueueKeyFmt, 0x55, (EpochTime, Address, Address));
-key_format!(ParametersKeyFmt, 0x56, ());
 key_format!(LastBlockFees, 0x57, ());
-key_format!(EpochSigningKeyFmt, 0x58, ());
 key_format!(GovernanceDepositsKeyFmt, 0x59, ());
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
