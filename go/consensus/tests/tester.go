@@ -43,7 +43,8 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	blk, err := backend.GetBlock(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetBlock")
 	require.NotNil(blk, "returned block should not be nil")
-	require.True(blk.Height > 0, "block height should be greater than zero")
+	require.Greater(blk.Height, int64(0), "block height should be greater than zero")
+	require.Greater(blk.Size, uint64(0), "block size should be greater than zero")
 
 	status, err := backend.GetStatus(ctx)
 	require.NoError(err, "GetStatus")
@@ -58,6 +59,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.EqualValues(blk.Height, status.LatestHeight, "latest block heights should match")
 	require.EqualValues(blk.Hash, status.LatestHash, "latest block hashes should match")
 	require.EqualValues(blk.StateRoot, status.LatestStateRoot, "latest state roots should match")
+	require.EqualValues(blk.Size, status.LatestBlockSize, "latest block sizes should match")
 
 	txs, err := backend.GetTransactions(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactions")
@@ -75,6 +77,13 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 		len(txsWithResults.Transactions),
 		"GetTransactionsWithResults.Results length mismatch",
 	)
+	for _, res := range txsWithResults.Results {
+		// Quick and dirty filter for meta transactions, which don't use any gas. Most other
+		// transactions do emit events so this should be good enough for here.
+		if len(res.Events) > 0 {
+			require.Greater(res.GasUsed, uint64(0), "gas used should be greater than zero")
+		}
+	}
 
 	txsWithProofs, err := backend.GetTransactionsWithProofs(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactionsWithProofs")
@@ -151,7 +160,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	err = backend.SubmitTxNoWait(ctx, &transaction.SignedTransaction{})
 	require.Error(err, "SubmitTxNoWait should fail with invalid transaction")
 
-	testTx := transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{})
+	testTx := transaction.NewTransaction(0, &transaction.Fee{Gas: 10_000}, staking.MethodTransfer, &staking.Transfer{})
 	testSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus tests tx signer: %T", backend))
 	testSigTx, err := transaction.Sign(testSigner, testTx)
 	require.NoError(err, "transaction.Sign")

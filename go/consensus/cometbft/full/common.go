@@ -700,6 +700,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 				Code:    rs.GetCode(),
 				Message: rs.GetLog(),
 			},
+			GasUsed: uint64(rs.GetGasUsed()),
 		}
 
 		// Transaction staking events.
@@ -879,6 +880,7 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			status.LatestHash = latestBlk.Hash
 			status.LatestTime = latestBlk.Time
 			status.LatestStateRoot = latestBlk.StateRoot
+			status.LatestBlockSize = latestBlk.Size
 
 			var epoch beaconAPI.EpochTime
 			epoch, err = n.beacon.GetEpoch(ctx, status.LatestHeight)

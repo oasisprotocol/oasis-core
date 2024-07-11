@@ -221,6 +221,8 @@ type Block struct {
 	Time time.Time `json:"time"`
 	// StateRoot is the Merkle root of the consensus state tree.
 	StateRoot mkvsNode.Root `json:"state_root"`
+	// Size is the size of the block in bytes.
+	Size uint64 `json:"size,omitempty"`
 	// Meta contains the consensus backend specific block metadata.
 	Meta cbor.RawMessage `json:"meta"`
 }
@@ -320,6 +322,8 @@ type Status struct { // nolint: maligned
 	LatestEpoch beacon.EpochTime `json:"latest_epoch"`
 	// LatestStateRoot is the Merkle root of the consensus state tree.
 	LatestStateRoot mkvsNode.Root `json:"latest_state_root"`
+	// LatestBlockSize is the size (in bytes) of the latest block.
+	LatestBlockSize uint64 `json:"latest_block_size,omitempty"`
 
 	// GenesisHeight is the height of the genesis block.
 	GenesisHeight int64 `json:"genesis_height"`
