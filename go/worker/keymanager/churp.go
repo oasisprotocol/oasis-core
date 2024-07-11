@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -291,7 +292,7 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 	}
 
 	w.mu.RLock()
-	_, ok := w.churps[status.ID]
+	prevStatus, ok := w.churps[status.ID]
 	w.mu.RUnlock()
 
 	if !ok {
@@ -312,6 +313,47 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 	w.submissions.Queue(status)
 	w.handoffs.Queue(status)
 	w.finisher.Finalize(status)
+
+	// Update metrics.
+	w.updateStatusMetrics(status, prevStatus)
+}
+
+func (w *churpWorker) updateStatusMetrics(status *churp.Status, prevStatus *churp.Status) {
+	// Prepare labels.
+	runtime := w.kmWorker.runtimeLabel
+	id := strconv.FormatUint(uint64(status.ID), 10)
+
+	// Read the last counter values to determine the increment amount.
+	var (
+		prevHandoff     beacon.EpochTime
+		prevNextHandoff beacon.EpochTime
+	)
+	if prevStatus != nil {
+		prevHandoff = prevStatus.Handoff
+		prevNextHandoff = prevStatus.NextHandoff
+	}
+
+	// Count how many nodes completed the handoff.
+	var confirmedApplications int
+	for _, app := range status.Applications {
+		if app.Reconstructed {
+			confirmedApplications++
+		}
+	}
+
+	// Update constant values once.
+	if prevStatus == nil {
+		churpThresholdNumber.WithLabelValues(runtime, id).Add((float64)(status.Threshold))
+	}
+
+	// Update variable values always.
+	churpHandoffNumber.WithLabelValues(runtime, id).Add((float64)(status.Handoff - prevHandoff))
+	churpNextHandoffNumber.WithLabelValues(runtime, id).Add((float64)(status.NextHandoff - prevNextHandoff))
+	churpHandoffInterval.WithLabelValues(runtime, id).Set((float64)(status.HandoffInterval))
+	churpExtraSharesNumber.WithLabelValues(runtime, id).Set((float64)(status.ExtraShares))
+	churpCommitteeSize.WithLabelValues(runtime, id).Set((float64)(len(status.Committee)))
+	churpSubmittedApplicationsTotal.WithLabelValues(runtime, id).Set((float64)(len(status.Applications)))
+	churpConfirmedApplicationsTotal.WithLabelValues(runtime, id).Set((float64)(confirmedApplications))
 }
 
 // submissionScheduler is responsible for generating and submitting
@@ -449,7 +491,7 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, status *
 		Epoch: status.NextHandoff,
 	}
 	var rsp churp.SignedApplicationRequest
-	if err := s.kmWorker.callEnclaveLocal(ctx, churp.RPCMethodInit, req, &rsp); err != nil {
+	if err := timeCallEnclaveLocal(ctx, s.kmWorker, churp.RPCMethodInit, req, &rsp, status); err != nil {
 		return fmt.Errorf("failed to generate verification matrix: %w", err)
 	}
 
@@ -778,7 +820,7 @@ func (e *handoffExecutor) tryFetch(
 		NodeIDs: nodeIDs,
 	}
 	var rsp churp.FetchResponse
-	if err := e.kmWorker.callEnclaveLocal(ctx, method, req, &rsp); err != nil {
+	if err := timeCallEnclaveLocal(ctx, e.kmWorker, method, req, &rsp, status); err != nil {
 		return nil, err
 	}
 
@@ -821,7 +863,7 @@ func (e *handoffExecutor) trySubmitConfirmation(ctx context.Context, status *chu
 		Epoch: status.NextHandoff,
 	}
 	var rsp churp.SignedConfirmationRequest
-	if err := e.kmWorker.callEnclaveLocal(ctx, churp.RPCMethodConfirm, req, &rsp); err != nil {
+	if err := timeCallEnclaveLocal(ctx, e.kmWorker, churp.RPCMethodConfirm, req, &rsp, status); err != nil {
 		return fmt.Errorf("failed to prepare confirmation request: %w", err)
 	}
 
@@ -921,7 +963,7 @@ func (f *handoffFinisher) finalizeHandoff(ctx context.Context, status *churp.Sta
 		Epoch: status.Handoff,
 	}
 	var rsp protocol.Empty
-	if err := f.kmWorker.callEnclaveLocal(ctx, churp.RPCMethodFinalize, req, &rsp); err != nil {
+	if err := timeCallEnclaveLocal(ctx, f.kmWorker, churp.RPCMethodFinalize, req, &rsp, status); err != nil {
 		f.logger.Info("failed to finalize handoff",
 			"id", status.ID,
 			"epoch", status.Handoff,
@@ -1040,6 +1082,24 @@ func selectNodes(nodeIDs map[signature.PublicKey]struct{}, priorities map[signat
 	})
 
 	return nodes
+}
+
+// timeCallEnclaveLocal calls the enclave, measures the call duration,
+// and updates relevant metrics.
+func timeCallEnclaveLocal(ctx context.Context, w *Worker, method string, req interface{}, rsp interface{}, status *churp.Status) error {
+	start := time.Now()
+	err := w.callEnclaveLocal(ctx, method, req, rsp)
+	latency := time.Since(start)
+
+	runtime := w.runtimeLabel
+	id := strconv.FormatUint(uint64(status.ID), 10)
+	churpEnclaveRPCLatency.WithLabelValues(runtime, id, method).Observe(latency.Seconds())
+
+	if err != nil {
+		churpEnclaveRPCFailures.WithLabelValues(runtime, id, method).Inc()
+	}
+
+	return err
 }
 
 // TaskInfo contains details about a scheduled task.
