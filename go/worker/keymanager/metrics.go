@@ -118,6 +118,76 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	churpThresholdNumber = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_worker_keymanager_churp_threshold_number",
+			Help: "Degree of the secret-sharing polynomial",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpExtraSharesNumber = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_keymanager_churp_extra_shares_number",
+			Help: "Minimum number of extra shares.",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpHandoffNumber = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_worker_keymanager_churp_handoff_number",
+			Help: "Epoch number of the last handoff",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpNextHandoffNumber = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_worker_keymanager_churp_next_handoff_number",
+			Help: "Epoch number of the next handoff",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpHandoffInterval = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_keymanager_churp_handoff_interval",
+			Help: "Handoff interval in epochs",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpCommitteeSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_keymanager_churp_committee_size",
+			Help: "Number of nodes in the committee",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpSubmittedApplicationsTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_keymanager_churp_submitted_applications_total",
+			Help: "Number of submitted applications",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpConfirmedApplicationsTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_keymanager_churp_confirmed_applications_total",
+			Help: "Number of confirmed applications",
+		},
+		[]string{"runtime", "churp"},
+	)
+	churpEnclaveRPCLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "oasis_worker_keymanager_churp_enclave_rpc_latency_seconds",
+			Help: "Latency of enclave rpc calls in seconds.",
+		},
+		[]string{"runtime", "churp", "method"},
+	)
+	churpEnclaveRPCFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_worker_keymanager_churp_enclave_rpc_failures_total",
+			Help: "Number of failed enclave rpc calls.",
+		},
+		[]string{"runtime", "churp", "method"},
+	)
 
 	keymanagerWorkerCollectors = []prometheus.Collector{
 		computeRuntimeCount,
@@ -134,6 +204,16 @@ var (
 		enclaveGeneratedMasterSecretEpochNumber,
 		enclaveGeneratedMasterSecretGenerationNumber,
 		enclaveGeneratedEphemeralSecretEpochNumber,
+		churpThresholdNumber,
+		churpExtraSharesNumber,
+		churpHandoffNumber,
+		churpNextHandoffNumber,
+		churpHandoffInterval,
+		churpCommitteeSize,
+		churpSubmittedApplicationsTotal,
+		churpConfirmedApplicationsTotal,
+		churpEnclaveRPCLatency,
+		churpEnclaveRPCFailures,
 	}
 
 	metricsOnce sync.Once
