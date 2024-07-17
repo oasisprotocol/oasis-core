@@ -310,7 +310,7 @@ impl Churp {
     /// needs to be kept secret and generated only for authorized nodes.
     pub fn share_distribution_switch_point(
         &self,
-        _ctx: &RpcContext,
+        ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
@@ -325,8 +325,8 @@ impl Churp {
             return Err(Error::NotInCommittee.into());
         }
 
-        self.verify_node_id(_ctx, node_id)?;
-        self.verify_km_enclave(_ctx, &status.policy)?;
+        self.verify_node_id(ctx, node_id)?;
+        self.verify_km_enclave(ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -377,7 +377,7 @@ impl Churp {
     /// for authorized nodes.
     pub fn bivariate_share(
         &self,
-        _ctx: &RpcContext,
+        ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<EncodedVerifiableSecretShare> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
@@ -387,8 +387,8 @@ impl Churp {
             return Err(Error::NotInCommittee.into());
         }
 
-        self.verify_node_id(_ctx, node_id)?;
-        self.verify_km_enclave(_ctx, &status.policy)?;
+        self.verify_node_id(ctx, node_id)?;
+        self.verify_km_enclave(ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {

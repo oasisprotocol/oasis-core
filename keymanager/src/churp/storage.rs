@@ -218,14 +218,14 @@ impl Storage {
     /// Creates storage key for the secret share.
     fn create_secret_share_storage_key(churp_id: u8) -> Vec<u8> {
         let mut key = SECRET_SHARE_STORAGE_KEY_PREFIX.to_vec();
-        key.extend(vec![churp_id]);
+        key.extend(&[churp_id]);
         key
     }
 
     /// Creates storage key for the next secret share.
     fn create_next_secret_share_storage_key(churp_id: u8) -> Vec<u8> {
         let mut key = NEXT_SECRET_SHARE_STORAGE_KEY_PREFIX.to_vec();
-        key.extend(vec![churp_id]);
+        key.extend(&[churp_id]);
         key
     }
 
