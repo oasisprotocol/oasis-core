@@ -51,17 +51,12 @@ type Parameters struct { // nolint: maligned
 
 // IsFeatureVersion returns true iff the consensus feature version is high
 // enough for the feature to be enabled.
-func (p *Parameters) IsFeatureVersion(minVersion string) (bool, error) {
-	mimFeatureVersion, err := version.FromString(minVersion)
-	if err != nil {
-		return false, err
-	}
-
+func (p *Parameters) IsFeatureVersion(minVersion version.Version) bool {
 	if p.FeatureVersion == nil {
-		return false, nil
+		return false
 	}
 
-	return p.FeatureVersion.ToU64() >= mimFeatureVersion.ToU64(), nil
+	return p.FeatureVersion.ToU64() >= minVersion.ToU64()
 }
 
 const (

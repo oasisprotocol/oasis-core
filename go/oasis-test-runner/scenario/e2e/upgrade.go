@@ -238,6 +238,39 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	return nil
 }
 
+type upgrade242Checker struct{}
+
+func (c *upgrade242Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check consensus parameters.
+	consParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != version.MustFromString("100.0") { // Default value in tests.
+		return fmt.Errorf("consensus parameter FeatureVersion should not be set (expected: 100.0.0 actual: %s)",
+			consParams.Parameters.FeatureVersion,
+		)
+	}
+
+	return nil
+}
+
+func (c *upgrade242Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check updated consensus parameters.
+	consParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != migrations.Version242 {
+		return fmt.Errorf("consensus parameter FeatureVersion not updated correctly (expected: %s actual: %s)",
+			migrations.Version242,
+			consParams.Parameters.FeatureVersion,
+		)
+	}
+
+	return nil
+}
+
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{}, true)
@@ -245,6 +278,8 @@ var (
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{}, false)
 	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
 	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{}, false)
+	// NodeUpgradeConsensus242 is the node upgrade scenario for migrating to consensus 24.2.
+	NodeUpgradeConsensus242 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus242, &upgrade242Checker{}, false)
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
