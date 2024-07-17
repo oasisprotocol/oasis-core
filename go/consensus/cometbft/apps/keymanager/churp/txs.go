@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
@@ -559,7 +560,7 @@ func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
 
 func verifyPolicy(ctx *tmapi.Context, policy *churp.SignedPolicySGX) error {
 	// Allow non-empty `MayQuery` field with the 24.2 release.
-	enabled, err := features.IsFeatureVersion(ctx, "24.2")
+	enabled, err := features.IsFeatureVersion(ctx, migrations.Version242)
 	if err != nil {
 		return err
 	}
