@@ -8,7 +8,7 @@ edition = "2018"
 anyhow = "1.0"
 thiserror = "1.0"
 serde = { version = "1.0.199", features = ["derive"] }
-toml = "0.8.2"
+toml = "0.8.15"
 clap = "4.0.22"
 ansi_term = "0.12.1"
 

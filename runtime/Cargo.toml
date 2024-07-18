@@ -32,12 +32,12 @@ base64 = "0.22.1"
 rustc-hex = "2.0.1"
 rand = "0.8.5"
 futures = "0.3.25"
-tokio = { version = "1.37", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.38", features = ["rt", "rt-multi-thread", "sync", "time"] }
 tokio-retry = "0.3.0"
-tendermint = "0.36.0"
-tendermint-proto = "0.36.0"
-tendermint-light-client = { version = "0.36.0", features = ["rust-crypto"], default-features = false }
-tendermint-rpc = { version = "0.36.0", default-features = false }
+tendermint = "0.37.0"
+tendermint-proto = "0.37.0"
+tendermint-light-client = { version = "0.37.0", features = ["rust-crypto"], default-features = false }
+tendermint-rpc = { version = "0.37.0", default-features = false }
 curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core", "digest"] }
@@ -63,14 +63,14 @@ async-trait = "0.1.77"
 cfg-if = "1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
-version = "1.36.0"
+version = "1.38.1"
 features = ["full"]
 
 [dev-dependencies]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.18.0", features = ["simple_uds"] }
 tempfile = "3.4.0"
-tendermint-testgen = "0.36.0"
+tendermint-testgen = "0.37.0"
 
 [features]
 default = []
