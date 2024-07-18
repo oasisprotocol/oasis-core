@@ -533,105 +533,6 @@ impl<S: Suite> Instance<S> {
         }
     }
 
-    fn derive_share_reduction_switch_point(
-        &self,
-        node_id: &PublicKey,
-        status: &Status,
-    ) -> Result<Vec<u8>> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
-        let shareholder = self.get_shareholder(status.id, status.handoff)?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
-
-        Ok(point)
-    }
-
-    fn derive_share_distribution_point(
-        &self,
-        node_id: &PublicKey,
-        status: &Status,
-    ) -> Result<Vec<u8>> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
-        let handoff = self.get_handoff(status.next_handoff)?;
-        let shareholder = handoff.get_reduced_shareholder()?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
-
-        Ok(point)
-    }
-
-    fn derive_bivariate_share(
-        &self,
-        node_id: &PublicKey,
-        status: &Status,
-    ) -> Result<EncodedVerifiableSecretShare> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
-        let kind = Self::handoff_kind(status);
-        let dealer = self.get_dealer(status.next_handoff)?;
-        let share = dealer.make_share(x, kind);
-        let share = (&share).into();
-        let verification_matrix = dealer.verification_matrix().to_bytes();
-
-        Ok(EncodedVerifiableSecretShare {
-            share,
-            verification_matrix,
-        })
-    }
-
-    fn make_key_share(&self, key_id: &[u8], status: &Status) -> Result<EncodedEncryptedPoint> {
-        let shareholder = self.get_shareholder(status.id, status.handoff)?;
-        let dst = self.domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, status.id);
-        let point = shareholder.make_key_share::<S>(key_id, &dst)?;
-        Ok((&point).into())
-    }
-
-    fn do_init(
-        &self,
-        churp_id: u8,
-        epoch: EpochTime,
-        threshold: u8,
-        dealing_phase: bool,
-    ) -> Result<SignedApplicationRequest> {
-        let dealer = self.get_or_create_dealer(epoch, threshold, dealing_phase)?;
-
-        // Fetch verification matrix and compute its checksum.
-        let matrix = dealer.verification_matrix();
-        let checksum = Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, epoch);
-
-        // Prepare response and sign it with RAK.
-        let application = ApplicationRequest {
-            id: churp_id,
-            runtime_id: self.runtime_id,
-            epoch,
-            checksum,
-        };
-        let body = cbor::to_vec(application.clone());
-        let signature = self
-            .signer
-            .sign(APPLICATION_REQUEST_SIGNATURE_CONTEXT, &body)?;
-
-        Ok(SignedApplicationRequest {
-            application,
-            signature,
-        })
-    }
-
-    /// Tries to fetch switch points for share reduction from the given nodes.
-    pub fn fetch_share_reduction_switch_points(
-        &self,
-        node_ids: &Vec<PublicKey>,
-        status: &Status,
-    ) -> Result<FetchResponse> {
-        let handoff = self.get_or_create_handoff(status)?;
-        let client = self.key_manager_client(status, false)?;
-        let f =
-            |node_id| self.fetch_share_reduction_switch_point(node_id, status, &handoff, &client);
-        fetch(f, node_ids)
-    }
-
     /// Tries to fetch switch point for share reduction from the given node.
     pub fn fetch_share_reduction_switch_point(
         &self,
@@ -693,20 +594,6 @@ impl<S: Suite> Instance<S> {
         handoff.add_share_reduction_switch_point(x, point)
     }
 
-    /// Tries to fetch switch points for share distribution from the given nodes.
-    pub fn fetch_share_distribution_switch_points(
-        &self,
-        node_ids: &Vec<PublicKey>,
-        status: &Status,
-    ) -> Result<FetchResponse> {
-        let handoff = self.get_handoff(status.next_handoff)?;
-        let client = self.key_manager_client(status, true)?;
-        let f = |node_id| {
-            self.fetch_share_distribution_switch_point(node_id, status, &handoff, &client)
-        };
-        fetch(f, node_ids)
-    }
-
     /// Tries to fetch switch point for share reduction from the given node.
     pub fn fetch_share_distribution_switch_point(
         &self,
@@ -740,18 +627,6 @@ impl<S: Suite> Instance<S> {
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
         handoff.add_full_share_distribution_switch_point(x, point)
-    }
-
-    /// Tries to fetch proactive bivariate shares from the given nodes.
-    pub fn fetch_bivariate_shares(
-        &self,
-        node_ids: &Vec<PublicKey>,
-        status: &Status,
-    ) -> Result<FetchResponse> {
-        let handoff = self.get_or_create_handoff(status)?;
-        let client = self.key_manager_client(status, true)?;
-        let f = |node_id| self.fetch_bivariate_share(node_id, status, &handoff, &client);
-        fetch(f, node_ids)
     }
 
     /// Tries to fetch proactive bivariate share from the given node.
@@ -804,72 +679,6 @@ impl<S: Suite> Instance<S> {
         let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
 
         handoff.add_bivariate_share(&x, verifiable_share)
-    }
-
-    fn prepare_confirmation(&self, status: &Status) -> Result<SignedConfirmationRequest> {
-        let handoff = self.get_handoff(status.next_handoff)?;
-        let shareholder = handoff.get_full_shareholder()?;
-        let share = shareholder.verifiable_share();
-
-        // Before overwriting the next secret share, make sure it was copied
-        // and used to construct the last shareholder.
-        let _ = self
-            .get_shareholder(status.id, status.handoff)
-            .map(Some)
-            .or_else(|err| ignore_error(err, Error::ShareholderNotFound))?; // Ignore if we don't have the correct share.
-
-        // Always persist the secret share before sending confirmation.
-        self.storage
-            .store_next_secret_share(share, status.id, status.next_handoff)?;
-
-        // Prepare response and sign it with RAK.
-        let vm = share.verification_matrix();
-        let checksum =
-            Self::checksum_verification_matrix(vm, self.runtime_id, status.id, status.next_handoff);
-        let confirmation = ConfirmationRequest {
-            id: status.id,
-            runtime_id: self.runtime_id,
-            epoch: status.next_handoff,
-            checksum,
-        };
-        let body = cbor::to_vec(confirmation.clone());
-        let signature = self
-            .signer
-            .sign(CONFIRMATION_REQUEST_SIGNATURE_CONTEXT, &body)?;
-
-        Ok(SignedConfirmationRequest {
-            confirmation,
-            signature,
-        })
-    }
-
-    fn do_finalize(&self, status: &Status) -> Result<()> {
-        // Move the shareholder if the handoff was completed.
-        let handoff = self.get_handoff(status.handoff);
-        let handoff = match handoff {
-            Ok(handoff) => Some(handoff),
-            Err(err) => match err.downcast_ref::<Error>() {
-                Some(err) if err == &Error::HandoffNotFound => None,
-                _ => return Err(err),
-            },
-        };
-        if let Some(handoff) = handoff {
-            let shareholder = handoff.get_full_shareholder()?;
-            let share = shareholder.verifiable_share();
-            self.storage
-                .store_secret_share(share, status.id, status.handoff)?;
-            self.add_shareholder(shareholder, status.handoff);
-        }
-
-        // Cleanup.
-        let max_epoch = status.handoff.saturating_sub(1);
-        self.remove_shareholders(max_epoch);
-
-        let max_epoch = status.next_handoff.saturating_sub(1);
-        self.remove_dealer(max_epoch);
-        self.remove_handoff(max_epoch);
-
-        Ok(())
     }
 
     /// Returns the shareholder for the specified scheme and handoff epoch.
@@ -1345,9 +1154,13 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.derive_share_reduction_switch_point(node_id, &status),
-        }
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let shareholder = self.get_shareholder(status.id, status.handoff)?;
+        let point = shareholder.switch_point(&x);
+        let point = scalar_to_bytes(&point);
+
+        Ok(point)
     }
 
     fn share_distribution_switch_point(
@@ -1370,9 +1183,14 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.derive_share_distribution_point(node_id, &status),
-        }
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let handoff = self.get_handoff(status.next_handoff)?;
+        let shareholder = handoff.get_reduced_shareholder()?;
+        let point = shareholder.switch_point(&x);
+        let point = scalar_to_bytes(&point);
+
+        Ok(point)
     }
 
     fn bivariate_share(
@@ -1390,9 +1208,18 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.derive_bivariate_share(node_id, &status),
-        }
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let kind = Self::handoff_kind(&status);
+        let dealer = self.get_dealer(status.next_handoff)?;
+        let share = dealer.make_share(x, kind);
+        let share = (&share).into();
+        let verification_matrix = dealer.verification_matrix().to_bytes();
+
+        Ok(EncodedVerifiableSecretShare {
+            share,
+            verification_matrix,
+        })
     }
 
     fn sgx_policy_key_share(
@@ -1404,9 +1231,10 @@ impl<S: Suite> Handler for Instance<S> {
 
         self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.make_key_share(&req.key_id.0, &status),
-        }
+        let shareholder = self.get_shareholder(status.id, status.handoff)?;
+        let dst = self.domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, status.id);
+        let point = shareholder.make_key_share::<S>(&req.key_id.0, &dst)?;
+        Ok((&point).into())
     }
 
     fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
@@ -1431,40 +1259,57 @@ impl<S: Suite> Handler for Instance<S> {
         }
 
         let dealing_phase = status.committee.is_empty();
+        let dealer = self.get_or_create_dealer(req.epoch, status.threshold, dealing_phase)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => {
-                self.do_init(req.id, req.epoch, status.threshold, dealing_phase)
-            }
-        }
+        // Fetch verification matrix and compute its checksum.
+        let matrix = dealer.verification_matrix();
+        let checksum =
+            Self::checksum_verification_matrix(matrix, self.runtime_id, req.id, req.epoch);
+
+        // Prepare response and sign it with RAK.
+        let application = ApplicationRequest {
+            id: req.id,
+            runtime_id: self.runtime_id,
+            epoch: req.epoch,
+            checksum,
+        };
+        let body = cbor::to_vec(application.clone());
+        let signature = self
+            .signer
+            .sign(APPLICATION_REQUEST_SIGNATURE_CONTEXT, &body)?;
+
+        Ok(SignedApplicationRequest {
+            application,
+            signature,
+        })
     }
 
     fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => {
-                self.fetch_share_reduction_switch_points(&req.node_ids, &status)
-            }
-        }
+        let handoff = self.get_or_create_handoff(&status)?;
+        let client = self.key_manager_client(&status, false)?;
+        let f =
+            |node_id| self.fetch_share_reduction_switch_point(node_id, &status, &handoff, &client);
+        fetch(f, &req.node_ids)
     }
 
     fn share_distribution(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
-
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => {
-                self.fetch_share_distribution_switch_points(&req.node_ids, &status)
-            }
-        }
+        let handoff = self.get_handoff(status.next_handoff)?;
+        let client = self.key_manager_client(&status, true)?;
+        let f = |node_id| {
+            self.fetch_share_distribution_switch_point(node_id, &status, &handoff, &client)
+        };
+        fetch(f, &req.node_ids)
     }
 
     fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
-
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.fetch_bivariate_shares(&req.node_ids, &status),
-        }
+        let handoff = self.get_or_create_handoff(&status)?;
+        let client = self.key_manager_client(&status, true)?;
+        let f = |node_id| self.fetch_bivariate_share(node_id, &status, &handoff, &client);
+        fetch(f, &req.node_ids)
     }
 
     fn confirmation(&self, req: &HandoffRequest) -> Result<SignedConfirmationRequest> {
@@ -1474,17 +1319,71 @@ impl<S: Suite> Handler for Instance<S> {
             return Err(Error::ApplicationNotSubmitted.into());
         }
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.prepare_confirmation(&status),
-        }
+        let handoff = self.get_handoff(status.next_handoff)?;
+        let shareholder = handoff.get_full_shareholder()?;
+        let share = shareholder.verifiable_share();
+
+        // Before overwriting the next secret share, make sure it was copied
+        // and used to construct the last shareholder.
+        let _ = self
+            .get_shareholder(status.id, status.handoff)
+            .map(Some)
+            .or_else(|err| ignore_error(err, Error::ShareholderNotFound))?; // Ignore if we don't have the correct share.
+
+        // Always persist the secret share before sending confirmation.
+        self.storage
+            .store_next_secret_share(share, status.id, status.next_handoff)?;
+
+        // Prepare response and sign it with RAK.
+        let vm = share.verification_matrix();
+        let checksum =
+            Self::checksum_verification_matrix(vm, self.runtime_id, status.id, status.next_handoff);
+        let confirmation = ConfirmationRequest {
+            id: status.id,
+            runtime_id: self.runtime_id,
+            epoch: status.next_handoff,
+            checksum,
+        };
+        let body = cbor::to_vec(confirmation.clone());
+        let signature = self
+            .signer
+            .sign(CONFIRMATION_REQUEST_SIGNATURE_CONTEXT, &body)?;
+
+        Ok(SignedConfirmationRequest {
+            confirmation,
+            signature,
+        })
     }
 
     fn finalize(&self, req: &HandoffRequest) -> Result<()> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.do_finalize(&status),
+        // Move the shareholder if the handoff was completed.
+        let handoff = self.get_handoff(status.handoff);
+        let handoff = match handoff {
+            Ok(handoff) => Some(handoff),
+            Err(err) => match err.downcast_ref::<Error>() {
+                Some(err) if err == &Error::HandoffNotFound => None,
+                _ => return Err(err),
+            },
+        };
+        if let Some(handoff) = handoff {
+            let shareholder = handoff.get_full_shareholder()?;
+            let share = shareholder.verifiable_share();
+            self.storage
+                .store_secret_share(share, status.id, status.handoff)?;
+            self.add_shareholder(shareholder, status.handoff);
         }
+
+        // Cleanup.
+        let max_epoch = status.handoff.saturating_sub(1);
+        self.remove_shareholders(max_epoch);
+
+        let max_epoch = status.next_handoff.saturating_sub(1);
+        self.remove_dealer(max_epoch);
+        self.remove_handoff(max_epoch);
+
+        Ok(())
     }
 }
 
