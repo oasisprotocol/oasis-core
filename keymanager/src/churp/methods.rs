@@ -6,7 +6,7 @@ use oasis_core_runtime::enclave_rpc::{
     types::Kind as RpcKind,
 };
 
-use crate::churp::Churp;
+use crate::churp::{Churp, Handler};
 
 /// Name of the `init` method.
 pub const METHOD_INIT: &str = "churp/init";
