@@ -489,6 +489,12 @@ struct Instance<S: Suite> {
 
     /// Cached verified policies.
     policies: Arc<VerifiedPolicies>,
+
+    /// Domain separation tag for encoding shareholder identifiers.
+    shareholder_dst: Vec<u8>,
+    /// Domain separation tag for encoding key identifiers for key share
+    /// derivation approved by an SGX policy.
+    sgx_policy_key_id_dst: Vec<u8>,
 }
 
 impl<S: Suite> Instance<S> {
@@ -514,6 +520,11 @@ impl<S: Suite> Instance<S> {
         let dealer = Mutex::new(None);
         let handoff = Mutex::new(None);
 
+        let shareholder_dst =
+            Self::domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, &runtime_id, churp_id);
+        let sgx_policy_key_id_dst =
+            Self::domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, &runtime_id, churp_id);
+
         Self {
             churp_id,
             identity,
@@ -530,6 +541,8 @@ impl<S: Suite> Instance<S> {
             dealer,
             handoff,
             policies,
+            shareholder_dst,
+            sgx_policy_key_id_dst,
         }
     }
 
@@ -541,8 +554,7 @@ impl<S: Suite> Instance<S> {
         handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
 
         if !handoff.needs_share_reduction_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
@@ -602,8 +614,7 @@ impl<S: Suite> Instance<S> {
         handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
 
         if !handoff.needs_full_share_distribution_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
@@ -637,8 +648,7 @@ impl<S: Suite> Instance<S> {
         handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool> {
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
 
         if !handoff.needs_bivariate_share(&x)? {
             return Err(Error::InvalidShareholder.into());
@@ -724,8 +734,7 @@ impl<S: Suite> Instance<S> {
         let share = share.ok_or(Error::ShareholderNotFound)?;
 
         // Verify that the host hasn't changed.
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, churp_id);
-        let x = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
         if share.secret_share().coordinate_x() != &x {
             return Err(Error::InvalidHost.into());
         }
@@ -877,11 +886,10 @@ impl<S: Suite> Instance<S> {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let me = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        let me = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
         let mut shareholders = Vec::with_capacity(status.applications.len());
         for id in status.applications.keys() {
-            let x = encode_shareholder::<S>(&id.0, &dst)?;
+            let x = encode_shareholder::<S>(&id.0, &self.shareholder_dst)?;
             shareholders.push(x);
         }
         let kind = Self::handoff_kind(status);
@@ -1110,10 +1118,10 @@ impl<S: Suite> Instance<S> {
 
     /// Extends the given domain separation tag with key manager runtime ID
     /// and churp ID.
-    fn domain_separation_tag(&self, context: &[u8], churp_id: u8) -> Vec<u8> {
+    fn domain_separation_tag(context: &[u8], runtime_id: &Namespace, churp_id: u8) -> Vec<u8> {
         let mut dst = context.to_vec();
         dst.extend(RUNTIME_CONTEXT_SEPARATOR);
-        dst.extend(&self.runtime_id.0);
+        dst.extend(runtime_id.0);
         dst.extend(CHURP_CONTEXT_SEPARATOR);
         dst.extend(&[churp_id]);
         dst
@@ -1154,8 +1162,7 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let shareholder = self.get_shareholder(status.id, status.handoff)?;
         let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
@@ -1183,8 +1190,7 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let handoff = self.get_handoff(status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
         let point = shareholder.switch_point(&x);
@@ -1208,8 +1214,7 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
 
-        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
-        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
+        let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let kind = Self::handoff_kind(&status);
         let dealer = self.get_dealer(status.next_handoff)?;
         let share = dealer.make_share(x, kind);
@@ -1232,8 +1237,7 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
 
         let shareholder = self.get_shareholder(status.id, status.handoff)?;
-        let dst = self.domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, status.id);
-        let point = shareholder.make_key_share::<S>(&req.key_id.0, &dst)?;
+        let point = shareholder.make_key_share::<S>(&req.key_id.0, &self.sgx_policy_key_id_dst)?;
         Ok((&point).into())
     }
 
