@@ -365,9 +365,16 @@ impl Churp {
         }
     }
 
-    fn get_instance(&self, churp_id: u8) -> Result<Arc<dyn Handler + Send + Sync>> {
-        let mut instances = self.instances.lock().unwrap();
+    fn get_instance(
+        &self,
+        churp_id: u8,
+        runtime_id: Namespace,
+    ) -> Result<Arc<dyn Handler + Send + Sync>> {
+        if self.runtime_id != runtime_id {
+            return Err(Error::RuntimeMismatch.into());
+        }
 
+        let mut instances = self.instances.lock().unwrap();
         if let Some(instance) = instances.get(&churp_id) {
             return Ok(instance.clone());
         }
@@ -392,7 +399,8 @@ impl Churp {
 
 impl Handler for Churp {
     fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
-        self.get_instance(req.id)?.verification_matrix(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.verification_matrix(req)
     }
 
     fn share_reduction_switch_point(
@@ -400,8 +408,8 @@ impl Handler for Churp {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
-        self.get_instance(req.id)?
-            .share_reduction_switch_point(ctx, req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.share_reduction_switch_point(ctx, req)
     }
 
     fn share_distribution_switch_point(
@@ -409,8 +417,8 @@ impl Handler for Churp {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
-        self.get_instance(req.id)?
-            .share_distribution_switch_point(ctx, req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.share_distribution_switch_point(ctx, req)
     }
 
     fn bivariate_share(
@@ -418,7 +426,8 @@ impl Handler for Churp {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<EncodedVerifiableSecretShare> {
-        self.get_instance(req.id)?.bivariate_share(ctx, req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.bivariate_share(ctx, req)
     }
 
     fn sgx_policy_key_share(
@@ -426,31 +435,38 @@ impl Handler for Churp {
         ctx: &RpcContext,
         req: &KeyShareRequest,
     ) -> Result<EncodedEncryptedPoint> {
-        self.get_instance(req.id)?.sgx_policy_key_share(ctx, req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.sgx_policy_key_share(ctx, req)
     }
 
     fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
-        self.get_instance(req.id)?.init(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.init(req)
     }
 
     fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        self.get_instance(req.id)?.share_reduction(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.share_reduction(req)
     }
 
     fn share_distribution(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        self.get_instance(req.id)?.share_distribution(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.share_distribution(req)
     }
 
     fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        self.get_instance(req.id)?.proactivization(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.proactivization(req)
     }
 
     fn confirmation(&self, req: &HandoffRequest) -> Result<SignedConfirmationRequest> {
-        self.get_instance(req.id)?.confirmation(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.confirmation(req)
     }
 
     fn finalize(&self, req: &HandoffRequest) -> Result<()> {
-        self.get_instance(req.id)?.finalize(req)
+        let instance = self.get_instance(req.id, req.runtime_id)?;
+        instance.finalize(req)
     }
 }
 
@@ -562,7 +578,7 @@ impl<S: Suite> Instance<S> {
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let shareholder = self.get_shareholder(status.id, status.handoff)?;
+            let shareholder = self.get_shareholder(status.handoff)?;
             let point = shareholder.switch_point(&x);
 
             if handoff.needs_verification_matrix()? {
@@ -579,13 +595,8 @@ impl<S: Suite> Instance<S> {
 
         if handoff.needs_verification_matrix()? {
             // The remote verification matrix needs to be verified.
-            let vm = block_on(client.churp_verification_matrix(status.id, status.handoff))?;
-            let checksum = Self::checksum_verification_matrix_bytes(
-                &vm,
-                self.runtime_id,
-                status.id,
-                status.handoff,
-            );
+            let vm = block_on(client.churp_verification_matrix(self.churp_id, status.handoff))?;
+            let checksum = self.checksum_verification_matrix_bytes(&vm, status.handoff);
             let status_checksum = status.checksum.ok_or(Error::InvalidHandoff)?; // Should never happen.
             if checksum != status_checksum {
                 return Err(Error::InvalidVerificationMatrixChecksum.into());
@@ -597,7 +608,7 @@ impl<S: Suite> Instance<S> {
         }
 
         let point = block_on(client.churp_share_reduction_point(
-            status.id,
+            self.churp_id,
             status.next_handoff,
             self.node_id,
         ))?;
@@ -631,7 +642,7 @@ impl<S: Suite> Instance<S> {
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
         let point = block_on(client.churp_share_distribution_point(
-            status.id,
+            self.churp_id,
             status.next_handoff,
             self.node_id,
         ))?;
@@ -667,16 +678,15 @@ impl<S: Suite> Instance<S> {
 
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
-        let share =
-            block_on(client.churp_bivariate_share(status.id, status.next_handoff, self.node_id))?;
+        let share = block_on(client.churp_bivariate_share(
+            self.churp_id,
+            status.next_handoff,
+            self.node_id,
+        ))?;
 
         // The remote verification matrix needs to be verified.
-        let checksum = Self::checksum_verification_matrix_bytes(
-            &share.verification_matrix,
-            self.runtime_id,
-            status.id,
-            status.next_handoff,
-        );
+        let checksum = self
+            .checksum_verification_matrix_bytes(&share.verification_matrix, status.next_handoff);
         let application = status
             .applications
             .get(&node_id)
@@ -691,12 +701,8 @@ impl<S: Suite> Instance<S> {
         handoff.add_bivariate_share(&x, verifiable_share)
     }
 
-    /// Returns the shareholder for the specified scheme and handoff epoch.
-    fn get_shareholder(
-        &self,
-        churp_id: u8,
-        epoch: EpochTime,
-    ) -> Result<Arc<Shareholder<S::Group>>> {
+    /// Returns the shareholder for the specified handoff epoch.
+    fn get_shareholder(&self, epoch: EpochTime) -> Result<Arc<Shareholder<S::Group>>> {
         // Check the memory first. Make sure to lock the new shareholders
         // so that we don't create two shareholders for the same handoff.
         let mut shareholders = self.shareholders.lock().unwrap();
@@ -710,7 +716,7 @@ impl<S: Suite> Instance<S> {
         // host has cleared the storage.
         let share = self
             .storage
-            .load_secret_share(churp_id, epoch)
+            .load_secret_share(self.churp_id, epoch)
             .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
         let share = match share {
@@ -720,12 +726,13 @@ impl<S: Suite> Instance<S> {
                 // succeeded as it might have been confirmed while we were away.
                 let share = self
                     .storage
-                    .load_next_secret_share(churp_id, epoch)
+                    .load_next_secret_share(self.churp_id, epoch)
                     .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
                 // If the share is valid, copy it.
                 if let Some(share) = share.as_ref() {
-                    self.storage.store_secret_share(share, churp_id, epoch)?;
+                    self.storage
+                        .store_secret_share(share, self.churp_id, epoch)?;
                 }
 
                 share
@@ -896,7 +903,7 @@ impl<S: Suite> Instance<S> {
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
 
         if kind == HandoffKind::CommitteeUnchanged {
-            let shareholder = self.get_shareholder(self.churp_id, status.handoff)?;
+            let shareholder = self.get_shareholder(status.handoff)?;
             handoff.set_shareholder(shareholder)?;
         }
 
@@ -921,17 +928,8 @@ impl<S: Suite> Instance<S> {
 
     /// Verifies parameters of the last successfully completed handoff against
     /// the latest status.
-    fn verify_last_handoff(
-        &self,
-        churp_id: u8,
-        runtime_id: Namespace,
-        epoch: EpochTime,
-    ) -> Result<Status> {
-        if self.runtime_id != runtime_id {
-            return Err(Error::RuntimeMismatch.into());
-        }
-
-        let status = self.churp_state.status(self.runtime_id, churp_id)?;
+    fn verify_last_handoff(&self, epoch: EpochTime) -> Result<Status> {
+        let status = self.churp_state.status(self.runtime_id, self.churp_id)?;
         if status.handoff != epoch {
             return Err(Error::HandoffMismatch.into());
         }
@@ -941,17 +939,8 @@ impl<S: Suite> Instance<S> {
 
     /// Verifies parameters of the next handoff against the latest status
     /// and checks whether the handoff is in progress.
-    fn verify_next_handoff(
-        &self,
-        churp_id: u8,
-        runtime_id: Namespace,
-        epoch: EpochTime,
-    ) -> Result<Status> {
-        if self.runtime_id != runtime_id {
-            return Err(Error::RuntimeMismatch.into());
-        }
-
-        let status = self.churp_state.status(self.runtime_id, churp_id)?;
+    fn verify_next_handoff(&self, epoch: EpochTime) -> Result<Status> {
+        let status = self.churp_state.status(self.runtime_id, self.churp_id)?;
         if status.next_handoff != epoch {
             return Err(Error::HandoffMismatch.into());
         }
@@ -1070,28 +1059,22 @@ impl<S: Suite> Instance<S> {
 
     /// Computes the checksum of the verification matrix.
     fn checksum_verification_matrix<G>(
+        &self,
         matrix: &VerificationMatrix<G>,
-        runtime_id: Namespace,
-        churp_id: u8,
         epoch: EpochTime,
     ) -> Hash
     where
         G: Group + GroupEncoding,
     {
-        Self::checksum_verification_matrix_bytes(&matrix.to_bytes(), runtime_id, churp_id, epoch)
+        self.checksum_verification_matrix_bytes(&matrix.to_bytes(), epoch)
     }
 
     /// Computes the checksum of the verification matrix bytes.
-    fn checksum_verification_matrix_bytes(
-        bytes: &Vec<u8>,
-        runtime_id: Namespace,
-        churp_id: u8,
-        epoch: EpochTime,
-    ) -> Hash {
+    fn checksum_verification_matrix_bytes(&self, bytes: &Vec<u8>, epoch: EpochTime) -> Hash {
         let mut checksum = [0u8; 32];
         let mut f = KMac::new_kmac256(bytes, CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
-        f.update(&runtime_id.0);
-        f.update(&[churp_id]);
+        f.update(&self.runtime_id.0);
+        f.update(&[self.churp_id]);
         f.update(&epoch.to_le_bytes());
         f.finalize(&mut checksum);
         Hash(checksum)
@@ -1130,9 +1113,9 @@ impl<S: Suite> Instance<S> {
 
 impl<S: Suite> Handler for Instance<S> {
     fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
-        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_last_handoff(req.epoch)?;
         let shareholder = match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.get_shareholder(req.id, req.epoch)?,
+            SuiteId::NistP384Sha3_384 => self.get_shareholder(req.epoch)?,
         };
         let vm = shareholder
             .verifiable_share()
@@ -1147,7 +1130,7 @@ impl<S: Suite> Handler for Instance<S> {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
 
         let kind = Self::handoff_kind(&status);
         if !matches!(kind, HandoffKind::CommitteeChanged) {
@@ -1163,7 +1146,7 @@ impl<S: Suite> Handler for Instance<S> {
         self.verify_km_enclave(ctx, &status.policy)?;
 
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
-        let shareholder = self.get_shareholder(status.id, status.handoff)?;
+        let shareholder = self.get_shareholder(status.handoff)?;
         let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
 
@@ -1175,7 +1158,7 @@ impl<S: Suite> Handler for Instance<S> {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
 
         let kind = Self::handoff_kind(&status);
         if !matches!(kind, HandoffKind::CommitteeChanged) {
@@ -1204,7 +1187,7 @@ impl<S: Suite> Handler for Instance<S> {
         ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<EncodedVerifiableSecretShare> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
 
         let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
         if !status.applications.contains_key(node_id) {
@@ -1232,20 +1215,16 @@ impl<S: Suite> Handler for Instance<S> {
         ctx: &RpcContext,
         req: &KeyShareRequest,
     ) -> Result<EncodedEncryptedPoint> {
-        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_last_handoff(req.epoch)?;
 
         self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
 
-        let shareholder = self.get_shareholder(status.id, status.handoff)?;
+        let shareholder = self.get_shareholder(status.handoff)?;
         let point = shareholder.make_key_share::<S>(&req.key_id.0, &self.sgx_policy_key_id_dst)?;
         Ok((&point).into())
     }
 
     fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
-        if self.runtime_id != req.runtime_id {
-            return Err(Error::RuntimeMismatch.into());
-        }
-
         let status = self.churp_state.status(self.runtime_id, req.id)?;
         if status.next_handoff != req.epoch {
             return Err(Error::HandoffMismatch.into());
@@ -1267,8 +1246,7 @@ impl<S: Suite> Handler for Instance<S> {
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
-        let checksum =
-            Self::checksum_verification_matrix(matrix, self.runtime_id, req.id, req.epoch);
+        let checksum = self.checksum_verification_matrix(matrix, req.epoch);
 
         // Prepare response and sign it with RAK.
         let application = ApplicationRequest {
@@ -1289,7 +1267,7 @@ impl<S: Suite> Handler for Instance<S> {
     }
 
     fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
 
         let handoff = self.get_or_create_handoff(&status)?;
         let client = self.key_manager_client(&status, false)?;
@@ -1299,7 +1277,7 @@ impl<S: Suite> Handler for Instance<S> {
     }
 
     fn share_distribution(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
         let handoff = self.get_handoff(status.next_handoff)?;
         let client = self.key_manager_client(&status, true)?;
         let f = |node_id| {
@@ -1309,7 +1287,7 @@ impl<S: Suite> Handler for Instance<S> {
     }
 
     fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
         let handoff = self.get_or_create_handoff(&status)?;
         let client = self.key_manager_client(&status, true)?;
         let f = |node_id| self.fetch_bivariate_share(node_id, &status, &handoff, &client);
@@ -1317,7 +1295,7 @@ impl<S: Suite> Handler for Instance<S> {
     }
 
     fn confirmation(&self, req: &HandoffRequest) -> Result<SignedConfirmationRequest> {
-        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_next_handoff(req.epoch)?;
 
         if !status.applications.contains_key(&self.node_id) {
             return Err(Error::ApplicationNotSubmitted.into());
@@ -1330,20 +1308,19 @@ impl<S: Suite> Handler for Instance<S> {
         // Before overwriting the next secret share, make sure it was copied
         // and used to construct the last shareholder.
         let _ = self
-            .get_shareholder(status.id, status.handoff)
+            .get_shareholder(status.handoff)
             .map(Some)
             .or_else(|err| ignore_error(err, Error::ShareholderNotFound))?; // Ignore if we don't have the correct share.
 
         // Always persist the secret share before sending confirmation.
         self.storage
-            .store_next_secret_share(share, status.id, status.next_handoff)?;
+            .store_next_secret_share(share, self.churp_id, status.next_handoff)?;
 
         // Prepare response and sign it with RAK.
         let vm = share.verification_matrix();
-        let checksum =
-            Self::checksum_verification_matrix(vm, self.runtime_id, status.id, status.next_handoff);
+        let checksum = self.checksum_verification_matrix(vm, status.next_handoff);
         let confirmation = ConfirmationRequest {
-            id: status.id,
+            id: self.churp_id,
             runtime_id: self.runtime_id,
             epoch: status.next_handoff,
             checksum,
@@ -1360,7 +1337,7 @@ impl<S: Suite> Handler for Instance<S> {
     }
 
     fn finalize(&self, req: &HandoffRequest) -> Result<()> {
-        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+        let status = self.verify_last_handoff(req.epoch)?;
 
         // Move the shareholder if the handoff was completed.
         let handoff = self.get_handoff(status.handoff);
@@ -1375,7 +1352,7 @@ impl<S: Suite> Handler for Instance<S> {
             let shareholder = handoff.get_full_shareholder()?;
             let share = shareholder.verifiable_share();
             self.storage
-                .store_secret_share(share, status.id, status.handoff)?;
+                .store_secret_share(share, self.churp_id, status.handoff)?;
             self.add_shareholder(shareholder, status.handoff);
         }
 
