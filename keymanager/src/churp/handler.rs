@@ -251,7 +251,7 @@ pub(crate) trait Handler {
     /// first one (dealing phase).
     ///
     /// This method must be called locally.
-    fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest>;
+    fn apply(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest>;
 
     /// Tries to fetch switch points for share reduction from the given nodes.
     ///
@@ -439,9 +439,9 @@ impl Handler for Churp {
         instance.sgx_policy_key_share(ctx, req)
     }
 
-    fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
+    fn apply(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
         let instance = self.get_instance(req.id, req.runtime_id)?;
-        instance.init(req)
+        instance.apply(req)
     }
 
     fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
@@ -1224,8 +1224,8 @@ impl<S: Suite> Handler for Instance<S> {
         Ok((&point).into())
     }
 
-    fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
-        let status = self.churp_state.status(self.runtime_id, req.id)?;
+    fn apply(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
+        let status = self.churp_state.status(self.runtime_id, self.churp_id)?;
         if status.next_handoff != req.epoch {
             return Err(Error::HandoffMismatch.into());
         }
@@ -1250,7 +1250,7 @@ impl<S: Suite> Handler for Instance<S> {
 
         // Prepare response and sign it with RAK.
         let application = ApplicationRequest {
-            id: req.id,
+            id: self.churp_id,
             runtime_id: self.runtime_id,
             epoch: req.epoch,
             checksum,

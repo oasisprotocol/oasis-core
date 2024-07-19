@@ -8,8 +8,8 @@ use oasis_core_runtime::enclave_rpc::{
 
 use crate::churp::{Churp, Handler};
 
-/// Name of the `init` method.
-pub const METHOD_INIT: &str = "churp/init";
+/// Name of the `apply` method.
+pub const METHOD_APPLY: &str = "churp/apply";
 /// Name of the `share_reduction` method.
 pub const METHOD_SHARE_REDUCTION: &str = "churp/share_reduction";
 /// Name of the `share_distribution` method.
@@ -74,10 +74,10 @@ impl RpcHandler for Churp {
             /* Local queries */
             RpcMethod::new(
                 RpcMethodDescriptor {
-                    name: METHOD_INIT.to_string(),
+                    name: METHOD_APPLY.to_string(),
                     kind: RpcKind::LocalQuery,
                 },
-                move |_ctx: &_, req: &_| self.init(req),
+                move |_ctx: &_, req: &_| self.apply(req),
             ),
             RpcMethod::new(
                 RpcMethodDescriptor {

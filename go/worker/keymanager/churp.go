@@ -491,7 +491,7 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, status *
 		Epoch: status.NextHandoff,
 	}
 	var rsp churp.SignedApplicationRequest
-	if err := timeCallEnclaveLocal(ctx, s.kmWorker, churp.RPCMethodInit, req, &rsp, status); err != nil {
+	if err := timeCallEnclaveLocal(ctx, s.kmWorker, churp.RPCMethodApply, req, &rsp, status); err != nil {
 		return fmt.Errorf("failed to generate verification matrix: %w", err)
 	}
 
