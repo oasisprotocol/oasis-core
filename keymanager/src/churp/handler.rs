@@ -370,15 +370,18 @@ impl Churp {
         churp_id: u8,
         runtime_id: Namespace,
     ) -> Result<Arc<dyn Handler + Send + Sync>> {
+        // Ensure runtime_id matches.
         if self.runtime_id != runtime_id {
             return Err(Error::RuntimeMismatch.into());
         }
 
+        // Return the instance if it exists.
         let mut instances = self.instances.lock().unwrap();
         if let Some(instance) = instances.get(&churp_id) {
             return Ok(instance.clone());
         }
 
+        // Create a new instance based on the suite type.
         let status = self.churp_state.status(self.runtime_id, churp_id)?;
         let instance = match status.suite_id {
             SuiteId::NistP384Sha3_384 => Instance::<p384::Sha3_384>::new(
@@ -390,6 +393,11 @@ impl Churp {
                 self.policies.clone(),
             ),
         };
+
+        // Load secret shares and bivariate share.
+        instance.init(&status)?;
+
+        // Store the new instance.
         let instance = Arc::new(instance);
         instances.insert(churp_id, instance.clone());
 
@@ -497,6 +505,9 @@ struct Instance<S: Suite> {
     registry_state: RegistryState,
 
     /// Shareholders with secret shares for completed handoffs.
+    ///
+    /// The map may also contain shareholders for failed or unfinished
+    /// handoffs, so always verify if the handoff succeeded in the consensus.
     shareholders: Mutex<HashMap<EpochTime, Arc<Shareholder<S::Group>>>>,
     /// Dealer of bivariate shares for the next handoff.
     dealer: Mutex<Option<DealerInfo<S::Group>>>,
@@ -514,6 +525,7 @@ struct Instance<S: Suite> {
 }
 
 impl<S: Suite> Instance<S> {
+    /// Creates a new CHURP instance.
     pub fn new(
         churp_id: u8,
         node_id: PublicKey,
@@ -560,6 +572,20 @@ impl<S: Suite> Instance<S> {
             shareholder_dst,
             sgx_policy_key_id_dst,
         }
+    }
+
+    /// Initializes the instance by loading the shareholder for the last
+    /// successfully completed handoff, as well as the shareholder and
+    /// the dealer for the upcoming handoff, if they are available.
+    pub fn init(&self, status: &Status) -> Result<()> {
+        let checksum = status
+            .applications
+            .get(&self.node_id)
+            .map(|app| app.checksum);
+
+        self.load_shareholder(status.handoff)?;
+        self.load_next_shareholder(status.next_handoff)?;
+        self.load_dealer(status.next_handoff, checksum)
     }
 
     /// Tries to fetch switch point for share reduction from the given node.
@@ -701,35 +727,50 @@ impl<S: Suite> Instance<S> {
         handoff.add_bivariate_share(&x, verifiable_share)
     }
 
-    /// Returns the shareholder for the specified handoff epoch.
+    /// Returns the shareholder for the given epoch.
     fn get_shareholder(&self, epoch: EpochTime) -> Result<Arc<Shareholder<S::Group>>> {
-        // Check the memory first. Make sure to lock the new shareholders
-        // so that we don't create two shareholders for the same handoff.
-        let mut shareholders = self.shareholders.lock().unwrap();
+        let shareholders = self.shareholders.lock().unwrap();
+        shareholders
+            .get(&epoch)
+            .cloned()
+            .ok_or(Error::ShareholderNotFound.into())
+    }
 
-        if let Some(shareholder) = shareholders.get(&epoch) {
-            return Ok(shareholder.clone());
+    /// Adds a shareholder for the given epoch.
+    fn add_shareholder(&self, shareholder: Arc<Shareholder<S::Group>>, epoch: EpochTime) {
+        let mut shareholders = self.shareholders.lock().unwrap();
+        shareholders.insert(epoch, shareholder);
+    }
+
+    /// Keeps only the shareholders that belong to one of the given epochs.
+    fn keep_shareholders(&self, epochs: &[EpochTime]) {
+        let mut shareholders = self.shareholders.lock().unwrap();
+        shareholders.retain(|epoch, _| epochs.contains(epoch));
+    }
+
+    /// Loads the shareholder from local storage for the given epoch.
+    fn load_shareholder(&self, epoch: EpochTime) -> Result<()> {
+        // Skip if no handoffs have been completed so far.
+        if epoch == 0 {
+            return Ok(());
         }
 
-        // Fetch shareholder's secret share from the local storage and use it
-        // to restore the internal state upon restarts, unless a malicious
-        // host has cleared the storage.
         let share = self
             .storage
             .load_secret_share(self.churp_id, epoch)
             .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
+        // If the secret share is not available, check if the next handoff
+        // succeeded as it might have been confirmed while we were away.
         let share = match share {
             Some(share) => Some(share),
             None => {
-                // If the secret share is not available, check if the next handoff
-                // succeeded as it might have been confirmed while we were away.
                 let share = self
                     .storage
                     .load_next_secret_share(self.churp_id, epoch)
                     .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
-                // If the share is valid, copy it.
+                // // Back up the secret share, if it is valid.
                 if let Some(share) = share.as_ref() {
                     self.storage
                         .store_secret_share(share, self.churp_id, epoch)?;
@@ -738,115 +779,137 @@ impl<S: Suite> Instance<S> {
                 share
             }
         };
-        let share = share.ok_or(Error::ShareholderNotFound)?;
+
+        self.verify_and_add_shareholder(share, epoch)
+    }
+
+    /// Loads the next shareholder from local storage for the given epoch.
+    fn load_next_shareholder(&self, epoch: EpochTime) -> Result<()> {
+        let share = self
+            .storage
+            .load_next_secret_share(self.churp_id, epoch)
+            .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
+
+        self.verify_and_add_shareholder(share, epoch)
+    }
+
+    fn verify_and_add_shareholder(
+        &self,
+        share: Option<VerifiableSecretShare<S::Group>>,
+        epoch: EpochTime,
+    ) -> Result<()> {
+        let share = match share {
+            Some(share) => share,
+            None => return Ok(()),
+        };
 
         // Verify that the host hasn't changed.
-        let x = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
-        if share.secret_share().coordinate_x() != &x {
+        let me = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
+        if share.secret_share().coordinate_x() != &me {
             return Err(Error::InvalidHost.into());
         }
 
         // Create a new shareholder.
         let shareholder = Arc::new(Shareholder::from(share));
-        shareholders.insert(epoch, shareholder.clone());
 
-        Ok(shareholder)
+        // Store the shareholder.
+        self.add_shareholder(shareholder, epoch);
+
+        Ok(())
     }
 
-    /// Adds a shareholder for the specified scheme and handoff epoch.
-    fn add_shareholder(&self, shareholder: Arc<Shareholder<S::Group>>, epoch: EpochTime) {
-        let mut shareholders = self.shareholders.lock().unwrap();
-        shareholders.insert(epoch, shareholder);
-    }
-
-    /// Removes shareholders that belong to a handoff that happened at or before
-    /// the given epoch.
-    fn remove_shareholders(&self, max_epoch: EpochTime) {
-        let mut shareholders = self.shareholders.lock().unwrap();
-        shareholders.retain(|&epoch, _| epoch > max_epoch);
-    }
-
-    /// Returns the dealer for the specified handoff epoch.
+    /// Returns the dealer for the given epoch.
     fn get_dealer(&self, epoch: EpochTime) -> Result<Arc<Dealer<S::Group>>> {
-        self._get_or_create_dealer(epoch, None, None)
+        let dealer_guard = self.dealer.lock().unwrap();
+
+        let dealer_info = match dealer_guard.as_ref() {
+            Some(dealer_info) => dealer_info,
+            None => return Err(Error::DealerNotFound.into()),
+        };
+        if dealer_info.epoch != epoch {
+            return Err(Error::DealerNotFound.into());
+        }
+
+        Ok(dealer_info.dealer.clone())
     }
 
-    /// Returns the dealer for the specified handoff epoch. If the dealer
-    /// doesn't exist, a new one is created.
-    fn get_or_create_dealer(
+    /// Adds a dealer for the given epoch. If a dealer is already set,
+    /// it will be overwritten.
+    fn add_dealer(&self, dealer: Arc<Dealer<S::Group>>, epoch: EpochTime) {
+        let mut dealer_guard = self.dealer.lock().unwrap();
+        *dealer_guard = Some(DealerInfo { epoch, dealer });
+    }
+
+    /// Creates a new dealer for the given epoch.
+    ///
+    /// If a dealer for the same or any other epoch already exists, it will
+    /// be removed, its bivariate polynomial overwritten, and permanently
+    /// lost.
+    ///
+    /// Note that since the host controls the local storage, he can restart
+    /// the enclave to create multiple dealers for the same epoch and then
+    /// replace the last backup with a bivariate polynomial from a dealer
+    /// of his choice. Therefore, it is essential to verify the bivariate
+    /// polynomial after loading or when deriving bivariate shares.
+    fn create_dealer(
         &self,
         epoch: EpochTime,
         threshold: u8,
         dealing_phase: bool,
     ) -> Result<Arc<Dealer<S::Group>>> {
-        self._get_or_create_dealer(epoch, Some(threshold), Some(dealing_phase))
+        // Create a new dealer.
+        let dealer = Dealer::create(threshold, dealing_phase, &mut OsRng)?;
+        let dealer = Arc::new(dealer);
+
+        // Encrypt and store the polynomial in case of a restart.
+        let polynomial = dealer.bivariate_polynomial();
+        self.storage
+            .store_bivariate_polynomial(polynomial, self.churp_id, epoch)?;
+
+        // Store the dealer.
+        self.add_dealer(dealer.clone(), epoch);
+
+        Ok(dealer)
     }
 
-    fn _get_or_create_dealer(
-        &self,
-        epoch: EpochTime,
-        threshold: Option<u8>,
-        dealing_phase: Option<bool>,
-    ) -> Result<Arc<Dealer<S::Group>>> {
-        // Check the memory first. Make sure to lock the dealer so that we
-        // don't create two dealers for the same handoff.
-        let mut dealer_guard = self.dealer.lock().unwrap();
-
-        if let Some(dealer_info) = dealer_guard.as_ref() {
-            match epoch.cmp(&dealer_info.epoch) {
-                cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
-                cmp::Ordering::Equal => return Ok(dealer_info.dealer.clone()),
-                cmp::Ordering::Greater => (),
-            }
+    /// Loads the dealer for the given epoch from the local storage and verifies
+    /// it against the provided checksum.
+    fn load_dealer(&self, epoch: EpochTime, checksum: Option<Hash>) -> Result<()> {
+        // Skip if handoffs are disabled.
+        if epoch == HANDOFFS_DISABLED {
+            return Ok(());
         }
 
-        // Check the local storage to ensure that only one secret bivariate
-        // polynomial is generated per handoff upon restarts, unless a malicious
-        // host has cleared the storage.
+        // Load untrusted polynomial.
         let polynomial = self
             .storage
             .load_bivariate_polynomial(self.churp_id, epoch)
             .or_else(|err| ignore_error(err, Error::InvalidBivariatePolynomial))?; // Ignore previous dealers.
 
-        let dealer = match polynomial {
-            Some(bp) => {
-                // Polynomial verification is redundant as encryption prevents
-                // tampering, while consensus ensures that the group ID remains
-                // unchanged and that polynomial dimensions remain consistent
-                // for any given pair of churp ID and handoff.
-                Dealer::from(bp)
-            }
-            None => {
-                // Skip dealer creation if not needed.
-                let threshold = threshold.ok_or(Error::DealerNotFound)?;
-                let dealing_phase = dealing_phase.ok_or(Error::DealerNotFound)?;
-
-                // The local storage is either empty or contains a polynomial
-                // from another handoff. It's time to prepare a new one.
-                //
-                // If the host has cleared the storage, other participants
-                // will detect the polynomial change because the checksum
-                // of the verification matrix in the submitted application
-                // will also change.
-                let dealer = Dealer::create(threshold, dealing_phase, &mut OsRng)?;
-
-                // Encrypt and store the polynomial in case of a restart.
-                let polynomial = dealer.bivariate_polynomial();
-                self.storage
-                    .store_bivariate_polynomial(polynomial, self.churp_id, epoch)?;
-
-                dealer
-            }
+        let polynomial = match polynomial {
+            Some(polynomial) => polynomial,
+            None => return Ok(()),
         };
 
-        // Create a new dealer.
-        let dealer = Arc::new(dealer);
-        *dealer_guard = Some(DealerInfo {
-            epoch,
-            dealer: dealer.clone(),
-        });
+        // Create untrusted dealer.
+        let dealer = Arc::new(Dealer::from(polynomial));
 
-        Ok(dealer)
+        // Verify that the host hasn't created multiple dealers for the same
+        // epoch and replaced the polynomial that was used to prepare
+        // the application.
+        if let Some(checksum) = checksum {
+            let verification_matrix = dealer.verification_matrix();
+            let computed_checksum = self.checksum_verification_matrix(verification_matrix, epoch);
+
+            if checksum != computed_checksum {
+                return Err(Error::InvalidBivariatePolynomial.into());
+            }
+        }
+
+        // Store the dealer.
+        self.add_dealer(dealer, epoch);
+
+        Ok(())
     }
 
     /// Removes the dealer if it belongs to a handoff that occurred
@@ -860,36 +923,32 @@ impl<S: Suite> Instance<S> {
         }
     }
 
-    /// Returns the handoff for the specified handoff epoch.
+    /// Returns the handoff for the given epoch.
     fn get_handoff(&self, epoch: EpochTime) -> Result<Arc<Handoff<S::Group>>> {
-        self._get_or_create_handoff(epoch, None)
+        let handoff_guard = self.handoff.lock().unwrap();
+
+        let handoff_info = handoff_guard
+            .as_ref()
+            .filter(|hi| hi.epoch == epoch)
+            .ok_or(Error::HandoffNotFound)?;
+
+        Ok(handoff_info.handoff.clone())
     }
 
-    /// Returns the handoff for the next handoff epoch. If the handoff doesn't
-    /// exist, a new one is created.
+    /// Creates a handoff for the next handoff epoch. If a handoff already
+    /// exists, the existing one is returned.
     fn get_or_create_handoff(&self, status: &Status) -> Result<Arc<Handoff<S::Group>>> {
-        self._get_or_create_handoff(status.next_handoff, Some(status))
-    }
-
-    fn _get_or_create_handoff(
-        &self,
-        epoch: EpochTime,
-        status: Option<&Status>,
-    ) -> Result<Arc<Handoff<S::Group>>> {
-        // Check the memory first. Make sure to lock the handoff so that we
-        // don't create two handoffs for the same epoch.
+        // Make sure to lock the handoff so that we don't create two handoffs
+        // for the same epoch.
         let mut handoff_guard = self.handoff.lock().unwrap();
 
         if let Some(handoff_info) = handoff_guard.as_ref() {
-            match epoch.cmp(&handoff_info.epoch) {
+            match status.next_handoff.cmp(&handoff_info.epoch) {
                 cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
                 cmp::Ordering::Equal => return Ok(handoff_info.handoff.clone()),
                 cmp::Ordering::Greater => (),
             }
         }
-
-        // Skip handoff creation if not needed.
-        let status = status.ok_or(Error::HandoffNotFound)?;
 
         // Create a new handoff.
         let threshold = status.threshold;
@@ -901,15 +960,18 @@ impl<S: Suite> Instance<S> {
         }
         let kind = Self::handoff_kind(status);
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
+        let handoff = Arc::new(handoff);
 
+        // If the committee hasn't changed, we need the latest shareholder
+        // to randomize its share.
         if kind == HandoffKind::CommitteeUnchanged {
             let shareholder = self.get_shareholder(status.handoff)?;
             handoff.set_shareholder(shareholder)?;
         }
 
-        let handoff = Arc::new(handoff);
+        // Store the handoff.
         *handoff_guard = Some(HandoffInfo {
-            epoch,
+            epoch: status.next_handoff,
             handoff: handoff.clone(),
         });
 
@@ -1192,7 +1254,12 @@ impl<S: Suite> Handler for Instance<S> {
         let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
-        }
+        };
+
+        let application = status
+            .applications
+            .get(&self.node_id)
+            .ok_or(Error::NotInCommittee)?;
 
         self.verify_node_id(ctx, node_id)?;
         self.verify_km_enclave(ctx, &status.policy)?;
@@ -1203,6 +1270,15 @@ impl<S: Suite> Handler for Instance<S> {
         let share = dealer.make_share(x, kind);
         let share = (&share).into();
         let verification_matrix = dealer.verification_matrix().to_bytes();
+
+        // Verify that the host hasn't created multiple dealers for the same
+        // epoch and replaced the polynomial that was used to prepare
+        // the application.
+        let computed_checksum =
+            self.checksum_verification_matrix_bytes(&verification_matrix, status.next_handoff);
+        if application.checksum != computed_checksum {
+            return Err(Error::InvalidBivariatePolynomial.into());
+        }
 
         Ok(EncodedVerifiableSecretShare {
             share,
@@ -1236,13 +1312,15 @@ impl<S: Suite> Handler for Instance<S> {
             return Err(Error::ApplicationSubmitted.into());
         }
 
+        // Ensure application is submitted one epoch before the next handoff.
         let now = self.beacon_state.epoch()?;
         if status.next_handoff != now + 1 {
             return Err(Error::ApplicationsClosed.into());
         }
 
+        // Create a new dealer.
         let dealing_phase = status.committee.is_empty();
-        let dealer = self.get_or_create_dealer(req.epoch, status.threshold, dealing_phase)?;
+        let dealer = self.create_dealer(status.next_handoff, status.threshold, dealing_phase)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
@@ -1252,7 +1330,7 @@ impl<S: Suite> Handler for Instance<S> {
         let application = ApplicationRequest {
             id: self.churp_id,
             runtime_id: self.runtime_id,
-            epoch: req.epoch,
+            epoch: status.next_handoff,
             checksum,
         };
         let body = cbor::to_vec(application.clone());
@@ -1288,7 +1366,10 @@ impl<S: Suite> Handler for Instance<S> {
 
     fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.epoch)?;
-        let handoff = self.get_or_create_handoff(&status)?;
+        let handoff = match Self::handoff_kind(&status) {
+            HandoffKind::CommitteeChanged => self.get_handoff(status.next_handoff)?,
+            _ => self.get_or_create_handoff(&status)?,
+        };
         let client = self.key_manager_client(&status, true)?;
         let f = |node_id| self.fetch_bivariate_share(node_id, &status, &handoff, &client);
         fetch(f, &req.node_ids)
@@ -1301,20 +1382,20 @@ impl<S: Suite> Handler for Instance<S> {
             return Err(Error::ApplicationNotSubmitted.into());
         }
 
+        // Fetch the next shareholder and its secret share.
         let handoff = self.get_handoff(status.next_handoff)?;
         let shareholder = handoff.get_full_shareholder()?;
         let share = shareholder.verifiable_share();
 
-        // Before overwriting the next secret share, make sure it was copied
-        // and used to construct the last shareholder.
-        let _ = self
-            .get_shareholder(status.handoff)
-            .map(Some)
-            .or_else(|err| ignore_error(err, Error::ShareholderNotFound))?; // Ignore if we don't have the correct share.
-
-        // Always persist the secret share before sending confirmation.
+        // Back up the secret share before sending confirmation.
         self.storage
             .store_next_secret_share(share, self.churp_id, status.next_handoff)?;
+
+        // Store the shareholder. Observe that we are adding the shareholder
+        // before the consensus has confirmed that the handoff was completed.
+        // This is fine, as we always verify the handoff epoch before fetching
+        // a shareholder.
+        self.add_shareholder(shareholder.clone(), status.next_handoff);
 
         // Prepare response and sign it with RAK.
         let vm = share.verification_matrix();
@@ -1339,32 +1420,27 @@ impl<S: Suite> Handler for Instance<S> {
     fn finalize(&self, req: &HandoffRequest) -> Result<()> {
         let status = self.verify_last_handoff(req.epoch)?;
 
-        // Move the shareholder if the handoff was completed.
-        let handoff = self.get_handoff(status.handoff);
-        let handoff = match handoff {
-            Ok(handoff) => Some(handoff),
-            Err(err) => match err.downcast_ref::<Error>() {
-                Some(err) if err == &Error::HandoffNotFound => None,
-                _ => return Err(err),
-            },
-        };
-        if let Some(handoff) = handoff {
-            let shareholder = handoff.get_full_shareholder()?;
-            let share = shareholder.verifiable_share();
-            self.storage
-                .store_secret_share(share, self.churp_id, status.handoff)?;
-            self.add_shareholder(shareholder, status.handoff);
-        }
+        // Cleanup shareholders by removing those for past or failed handoffs.
+        let epochs = [status.handoff, status.next_handoff];
+        self.keep_shareholders(&epochs);
 
-        // Cleanup.
-        let max_epoch = status.handoff.saturating_sub(1);
-        self.remove_shareholders(max_epoch);
-
+        // Cleaning up dealers and handoffs is optional,
+        // as they are overwritten during the next handoff.
         let max_epoch = status.next_handoff.saturating_sub(1);
         self.remove_dealer(max_epoch);
         self.remove_handoff(max_epoch);
 
-        Ok(())
+        // Fetch the last shareholder and its secret share.
+        let shareholder = match self.get_shareholder(status.handoff) {
+            Ok(shareholder) => shareholder,
+            Err(_) => return Ok(()), // Not found.
+        };
+        let share = shareholder.verifiable_share();
+
+        // Back up the secret share. This operation will be a no-op
+        // if the handoff failed, as the last shareholder hasn't changed.
+        self.storage
+            .store_secret_share(share, self.churp_id, status.handoff)
     }
 }
 
