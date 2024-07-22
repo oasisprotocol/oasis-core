@@ -26,7 +26,7 @@ require (
 	github.com/gammazero/deque v0.2.1
 	github.com/go-kit/log v0.2.1
 	github.com/goki/go-difflib v1.2.1
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.1.2
 	github.com/hashicorp/go-hclog v1.5.0
