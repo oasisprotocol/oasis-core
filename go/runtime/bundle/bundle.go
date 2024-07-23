@@ -22,6 +22,9 @@ import (
 type Bundle struct {
 	Manifest *Manifest
 	Data     map[string][]byte
+
+	// manifestHash is the original manifest hash of the bundle at time the bundle was loaded.
+	manifestHash hash.Hash
 }
 
 // Validate validates the runtime bundle for well-formedness.
@@ -277,6 +280,9 @@ func (bnd *Bundle) Write(fn string) error {
 		return fmt.Errorf("runtime/bundle: failed to write bundle: %w", err)
 	}
 
+	// Update the manifest hash.
+	bnd.manifestHash = bnd.Manifest.Hash()
+
 	return nil
 }
 
@@ -298,12 +304,12 @@ func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
 	case false:
 		// DATADIR/runtimes/bundles/manifestHash
 		subDir = filepath.Join(ExplodedPath(dataDir),
-			bnd.Manifest.Hash().String(),
+			bnd.manifestHash.String(),
 		)
 	case true:
 		// DATADIR/runtimes/bundles/detached/manifestHash
 		subDir = filepath.Join(DetachedExplodedPath(dataDir),
-			bnd.Manifest.Hash().String(),
+			bnd.manifestHash.String(),
 		)
 	}
 
@@ -378,6 +384,7 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 func (bnd *Bundle) Close() error {
 	bnd.Manifest = nil
 	bnd.Data = nil
+	bnd.manifestHash.Empty()
 	return nil
 }
 
@@ -436,8 +443,9 @@ func Open(fn string) (*Bundle, error) {
 
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
-		Manifest: &manifest,
-		Data:     data,
+		Manifest:     &manifest,
+		Data:         data,
+		manifestHash: manifest.Hash(),
 	}
 	if err = bnd.Validate(); err != nil {
 		return nil, err
