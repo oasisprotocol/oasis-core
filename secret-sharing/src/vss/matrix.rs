@@ -2,11 +2,9 @@ use std::{cmp::max, ops::Add};
 
 use group::{Group, GroupEncoding};
 
-use super::{
-    arith::powers,
-    polynomial::{BivariatePolynomial, Polynomial},
-    vector::VerificationVector,
-};
+use crate::poly::{powers, BivariatePolynomial, Polynomial};
+
+use super::vector::VerificationVector;
 
 /// Verification matrix for a bivariate polynomial.
 ///

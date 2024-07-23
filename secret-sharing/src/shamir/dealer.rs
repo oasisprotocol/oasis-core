@@ -1,7 +1,7 @@
 use group::ff::PrimeField;
 use rand::RngCore;
 
-use crate::vss::polynomial::{Point, Polynomial};
+use crate::poly::{Point, Polynomial};
 
 /// A holder of the secret-sharing polynomial responsible for generating
 /// secret shares.

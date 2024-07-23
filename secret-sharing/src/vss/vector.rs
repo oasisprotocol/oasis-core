@@ -1,6 +1,6 @@
 use group::Group;
 
-use super::{arith::powers, polynomial::Polynomial};
+use crate::poly::{powers, Polynomial};
 
 /// Verification vector for a univariate polynomial.
 ///
@@ -95,7 +95,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::vss::{polynomial::Polynomial, vector::VerificationVector};
+    use crate::{poly::Polynomial, vss::vector::VerificationVector};
 
     fn scalar(value: i64) -> p384::Scalar {
         scalars(&vec![value])[0]

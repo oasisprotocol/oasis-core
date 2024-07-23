@@ -3,7 +3,7 @@ use std::iter::zip;
 
 use group::ff::PrimeField;
 
-use crate::vss::polynomial::Polynomial;
+use crate::poly::Polynomial;
 
 /// Returns the Lagrange interpolation polynomial for the given set of points.
 ///

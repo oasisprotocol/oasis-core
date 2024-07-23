@@ -3,7 +3,7 @@ use std::iter::zip;
 use anyhow::{bail, Result};
 use group::ff::PrimeField;
 
-use crate::{kdc::KeyRecoverer, vss::lagrange};
+use crate::{poly::lagrange, kdc::KeyRecoverer};
 
 use super::{HandoffKind, SecretShare};
 

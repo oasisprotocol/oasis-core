@@ -2,7 +2,7 @@ use std::iter::zip;
 
 use group::ff::PrimeField;
 
-use crate::vss::polynomial::Polynomial;
+use crate::poly::Polynomial;
 
 use super::multiplier::Multiplier;
 

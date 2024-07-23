@@ -1,7 +1,7 @@
 use group::ff::PrimeField;
 use rand_core::RngCore;
 
-use crate::vss::{arith::powers, scalar::scalar_from_bytes};
+use crate::poly::{powers, scalar_from_bytes};
 
 use super::Polynomial;
 

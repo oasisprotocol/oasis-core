@@ -34,10 +34,10 @@ use oasis_core_runtime::{
     protocol::Protocol,
 };
 use secret_sharing::{
+    poly::EncryptedPoint,
     churp::{HandoffKind, Player},
     kdc::KeyRecoverer,
     suites::{p384, Suite},
-    vss::polynomial::EncryptedPoint,
 };
 
 use crate::{

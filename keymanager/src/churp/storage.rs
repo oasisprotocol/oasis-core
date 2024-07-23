@@ -3,7 +3,7 @@ pub use std::{convert::TryInto, sync::Arc};
 
 use anyhow::Result;
 use group::{ff::PrimeField, Group, GroupEncoding};
-use secret_sharing::{churp::VerifiableSecretShare, vss::polynomial::BivariatePolynomial};
+use secret_sharing::{churp::VerifiableSecretShare, poly::BivariatePolynomial};
 use sgx_isa::Keypolicy;
 
 use oasis_core_runtime::{
@@ -260,7 +260,8 @@ mod tests {
 
     use secret_sharing::{
         churp::{SecretShare, VerifiableSecretShare},
-        vss::{matrix, polynomial},
+        poly,
+        vss::matrix,
     };
 
     use crate::churp::storage::{
@@ -273,7 +274,7 @@ mod tests {
 
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
-    type BivariatePolynomial = polynomial::BivariatePolynomial<PrimeField>;
+    type BivariatePolynomial = poly::BivariatePolynomial<PrimeField>;
     type VerificationMatrix = matrix::VerificationMatrix<Group>;
 
     #[test]

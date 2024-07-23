@@ -5,7 +5,7 @@ use group::ff::PrimeField;
 
 use crate::{
     kdc::KeyRecoverer,
-    vss::{lagrange, polynomial::Point},
+    poly::{lagrange, Point},
 };
 
 /// A constructor of the shared secret.
