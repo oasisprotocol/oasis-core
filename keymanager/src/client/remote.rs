@@ -36,8 +36,8 @@ use oasis_core_runtime::{
 use secret_sharing::{
     churp::{HandoffKind, Player},
     kdc::KeyRecoverer,
+    poly::EncryptedPoint,
     suites::{p384, Suite},
-    vss::polynomial::EncryptedPoint,
 };
 
 use crate::{

@@ -2,11 +2,9 @@ use std::{cmp::max, ops::Add};
 
 use group::{Group, GroupEncoding};
 
-use super::{
-    arith::powers,
-    polynomial::{BivariatePolynomial, Polynomial},
-    vector::VerificationVector,
-};
+use crate::poly::{powers, BivariatePolynomial, Polynomial};
+
+use super::VerificationVector;
 
 /// Verification matrix for a bivariate polynomial.
 ///
@@ -338,7 +336,7 @@ mod tests {
     use group::Group;
     use rand::{rngs::StdRng, SeedableRng};
 
-    use crate::vss::matrix::VerificationMatrix;
+    use crate::vss::VerificationMatrix;
 
     use super::BivariatePolynomial;
 

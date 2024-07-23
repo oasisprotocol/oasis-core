@@ -6,8 +6,8 @@ use anyhow::{bail, Result};
 use group::{ff::PrimeField, Group};
 
 use crate::{
+    poly::{lagrange, EncryptedPoint},
     suites::GroupDigest,
-    vss::{lagrange, polynomial::EncryptedPoint},
 };
 
 /// A trait for shareholders which hold a secret share point on a secret-sharing

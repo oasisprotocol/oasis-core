@@ -36,11 +36,9 @@ use oasis_core_runtime::{
 use secret_sharing::{
     churp::{encode_shareholder, Dealer, Handoff, HandoffKind, Shareholder, VerifiableSecretShare},
     kdc::KeySharer,
+    poly::{scalar_from_bytes, scalar_to_bytes},
     suites::{p384, Suite},
-    vss::{
-        matrix::VerificationMatrix,
-        scalar::{scalar_from_bytes, scalar_to_bytes},
-    },
+    vss::VerificationMatrix,
 };
 
 use crate::{

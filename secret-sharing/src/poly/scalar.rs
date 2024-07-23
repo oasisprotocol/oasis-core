@@ -24,7 +24,7 @@ mod tests {
     use group::ff::Field;
     use rand::{rngs::StdRng, SeedableRng};
 
-    use crate::vss::scalar::{scalar_from_bytes, scalar_to_bytes};
+    use super::{scalar_from_bytes, scalar_to_bytes};
 
     type PrimeField = p384::Scalar;
 

@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use group::{Group, GroupEncoding};
 
-use crate::vss::{
-    lagrange::lagrange, matrix::VerificationMatrix, polynomial::Polynomial,
-    vector::VerificationVector,
+use crate::{
+    poly::{lagrange::lagrange, Polynomial},
+    vss::{VerificationMatrix, VerificationVector},
 };
 
 use super::{Error, HandoffKind, SecretShare, Shareholder, VerifiableSecretShare};
@@ -610,8 +610,9 @@ mod tests {
 
     use crate::{
         churp::{HandoffKind, SecretShare, VerifiableSecretShare},
+        poly,
         suites::{self, p384},
-        vss::{matrix, polynomial},
+        vss,
     };
 
     use super::{BivariateShares, DimensionSwitchKind, Error, SwitchPoints};
@@ -619,9 +620,8 @@ mod tests {
     type Suite = p384::Sha3_384;
     type Group = <Suite as suites::Suite>::Group;
     type PrimeField = <Suite as suites::Suite>::PrimeField;
-    type BivariatePolynomial =
-        polynomial::BivariatePolynomial<<Suite as suites::Suite>::PrimeField>;
-    type VerificationMatrix = matrix::VerificationMatrix<<Suite as suites::Suite>::Group>;
+    type BivariatePolynomial = poly::BivariatePolynomial<<Suite as suites::Suite>::PrimeField>;
+    type VerificationMatrix = vss::VerificationMatrix<<Suite as suites::Suite>::Group>;
 
     fn prepare_shareholder(id: u64) -> PrimeField {
         id.into()

@@ -1,8 +1,7 @@
 //! Verifiable secret sharing.
 
-pub mod arith;
-pub mod lagrange;
-pub mod matrix;
-pub mod polynomial;
-pub mod scalar;
-pub mod vector;
+mod matrix;
+mod vector;
+
+// Re-exports.
+pub use self::{matrix::*, vector::*};

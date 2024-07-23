@@ -13,6 +13,7 @@
 
 pub mod churp;
 pub mod kdc;
+pub mod poly;
 pub mod shamir;
 pub mod suites;
 pub mod vss;

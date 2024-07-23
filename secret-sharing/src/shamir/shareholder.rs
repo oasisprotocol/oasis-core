@@ -1,6 +1,6 @@
 use group::ff::PrimeField;
 
-use crate::{kdc::PointShareholder, vss::polynomial::Point};
+use crate::{kdc::PointShareholder, poly::Point};
 
 /// A holder of a secret share.
 pub struct Shareholder<F> {
