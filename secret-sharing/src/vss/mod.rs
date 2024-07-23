@@ -1,4 +1,7 @@
 //! Verifiable secret sharing.
 
-pub mod matrix;
-pub mod vector;
+mod matrix;
+mod vector;
+
+// Re-exports.
+pub use self::{matrix::*, vector::*};

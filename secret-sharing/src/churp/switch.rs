@@ -5,7 +5,7 @@ use group::{Group, GroupEncoding};
 
 use crate::{
     poly::{lagrange::lagrange, Polynomial},
-    vss::{matrix::VerificationMatrix, vector::VerificationVector},
+    vss::{VerificationMatrix, VerificationVector},
 };
 
 use super::{Error, HandoffKind, SecretShare, Shareholder, VerifiableSecretShare};
@@ -612,7 +612,7 @@ mod tests {
         churp::{HandoffKind, SecretShare, VerifiableSecretShare},
         poly,
         suites::{self, p384},
-        vss::matrix,
+        vss,
     };
 
     use super::{BivariateShares, DimensionSwitchKind, Error, SwitchPoints};
@@ -621,7 +621,7 @@ mod tests {
     type Group = <Suite as suites::Suite>::Group;
     type PrimeField = <Suite as suites::Suite>::PrimeField;
     type BivariatePolynomial = poly::BivariatePolynomial<<Suite as suites::Suite>::PrimeField>;
-    type VerificationMatrix = matrix::VerificationMatrix<<Suite as suites::Suite>::Group>;
+    type VerificationMatrix = vss::VerificationMatrix<<Suite as suites::Suite>::Group>;
 
     fn prepare_shareholder(id: u64) -> PrimeField {
         id.into()

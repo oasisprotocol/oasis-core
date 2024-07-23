@@ -38,7 +38,7 @@ use secret_sharing::{
     kdc::KeySharer,
     poly::{scalar_from_bytes, scalar_to_bytes},
     suites::{p384, Suite},
-    vss::matrix::VerificationMatrix,
+    vss::VerificationMatrix,
 };
 
 use crate::{

@@ -4,7 +4,7 @@ use anyhow::Result;
 use group::{Group, GroupEncoding};
 use rand_core::RngCore;
 
-use crate::{poly::BivariatePolynomial, vss::matrix::VerificationMatrix};
+use crate::{poly::BivariatePolynomial, vss::VerificationMatrix};
 
 use super::{Error, HandoffKind, SecretShare};
 

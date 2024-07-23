@@ -18,7 +18,7 @@ use oasis_core_runtime::{
 use secret_sharing::{
     churp::{SecretShare, VerifiableSecretShare},
     poly::{scalar_from_bytes, scalar_to_bytes, EncryptedPoint, Polynomial},
-    vss::matrix::VerificationMatrix,
+    vss::VerificationMatrix,
 };
 
 use crate::crypto::KeyPairId;

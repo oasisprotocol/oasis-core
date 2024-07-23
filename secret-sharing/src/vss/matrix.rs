@@ -4,7 +4,7 @@ use group::{Group, GroupEncoding};
 
 use crate::poly::{powers, BivariatePolynomial, Polynomial};
 
-use super::vector::VerificationVector;
+use super::VerificationVector;
 
 /// Verification matrix for a bivariate polynomial.
 ///
@@ -336,7 +336,7 @@ mod tests {
     use group::Group;
     use rand::{rngs::StdRng, SeedableRng};
 
-    use crate::vss::matrix::VerificationMatrix;
+    use crate::vss::VerificationMatrix;
 
     use super::BivariatePolynomial;
 

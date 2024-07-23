@@ -95,7 +95,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{poly::Polynomial, vss::vector::VerificationVector};
+    use crate::{poly::Polynomial, vss::VerificationVector};
 
     fn scalar(value: i64) -> p384::Scalar {
         scalars(&vec![value])[0]

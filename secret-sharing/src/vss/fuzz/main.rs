@@ -2,7 +2,7 @@ use group::ff::PrimeField;
 use honggfuzz::fuzz;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use secret_sharing::{poly::BivariatePolynomial, vss::matrix::VerificationMatrix};
+use secret_sharing::{poly::BivariatePolynomial, vss::VerificationMatrix};
 
 fn main() {
     loop {

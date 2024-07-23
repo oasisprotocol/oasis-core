@@ -260,8 +260,7 @@ mod tests {
 
     use secret_sharing::{
         churp::{SecretShare, VerifiableSecretShare},
-        poly,
-        vss::matrix,
+        poly, vss,
     };
 
     use crate::churp::storage::{
@@ -275,7 +274,7 @@ mod tests {
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
     type BivariatePolynomial = poly::BivariatePolynomial<PrimeField>;
-    type VerificationMatrix = matrix::VerificationMatrix<Group>;
+    type VerificationMatrix = vss::VerificationMatrix<Group>;
 
     #[test]
     fn test_unique_seal_contexts() {

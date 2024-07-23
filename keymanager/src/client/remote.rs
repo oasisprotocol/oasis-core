@@ -34,9 +34,9 @@ use oasis_core_runtime::{
     protocol::Protocol,
 };
 use secret_sharing::{
-    poly::EncryptedPoint,
     churp::{HandoffKind, Player},
     kdc::KeyRecoverer,
+    poly::EncryptedPoint,
     suites::{p384, Suite},
 };
 

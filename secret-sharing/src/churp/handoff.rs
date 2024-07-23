@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use group::{Group, GroupEncoding};
 
-use crate::vss::matrix::VerificationMatrix;
+use crate::vss::VerificationMatrix;
 
 use super::{DimensionSwitch, Error, Shareholder, VerifiableSecretShare};
 

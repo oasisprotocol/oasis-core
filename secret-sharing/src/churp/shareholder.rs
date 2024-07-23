@@ -7,7 +7,7 @@ use group::{
 };
 
 use crate::{
-    kdc::PointShareholder, poly::Polynomial, suites::FieldDigest, vss::matrix::VerificationMatrix,
+    kdc::PointShareholder, poly::Polynomial, suites::FieldDigest, vss::VerificationMatrix,
 };
 
 use super::Error;
