@@ -289,8 +289,9 @@ func newConfig( //nolint: gocyclo
 			}
 
 			rtBnd := &runtimeHost.RuntimeBundle{
-				Bundle:          bnd,
-				ExplodedDataDir: dataDir,
+				Bundle:               bnd,
+				ExplodedDataDir:      dataDir,
+				ExplodedDetachedDirs: make(map[component.ID]string),
 			}
 
 			// Merge in detached components.
@@ -320,6 +321,10 @@ func newConfig( //nolint: gocyclo
 				// On non-compute nodes, assume all components are disabled by default.
 				if config.GlobalConfig.Mode != config.ModeCompute {
 					enabled = false
+				}
+				// Detached components are explicit and they should be enabled by default.
+				if _, ok := rtBnd.ExplodedDetachedDirs[comp.ID()]; ok {
+					enabled = true
 				}
 
 				// Check for any overrides in the node configuration.
