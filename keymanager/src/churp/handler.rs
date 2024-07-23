@@ -97,6 +97,10 @@ const RUNTIME_CONTEXT_SEPARATOR: &[u8] = b" for runtime ";
 /// on the churp ID.
 const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 
+/// The number of blocks a remote client is allowed to be behind when querying
+/// past key shares.
+const ALLOWED_BLOCKS_BEHIND: u64 = 5;
+
 /// Represents information about a dealer.
 struct DealerInfo<G: Group + GroupEncoding> {
     /// The epoch during which this dealer is active.
@@ -742,10 +746,12 @@ impl<S: Suite> Instance<S> {
         shareholders.insert(epoch, shareholder);
     }
 
-    /// Keeps only the shareholders that belong to one of the given epochs.
-    fn keep_shareholders(&self, epochs: &[EpochTime]) {
+    /// Keeps only the shareholder for the given epoch and the shareholder
+    /// preceding that one.
+    fn clean_shareholders(&self, epoch: EpochTime) {
         let mut shareholders = self.shareholders.lock().unwrap();
-        shareholders.retain(|epoch, _| epochs.contains(epoch));
+        let second_last = shareholders.keys().filter(|&&e| e < epoch).max().cloned();
+        shareholders.retain(|&e, _| e == epoch || Some(e) == second_last);
     }
 
     /// Loads the shareholder from local storage for the given epoch.
@@ -1291,12 +1297,27 @@ impl<S: Suite> Handler for Instance<S> {
         ctx: &RpcContext,
         req: &KeyShareRequest,
     ) -> Result<EncodedEncryptedPoint> {
-        let status = self.verify_last_handoff(req.epoch)?;
+        let status = self.churp_state.status(self.runtime_id, self.churp_id)?;
+        let status = if status.handoff != req.epoch {
+            // Allow querying past key shares if the client is a few blocks behind.
+            self.churp_state
+                .status_before(self.runtime_id, self.churp_id, ALLOWED_BLOCKS_BEHIND)?
+        } else {
+            status
+        };
 
+        if status.handoff != req.epoch {
+            return Err(Error::HandoffMismatch.into());
+        }
+
+        // Note that querying past key shares can fail at this point
+        // if the policy has changed.
         self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
 
+        // Prepare key share.
         let shareholder = self.get_shareholder(status.handoff)?;
         let point = shareholder.make_key_share::<S>(&req.key_id.0, &self.sgx_policy_key_id_dst)?;
+
         Ok((&point).into())
     }
 
@@ -1420,9 +1441,10 @@ impl<S: Suite> Handler for Instance<S> {
     fn finalize(&self, req: &HandoffRequest) -> Result<()> {
         let status = self.verify_last_handoff(req.epoch)?;
 
-        // Cleanup shareholders by removing those for past or failed handoffs.
-        let epochs = [status.handoff, status.next_handoff];
-        self.keep_shareholders(&epochs);
+        // Keep only the last two shareholders. The second-last shareholder
+        // could be removed after a few blocks, as we need it only to serve
+        // clients that are lagging behind.
+        self.clean_shareholders(status.handoff);
 
         // Cleaning up dealers and handoffs is optional,
         // as they are overwritten during the next handoff.
