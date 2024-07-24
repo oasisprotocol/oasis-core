@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	// RPCMethodInit is the name of the `init` method.
-	RPCMethodInit = "churp/init"
+	// RPCMethodApply is the name of the `apply` method.
+	RPCMethodApply = "churp/apply"
 
 	// RPCMethodShareReduction is the name of the `share_reduction` method.
 	RPCMethodShareReduction = "churp/share_reduction"

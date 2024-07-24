@@ -35,4 +35,22 @@ impl State {
 
         Ok(status)
     }
+
+    /// Returns CHURP status before the given number of blocks.
+    pub fn status_before(
+        &self,
+        runtime_id: Namespace,
+        churp_id: u8,
+        blocks: u64,
+    ) -> Result<Status> {
+        let height = block_on(self.consensus_verifier.latest_height())?;
+        let height = height.saturating_sub(blocks).max(1);
+        let consensus_state = block_on(self.consensus_verifier.state_at(height))?;
+        let churp_state = ChurpState::new(&consensus_state);
+        let status = churp_state
+            .status(runtime_id, churp_id)?
+            .ok_or(Error::StatusNotPublished)?;
+
+        Ok(status)
+    }
 }
