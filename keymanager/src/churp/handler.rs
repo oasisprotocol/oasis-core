@@ -1182,9 +1182,7 @@ impl<S: Suite> Instance<S> {
 impl<S: Suite> Handler for Instance<S> {
     fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
         let status = self.verify_last_handoff(req.epoch)?;
-        let shareholder = match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.get_shareholder(req.epoch)?,
-        };
+        let shareholder = self.get_shareholder(status.handoff)?;
         let vm = shareholder
             .verifiable_share()
             .verification_matrix()
