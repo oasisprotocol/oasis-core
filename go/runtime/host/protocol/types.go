@@ -191,9 +191,6 @@ type Features struct {
 	// KeyManagerStatusUpdates is a feature specifying that the runtime supports updating
 	// key manager's status.
 	KeyManagerStatusUpdates bool `json:"key_manager_status_updates,omitempty"`
-	// KeyManagerMasterSecretRotation is a feature specifying that the runtime supports rotating
-	// key manager's master secret.
-	KeyManagerMasterSecretRotation bool `json:"key_manager_master_secret_rotation,omitempty"`
 	// RPCPeerID is a feature specifying that the runtime supports RPC peer IDs.
 	RPCPeerID bool `json:"rpc_peer_id,omitempty"`
 	// EndorsedCapabilityTEE is a feature specifying that the runtime supports endorsed TEE
