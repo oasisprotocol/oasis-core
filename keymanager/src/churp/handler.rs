@@ -1182,6 +1182,10 @@ impl<S: Suite> Instance<S> {
 impl<S: Suite> Handler for Instance<S> {
     fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
         let status = self.verify_last_handoff(req.epoch)?;
+        if !status.committee.contains(&self.node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
+
         let shareholder = self.get_shareholder(status.handoff)?;
         let vm = shareholder
             .verifiable_share()
@@ -1197,6 +1201,9 @@ impl<S: Suite> Handler for Instance<S> {
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
         let status = self.verify_next_handoff(req.epoch)?;
+        if !status.committee.contains(&self.node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
 
         let kind = Self::handoff_kind(&status);
         if !matches!(kind, HandoffKind::CommitteeChanged) {
@@ -1225,6 +1232,9 @@ impl<S: Suite> Handler for Instance<S> {
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
         let status = self.verify_next_handoff(req.epoch)?;
+        if !status.applications.contains_key(&self.node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
 
         let kind = Self::handoff_kind(&status);
         if !matches!(kind, HandoffKind::CommitteeChanged) {
@@ -1254,6 +1264,9 @@ impl<S: Suite> Handler for Instance<S> {
         req: &QueryRequest,
     ) -> Result<EncodedVerifiableSecretShare> {
         let status = self.verify_next_handoff(req.epoch)?;
+        if !status.applications.contains_key(&self.node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
 
         let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
         if !status.applications.contains_key(node_id) {
@@ -1306,6 +1319,9 @@ impl<S: Suite> Handler for Instance<S> {
 
         if status.handoff != req.epoch {
             return Err(Error::HandoffMismatch.into());
+        }
+        if !status.committee.contains(&self.node_id) {
+            return Err(Error::NotInCommittee.into());
         }
 
         // Note that querying past key shares can fail at this point
