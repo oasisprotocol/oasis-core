@@ -39,12 +39,7 @@ where
 
     /// Generates shares of the secret for the given shareholders.
     pub fn make_shares(&self, xs: Vec<F>) -> Vec<Point<F>> {
-        let mut shares = Vec::with_capacity(xs.len());
-        for x in xs {
-            let share = self.make_share(x);
-            shares.push(share);
-        }
-        shares
+        xs.into_iter().map(|x| self.make_share(x)).collect()
     }
 
     /// Generates a share of the secret for the given shareholder.

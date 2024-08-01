@@ -6,8 +6,9 @@ use std::{
 
 use group::ff::PrimeField;
 use rand_core::RngCore;
+use subtle::{Choice, CtOption};
 
-use crate::poly::{powers, scalar_from_bytes};
+use crate::poly::powers;
 
 /// Univariate polynomial over a non-binary prime field.
 ///
@@ -40,6 +41,9 @@ where
     }
 
     /// Creates a bivariate polynomial with random coefficients.
+    ///
+    /// This method is not constant time as some prime field implementations
+    /// may generate uniformly random elements using rejection sampling.
     pub fn random(deg: u8, rng: &mut impl RngCore) -> Self {
         let deg = deg as usize;
 
@@ -76,8 +80,7 @@ where
         self.set_coefficient(0, F::ZERO);
     }
 
-    /// Returns true if and only if the coefficient `a_0` of the constant
-    /// term is zero.
+    /// Returns true iff the coefficient `a_0` of the constant term is zero.
     pub fn is_zero_hole(&self) -> bool {
         self.a[0].is_zero().into()
     }
@@ -104,34 +107,46 @@ where
     }
 
     /// Attempts to create a polynomial from its byte representation.
+    ///
+    /// This method is not constant time if the length of the slice is invalid.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let size = Self::coefficient_byte_size();
-        if bytes.is_empty() || bytes.len() % size != 0 {
+        // Short-circuit on the length of the slice, not its contents.
+        let coefficient_size = Self::coefficient_byte_size();
+
+        if bytes.is_empty() || bytes.len() % coefficient_size != 0 {
             return None;
         }
-        let deg = bytes.len() / size - 1;
 
-        let mut bytes = bytes;
-        let mut a = Vec::with_capacity(deg + 1);
-        for _ in 0..=deg {
-            let ai = match scalar_from_bytes(&bytes[..size]) {
-                Some(ai) => ai,
-                None => return None,
-            };
-            bytes = &bytes[size..];
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to decode.
+        let num_coefficients = bytes.len() / coefficient_size;
+        let mut a = Vec::with_capacity(num_coefficients);
+        let mut failed = Choice::from(0);
+
+        for chunk in bytes.chunks(coefficient_size) {
+            let mut repr: F::Repr = Default::default();
+            repr.as_mut().copy_from_slice(chunk);
+
+            let maybe_ai = F::from_repr(repr);
+            failed |= maybe_ai.is_none();
+
+            let ai = maybe_ai.unwrap_or(Default::default());
             a.push(ai);
         }
 
-        Some(Self::with_coefficients(a))
+        let p = Self::with_coefficients(a);
+        let res = CtOption::new(p, !failed);
+
+        res.into()
     }
 
     /// Returns the size of the byte representation of a coefficient.
-    pub fn coefficient_byte_size() -> usize {
+    pub const fn coefficient_byte_size() -> usize {
         F::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the polynomial.
-    pub fn byte_size(deg: usize) -> usize {
+    pub const fn byte_size(deg: usize) -> usize {
         Self::coefficient_byte_size() * deg
     }
 

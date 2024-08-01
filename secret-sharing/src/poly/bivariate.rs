@@ -1,7 +1,8 @@
 use group::ff::PrimeField;
 use rand_core::RngCore;
+use subtle::{Choice, CtOption};
 
-use crate::poly::{powers, scalar_from_bytes};
+use crate::poly::powers;
 
 use super::Polynomial;
 
@@ -35,6 +36,9 @@ where
     }
 
     /// Creates a bivariate polynomial with random coefficients.
+    ///
+    /// This method is not constant time as some prime field implementations
+    /// may generate uniformly random elements using rejection sampling.
     pub fn random(deg_x: u8, deg_y: u8, rng: &mut impl RngCore) -> Self {
         let deg_x = deg_x as usize;
         let deg_y = deg_y as usize;
@@ -92,8 +96,7 @@ where
         self.set_coefficient(0, 0, F::ZERO);
     }
 
-    /// Returns true if and only if the coefficient `b_{0,0}` of the constant
-    /// term is zero.
+    /// Returns true iff the coefficient `b_{0,0}` of the constant term is zero.
     pub fn is_zero_hole(&self) -> bool {
         self.b[0][0].is_zero().into()
     }
@@ -118,45 +121,58 @@ where
     }
 
     /// Attempts to create a bivariate polynomial from its byte representation.
-    pub fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+    ///
+    /// This method is not constant time if the length of the slice is invalid.
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        // Short-circuit on the length of the slice, not its contents.
         if bytes.len() < 2 {
             return None;
         }
 
         let deg_x = bytes[0] as usize;
         let deg_y = bytes[1] as usize;
+        let expected_len = Self::byte_size(deg_x, deg_y);
 
-        if bytes.len() != Self::byte_size(deg_x, deg_y) {
+        if bytes.len() != expected_len {
             return None;
         }
 
-        let size = Self::coefficient_byte_size();
-        let mut bytes = &bytes[2..];
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to decode.
+        let coefficient_size = Self::coefficient_byte_size();
         let mut b = Vec::with_capacity(deg_x + 1);
+        let mut failed = Choice::from(0);
 
-        for _ in 0..=deg_x {
+        for chunks in bytes[2..].chunks(coefficient_size * (deg_y + 1)) {
             let mut bi = Vec::with_capacity(deg_y + 1);
-            for _ in 0..=deg_y {
-                let bij = match scalar_from_bytes(&bytes[..size]) {
-                    Some(bij) => bij,
-                    None => return None,
-                };
-                bytes = &bytes[size..];
+
+            for chunk in chunks.chunks(coefficient_size) {
+                let mut repr: F::Repr = Default::default();
+                repr.as_mut().copy_from_slice(chunk);
+
+                let maybe_bij = F::from_repr(repr);
+                failed |= maybe_bij.is_none();
+
+                let bij = maybe_bij.unwrap_or(Default::default());
                 bi.push(bij);
             }
-            b.push(bi);
+
+            b.push(bi)
         }
 
-        Some(Self { deg_x, deg_y, b })
+        let bp = Self::with_coefficients(b);
+        let res = CtOption::new(bp, !failed);
+
+        res.into()
     }
 
     /// Returns the size of the byte representation of a coefficient.
-    pub fn coefficient_byte_size() -> usize {
+    pub const fn coefficient_byte_size() -> usize {
         F::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the bivariate polynomial.
-    pub fn byte_size(deg_x: usize, deg_y: usize) -> usize {
+    pub const fn byte_size(deg_x: usize, deg_y: usize) -> usize {
         2 + (deg_x + 1) * (deg_y + 1) * Self::coefficient_byte_size()
     }
 
@@ -371,13 +387,13 @@ mod tests {
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::random(0, 0, &mut rng);
-        let restored =
-            BivariatePolynomial::from_bytes(bp.to_bytes()).expect("deserialization should succeed");
+        let restored = BivariatePolynomial::from_bytes(&bp.to_bytes())
+            .expect("deserialization should succeed");
         assert!(bp == restored);
 
         let bp = BivariatePolynomial::random(2, 3, &mut rng);
-        let restored =
-            BivariatePolynomial::from_bytes(bp.to_bytes()).expect("deserialization should succeed");
+        let restored = BivariatePolynomial::from_bytes(&bp.to_bytes())
+            .expect("deserialization should succeed");
         assert!(bp == restored);
     }
 

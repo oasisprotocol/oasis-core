@@ -6,10 +6,13 @@ pub fn scalar_to_bytes<F: PrimeField>(element: &F) -> Vec<u8> {
 }
 
 /// Converts bytes to an element of a non-binary prime field.
+///
+/// This method is not constant time if the length of the slice is invalid.
 pub fn scalar_from_bytes<F: PrimeField>(bytes: &[u8]) -> Option<F> {
     let mut repr: F::Repr = Default::default();
     let slice = &mut repr.as_mut()[..];
 
+    // Short-circuit on the length of the slice, not its contents.
     if slice.len() != bytes.len() {
         return None;
     }

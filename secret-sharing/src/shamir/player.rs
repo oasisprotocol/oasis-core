@@ -40,7 +40,7 @@ impl Player {
         self.threshold as usize + 1
     }
 
-    /// Returns true if shares are from distinct shareholders.
+    /// Returns true iff shares are from distinct shareholders.
     fn distinct_shares<F: PrimeField>(shares: &[Point<F>]) -> bool {
         // For a small number of shareholders, a brute-force approach should
         // suffice, and it doesn't require the prime field to be hashable.

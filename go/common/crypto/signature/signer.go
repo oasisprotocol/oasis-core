@@ -278,7 +278,7 @@ type SignerFactory interface {
 	// implementations require an entropy source to be provided.
 	Generate(role SignerRole, rng io.Reader) (Signer, error)
 
-	// Load will load the private key corresonding to the provided role, and
+	// Load will load the private key corresponding to the provided role, and
 	// return a Signer ready for use.
 	Load(role SignerRole) (Signer, error)
 }
