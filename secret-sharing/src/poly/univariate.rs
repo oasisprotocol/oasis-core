@@ -92,13 +92,6 @@ where
         self.a.get(i)
     }
 
-    /// Removes trailing zeros.
-    pub fn trim(&mut self) {
-        while self.a.len() > 1 && self.a[self.a.len() - 1].is_zero().into() {
-            _ = self.a.pop();
-        }
-    }
-
     /// Returns the byte representation of the polynomial.
     pub fn to_bytes(&self) -> Vec<u8> {
         let cap = Self::byte_size(self.a.len());
@@ -532,22 +525,6 @@ mod tests {
 
         // Test coefficients out of bounds.
         assert_eq!(p.coefficient(3), None);
-    }
-
-    #[test]
-    fn test_trim() {
-        let test_cases = vec![
-            (vec![0], vec![0]),
-            (vec![0, 0], vec![0]),
-            (vec![1, 2, 3], vec![1, 2, 3]),
-            (vec![1, 2, 3, 0, 0], vec![1, 2, 3]),
-        ];
-
-        for (before, after) in test_cases {
-            let mut p = Polynomial::with_coefficients(scalars(&before));
-            p.trim();
-            assert_eq!(p.a, scalars(&after));
-        }
     }
 
     #[test]
