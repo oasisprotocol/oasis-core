@@ -82,23 +82,6 @@ where
         self.a[0].is_zero().into()
     }
 
-    /// Returns the highest of the degrees of the polynomial's monomials with
-    /// non-zero coefficients.
-    ///
-    /// This method is not constant time.
-    pub fn degree(&self) -> usize {
-        let mut deg = self.a.len().saturating_sub(1);
-        for ai in self.a.iter().rev() {
-            if ai.is_zero().into() {
-                deg = deg.saturating_sub(1);
-            } else {
-                break;
-            }
-        }
-
-        deg
-    }
-
     /// Returns the number of coefficients in the polynomial.
     pub fn size(&self) -> usize {
         self.a.len()
@@ -520,20 +503,19 @@ mod tests {
     }
 
     #[test]
-    fn test_degree_and_size() {
+    fn test_size() {
         let test_cases = vec![
-            (0, 1, vec![]),
-            (0, 1, vec![0]),
-            (0, 1, vec![1]),
-            (0, 2, vec![0, 0]),
-            (2, 3, vec![1, 2, 3]),
-            (2, 5, vec![1, 2, 3, 0, 0]),
-            (4, 5, vec![0, 1, 2, 0, 3]),
+            (1, vec![]),
+            (1, vec![0]),
+            (1, vec![1]),
+            (2, vec![0, 0]),
+            (3, vec![1, 2, 3]),
+            (5, vec![1, 2, 3, 0, 0]),
+            (5, vec![0, 1, 2, 0, 3]),
         ];
 
-        for (degree, size, coefficients) in test_cases {
+        for (size, coefficients) in test_cases {
             let p = Polynomial::with_coefficients(scalars(&coefficients));
-            assert_eq!(p.degree(), degree);
             assert_eq!(p.size(), size);
         }
     }
