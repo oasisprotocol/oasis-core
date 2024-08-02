@@ -140,7 +140,6 @@ mod tests {
             }
 
             // Verify degree.
-            assert_eq!(p.degree(), size - 1);
             assert_eq!(p.size(), size);
         }
     }
@@ -167,7 +166,6 @@ mod tests {
                 }
 
                 // Verify degree.
-                assert_eq!(p.degree(), xs.len() - 1);
                 assert_eq!(p.size(), xs.len());
             }
         }

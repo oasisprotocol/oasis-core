@@ -84,6 +84,8 @@ where
 
     /// Returns the highest of the degrees of the polynomial's monomials with
     /// non-zero coefficients.
+    ///
+    /// This method is not constant time.
     pub fn degree(&self) -> usize {
         let mut deg = self.a.len().saturating_sub(1);
         for ai in self.a.iter().rev() {

@@ -56,7 +56,7 @@ where
         p: &Polynomial<G::Scalar>,
         vm: &VerificationMatrix<G>,
     ) -> Result<Shareholder<G>> {
-        if p.degree() != self.verifiable_share.share.p.degree() {
+        if p.size() != self.verifiable_share.share.p.size() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
         if !vm.is_zero_hole() {

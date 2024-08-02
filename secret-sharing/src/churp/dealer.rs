@@ -193,14 +193,13 @@ mod tests {
         let x = PrimeField::from_u64(2);
 
         let test_cases = vec![
-            (HandoffKind::DealingPhase, 4, 5),
-            (HandoffKind::CommitteeUnchanged, 4, 5),
-            (HandoffKind::CommitteeChanged, 2, 3),
+            (HandoffKind::DealingPhase, 5),
+            (HandoffKind::CommitteeUnchanged, 5),
+            (HandoffKind::CommitteeChanged, 3),
         ];
 
-        for (kind, degree, size) in test_cases {
+        for (kind, size) in test_cases {
             let share = dealer.make_share(x, kind);
-            assert_eq!(share.polynomial().degree(), degree);
             assert_eq!(share.polynomial().size(), size);
         }
     }
