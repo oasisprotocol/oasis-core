@@ -61,7 +61,7 @@ func tryProviders[R any](
 	return result, nil, err
 }
 
-// GetStoredBlock implements api.Client.
+// GetStoredLightBlock implements api.Client.
 func (lc *lightClient) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
 	clb, err := lc.tmc.TrustedLightBlock(height)
 	if err != nil {

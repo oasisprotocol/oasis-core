@@ -258,7 +258,7 @@ func (c *client) worker() {
 	}
 }
 
-// GetStoredBlock implements api.Client.
+// GetStoredLightBlock implements api.Client.
 func (c *client) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
 	clb, err := c.store.LightBlock(height)
 	if err != nil {
