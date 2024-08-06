@@ -6,8 +6,9 @@ use std::{
 
 use group::ff::PrimeField;
 use rand_core::RngCore;
+use subtle::{Choice, CtOption};
 
-use crate::poly::{powers, scalar_from_bytes};
+use crate::poly::powers;
 
 /// Univariate polynomial over a non-binary prime field.
 ///
@@ -40,6 +41,9 @@ where
     }
 
     /// Creates a bivariate polynomial with random coefficients.
+    ///
+    /// This method is not constant time as some prime field implementations
+    /// may generate uniformly random elements using rejection sampling.
     pub fn random(deg: u8, rng: &mut impl RngCore) -> Self {
         let deg = deg as usize;
 
@@ -76,25 +80,9 @@ where
         self.set_coefficient(0, F::ZERO);
     }
 
-    /// Returns true if and only if the coefficient `a_0` of the constant
-    /// term is zero.
+    /// Returns true iff the coefficient `a_0` of the constant term is zero.
     pub fn is_zero_hole(&self) -> bool {
         self.a[0].is_zero().into()
-    }
-
-    /// Returns the highest of the degrees of the polynomial's monomials with
-    /// non-zero coefficients.
-    pub fn degree(&self) -> usize {
-        let mut deg = self.a.len().saturating_sub(1);
-        for ai in self.a.iter().rev() {
-            if ai.is_zero().into() {
-                deg = deg.saturating_sub(1);
-            } else {
-                break;
-            }
-        }
-
-        deg
     }
 
     /// Returns the number of coefficients in the polynomial.
@@ -105,13 +93,6 @@ where
     /// Returns the i-th coefficient of the polynomial.
     pub fn coefficient(&self, i: usize) -> Option<&F> {
         self.a.get(i)
-    }
-
-    /// Removes trailing zeros.
-    pub fn trim(&mut self) {
-        while self.a.len() > 1 && self.a[self.a.len() - 1].is_zero().into() {
-            _ = self.a.pop();
-        }
     }
 
     /// Returns the byte representation of the polynomial.
@@ -126,34 +107,46 @@ where
     }
 
     /// Attempts to create a polynomial from its byte representation.
+    ///
+    /// This method is not constant time if the length of the slice is invalid.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let size = Self::coefficient_byte_size();
-        if bytes.is_empty() || bytes.len() % size != 0 {
+        // Short-circuit on the length of the slice, not its contents.
+        let coefficient_size = Self::coefficient_byte_size();
+
+        if bytes.is_empty() || bytes.len() % coefficient_size != 0 {
             return None;
         }
-        let deg = bytes.len() / size - 1;
 
-        let mut bytes = bytes;
-        let mut a = Vec::with_capacity(deg + 1);
-        for _ in 0..=deg {
-            let ai = match scalar_from_bytes(&bytes[..size]) {
-                Some(ai) => ai,
-                None => return None,
-            };
-            bytes = &bytes[size..];
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to decode.
+        let num_coefficients = bytes.len() / coefficient_size;
+        let mut a = Vec::with_capacity(num_coefficients);
+        let mut failed = Choice::from(0);
+
+        for chunk in bytes.chunks(coefficient_size) {
+            let mut repr: F::Repr = Default::default();
+            repr.as_mut().copy_from_slice(chunk);
+
+            let maybe_ai = F::from_repr(repr);
+            failed |= maybe_ai.is_none();
+
+            let ai = maybe_ai.unwrap_or(Default::default());
             a.push(ai);
         }
 
-        Some(Self::with_coefficients(a))
+        let p = Self::with_coefficients(a);
+        let res = CtOption::new(p, !failed);
+
+        res.into()
     }
 
     /// Returns the size of the byte representation of a coefficient.
-    pub fn coefficient_byte_size() -> usize {
+    pub const fn coefficient_byte_size() -> usize {
         F::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the polynomial.
-    pub fn byte_size(deg: usize) -> usize {
+    pub const fn byte_size(deg: usize) -> usize {
         Self::coefficient_byte_size() * deg
     }
 
@@ -518,20 +511,19 @@ mod tests {
     }
 
     #[test]
-    fn test_degree_and_size() {
+    fn test_size() {
         let test_cases = vec![
-            (0, 1, vec![]),
-            (0, 1, vec![0]),
-            (0, 1, vec![1]),
-            (0, 2, vec![0, 0]),
-            (2, 3, vec![1, 2, 3]),
-            (2, 5, vec![1, 2, 3, 0, 0]),
-            (4, 5, vec![0, 1, 2, 0, 3]),
+            (1, vec![]),
+            (1, vec![0]),
+            (1, vec![1]),
+            (2, vec![0, 0]),
+            (3, vec![1, 2, 3]),
+            (5, vec![1, 2, 3, 0, 0]),
+            (5, vec![0, 1, 2, 0, 3]),
         ];
 
-        for (degree, size, coefficients) in test_cases {
+        for (size, coefficients) in test_cases {
             let p = Polynomial::with_coefficients(scalars(&coefficients));
-            assert_eq!(p.degree(), degree);
             assert_eq!(p.size(), size);
         }
     }
@@ -548,22 +540,6 @@ mod tests {
 
         // Test coefficients out of bounds.
         assert_eq!(p.coefficient(3), None);
-    }
-
-    #[test]
-    fn test_trim() {
-        let test_cases = vec![
-            (vec![0], vec![0]),
-            (vec![0, 0], vec![0]),
-            (vec![1, 2, 3], vec![1, 2, 3]),
-            (vec![1, 2, 3, 0, 0], vec![1, 2, 3]),
-        ];
-
-        for (before, after) in test_cases {
-            let mut p = Polynomial::with_coefficients(scalars(&before));
-            p.trim();
-            assert_eq!(p.a, scalars(&after));
-        }
     }
 
     #[test]

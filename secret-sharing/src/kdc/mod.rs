@@ -72,7 +72,7 @@ pub trait KeyRecoverer {
         Ok(key)
     }
 
-    /// Returns true if shares are from distinct shareholders.
+    /// Returns true iff shares are from distinct shareholders.
     fn distinct_shares<G: Group>(shares: &[EncryptedPoint<G>]) -> bool {
         // For a small number of shareholders, a brute-force approach should
         // suffice, and it doesn't require the prime field to be hashable.

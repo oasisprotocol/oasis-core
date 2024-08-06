@@ -1,4 +1,5 @@
 use group::Group;
+use subtle::Choice;
 
 use crate::poly::{powers, Polynomial};
 
@@ -38,19 +39,25 @@ where
 
     /// Verifies if the verification vector belongs to the given univariate
     /// polynomial.
+    ///
+    /// This method is not constant time if the size of the polynomial
+    /// is invalid.
     pub fn is_from(&self, p: &Polynomial<G::Scalar>) -> bool {
+        // Short-circuit on the size of the polynomial, not its contents.
         if self.v.len() != p.a.len() {
             return false;
         }
 
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to verify.
+        let mut verified = Choice::from(1);
+
         for (i, vi) in self.v.iter().enumerate() {
             let diff = G::generator() * p.a[i] - vi;
-            if !Into::<bool>::into(diff.is_identity()) {
-                return false;
-            }
+            verified &= diff.is_identity();
         }
 
-        true
+        verified.into()
     }
 
     /// Verifies if the underlying univariate polynomial evaluates

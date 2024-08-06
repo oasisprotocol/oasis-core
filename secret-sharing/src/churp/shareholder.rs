@@ -56,7 +56,7 @@ where
         p: &Polynomial<G::Scalar>,
         vm: &VerificationMatrix<G>,
     ) -> Result<Shareholder<G>> {
-        if p.degree() != self.verifiable_share.share.p.degree() {
+        if p.size() != self.verifiable_share.share.p.size() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
         if !vm.is_zero_hole() {
@@ -218,7 +218,7 @@ where
 
     /// Calculates the number of rows and columns in the verification matrix
     /// based on the given threshold.
-    fn calculate_dimensions(threshold: u8) -> (usize, usize) {
+    const fn calculate_dimensions(threshold: u8) -> (usize, usize) {
         let rows: usize = threshold as usize + 1;
         let cols = threshold as usize * 2 + 1;
         (rows, cols)
