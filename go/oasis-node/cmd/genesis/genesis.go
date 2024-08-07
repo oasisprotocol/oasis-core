@@ -570,7 +570,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 // AppendKeyManagerState appends the key manager genesis state given a vector of
 // key manager statuses.
 func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.Logger) error {
-	kmSt := secrets.Genesis{
+	secretsGenesis := secrets.Genesis{
 		Parameters: secrets.ConsensusParameters{
 			GasCosts: secrets.DefaultGasCosts, // TODO: Make these configurable.
 		},
@@ -595,10 +595,10 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 			return err
 		}
 
-		kmSt.Statuses = append(kmSt.Statuses, &status)
+		secretsGenesis.Statuses = append(secretsGenesis.Statuses, &status)
 	}
 
-	doc.KeyManager = kmSt
+	doc.KeyManager.Genesis = secretsGenesis
 
 	return nil
 }

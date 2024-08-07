@@ -62,6 +62,16 @@ func (sc *ServiceClient) AllStatuses(ctx context.Context, height int64) ([]*chur
 	return q.Churp().AllStatuses(ctx)
 }
 
+// StateToGenesis implements churp.Backend.
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*churp.Genesis, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Churp().Genesis(ctx)
+}
+
 // WatchStatuses implements churp.Backend.
 func (sc *ServiceClient) WatchStatuses() (<-chan *churp.Status, *pubsub.Subscription) {
 	sub := sc.statusNotifier.Subscribe()
