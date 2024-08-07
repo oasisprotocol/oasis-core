@@ -338,11 +338,12 @@ type LoadEphemeralSecretRequest struct {
 	SignedSecret SignedEncryptedEphemeralSecret `json:"signed_secret"`
 }
 
-// Genesis is the key manager management genesis state.
+// Genesis is the key manager management genesis state for secrets.
 type Genesis struct {
-	// Parameters are the key manager consensus parameters.
+	// Parameters are the consensus parameters for secrets.
 	Parameters ConsensusParameters `json:"params"`
 
+	// Statuses are the statuses of secrets.
 	Statuses []*Status `json:"statuses,omitempty"`
 }
 

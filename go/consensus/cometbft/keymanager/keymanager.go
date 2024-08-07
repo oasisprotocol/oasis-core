@@ -39,7 +39,15 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 		return nil, err
 	}
 
-	return secretsGenesis, nil
+	churpGenesis, err := sc.churpClient.StateToGenesis(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.Genesis{
+		Genesis: *secretsGenesis,
+		Churp:   churpGenesis,
+	}, nil
 }
 
 // Implements api.Backend.

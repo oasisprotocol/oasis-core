@@ -26,15 +26,16 @@ func TestConsensusParameters(t *testing.T) {
 	}
 
 	// Empty state.
-	_, err := st.ConsensusParameters(ctx)
-	require.Error(t, err)
+	fetched, err := st.ConsensusParameters(ctx)
+	require.NoError(t, err)
+	require.Equal(t, &churp.ConsensusParameters{}, fetched)
 
 	// Set state.
 	err = st.SetConsensusParameters(ctx, &params)
 	require.NoError(t, err)
 
 	// New state.
-	fetched, err := st.ConsensusParameters(ctx)
+	fetched, err = st.ConsensusParameters(ctx)
 	require.NoError(t, err)
 	require.Len(t, fetched.GasCosts, 1)
 	require.Equal(t, params.GasCosts[churp.GasOpCreate], fetched.GasCosts[churp.GasOpCreate])
