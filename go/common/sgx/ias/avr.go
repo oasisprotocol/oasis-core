@@ -78,19 +78,19 @@ var (
 // QuotePolicy is the quote validity policy.
 type QuotePolicy struct {
 	// Disabled specifies whether IAS quotes are disabled and will always be rejected.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 
 	// AllowedQuoteStatuses are the allowed quote statuses.
 	//
 	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
-	AllowedQuoteStatuses []ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty"`
+	AllowedQuoteStatuses []ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty" yaml:"allowed_quote_statuses,omitempty"`
 
 	// GIDBlackList is a list of blocked platform EPID group IDs.
-	GIDBlacklist []uint32 `json:"gid_blacklist,omitempty"`
+	GIDBlacklist []uint32 `json:"gid_blacklist,omitempty" yaml:"gid_blacklist,omitempty"`
 
 	// MinTCBEvaluationDataNumber is the minimum acceptable TCB Evaluation Data number,
 	// as used in the attestation verification report structure.
-	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number,omitempty"`
+	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number,omitempty" yaml:"min_tcb_evaluation_data_number,omitempty"`
 }
 
 // AttestationType is the type of the SGX attestation.
