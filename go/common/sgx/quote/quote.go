@@ -12,8 +12,8 @@ import (
 
 // Quote is an unverified SGX remote attestation quote, depending on the attestation scheme.
 type Quote struct {
-	IAS *ias.AVRBundle   `json:"ias,omitempty"`
-	PCS *pcs.QuoteBundle `json:"pcs,omitempty"`
+	IAS *ias.AVRBundle   `json:"ias,omitempty" yaml:"ias,omitempty"`
+	PCS *pcs.QuoteBundle `json:"pcs,omitempty" yaml:"pcs,omitempty"`
 }
 
 // Verify verifies the SGX remote attestation quote.
@@ -61,6 +61,6 @@ func (q *Quote) Verify(policy *Policy, ts time.Time) (*sgx.VerifiedQuote, error)
 
 // Policy is the quote validity policy.
 type Policy struct {
-	IAS *ias.QuotePolicy `json:"ias,omitempty"`
-	PCS *pcs.QuotePolicy `json:"pcs,omitempty"`
+	IAS *ias.QuotePolicy `json:"ias,omitempty" yaml:"ias,omitempty"`
+	PCS *pcs.QuotePolicy `json:"pcs,omitempty" yaml:"pcs,omitempty"`
 }

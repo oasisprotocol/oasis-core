@@ -40,18 +40,18 @@ const (
 // QuotePolicy is the quote validity policy.
 type QuotePolicy struct {
 	// Disabled specifies whether PCS quotes are disabled and will always be rejected.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 
 	// TCBValidityPeriod is the validity (in days) of the TCB collateral.
-	TCBValidityPeriod uint16 `json:"tcb_validity_period"`
+	TCBValidityPeriod uint16 `json:"tcb_validity_period" yaml:"tcb_validity_period"`
 
 	// MinTCBEvaluationDataNumber is the minimum TCB evaluation data number that is considered to be
 	// valid. TCB bundles containing smaller values will be invalid.
-	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number"`
+	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number" yaml:"min_tcb_evaluation_data_number"`
 
 	// FMSPCBlacklist is a list of hexadecimal encoded FMSPCs specifying which processor
 	// packages and platform instances are blocked.
-	FMSPCBlacklist []string `json:"fmspc_blacklist,omitempty"`
+	FMSPCBlacklist []string `json:"fmspc_blacklist,omitempty" yaml:"fmspc_blacklist,omitempty"`
 }
 
 // Quote is an enclave quote.
