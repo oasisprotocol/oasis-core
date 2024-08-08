@@ -93,14 +93,14 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 	if err != nil {
 		return fmt.Errorf("can't get registry consensus parameters: %w", err)
 	}
-	if registryParams.EnableKeyManagerCHURP {
+	if registryParams.DeprecatedEnableKeyManagerCHURP { // nolint: staticcheck
 		return fmt.Errorf("key manager CHURP extension is enabled")
 	}
 
 	// Check CHURP parameters.
 	_, err = ctrl.Keymanager.Churp().ConsensusParameters(ctx, consensus.HeightLatest)
-	if err == nil {
-		return fmt.Errorf("key manager CHURP consensus parameters shouldn't be set: %w", err)
+	if err != nil {
+		return fmt.Errorf("key manager CHURP consensus parameters should be set: %w", err)
 	}
 
 	// Check staking parameters.
@@ -176,7 +176,7 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	if err != nil {
 		return fmt.Errorf("can't get registry consensus parameters: %w", err)
 	}
-	if !registryParams.EnableKeyManagerCHURP {
+	if !registryParams.DeprecatedEnableKeyManagerCHURP { // nolint: staticcheck
 		return fmt.Errorf("key manager CHURP extension is disabled")
 	}
 

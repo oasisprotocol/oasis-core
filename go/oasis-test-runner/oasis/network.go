@@ -175,9 +175,6 @@ type NetworkCfg struct { // nolint: maligned
 	// left empty. Nodes are started in the order in which they appear here (automatically created
 	// nodes are appended).
 	Nodes []string
-
-	// EnableKeyManagerCHURP is the enable key manager CHURP extension flag.
-	EnableKeyManagerCHURP bool `json:"enable_km_churp,omitempty"`
 }
 
 // SetMockEpoch force-enables the mock epoch time keeping.
@@ -803,11 +800,6 @@ func (net *Network) MakeGenesis() error {
 		"--" + genesis.CfgStakingTokenSymbol, genesisTestHelpers.TestStakingTokenSymbol,
 		"--" + genesis.CfgStakingTokenValueExponent, strconv.FormatUint(uint64(genesisTestHelpers.TestStakingTokenValueExponent), 10),
 		"--" + genesis.CfgBeaconBackend, net.cfg.Beacon.Backend,
-	}
-	if net.cfg.EnableKeyManagerCHURP {
-		args = append(args, []string{
-			"--" + genesis.CfgRegistryEnableKeyManagerCHURP, "true",
-		}...)
 	}
 	switch net.cfg.Beacon.Backend {
 	case beacon.BackendInsecure:

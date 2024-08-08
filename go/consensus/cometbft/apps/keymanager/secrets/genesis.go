@@ -6,12 +6,11 @@ import (
 
 	"github.com/cometbft/cometbft/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 func (ext *secretsExt) InitChain(ctx *tmapi.Context, _ types.RequestInitChain, doc *genesis.Document) error {
@@ -27,32 +26,14 @@ func (ext *secretsExt) InitChain(ctx *tmapi.Context, _ types.RequestInitChain, d
 	if err != nil {
 		return fmt.Errorf("cometbft/keymanager: couldn't get current epoch: %w", err)
 	}
-
-	// TODO: The better thing to do would be to move the registry init
-	// before the keymanager, and just query the registry for the runtime
-	// list.
-	regSt := doc.Registry
-	rtMap := make(map[common.Namespace]*registry.Runtime)
-	for _, rt := range regSt.Runtimes {
-		err := registry.VerifyRuntime(&regSt.Parameters, ctx.Logger(), rt, true, false, epoch)
-		if err != nil {
-			ctx.Logger().Error("InitChain: Invalid runtime",
-				"err", err,
-			)
-			continue
-		}
-
-		if rt.Kind == registry.KindKeyManager {
-			rtMap[rt.ID] = rt
-		}
-	}
+	runtimes := common.RegistryRuntimes(ctx, doc, epoch)
 
 	var toEmit []*secrets.Status
 	for i, v := range st.Statuses {
 		if v == nil {
 			return fmt.Errorf("InitChain: Status index %d is nil", i)
 		}
-		rt := rtMap[v.ID]
+		rt := runtimes[v.ID]
 		if rt == nil {
 			ctx.Logger().Error("InitChain: State for unknown key manager runtime",
 				"id", v.ID,

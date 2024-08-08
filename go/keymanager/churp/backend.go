@@ -27,4 +27,16 @@ type Backend interface {
 	//
 	// Upon subscription the current statuses are sent immediately.
 	WatchStatuses() (<-chan *Status, *pubsub.Subscription)
+
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(context.Context, int64) (*Genesis, error)
+}
+
+// Genesis is the key manager management genesis state for CHURP.
+type Genesis struct {
+	// Parameters are the consensus parameters for CHURP.
+	Parameters ConsensusParameters `json:"params"`
+
+	// Statuses are the statuses of CHURP instances.
+	Statuses []*Status `json:"statuses,omitempty"`
 }

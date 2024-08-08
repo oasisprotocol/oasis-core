@@ -61,7 +61,6 @@ const (
 	CfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
 	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
 	CfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
-	CfgRegistryEnableKeyManagerCHURP                  = "registry.enable_key_manager_churp"
 	CfgRegistryTEEFeaturesSGXPCS                      = "registry.tee_features.sgx.pcs"
 	CfgRegistryTEEFeaturesSGXSignedAttestations       = "registry.tee_features.sgx.signed_attestations"
 	CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge = "registry.tee_features.sgx.default_max_attestation_age"
@@ -391,10 +390,6 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		regSt.Parameters.EnableRuntimeGovernanceModels[gm] = true
 	}
 
-	if viper.GetBool(CfgRegistryEnableKeyManagerCHURP) {
-		regSt.Parameters.EnableKeyManagerCHURP = true
-	}
-
 	entMap := make(map[signature.PublicKey]bool)
 	appendToEntities := func(signedEntity *entity.SignedEntity, ent *entity.Entity) error {
 		if entMap[ent.ID] {
@@ -575,7 +570,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 // AppendKeyManagerState appends the key manager genesis state given a vector of
 // key manager statuses.
 func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.Logger) error {
-	kmSt := secrets.Genesis{
+	secretsGenesis := secrets.Genesis{
 		Parameters: secrets.ConsensusParameters{
 			GasCosts: secrets.DefaultGasCosts, // TODO: Make these configurable.
 		},
@@ -600,10 +595,10 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 			return err
 		}
 
-		kmSt.Statuses = append(kmSt.Statuses, &status)
+		secretsGenesis.Statuses = append(secretsGenesis.Statuses, &status)
 	}
 
-	doc.KeyManager = kmSt
+	doc.KeyManager.Genesis = secretsGenesis
 
 	return nil
 }
@@ -814,7 +809,6 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.StringSlice(CfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
-	initGenesisFlags.Bool(CfgRegistryEnableKeyManagerCHURP, false, "enable key manager CHURP extension")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXSignedAttestations, true, "enable SGX RAK-signed attestations")
 	initGenesisFlags.Uint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, 1200, "default max attestation age (SGX RAK-signed attestations must be enabled") // ~2 hours at 6 sec per block.

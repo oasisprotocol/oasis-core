@@ -54,9 +54,6 @@ func (sc *kmChurpManyImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Keymanagers[5].ChurpIDs = []uint8{0, 1, 2}
 	f.Keymanagers[5].NoAutoStart = true
 
-	// Enable CHURP extension.
-	f.Network.EnableKeyManagerCHURP = true
-
 	// Speed up the test.
 	f.Network.Beacon.VRFParameters = &beacon.VRFParameters{
 		Interval:             10,
