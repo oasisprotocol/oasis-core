@@ -97,7 +97,7 @@ func (a AuthorizeAction) PrettyType() (interface{}, error) {
 	return a, nil
 }
 
-// CancelAction is an action cancelation call body.
+// CancelAction is an action cancellation call body.
 type CancelAction struct {
 	// Vault is the address of the target vault.
 	Vault staking.Address `json:"vault"`
@@ -105,7 +105,7 @@ type CancelAction struct {
 	Nonce uint64 `json:"nonce"`
 }
 
-// Validate validates the action cancelation call.
+// Validate validates the action cancellation call.
 func (a *CancelAction) Validate() error {
 	if !a.Vault.IsValid() {
 		return fmt.Errorf("invalid vault address")

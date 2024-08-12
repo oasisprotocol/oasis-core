@@ -189,7 +189,7 @@ func (sc *storageSyncInconsistentImpl) Run(ctx context.Context, childEnv *env.En
 	}
 
 	// No need to wait, client is dead at this point.  Unfortunately
-	// the error didn't indicate cancelation though.
+	// the error didn't indicate cancellation though.
 
 	return sc.Net.CheckLogWatchers()
 }

@@ -84,7 +84,7 @@ To run an Oasis node under SGX follow the same steps as for non-SGX, except the
 If the above does not appear to work (e.g., when you run the client, it appears
 to hang and not make any progress) usually the best place to start debugging is
 looking at the various node logs which are stored under a directory starting
-with `/tmp/oasis-net-runner` (unless overriden via `--basedir` options).
+with `/tmp/oasis-net-runner` (unless overridden via `--basedir` options).
 
 Specifically look at `node.log` and `console.log` files located in directories
 for each of the nodes comprising the local network.
