@@ -24,8 +24,13 @@ import (
 )
 
 type pendingTx struct {
+	chs map[chan *api.SubmitTxResult]struct{}
+}
+
+type wantTx struct {
 	txHash hash.Hash
 	ch     chan *api.SubmitTxResult
+	remove bool
 }
 
 // Node is a client node.
@@ -88,7 +93,36 @@ func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 	// Nothing to do here.
 }
 
-func (n *Node) SubmitTx(ctx context.Context, tx []byte) (<-chan *api.SubmitTxResult, *protocol.Error, error) {
+// SubmitTxSubscription is a subscription to a transaction submission result.
+type SubmitTxSubscription struct {
+	txHash hash.Hash
+	ch     chan *api.SubmitTxResult
+
+	n *Node
+}
+
+// Result returns a channel that will receive the transaction submission result once the transaction
+// has been included in a block.
+func (sr *SubmitTxSubscription) Result() <-chan *api.SubmitTxResult {
+	return sr.ch
+}
+
+// Stop notifies the client to stop watching for the transaction submission result.
+func (sr *SubmitTxSubscription) Stop() {
+	sr.n.txCh.In() <- &wantTx{
+		txHash: sr.txHash,
+		ch:     sr.ch,
+		remove: true,
+	}
+}
+
+// SubmitTx submits the transaction to the transaction pool, waits for it to be checked and returns
+// a subscription that gets a notification when the transaction is included in a block.
+//
+// When the caller is not interested in the transaction execution result, it should call `Stop` on
+// the returned subscription. Not doing so may leak resources associated with tracking the submitted
+// transaction.
+func (n *Node) SubmitTx(ctx context.Context, tx []byte) (*SubmitTxSubscription, *protocol.Error, error) {
 	// Make sure consensus is synced.
 	select {
 	case <-n.commonNode.Consensus.Synced():
@@ -107,13 +141,19 @@ func (n *Node) SubmitTx(ctx context.Context, tx []byte) (<-chan *api.SubmitTxRes
 		return nil, &result.Error, nil
 	}
 
+	txHash := hash.NewFromBytes(tx)
 	ch := make(chan *api.SubmitTxResult, 1)
-	n.txCh.In() <- &pendingTx{
-		txHash: hash.NewFromBytes(tx),
+	n.txCh.In() <- &wantTx{
+		txHash: txHash,
 		ch:     ch,
 	}
 
-	return ch, nil, nil
+	sub := &SubmitTxSubscription{
+		txHash: txHash,
+		ch:     ch,
+		n:      n,
+	}
+	return sub, nil, nil
 }
 
 func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult, error) {
@@ -198,14 +238,16 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 	var processed []hash.Hash
 	for txHash, tx := range matches {
 		pTx := pending[txHash]
-		pTx.ch <- &api.SubmitTxResult{
-			Result: &api.SubmitTxMetaResponse{
-				Round:      blk.Header.Round,
-				BatchOrder: tx.BatchOrder,
-				Output:     tx.Output,
-			},
+		for ch := range pTx.chs {
+			ch <- &api.SubmitTxResult{
+				Result: &api.SubmitTxMetaResponse{
+					Round:      blk.Header.Round,
+					BatchOrder: tx.BatchOrder,
+					Output:     tx.Output,
+				},
+			}
+			close(ch)
 		}
-		close(pTx.ch)
 		delete(pending, txHash)
 		processed = append(processed, txHash)
 	}
@@ -262,8 +304,31 @@ func (n *Node) worker() {
 			n.logger.Info("termination requested")
 			return
 		case rtx := <-n.txCh.Out():
-			tx := rtx.(*pendingTx)
-			pending[tx.txHash] = tx
+			tx := rtx.(*wantTx)
+			existingTx, ok := pending[tx.txHash]
+
+			switch tx.remove {
+			case false:
+				// Interest in the transaction.
+				if !ok {
+					existingTx = &pendingTx{
+						chs: make(map[chan *api.SubmitTxResult]struct{}),
+					}
+					pending[tx.txHash] = existingTx
+				}
+
+				existingTx.chs[tx.ch] = struct{}{}
+			case true:
+				// Removal of interest in the transaction.
+				if !ok {
+					continue
+				}
+
+				delete(existingTx.chs, tx.ch)
+				if len(existingTx.chs) == 0 {
+					delete(pending, tx.txHash)
+				}
+			}
 			continue
 		case blk := <-blkCh:
 			blocks = append(blocks, blk.Block)
