@@ -28,6 +28,9 @@ const (
 	roflAttachRuntimeTimeout = 2 * time.Second
 	// roflNotifyTimeout is the maximum amount of time runtime notification handling can take.
 	roflNotifyTimeout = 2 * time.Second
+	// roflSubmitTxTimeout is the maximum amount of time that the host will wait for transaction
+	// inclusion into a block.
+	roflSubmitTxTimeout = 1 * time.Minute
 	// roflLocalStorageKeySeparator is the local storage key separator after component ID.
 	roflLocalStorageKeySeparator = ":"
 )
@@ -178,10 +181,13 @@ func (rh *roflHostHandler) handleHostSubmitTx(
 		Data:      rq.Data,
 	}
 
+	submitTxCtx, cancel := context.WithTimeout(ctx, roflSubmitTxTimeout)
+	defer cancel()
+
 	switch rq.Wait {
 	case true:
 		// We need to wait for transaction inclusion.
-		rsp, err := rh.client.SubmitTxMeta(ctx, submitRq)
+		rsp, err := rh.client.SubmitTxMeta(submitTxCtx, submitRq)
 		switch {
 		case err != nil:
 			return nil, err
@@ -201,7 +207,7 @@ func (rh *roflHostHandler) handleHostSubmitTx(
 		}, nil
 	default:
 		// Just submit and forget.
-		err := rh.client.SubmitTxNoWait(ctx, submitRq)
+		err := rh.client.SubmitTxNoWait(submitTxCtx, submitRq)
 		if err != nil {
 			return nil, err
 		}
