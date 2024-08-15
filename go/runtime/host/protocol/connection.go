@@ -504,7 +504,12 @@ func (c *connection) workerIncoming() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			c.handleMessage(ctx, &message)
+
+			// Ensure each message has its own context which is canceled at the end.
+			localCtx, localCancel := context.WithCancel(ctx)
+			defer localCancel()
+
+			c.handleMessage(localCtx, &message)
 		}()
 	}
 }
