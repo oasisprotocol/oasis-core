@@ -435,7 +435,7 @@ where
         let ys = &self.bijs[0..self.n];
         let p = lagrange(xs, ys);
 
-        if p.degree() + 1 != self.n {
+        if p.size() != self.n {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
 

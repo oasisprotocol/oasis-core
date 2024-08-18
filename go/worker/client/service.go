@@ -15,13 +15,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/client/committee"
 )
 
 type service struct {
 	w *Worker
 }
 
-func (s *service) submitTx(ctx context.Context, request *api.SubmitTxRequest) (<-chan *api.SubmitTxResult, *protocol.Error, error) {
+func (s *service) submitTx(ctx context.Context, request *api.SubmitTxRequest) (*committee.SubmitTxSubscription, *protocol.Error, error) {
 	rt := s.w.runtimes[request.RuntimeID]
 	if rt == nil {
 		return nil, nil, api.ErrNoHostedRuntime
@@ -44,7 +45,7 @@ func (s *service) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([
 
 // Implements api.RuntimeClient.
 func (s *service) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest) (*api.SubmitTxMetaResponse, error) {
-	respCh, checkTxErr, err := s.submitTx(ctx, request)
+	sub, checkTxErr, err := s.submitTx(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +54,7 @@ func (s *service) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest
 			CheckTxError: checkTxErr,
 		}, nil
 	}
+	defer sub.Stop() // Ensure subscription is stopped.
 
 	// Wait for result.
 	for {
@@ -63,7 +65,7 @@ func (s *service) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest
 		case <-ctx.Done():
 			// The context we're working in was canceled, abort.
 			return nil, ctx.Err()
-		case resp, ok = <-respCh:
+		case resp, ok = <-sub.Result():
 			if !ok {
 				return nil, fmt.Errorf("client: channel closed unexpectedly")
 			}
@@ -74,13 +76,14 @@ func (s *service) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest
 
 // Implements api.RuntimeClient.
 func (s *service) SubmitTxNoWait(ctx context.Context, request *api.SubmitTxRequest) error {
-	_, checkTxErr, err := s.submitTx(ctx, request)
+	sub, checkTxErr, err := s.submitTx(ctx, request)
 	if err != nil {
 		return err
 	}
 	if checkTxErr != nil {
 		return errors.WithContext(api.ErrCheckTxFailed, checkTxErr.String())
 	}
+	sub.Stop() // Ensure subscription is stopped.
 	return nil
 }
 

@@ -1,6 +1,7 @@
 use std::{cmp::max, ops::Add};
 
 use group::{Group, GroupEncoding};
+use subtle::Choice;
 
 use crate::poly::{powers, BivariatePolynomial, Polynomial};
 
@@ -106,7 +107,7 @@ where
 
     /// Verifies coefficients of the polynomial resulting from the evaluation
     /// of the bivariate polynomial with respect to the indeterminate x against
-    /// the verification matrix in non-constant time.
+    /// the verification matrix.
     ///
     /// The polynomial
     /// ```text
@@ -121,12 +122,20 @@ where
     /// a_j * G = \sum_{i=0}^{deg_x} b_{i,j} x^i * G
     ///         = \sum_{i=0}^{deg_x} x^i * M_{i,j}
     /// ```
+    ///
+    /// This method is not constant time if the size of the polynomial
+    /// is invalid.
     pub fn verify_x(&self, x: &G::Scalar, polynomial: &Polynomial<G::Scalar>) -> bool {
+        // Short-circuit on the size of the polynomial, not its contents.
         if polynomial.size() != self.cols {
             return false;
         }
 
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to verify.
         let xpows = powers(x, self.rows - 1); // [x^i]
+        let mut verified = Choice::from(1);
+
         for j in 0..self.cols {
             // Verify if the following difference is the identity element (zero)
             // of the group: a_j * G - \sum_{i=0}^{deg_x} x^i * M_{i,j}.
@@ -136,12 +145,10 @@ where
                 diff -= self.m[i][j] * xpow; // x^i * M_{i,j} = b_{i,j} x^i * G
             }
 
-            if !Into::<bool>::into(diff.is_identity()) {
-                return false;
-            }
+            verified &= diff.is_identity();
         }
 
-        true
+        verified.into()
     }
 
     /// Verifies coefficients of the polynomial resulting from the evaluation
@@ -162,12 +169,20 @@ where
     /// a_i * G = \sum_{j=0}^{deg_y} b_{i,j} y^j * G
     ///         = \sum_{j=0}^{deg_y} y^j * M_{i,j}
     /// ```
+    ///
+    /// This method is not constant time if the size of the polynomial
+    /// is invalid.
     pub fn verify_y(&self, y: &G::Scalar, polynomial: &Polynomial<G::Scalar>) -> bool {
+        // Short-circuit on the size of the polynomial, not its contents.
         if polynomial.size() != self.rows {
             return false;
         }
 
+        // Don't short-circuit this loop to avoid revealing which coefficient
+        // failed to verify.
         let ypows = powers(y, self.cols - 1); // [y^j]
+        let mut verified = Choice::from(1);
+
         for i in 0..self.rows {
             // Verify if the following difference is the identity element (zero)
             // of the group: a_i * G - \sum_{j=0}^{deg_y} y^j * M_{i,j}.
@@ -177,12 +192,10 @@ where
                 diff -= self.m[i][j] * ypow; // y^j * M_{i,j} = b_{i,j} y^j * G
             }
 
-            if !Into::<bool>::into(diff.is_identity()) {
-                return false;
-            }
+            verified &= diff.is_identity();
         }
 
-        true
+        verified.into()
     }
 
     /// Returns the byte representation of the verification matrix.
@@ -202,6 +215,9 @@ where
     }
 
     /// Attempts to create a verification matrix from its byte representation.
+    ///
+    /// This method is not constant time since the verification matrix doesn't
+    /// contain sensitive information.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < 2 {
             return None;
@@ -211,21 +227,21 @@ where
         let deg_y = bytes[1] as usize;
         let rows = deg_x + 1;
         let cols = deg_y + 1;
+        let expected_len = Self::byte_size(rows, cols);
 
-        if bytes.len() != Self::byte_size(rows, cols) {
+        if bytes.len() != expected_len {
             return None;
         }
 
-        let mut bytes = &bytes[2..];
+        let element_size = Self::element_byte_size();
         let mut m = Vec::with_capacity(rows);
-        for _ in 0..=deg_x {
+
+        for chunks in bytes[2..].chunks(element_size * cols) {
             let mut mi = Vec::with_capacity(cols);
-            for _ in 0..=deg_y {
+
+            for chunk in chunks.chunks(element_size) {
                 let mut repr: G::Repr = Default::default();
-                let slice = &mut repr.as_mut()[..];
-                let (bij, rest) = bytes.split_at(slice.len());
-                slice.copy_from_slice(bij);
-                bytes = rest;
+                repr.as_mut().copy_from_slice(chunk);
 
                 let mij = match G::from_bytes(&repr).into() {
                     None => return None,

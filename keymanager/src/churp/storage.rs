@@ -166,7 +166,7 @@ impl Storage {
             .open(nonce, ciphertext, additional_data)
             .map_err(|_| Error::InvalidBivariatePolynomial)?;
 
-        BivariatePolynomial::from_bytes(plaintext)
+        BivariatePolynomial::from_bytes(&plaintext)
             .ok_or(Error::BivariatePolynomialDecodingFailed.into())
     }
 
