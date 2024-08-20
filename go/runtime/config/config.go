@@ -194,7 +194,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("prune.interval must be >= 1 second")
 		}
 	default:
-		return fmt.Errorf("unknown runtime history pruner strategy: %s", c.Environment)
+		return fmt.Errorf("unknown runtime history pruner strategy: %s", c.Prune.Strategy)
 	}
 
 	if c.LoadBalancer.NumInstances > 128 {
