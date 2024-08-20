@@ -17,7 +17,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	cmdControl "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity/cometbft"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const CfgDataDir = "datadir"
@@ -46,6 +49,12 @@ var (
 		Use:   "show-tls-pubkey",
 		Short: "outputs node's endpoint tls public key",
 		Run:   doShowTLSPubkey,
+	}
+
+	identityShowAddressCmd = &cobra.Command{
+		Use:   "show-address",
+		Short: "outputs node's address",
+		Run:   doShowAddress,
 	}
 
 	logger = logging.GetLogger("cmd/identity")
@@ -141,6 +150,13 @@ func doShowSentryTLSPubkey(cmd *cobra.Command, args []string) {
 	doShowPubkey(cmd, args, true)
 }
 
+func doShowAddress(cmd *cobra.Command, _ []string) {
+	status := cmdControl.DoFetchStatus(cmd)
+
+	addr := staking.NewAddress(status.Identity.Node)
+	fmt.Println(addr)
+}
+
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	cometbft.Register(identityCmd)
@@ -149,9 +165,12 @@ func Register(parentCmd *cobra.Command) {
 
 	identityInitCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
+	identityShowAddressCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+
 	identityCmd.AddCommand(identityInitCmd)
 	identityCmd.AddCommand(identityShowSentryPubkeyCmd)
 	identityCmd.AddCommand(identityShowTLSPubkeyCmd)
+	identityCmd.AddCommand(identityShowAddressCmd)
 
 	parentCmd.AddCommand(identityCmd)
 }

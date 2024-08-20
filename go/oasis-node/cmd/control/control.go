@@ -80,7 +80,7 @@ var (
 	logger = logging.GetLogger("cmd/control")
 )
 
-// DoConnect connects to the runtime client grpc server.
+// DoConnect connects to the node's gRPC server.
 func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, control.NodeController) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -268,11 +268,10 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doStatus(cmd *cobra.Command, _ []string) {
+// DoFetchStatus connects to the node's gRPC server and fetches its status.
+func DoFetchStatus(cmd *cobra.Command) *control.Status {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
-
-	logger.Debug("querying status")
 
 	// Use background context to block until the result comes in.
 	status, err := client.GetStatus(context.Background())
@@ -282,6 +281,12 @@ func doStatus(cmd *cobra.Command, _ []string) {
 		)
 		os.Exit(128)
 	}
+	return status
+}
+
+func doStatus(cmd *cobra.Command, _ []string) {
+	status := DoFetchStatus(cmd)
+
 	prettyStatus, err := cmdCommon.PrettyJSONMarshal(status)
 	if err != nil {
 		logger.Error("failed to get pretty JSON of node status",
