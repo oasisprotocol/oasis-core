@@ -12,6 +12,124 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 24.2 (2024-08-20)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- Support only `entity_id` to be specified in configuration
+  ([#5764](https://github.com/oasisprotocol/oasis-core/issues/5764))
+
+  Instead of the need to specify the path to the entire entity descriptor, the
+  node configuration can now specify only `registration.entity_id`, the entity
+  public key.
+
+### Features
+
+- keymanager/src/churp: Fetch key shares and recover key
+  ([#5715](https://github.com/oasisprotocol/oasis-core/issues/5715))
+
+- go/consensus: add GasUsed to transaction results and Size to block header
+  ([#5761](https://github.com/oasisprotocol/oasis-core/issues/5761))
+
+- go/worker/keymanager/churp: Add metrics
+  ([#5773](https://github.com/oasisprotocol/oasis-core/issues/5773))
+
+  The following metrics have been added:
+
+  - `oasis_worker_keymanager_churp_threshold_number`
+  is the degree of the secret-sharing polynomial.
+
+  - `oasis_worker_keymanager_churp_extra_shares_number`
+  is the minimum number of extra shares.
+
+  - `oasis_worker_keymanager_churp_handoff_number`
+  is the epoch number of the last handoff.
+
+  - `oasis_worker_keymanager_churp_next_handoff_number`
+  is the epoch number of the next handoff.
+
+  - `oasis_worker_keymanager_churp_handoff_interval`
+  is the handoff interval.
+
+  - `oasis_worker_keymanager_churp_committee_size`
+  is the number of nodes in the committee.
+
+  - `oasis_worker_keymanager_churp_submitted_applications_total`
+  is the number of submitted applications.
+
+  - `oasis_worker_keymanager_churp_confirmed_applications_total`
+  is the number of confirmed applications.
+
+  - `oasis_worker_keymanager_churp_enclave_rpc_latency_seconds`
+  is the latency of enclave rpc calls.
+
+  - `oasis_worker_keymanager_churp_enclave_rpc_failures_total`
+  is the number of failed enclave rpc calls.
+
+- go/upgrade/migrations: Prepare handler for version 24.2.0
+  ([#5777](https://github.com/oasisprotocol/oasis-core/issues/5777))
+
+- go/runtime: Automatically enable all configured detached components
+  ([#5785](https://github.com/oasisprotocol/oasis-core/issues/5785))
+
+  Since they are explicitly configured there should be no need to enable
+  them twice. This just defaults detached components to be enabled and one
+  needs to explicitly disable them.
+
+- go/oasis-node: Add `identity show-address` subcommand
+  ([#5820](https://github.com/oasisprotocol/oasis-core/issues/5820))
+
+  This subcommand makes it easier to get the address associated with the node
+  identity public key.
+
+### Bug Fixes
+
+- go/runtime/registry/host: Ignore key manager quote policy update feature
+  ([#5759](https://github.com/oasisprotocol/oasis-core/issues/5759))
+
+  If the key manager policy and status update watcher started before
+  the runtime active version was ready, it failed to fetch the runtime
+  info and stopped. Therefore, the key manager status and quote policy
+  were never updated, causing the key manager runtime client to reject
+  incoming Noise session requests since the policy was not set.
+
+- go/runtime/bundle: Use manifest hash at bundle load time
+  ([#5785](https://github.com/oasisprotocol/oasis-core/issues/5785))
+
+- go/runtime: Add timeout for HostSubmitTx from ROFL apps
+  ([#5813](https://github.com/oasisprotocol/oasis-core/issues/5813))
+
+- go/runtime/config: Fix incorrect error message for invalid prune config
+  ([#5821](https://github.com/oasisprotocol/oasis-core/issues/5821))
+
+### Internal Changes
+
+- go/consensus: Add the latest consensus-breaking software feature version
+  ([#5760](https://github.com/oasisprotocol/oasis-core/issues/5760))
+
+  Useful for enabling new consensus-breaking features with upcoming releases.
+  A feature is enabled if the latest consensus-breaking software feature
+  version is not lower than the version in which the feature is to be enabled.
+
+- Bump Rust toolchain to 2024-07-09
+  ([#5770](https://github.com/oasisprotocol/oasis-core/issues/5770),
+   [#5772](https://github.com/oasisprotocol/oasis-core/issues/5772))
+
+- go: Bump CometBFT to 0.37.9-oasis1
+  ([#5782](https://github.com/oasisprotocol/oasis-core/issues/5782))
+
+- secret-sharing: Make sensitive functions constant time
+  ([#5800](https://github.com/oasisprotocol/oasis-core/issues/5800))
+
+- go/common/sgx: Make quote policy YAML serializable
+  ([#5804](https://github.com/oasisprotocol/oasis-core/issues/5804))
+
 ## 24.1 (2024-06-28)
 
 | Protocol          | Version   |
