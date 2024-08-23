@@ -270,19 +270,21 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 		elfBin := fmt.Sprintf("component-%d-%s.elf", i, compCfg.Kind)
 		sgxBin := fmt.Sprintf("component-%d-%s.sgx", i, compCfg.Kind)
 
-		binBuf, err := os.ReadFile(compCfg.Binaries[node.TEEHardwareInvalid])
-		if err != nil {
-			return nil, fmt.Errorf("oasis/runtime: failed to read ELF binary: %w", err)
-		}
-		_ = bnd.Add(elfBin, binBuf)
-
 		comp := &bundle.Component{
 			Kind:       compCfg.Kind,
 			Executable: elfBin,
 		}
+		
+		if rt.teeHardware == node.TEEHardwareInvalid {
+			binBuf, err := os.ReadFile(compCfg.Binaries[node.TEEHardwareInvalid])
+			if err != nil {
+				return nil, fmt.Errorf("oasis/runtime: failed to read %s ELF binary: %w", compCfg.Binaries[node.TEEHardwareInvalid], err)
+			}
+			_ = bnd.Add(elfBin, binBuf)
 
+		}
 		if rt.teeHardware == node.TEEHardwareIntelSGX {
-			binBuf, err = os.ReadFile(compCfg.Binaries[node.TEEHardwareIntelSGX])
+			binBuf, err := os.ReadFile(compCfg.Binaries[node.TEEHardwareIntelSGX])
 			if err != nil {
 				return nil, fmt.Errorf("oasis/runtime: failed to read SGX binary: %w", err)
 			}
