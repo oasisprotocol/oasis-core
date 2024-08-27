@@ -158,6 +158,8 @@ steps:
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/default/release
       - buildkite-agent artifact upload oasis-core-runtime-loader
+    env:
+      RUSTFLAGS: "-C debug-assertions=yes"
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -196,6 +198,8 @@ steps:
       - mv simple-keyvalue simple-keyvalue.mocksgx
       - buildkite-agent artifact upload simple-keymanager.mocksgx
       - buildkite-agent artifact upload simple-keyvalue.mocksgx
+    env:
+      RUSTFLAGS: "-C target-feature=+aes,+ssse3 -C debug-assertions=yes"
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -210,6 +214,8 @@ steps:
       - make build-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/interop/mkvs-test-helpers)
       - .buildkite/rust/test_generic.sh .
+    env:
+      RUSTFLAGS: "-C target-feature=+aes,+ssse3 -C debug-assertions=yes"
     retry:
       <<: *retry_agent_failure
     plugins:
