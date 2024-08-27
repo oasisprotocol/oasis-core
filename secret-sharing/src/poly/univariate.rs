@@ -21,8 +21,7 @@ use crate::poly::powers;
 ///
 /// Trailing zeros are never trimmed to ensure that all polynomials of the same
 /// degree are consistently represented by vectors of the same size, resulting
-/// in encodings of equal length. If you wish to remove them, consider using
-/// the `trim` method after each operation.
+/// in encodings of equal length.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Polynomial<F> {
     pub(crate) a: Vec<F>,
