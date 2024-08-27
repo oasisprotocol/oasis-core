@@ -82,18 +82,21 @@ where
     /// Sets the coefficient `b_{i,j}` that belongs to the term `x^i y^j`.
     ///
     /// If the coefficient does not exist, this is a no-op.
-    pub fn set_coefficient(&mut self, i: usize, j: usize, bij: F) {
+    pub fn set_coefficient(&mut self, i: usize, j: usize, bij: F) -> bool {
         if let Some(bi) = self.b.get_mut(i) {
             if let Some(old_bij) = bi.get_mut(j) {
                 *old_bij = bij;
+                return true;
             }
         }
+        false
     }
 
     /// Sets the coefficient `b_{0,0}` of the constant term to zero,
     /// effectively creating a zero-hole bivariate polynomial.
     pub fn to_zero_hole(&mut self) {
-        self.set_coefficient(0, 0, F::ZERO);
+        let updated = self.set_coefficient(0, 0, F::ZERO);
+        debug_assert!(updated);
     }
 
     /// Returns true iff the coefficient `b_{0,0}` of the constant term is zero.
@@ -338,7 +341,7 @@ mod tests {
         let mut bp = BivariatePolynomial::zero(2, 3);
         assert_eq!(bp.b[0][0], scalar(0));
 
-        bp.set_coefficient(0, 0, scalar(1));
+        assert!(bp.set_coefficient(0, 0, scalar(1)));
         assert_eq!(bp.b[0][0], scalar(1));
     }
 
@@ -347,7 +350,7 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::random(2, 3, &mut rng);
 
-        bp.set_coefficient(0, 0, scalar(1));
+        assert!(bp.set_coefficient(0, 0, scalar(1)));
         assert_eq!(bp.b[0][0], scalar(1));
 
         bp.to_zero_hole();

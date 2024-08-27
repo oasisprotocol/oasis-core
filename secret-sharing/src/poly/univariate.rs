@@ -21,8 +21,7 @@ use crate::poly::powers;
 ///
 /// Trailing zeros are never trimmed to ensure that all polynomials of the same
 /// degree are consistently represented by vectors of the same size, resulting
-/// in encodings of equal length. If you wish to remove them, consider using
-/// the `trim` method after each operation.
+/// in encodings of equal length.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Polynomial<F> {
     pub(crate) a: Vec<F>,
@@ -68,16 +67,19 @@ where
     /// Sets the coefficient `a_i` that belongs to the term `x^i`.
     ///
     /// If the coefficient does not exist, this is a no-op.
-    pub fn set_coefficient(&mut self, i: usize, ai: F) {
+    pub fn set_coefficient(&mut self, i: usize, ai: F) -> bool {
         if let Some(old_ai) = self.a.get_mut(i) {
             *old_ai = ai;
+            return true;
         }
+        false
     }
 
     /// Sets the coefficient `a_0` of the constant term to zero,
     /// effectively creating a zero-hole univariate polynomial.
     pub fn to_zero_hole(&mut self) {
-        self.set_coefficient(0, F::ZERO);
+        let updated = self.set_coefficient(0, F::ZERO);
+        debug_assert!(updated)
     }
 
     /// Returns true iff the coefficient `a_0` of the constant term is zero.
@@ -484,10 +486,10 @@ mod tests {
     fn test_set_coefficients() {
         let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
 
-        p.set_coefficient(3, scalar(4));
+        assert!(!p.set_coefficient(3, scalar(4)));
         assert_eq!(p.a, scalars(&[1, 2, 3]));
 
-        p.set_coefficient(1, scalar(4));
+        assert!(p.set_coefficient(1, scalar(4)));
         assert_eq!(p.a, scalars(&[1, 4, 3]));
     }
 

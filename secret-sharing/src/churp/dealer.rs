@@ -41,7 +41,8 @@ where
     /// Creates a new dealer with a predefined shared secret.
     pub fn new(threshold: u8, secret: G::Scalar, rng: &mut impl RngCore) -> Result<Self> {
         let mut bp = Self::random_bivariate_polynomial(threshold, rng)?;
-        bp.set_coefficient(0, 0, secret);
+        let updated = bp.set_coefficient(0, 0, secret);
+        debug_assert!(updated);
         Ok(bp.into())
     }
 
