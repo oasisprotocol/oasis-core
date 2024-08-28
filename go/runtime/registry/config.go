@@ -102,7 +102,62 @@ func newConfig( //nolint: gocyclo
 
 	// Check if any runtimes are configured to be hosted.
 	if haveSetRuntimes || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
+		// By default start with the environment specified in configuration.
 		runtimeEnv := config.GlobalConfig.Runtime.Environment
+
+		// Preprocess runtimes to separate detached from non-detached.
+		type nameKey struct {
+			runtime common.Namespace
+			comp    component.ID
+		}
+
+		var (
+			regularBundles []*bundle.Bundle
+			err            error
+		)
+		detachedBundles := make(map[common.Namespace][]*bundle.Bundle)
+		existingNames := make(map[nameKey]struct{})
+		for _, path := range config.GlobalConfig.Runtime.Paths {
+			var bnd *bundle.Bundle
+			if bnd, err = bundle.Open(path); err != nil {
+				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
+			}
+			if err = bnd.WriteExploded(dataDir); err != nil {
+				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
+			}
+			// Release resources as the bundle has been exploded anyway.
+			bnd.Data = nil
+
+			switch bnd.Manifest.IsDetached() {
+			case false:
+				// A regular non-detached bundle that has the RONL component.
+				regularBundles = append(regularBundles, bnd)
+			case true:
+				// A detached bundle without the RONL component that needs to be attached.
+				detachedBundles[bnd.Manifest.ID] = append(detachedBundles[bnd.Manifest.ID], bnd)
+
+				// Ensure there are no name conflicts among the components.
+				for compID := range bnd.Manifest.GetAvailableComponents() {
+					nk := nameKey{bnd.Manifest.ID, compID}
+					if _, ok := existingNames[nk]; ok {
+						return nil, fmt.Errorf("duplicate component '%s' for runtime '%s'", compID, bnd.Manifest.ID)
+					}
+					existingNames[nk] = struct{}{}
+				}
+			}
+
+			// If the runtime environment is set to automatic selection and a bundle has a component
+			// that requires the use of a TEE, force a TEE environment to simplify configuration.
+			if runtimeEnv == rtConfig.RuntimeEnvironmentAuto {
+				for _, comp := range bnd.Manifest.GetAvailableComponents() {
+					if comp.IsTEERequired() {
+						runtimeEnv = rtConfig.RuntimeEnvironmentSGX
+						break
+					}
+				}
+			}
+		}
+
 		isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
 			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
@@ -224,45 +279,6 @@ func newConfig( //nolint: gocyclo
 			rh.Provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
 				NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
 			})
-		}
-
-		// Preprocess runtimes to separate detached from non-detached.
-		type nameKey struct {
-			runtime common.Namespace
-			comp    component.ID
-		}
-
-		var regularBundles []*bundle.Bundle
-		detachedBundles := make(map[common.Namespace][]*bundle.Bundle)
-		existingNames := make(map[nameKey]struct{})
-		for _, path := range config.GlobalConfig.Runtime.Paths {
-			var bnd *bundle.Bundle
-			if bnd, err = bundle.Open(path); err != nil {
-				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
-			}
-			if err = bnd.WriteExploded(dataDir); err != nil {
-				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
-			}
-			// Release resources as the bundle has been exploded anyway.
-			bnd.Data = nil
-
-			switch bnd.Manifest.IsDetached() {
-			case false:
-				// A regular non-detached bundle that has the RONL component.
-				regularBundles = append(regularBundles, bnd)
-			case true:
-				// A detached bundle without the RONL component that needs to be attached.
-				detachedBundles[bnd.Manifest.ID] = append(detachedBundles[bnd.Manifest.ID], bnd)
-
-				// Ensure there are no name conflicts among the components.
-				for compID := range bnd.Manifest.GetAvailableComponents() {
-					nk := nameKey{bnd.Manifest.ID, compID}
-					if _, ok := existingNames[nk]; ok {
-						return nil, fmt.Errorf("duplicate component '%s' for runtime '%s'", compID, bnd.Manifest.ID)
-					}
-					existingNames[nk] = struct{}{}
-				}
-			}
 		}
 
 		// Configure runtimes.
