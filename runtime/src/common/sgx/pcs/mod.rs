@@ -4,6 +4,7 @@ mod certificates;
 mod constants;
 mod quote;
 mod tcb;
+mod utils;
 
 /// Possible errors returned by this module.
 #[derive(Debug, thiserror::Error)]
@@ -18,6 +19,10 @@ pub enum Error {
     VerificationFailed(String),
     #[error("unexpected certificate chain")]
     UnexpectedCertificateChain,
+    #[error("unexpected certification data")]
+    UnexpectedCertificationData,
+    #[error("malformed certification data")]
+    MalformedCertificationData,
     #[error("PCK is malformed")]
     MalformedPCK,
     #[error("failed to parse TCB bundle: {0}")]
@@ -44,9 +49,11 @@ pub enum Error {
     ProductionEnclave,
     #[error("PCS quotes are disabled by policy")]
     Disabled,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
-pub use quote::{QuoteBundle, QuotePolicy};
+pub use quote::{Quote, QuoteBundle, QuotePolicy};
 pub use tcb::TCBBundle;
 
 #[cfg(test)]
