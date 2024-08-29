@@ -24,7 +24,7 @@ func TestNewMockQuote(t *testing.T) {
 	var testVector Quote
 	err = testVector.UnmarshalBinary(rawTestVector)
 	require.NoError(err, "Parse test vector")
-	rawReport := testVector.ISVReport.raw
+	rawReport := testVector.reportBody.Raw()
 
 	// Generate mock quote for the given report.
 	mockQuote, err := NewMockQuote(rawReport)
@@ -36,11 +36,11 @@ func TestNewMockQuote(t *testing.T) {
 	require.NoError(err, "Parse generated mock quote")
 
 	// Check what information we need to retrieve based on what is in the quote.
-	qs, ok := quote.Signature.(*QuoteSignatureECDSA_P256)
+	qs, ok := quote.signature.(*QuoteSignatureECDSA_P256)
 	require.True(ok, "attestation key type should be correct")
 
 	// Verify PCK certificate and extract the information required to get the TCB bundle.
-	_, err = qs.VerifyPCK(now)
+	_, err = qs.qe.verifyPCK(now)
 	require.NoError(err, "VerifyPCK should work on mock quote")
 
 	// Prepare TCB bundle needed for verification.

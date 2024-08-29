@@ -41,6 +41,7 @@ export RUSTFLAGS="-C target-feature=+aes,+ssse3"
 
 # Make sure we can run unit tests for production enclaves.
 unset OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES
+unset OASIS_UNSAFE_SKIP_AVR_VERIFY
 
 # Name the current commit so Tarpaulin can detect it correctly.
 git checkout -B ${BUILDKITE_BRANCH}

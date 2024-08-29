@@ -21,8 +21,10 @@ const (
 	// quoteHeaderLen is the length of the quote header in bytes.
 	quoteHeaderLen = 48
 
-	// reportBodyLen is the length of the report in bytes.
-	reportBodyLen = 384
+	// reportBodySgxLen is the length of the SGX report in bytes.
+	reportBodySgxLen = 384
+	// reportBodyTdLen is the length of the TDX TD report in bytes.
+	reportBodyTdLen = 584
 
 	// quoteSigSizeLen is the length of the quote signature size field in bytes.
 	quoteSigSizeLen = 4
@@ -37,71 +39,88 @@ const (
 	DefaultMinTCBEvaluationDataNumber = 12 // As of 2022-08-01.
 )
 
-// QuotePolicy is the quote validity policy.
-type QuotePolicy struct {
-	// Disabled specifies whether PCS quotes are disabled and will always be rejected.
-	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
-
-	// TCBValidityPeriod is the validity (in days) of the TCB collateral.
-	TCBValidityPeriod uint16 `json:"tcb_validity_period" yaml:"tcb_validity_period"`
-
-	// MinTCBEvaluationDataNumber is the minimum TCB evaluation data number that is considered to be
-	// valid. TCB bundles containing smaller values will be invalid.
-	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number" yaml:"min_tcb_evaluation_data_number"`
-
-	// FMSPCBlacklist is a list of hexadecimal encoded FMSPCs specifying which processor
-	// packages and platform instances are blocked.
-	FMSPCBlacklist []string `json:"fmspc_blacklist,omitempty" yaml:"fmspc_blacklist,omitempty"`
-}
-
 // Quote is an enclave quote.
 type Quote struct {
-	Header    QuoteHeader
-	ISVReport ReportBody
-	Signature QuoteSignature
+	header     QuoteHeader
+	reportBody ReportBody
+	signature  QuoteSignature
 }
+
+const (
+	quoteVersionV3 = 3
+	quoteVersionV4 = 4
+)
 
 // UnmarshalBinary decodes a Quote from a byte array.
 func (q *Quote) UnmarshalBinary(data []byte) error {
-	if len(data) < quoteHeaderLen+reportBodyLen+quoteSigSizeLen {
+	if len(data) < quoteHeaderLen+reportBodySgxLen+quoteSigSizeLen {
 		return fmt.Errorf("pcs/quote: invalid quote length")
 	}
 
 	// Quote Header.
 	var offset int
-	if err := q.Header.UnmarshalBinary(data[offset : offset+quoteHeaderLen]); err != nil {
-		return err
+	version := binary.LittleEndian.Uint16(data[0:])
+	switch version {
+	case quoteVersionV3:
+		var qh QuoteHeaderV3
+		if err := qh.UnmarshalBinary(data[offset : offset+quoteHeaderLen]); err != nil {
+			return err
+		}
+		q.header = &qh
+	case quoteVersionV4:
+		var qh QuoteHeaderV4
+		if err := qh.UnmarshalBinary(data[offset : offset+quoteHeaderLen]); err != nil {
+			return err
+		}
+		q.header = &qh
+	default:
+		return fmt.Errorf("pcs/quote: unsupported quote version %d", version)
 	}
 	offset += quoteHeaderLen
 
-	// Support only SGX, as TDX is not needed.
-	if q.Header.TEEType != teeTypeSGX {
-		return fmt.Errorf("pcs/quote: unsupported TEE type: %X", q.Header.TEEType)
+	if !bytes.Equal(q.header.QEVendorID(), QEVendorID_Intel) {
+		return fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.header.QEVendorID())
 	}
 
-	// ISV Report.
-	if err := q.ISVReport.UnmarshalBinary(data[offset : offset+reportBodyLen]); err != nil {
-		return err
+	// Report body.
+	switch q.header.TeeType() {
+	case TeeTypeSGX:
+		var report SgxReport
+		if err := report.UnmarshalBinary(data[offset : offset+reportBodySgxLen]); err != nil {
+			return err
+		}
+		q.reportBody = &report
+		offset += reportBodySgxLen
+	case TeeTypeTDX:
+		if len(data) < offset+reportBodyTdLen+quoteSigSizeLen {
+			return fmt.Errorf("pcs/quote: invalid quote length")
+		}
+
+		var report TdReport
+		if err := report.UnmarshalBinary(data[offset : offset+reportBodyTdLen]); err != nil {
+			return err
+		}
+		q.reportBody = &report
+		offset += reportBodyTdLen
 	}
-	offset += reportBodyLen
 
 	// Quote Signature Length.
 	sigLen := int(binary.LittleEndian.Uint32(data[offset:]))
 	offset += quoteSigSizeLen
-	if len(data) != quoteHeaderLen+reportBodyLen+quoteSigSizeLen+sigLen {
+	if len(data) != offset+sigLen {
 		return fmt.Errorf("pcs/quote: unexpected trailing data")
 	}
 
 	// Quote Signature.
-	switch q.Header.attestationKeyType {
+	switch q.header.AttestationKeyType() {
 	case AttestationKeyECDSA_P256:
 		var qs QuoteSignatureECDSA_P256
-		if err := qs.UnmarshalBinary(data[offset : offset+sigLen]); err != nil {
+		if err := qs.UnmarshalBinary(q.header.Version(), data[offset:offset+sigLen]); err != nil {
 			return err
 		}
-		q.Signature = &qs
+		q.signature = &qs
 	default:
-		return fmt.Errorf("pcs/quote: unsupported attestation key type: %s", q.Header.attestationKeyType)
+		return fmt.Errorf("pcs/quote: unsupported attestation key type: %s", q.header.AttestationKeyType())
 	}
 
 	return nil
@@ -111,25 +130,6 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 //
 // In case of successful verification it returns the TCB level.
 func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.VerifiedQuote, error) {
-	if q.Header.TEEType != teeTypeSGX {
-		return nil, fmt.Errorf("pcs/quote: unsupported TEE type: %X", q.Header.TEEType)
-	}
-
-	if !bytes.Equal(q.Header.QEVendorID[:], QEVendorID_Intel) {
-		return nil, fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.Header.QEVendorID)
-	}
-
-	if mrSignerBlacklist[q.ISVReport.MRSIGNER] {
-		return nil, fmt.Errorf("pcs/quote: blacklisted MRSIGNER")
-	}
-
-	isDebug := q.ISVReport.Attributes.Flags.Contains(sgx.AttributeDebug)
-	if unsafeAllowDebugEnclaves != isDebug {
-		// Debug enclaves are only allowed in debug mode, prod enclaves in prod mode.
-		// A mismatch is an error.
-		return nil, fmt.Errorf("pcs/quote: disallowed debug/production enclave/mode combination")
-	}
-
 	if policy == nil {
 		policy = &QuotePolicy{
 			TCBValidityPeriod:          30,
@@ -142,65 +142,240 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 		return nil, fmt.Errorf("pcs/quote: PCS quotes are disabled by policy")
 	}
 
+	switch q.header.TeeType() {
+	case TeeTypeSGX:
+		report, ok := q.reportBody.(*SgxReport)
+		if !ok {
+			return nil, fmt.Errorf("pcs/quote: mismatched report body and TEE type")
+		}
+		if mrSignerBlacklist[report.mrSigner] {
+			return nil, fmt.Errorf("pcs/quote: blacklisted MRSIGNER")
+		}
+
+		isDebug := report.attributes.Flags.Contains(sgx.AttributeDebug)
+		if unsafeAllowDebugEnclaves != isDebug {
+			// Debug enclaves are only allowed in debug mode, prod enclaves in prod mode.
+			// A mismatch is an error.
+			return nil, fmt.Errorf("pcs/quote: disallowed debug/production enclave/mode combination")
+		}
+	case TeeTypeTDX:
+		report, ok := q.reportBody.(*TdReport)
+		if !ok {
+			return nil, fmt.Errorf("pcs/quote: mismatched report body and TEE type")
+		}
+
+		isDebug := report.tdAttributes.Contains(TdAttributeDebug)
+		if unsafeAllowDebugEnclaves != isDebug {
+			// Debug TDs are only allowed in debug mode, prod TDs in prod mode.
+			// A mismatch is an error.
+			return nil, fmt.Errorf("pcs/quote: disallowed debug/production enclave/mode combination")
+		}
+
+		// Verify report against TDX policy.
+		if policy.TDX == nil {
+			return nil, fmt.Errorf("pcs/quote: TEE type not allowed")
+		}
+		if err := policy.TDX.Verify(report); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("pcs/quote: unsupported TEE type: %X", q.header.TeeType())
+	}
+
 	if !unsafeSkipVerify {
-		err := q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb, policy)
+		err := q.signature.Verify(q.header, q.reportBody, ts, tcb, policy)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &sgx.VerifiedQuote{
-		ReportData: q.ISVReport.ReportData[:],
-		Identity: sgx.EnclaveIdentity{
-			MrEnclave: q.ISVReport.MRENCLAVE,
-			MrSigner:  q.ISVReport.MRSIGNER,
-		},
+		ReportData: q.reportBody.ReportData(),
+		Identity:   q.reportBody.AsEnclaveIdentity(),
 	}, nil
 }
 
-// QuoteHeader is a quote header.
-type QuoteHeader struct {
-	Version    uint16
-	TEEType    uint32
-	QESVN      uint16
-	PCESVN     uint16
-	QEVendorID [16]byte
-	UserData   [20]byte
+// Signature returns the quote signature.
+func (q *Quote) Signature() QuoteSignature {
+	return q.signature
+}
+
+// TeeType is the TEE type.
+type TeeType uint32
+
+const (
+	TeeTypeSGX TeeType = 0x00000000
+	TeeTypeTDX TeeType = 0x00000081
+)
+
+// QuoteHeader is the quote header interface.
+type QuoteHeader interface {
+	// Version returns the quote version.
+	Version() uint16
+
+	// TeeType returns the TEE type.
+	TeeType() TeeType
+
+	// QEVendorID returns the QE vendor ID.
+	QEVendorID() []byte
+
+	// AttestationKeyType returns the quote attestation key type.
+	AttestationKeyType() AttestationKeyType
+
+	// ReportBodyLength returns the length of the report body field.
+	ReportBodyLength() int
+
+	// Raw returns the raw quote header bytes.
+	Raw() []byte
+}
+
+// QuoteHeaderV3 is a V3 quote header.
+type QuoteHeaderV3 struct {
+	qeSvn      uint16
+	pceSvn     uint16
+	qeVendorID [16]byte
+	userData   [20]byte
 
 	attestationKeyType AttestationKeyType
 	raw                []byte
 }
 
-// UnmarshalBinary decodes QuoteHeader from a byte array.
-func (qh *QuoteHeader) UnmarshalBinary(data []byte) error {
+// UnmarshalBinary decodes QuoteHeaderV3 from a byte array.
+func (qh *QuoteHeaderV3) UnmarshalBinary(data []byte) error {
 	if len(data) != quoteHeaderLen {
 		return fmt.Errorf("pcs/quote: invalid quote header length")
 	}
 
-	qh.Version = binary.LittleEndian.Uint16(data[0:])
-	if qh.Version != 3 {
-		return fmt.Errorf("pcs/quote: unsupported quote version %d", qh.Version)
+	if version := binary.LittleEndian.Uint16(data[0:]); version != quoteVersionV3 {
+		return fmt.Errorf("pcs/quote: invalid quote version")
 	}
 
 	qh.attestationKeyType = AttestationKeyType(binary.LittleEndian.Uint16(data[2:]))
 
-	qh.TEEType = binary.LittleEndian.Uint32(data[4:])
-	if qh.TEEType != teeTypeSGX {
-		return fmt.Errorf("pcs/quote: unsupported TEE type: %X", qh.TEEType)
+	reserved := binary.LittleEndian.Uint32(data[4:])
+	if reserved != 0 {
+		return fmt.Errorf("pcs/quote: data in reserved field")
 	}
 
-	qh.QESVN = binary.LittleEndian.Uint16(data[8:])
-	qh.PCESVN = binary.LittleEndian.Uint16(data[10:])
-	copy(qh.QEVendorID[:], data[12:])
-	copy(qh.UserData[:], data[28:])
+	qh.qeSvn = binary.LittleEndian.Uint16(data[8:])
+	qh.pceSvn = binary.LittleEndian.Uint16(data[10:])
+	copy(qh.qeVendorID[:], data[12:])
+	copy(qh.userData[:], data[28:])
 
 	qh.raw = data[:quoteHeaderLen]
 
 	return nil
 }
 
-// teeTypeSGX is the SGX TEE type.
-const teeTypeSGX uint32 = 0
+// Version returns the quote version.
+func (qh *QuoteHeaderV3) Version() uint16 {
+	return quoteVersionV3
+}
+
+// TeeType returns the TEE type.
+func (qh *QuoteHeaderV3) TeeType() TeeType {
+	return TeeTypeSGX
+}
+
+// QEVendorID returns the QE vendor ID.
+func (qh *QuoteHeaderV3) QEVendorID() []byte {
+	return qh.qeVendorID[:]
+}
+
+// AttestationKeyType returns the quote attestation key type.
+func (qh *QuoteHeaderV3) AttestationKeyType() AttestationKeyType {
+	return qh.attestationKeyType
+}
+
+// ReportBodyLength returns the length of the report body field.
+func (qh *QuoteHeaderV3) ReportBodyLength() int {
+	return reportBodySgxLen
+}
+
+// Raw returns the raw quote header bytes.
+func (qh *QuoteHeaderV3) Raw() []byte {
+	return qh.raw
+}
+
+// QuoteHeaderV4 is a V4 quote header.
+type QuoteHeaderV4 struct {
+	teeType    TeeType
+	qeVendorID [16]byte
+	userData   [20]byte
+
+	attestationKeyType AttestationKeyType
+	raw                []byte
+}
+
+// UnmarshalBinary decodes QuoteHeaderV4 from a byte array.
+func (qh *QuoteHeaderV4) UnmarshalBinary(data []byte) error {
+	if len(data) != quoteHeaderLen {
+		return fmt.Errorf("pcs/quote: invalid quote header length")
+	}
+
+	if version := binary.LittleEndian.Uint16(data[0:]); version != quoteVersionV4 {
+		return fmt.Errorf("pcs/quote: invalid quote version")
+	}
+
+	qh.attestationKeyType = AttestationKeyType(binary.LittleEndian.Uint16(data[2:]))
+
+	qh.teeType = TeeType(binary.LittleEndian.Uint32(data[4:]))
+	switch qh.teeType {
+	case TeeTypeSGX, TeeTypeTDX:
+	default:
+		return fmt.Errorf("pcs/quote: unsupported TEE type: %d", qh.teeType)
+	}
+
+	reserved1 := binary.LittleEndian.Uint16(data[8:])
+	reserved2 := binary.LittleEndian.Uint16(data[10:])
+	if reserved1 != 0 || reserved2 != 0 {
+		return fmt.Errorf("pcs/quote: data in reserved field")
+	}
+
+	copy(qh.qeVendorID[:], data[12:])
+	copy(qh.userData[:], data[28:])
+
+	qh.raw = data[:quoteHeaderLen]
+
+	return nil
+}
+
+// Version returns the quote version.
+func (qh *QuoteHeaderV4) Version() uint16 {
+	return quoteVersionV4
+}
+
+// TeeType returns the TEE type.
+func (qh *QuoteHeaderV4) TeeType() TeeType {
+	return qh.teeType
+}
+
+// QEVendorID returns the QE vendor ID.
+func (qh *QuoteHeaderV4) QEVendorID() []byte {
+	return qh.qeVendorID[:]
+}
+
+// AttestationKeyType returns the quote attestation key type.
+func (qh *QuoteHeaderV4) AttestationKeyType() AttestationKeyType {
+	return qh.attestationKeyType
+}
+
+// ReportBodyLength returns the length of the report body field.
+func (qh *QuoteHeaderV4) ReportBodyLength() int {
+	switch qh.teeType {
+	case TeeTypeSGX:
+		return reportBodySgxLen
+	case TeeTypeTDX:
+		return reportBodyTdLen
+	default:
+		return 0
+	}
+}
+
+// Raw returns the raw quote header bytes.
+func (qh *QuoteHeaderV4) Raw() []byte {
+	return qh.raw
+}
 
 // QEVendorID_Intel is the Quoting Enclave vendor ID for Intel (939A7233F79C4CA9940A0DB3957F0607).
 var QEVendorID_Intel = []byte{0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3, 0x95, 0x7f, 0x06, 0x07} // nolint: revive
@@ -247,62 +422,58 @@ type QuoteSignature interface {
 
 	// Verify verifies the quote signature of the header and ISV report.
 	Verify(
-		header *QuoteHeader,
-		isvReport *ReportBody,
+		header QuoteHeader,
+		reportBody ReportBody,
 		ts time.Time,
 		tcb *TCBBundle,
 		policy *QuotePolicy,
 	) error
 }
 
-// QuoteSignatureECDSA_P256 is an ECDSA-P256 quote signature.
-type QuoteSignatureECDSA_P256 struct { // nolint: revive
-	Signature            SignatureECDSA_P256
-	AttestationPublicKey [64]byte
-	QEReport             ReportBody
-	QESignature          SignatureECDSA_P256
-	AuthenticationData   []byte
-	CertificationData    CertificationData
+// CertificationData_QEReport is the QE report certification data that contains nested certification
+// data. This kind is implicit in v3 quotes and explicit via an additional envelope in v4 quotes.
+type CertificationData_QEReport struct { //nolint: revive
+	QEReport           SgxReport
+	QEReportSignature  SignatureECDSA_P256
+	AuthenticationData []byte
+	CertificationData  CertificationData
 }
 
-// AttestationKeyType returns the type of the attestation key used in this quote signature.
-func (qs *QuoteSignatureECDSA_P256) AttestationKeyType() AttestationKeyType {
-	return AttestationKeyECDSA_P256
+// CertificationDataType returns the certification data type.
+func (qe *CertificationData_QEReport) CertificationDataType() CertificationDataType {
+	return CertificationDataQEReport
 }
 
-// UnmarshalBinary decodes QuoteSignatureECDSA_P256 from a byte array.
-func (qs *QuoteSignatureECDSA_P256) UnmarshalBinary(data []byte) error {
-	if len(data) < quoteSigEcdsaP256MinLen {
-		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature length")
+// UnmarshalBinary decodes CertificationData_QEReport from a byte array.
+func (qe *CertificationData_QEReport) UnmarshalBinary(data []byte) error {
+	if len(data) < reportBodySgxLen {
+		return fmt.Errorf("pcs/quote: malformed certification data")
 	}
 
 	var offset int
-	copy(qs.Signature[:], data[0:])
-	offset += len(qs.Signature)
-
-	copy(qs.AttestationPublicKey[:], data[offset:])
-	offset += len(qs.AttestationPublicKey)
-
-	if err := qs.QEReport.UnmarshalBinary(data[offset : offset+reportBodyLen]); err != nil {
+	if err := qe.QEReport.UnmarshalBinary(data[offset : offset+reportBodySgxLen]); err != nil {
 		return err
 	}
-	offset += reportBodyLen
+	offset += reportBodySgxLen
 
-	copy(qs.QESignature[:], data[offset:])
-	offset += len(qs.QESignature)
+	if len(data) < offset+len(qe.QEReportSignature[:]) {
+		return fmt.Errorf("pcs/quote: malformed certification data")
+	}
+	copy(qe.QEReportSignature[:], data[offset:])
+	offset += len(qe.QEReportSignature)
 
 	authDataSize := int(binary.LittleEndian.Uint16(data[offset:]))
 	offset += 2
-	if len(data) < authDataSize+quoteSigEcdsaP256MinLen {
+	if len(data) < offset+authDataSize {
 		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature authentication data size")
 	}
-	qs.AuthenticationData = make([]byte, authDataSize)
-	copy(qs.AuthenticationData[:], data[offset:offset+authDataSize])
+	qe.AuthenticationData = make([]byte, authDataSize)
+	copy(qe.AuthenticationData[:], data[offset:offset+authDataSize])
 	offset += authDataSize
 
 	certificationDataType := CertificationDataType(binary.LittleEndian.Uint16(data[offset:]))
 	certDataSize := int(binary.LittleEndian.Uint32(data[offset+2:]))
-	if len(data) < certDataSize+authDataSize+quoteSigEcdsaP256MinLen {
+	if len(data) < offset+6+certDataSize {
 		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature certification data size")
 	}
 	certData := data[offset+6 : offset+6+certDataSize]
@@ -314,13 +485,13 @@ func (qs *QuoteSignatureECDSA_P256) UnmarshalBinary(data []byte) error {
 			return err
 		}
 		cd.subtype = certificationDataType
-		qs.CertificationData = &cd
+		qe.CertificationData = &cd
 	case CertificationDataPCKCertificateChain:
 		var cd CertificationData_PCKCertificateChain
 		if err := cd.UnmarshalBinary(certData); err != nil {
 			return err
 		}
-		qs.CertificationData = &cd
+		qe.CertificationData = &cd
 	default:
 		return fmt.Errorf("pcs/quote: unsupported certification data type: %s", certificationDataType)
 	}
@@ -328,8 +499,8 @@ func (qs *QuoteSignatureECDSA_P256) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func (qs *QuoteSignatureECDSA_P256) verifyCertificateChain(ts time.Time) (*x509.Certificate, error) {
-	cd, ok := qs.CertificationData.(*CertificationData_PCKCertificateChain)
+func (qe *CertificationData_QEReport) verifyCertificateChain(ts time.Time) (*x509.Certificate, error) {
+	cd, ok := qe.CertificationData.(*CertificationData_PCKCertificateChain)
 	if !ok {
 		return nil, fmt.Errorf("pcs/quote: no PCK certificate chain in quote")
 	}
@@ -370,10 +541,10 @@ type PCKInfo struct {
 	CPUSVN     [16]byte
 }
 
-// VerifyPCK verifies the PCK certificate and returns the extracted information.
-func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
+// verifyPCK verifies the PCK certificate and returns the extracted information.
+func (qe *CertificationData_QEReport) verifyPCK(ts time.Time) (*PCKInfo, error) {
 	// Verify PCK certificate chain.
-	leafCert, err := qs.verifyCertificateChain(ts)
+	leafCert, err := qe.verifyCertificateChain(ts)
 	if err != nil {
 		return nil, err
 	}
@@ -451,23 +622,24 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 	return &pckInfo, nil
 }
 
-// Verify verifies the quote signature.
-func (qs *QuoteSignatureECDSA_P256) Verify(
-	header *QuoteHeader,
-	isvReport *ReportBody,
+// verify verifies the quote signature.
+func (qe *CertificationData_QEReport) verify(
+	attestationPublicKey []byte,
+	header QuoteHeader,
+	reportBody ReportBody,
 	ts time.Time,
 	tcb *TCBBundle,
 	policy *QuotePolicy,
 ) error {
 	// Verify PCK certificate chain and extract relevant information (e.g. public key and FMSPC).
-	pckInfo, err := qs.VerifyPCK(ts)
+	pckInfo, err := qe.verifyPCK(ts)
 	if err != nil {
 		return err
 	}
 
 	// Verify QE report signature using PCK public key.
-	reportHash := sha256.Sum256(qs.QEReport.raw)
-	if !qs.QESignature.Verify(pckInfo.PublicKey, reportHash[:]) {
+	reportHash := sha256.Sum256(qe.QEReport.raw)
+	if !qe.QEReportSignature.Verify(pckInfo.PublicKey, reportHash[:]) {
 		return fmt.Errorf("pcs/quote: failed to verify QE report signature using PCK public key")
 	}
 
@@ -475,15 +647,15 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 	//   SHA-256(AttestationPublicKey || AuthenticationData)
 	// and the remaining 32 bytes MUST be zero.
 	h := sha256.New()
-	h.Write(qs.AttestationPublicKey[:])
-	h.Write(qs.AuthenticationData[:])
+	h.Write(attestationPublicKey)
+	h.Write(qe.AuthenticationData[:])
 	expectedHash := h.Sum(nil)
 
-	if !bytes.Equal(qs.QEReport.ReportData[:32], expectedHash) {
+	if !bytes.Equal(qe.QEReport.reportData[:32], expectedHash) {
 		return fmt.Errorf("pcs/quote: QE report data does not match expected value")
 	}
 	var allZeros [32]byte
-	if !bytes.Equal(qs.QEReport.ReportData[32:], allZeros[:]) {
+	if !bytes.Equal(qe.QEReport.reportData[32:], allZeros[:]) {
 		return fmt.Errorf("pcs/quote: QE report data does not match expected value")
 	}
 
@@ -491,29 +663,108 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 	if tcb == nil {
 		return fmt.Errorf("pcs/quote: missing TCB bundle")
 	}
-	err = tcb.Verify(ts, policy, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
+	var tdxCompSvn *[16]byte
+	if header.TeeType() == TeeTypeTDX {
+		// Extract TEE TCB SVN for TDX.
+		tdxCompSvn = &reportBody.(*TdReport).teeTcbSvn
+	}
+	err = tcb.Verify(header.TeeType(), ts, policy, pckInfo.FMSPC, pckInfo.TCBCompSVN, tdxCompSvn, pckInfo.PCESVN, &qe.QEReport)
 	if err != nil {
 		return fmt.Errorf("pcs/quote: failed to verify TCB bundle: %w", err)
 	}
 
-	// Verify quote header and ISV report body signature.
-	attPkWithTag := append([]byte{0x04}, qs.AttestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
+	return nil
+}
+
+// QuoteSignatureECDSA_P256 is an ECDSA-P256 quote signature.
+type QuoteSignatureECDSA_P256 struct { // nolint: revive
+	signature            SignatureECDSA_P256
+	attestationPublicKey [64]byte
+
+	qe *CertificationData_QEReport
+}
+
+// AttestationKeyType returns the type of the attestation key used in this quote signature.
+func (qs *QuoteSignatureECDSA_P256) AttestationKeyType() AttestationKeyType {
+	return AttestationKeyECDSA_P256
+}
+
+// UnmarshalBinary decodes QuoteSignatureECDSA_P256 from a byte array.
+func (qs *QuoteSignatureECDSA_P256) UnmarshalBinary(version uint16, data []byte) error {
+	if len(data) < quoteSigEcdsaP256MinLen {
+		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature length")
+	}
+
+	var offset int
+	copy(qs.signature[:], data[0:])
+	offset += len(qs.signature)
+
+	copy(qs.attestationPublicKey[:], data[offset:])
+	offset += len(qs.attestationPublicKey)
+
+	// In version 4 quotes, there is an intermediate certification data tuple.
+	if version == quoteVersionV4 {
+		certificationDataType := CertificationDataType(binary.LittleEndian.Uint16(data[offset:]))
+		certDataSize := int(binary.LittleEndian.Uint32(data[offset+2:]))
+		offset += 6
+		if len(data[offset:]) != certDataSize {
+			return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature certification data size")
+		}
+		if certificationDataType != CertificationDataQEReport {
+			return fmt.Errorf("pcs/quote: unexpected certification data")
+		}
+	}
+
+	var qe CertificationData_QEReport
+	if err := qe.UnmarshalBinary(data[offset:]); err != nil {
+		return err
+	}
+	qs.qe = &qe
+
+	return nil
+}
+
+// Verify verifies the quote signature.
+func (qs *QuoteSignatureECDSA_P256) Verify(
+	header QuoteHeader,
+	reportBody ReportBody,
+	ts time.Time,
+	tcb *TCBBundle,
+	policy *QuotePolicy,
+) error {
+	// Verify attestation public key used by QE.
+	if err := qs.qe.verify(qs.attestationPublicKey[:], header, reportBody, ts, tcb, policy); err != nil {
+		return err
+	}
+
+	// Verify quote header and report body signature.
+	attPkWithTag := append([]byte{0x04}, qs.attestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
 	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)           //nolint:staticcheck
 	if x == nil {
 		return fmt.Errorf("pcs/quote: invalid attestation public key")
 	}
 	attPk := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 
-	h.Reset()
-	h.Write(header.raw)
-	h.Write(isvReport.raw)
-	expectedHash = h.Sum(nil)
+	h := sha256.New()
+	h.Write(header.Raw())
+	h.Write(reportBody.Raw())
+	expectedHash := h.Sum(nil)
 
-	if !qs.Signature.Verify(&attPk, expectedHash) {
+	if !qs.signature.Verify(&attPk, expectedHash) {
 		return fmt.Errorf("pcs/quote: failed to verify quote signature")
 	}
 
 	return nil
+}
+
+// CertificationData returns the certification data.
+func (qs *QuoteSignatureECDSA_P256) CertificationData() CertificationData {
+	return qs.qe.CertificationData
+}
+
+// VerifyPCK verifies the PCK certificate and returns the extracted information.
+func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
+	return qs.qe.verifyPCK(ts)
 }
 
 // SignatureECDSA_P256 is an ECDSA-P256 signature in the form r || s.
@@ -553,6 +804,7 @@ const (
 	CertificationDataPPIDEncryptedRSA3072 = 3
 	CertificationDataPCKLeafCertificate   = 4
 	CertificationDataPCKCertificateChain  = 5
+	CertificationDataQEReport             = 6
 	CertificationDataPlatformManifest     = 7
 )
 
@@ -568,6 +820,8 @@ func (ct CertificationDataType) String() string {
 		return "PCK-leaf"
 	case CertificationDataPCKCertificateChain:
 		return "PCK-chain"
+	case CertificationDataQEReport:
+		return "QE-report"
 	case CertificationDataPlatformManifest:
 		return "platform-manifest"
 	default:
@@ -636,70 +890,6 @@ func (cd *CertificationData_PCKCertificateChain) UnmarshalBinary(data []byte) er
 		}
 		cd.CertificateChain = append(cd.CertificateChain, cert)
 	}
-
-	return nil
-}
-
-// ReportBody is an enclave report body.
-type ReportBody struct { // nolint: maligned
-	CPUSVN     [16]byte
-	MiscSelect uint32
-	Attributes sgx.Attributes
-	MRENCLAVE  sgx.MrEnclave
-	MRSIGNER   sgx.MrSigner
-	ISVProdID  uint16
-	ISVSVN     uint16
-	ReportData [64]byte
-
-	raw []byte
-}
-
-// MarshalBinary encodes ReportBody into byte array.
-func (r *ReportBody) MarshalBinary() ([]byte, error) {
-	rBin := []byte{}
-	uint16b := make([]byte, 2)
-	uint32b := make([]byte, 4)
-	uint64b := make([]byte, 8)
-
-	rBin = append(rBin, r.CPUSVN[:]...)
-	binary.LittleEndian.PutUint32(uint32b, r.MiscSelect)
-	rBin = append(rBin, uint32b[:]...)
-	rBin = append(rBin, make([]byte, 28)...) // 28 reserved bytes.
-	binary.LittleEndian.PutUint64(uint64b, uint64(r.Attributes.Flags))
-	rBin = append(rBin, uint64b[:]...)
-	binary.LittleEndian.PutUint64(uint64b, r.Attributes.Xfrm)
-	rBin = append(rBin, uint64b[:]...)
-	rBin = append(rBin, r.MRENCLAVE[:]...)
-	rBin = append(rBin, make([]byte, 32)...) // 32 reserved bytes.
-	rBin = append(rBin, r.MRSIGNER[:]...)
-	rBin = append(rBin, make([]byte, 96)...) // 96 reserved bytes.
-	binary.LittleEndian.PutUint16(uint16b, r.ISVProdID)
-	rBin = append(rBin, uint16b[:]...)
-	binary.LittleEndian.PutUint16(uint16b, r.ISVSVN)
-	rBin = append(rBin, uint16b[:]...)
-	rBin = append(rBin, make([]byte, 60)...) // 60 reserved bytes.
-	rBin = append(rBin, r.ReportData[:]...)
-
-	return rBin, nil
-}
-
-// UnmarshalBinary decodes ReportBody from a byte array.
-func (r *ReportBody) UnmarshalBinary(data []byte) error {
-	if len(data) < reportBodyLen {
-		return fmt.Errorf("pcs/quote: invalid report length")
-	}
-
-	copy(r.CPUSVN[:], data[0:])
-	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
-	r.Attributes.Flags = sgx.AttributesFlags(binary.LittleEndian.Uint64(data[48:]))
-	r.Attributes.Xfrm = binary.LittleEndian.Uint64(data[56:])
-	_ = r.MRENCLAVE.UnmarshalBinary(data[64 : 64+sgx.MrEnclaveSize])
-	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrSignerSize])
-	r.ISVProdID = binary.LittleEndian.Uint16(data[256:])
-	r.ISVSVN = binary.LittleEndian.Uint16(data[258:])
-	copy(r.ReportData[:], data[320:])
-
-	r.raw = data[:reportBodyLen]
 
 	return nil
 }

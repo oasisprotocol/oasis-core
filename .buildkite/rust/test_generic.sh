@@ -25,6 +25,7 @@ shift
 
 # Make sure we can run unit tests for production enclaves.
 unset OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES
+unset OASIS_UNSAFE_SKIP_AVR_VERIFY
 
 #########################
 # Run the build and tests

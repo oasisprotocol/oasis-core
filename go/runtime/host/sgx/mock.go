@@ -45,9 +45,9 @@ func (ec *teeStateMock) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	}
 
 	// Check what information we need to retrieve based on what is in the quote.
-	qs, ok := quote.Signature.(*pcs.QuoteSignatureECDSA_P256)
+	qs, ok := quote.Signature().(*pcs.QuoteSignatureECDSA_P256)
 	if !ok {
-		return nil, fmt.Errorf("unsupported attestation key type: %s", quote.Signature.AttestationKeyType())
+		return nil, fmt.Errorf("unsupported attestation key type: %s", qs.AttestationKeyType())
 	}
 
 	// Verify PCK certificate and extract the information required to get the TCB bundle.

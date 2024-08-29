@@ -9,20 +9,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 )
 
 const (
-	// requiredTCBInfoID is the required TCB info identifier.
-	requiredTCBInfoID = "SGX"
-
 	// requiredTCBInfoVersion is the required TCB info version.
 	requiredTCBInfoVersion = 3
 
-	// requiredQEID is the required QE identity enclave ID.
-	requiredQEID = "QE"
 	// requiredQEIdentityVersion is the required QE identity version.
 	requiredQEIdentityVersion = 2
 )
@@ -51,22 +47,24 @@ type TCBBundle struct {
 
 // Verify verifies the TCB info and the QE identity corresponding to the passed SVN information.
 func (bnd *TCBBundle) Verify(
+	teeType TeeType,
 	ts time.Time,
 	policy *QuotePolicy,
 	fmspc []byte,
-	tcbCompSvn [16]int32,
+	sgxCompSvn [16]int32,
+	tdxCompSvn *[16]byte,
 	pcesvn uint16,
-	qe *ReportBody,
+	qe *SgxReport,
 ) error {
 	pk, err := bnd.getPublicKey(ts)
 	if err != nil {
 		return err
 	}
-	err = bnd.verifyQEIdentity(ts, pk, policy, qe)
+	err = bnd.verifyQEIdentity(teeType, ts, pk, policy, qe)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: failed to verify QE identity: %w", err)
 	}
-	err = bnd.verifyTCBInfo(ts, pk, policy, fmspc, tcbCompSvn, pcesvn)
+	err = bnd.verifyTCBInfo(teeType, ts, pk, policy, fmspc, sgxCompSvn, tdxCompSvn, pcesvn)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: failed to verify TCB info: %w", err)
 	}
@@ -75,12 +73,13 @@ func (bnd *TCBBundle) Verify(
 
 // verifyQEIdentity verifies the QE identity.
 func (bnd *TCBBundle) verifyQEIdentity(
+	teeType TeeType,
 	ts time.Time,
 	pk *ecdsa.PublicKey,
 	policy *QuotePolicy,
-	qe *ReportBody,
+	qe *SgxReport,
 ) error {
-	qeInfo, err := bnd.QEIdentity.open(ts, policy, pk)
+	qeInfo, err := bnd.QEIdentity.open(teeType, ts, policy, pk)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: invalid QE identity: %w", err)
 	}
@@ -89,14 +88,16 @@ func (bnd *TCBBundle) verifyQEIdentity(
 
 // verifyTCBInfo verifies the TCB level and the FMSPC.
 func (bnd *TCBBundle) verifyTCBInfo(
+	teeType TeeType,
 	ts time.Time,
 	pk *ecdsa.PublicKey,
 	policy *QuotePolicy,
 	fmspc []byte,
-	tcbCompSvn [16]int32,
+	sgxCompSvn [16]int32,
+	tdxCompSvn *[16]byte,
 	pcesvn uint16,
 ) error {
-	tcbInfo, err := bnd.TCBInfo.open(ts, policy, pk)
+	tcbInfo, err := bnd.TCBInfo.open(teeType, ts, policy, pk)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: invalid TCB info: %w", err)
 	}
@@ -104,7 +105,7 @@ func (bnd *TCBBundle) verifyTCBInfo(
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: failed to validate FMSPC: %w", err)
 	}
-	err = tcbInfo.validateTCBLevel(tcbCompSvn, pcesvn)
+	err = tcbInfo.validateTCBLevel(sgxCompSvn, tdxCompSvn, pcesvn)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: failed to validate TCB level: %w", err)
 	}
@@ -178,7 +179,7 @@ type SignedTCBInfo struct {
 }
 
 // Open verifies the signature and unmarshals the inner TCB info.
-func (st *SignedTCBInfo) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*TCBInfo, error) {
+func (st *SignedTCBInfo) open(teeType TeeType, ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*TCBInfo, error) {
 	if err := verifyTCBSignature(st.TCBInfo, st.Signature, pk); err != nil {
 		return nil, err
 	}
@@ -187,36 +188,59 @@ func (st *SignedTCBInfo) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.Publi
 	if err := json.Unmarshal(st.TCBInfo, &tcbInfo); err != nil {
 		return nil, fmt.Errorf("pcs/tcb: malformed TCB info body: %w", err)
 	}
-	if err := tcbInfo.validate(ts, policy); err != nil {
+	if err := tcbInfo.validate(teeType, ts, policy); err != nil {
 		return nil, err
 	}
 	return &tcbInfo, nil
 }
 
-// TDXModule is a representation of the properties of Intel’s TDX SEAM module.
+// TDXModule is a representation of the properties of Intel's TDX SEAM module.
 type TDXModule struct {
-	MRSIGNER       string  `json:"mrsigner"`
-	Attributes     [8]byte `json:"attributes"`
-	AttributesMask [8]byte `json:"attributesMask"`
+	MRSIGNER       string `json:"mrsigner"`
+	Attributes     string `json:"attributes"`
+	AttributesMask string `json:"attributesMask"`
 }
+
+// TDXModuleIdentity is a representation of the identity of the Intel's TDX SEAM module in case the
+// platform supports more than one TDX SEAM module.
+type TDXModuleIdentity struct {
+	ID        string            `json:"id"`
+	TCBLevels []EnclaveTCBLevel `json:"tcbLevels"`
+	TDXModule
+}
+
+const (
+	tcbInfoSGX = "SGX"
+	tcbInfoTDX = "TDX"
+)
 
 // TCBInfo is the TCB info body.
 type TCBInfo struct {
-	ID                      string     `json:"id"`
-	Version                 int        `json:"version"`
-	IssueDate               string     `json:"issueDate"`
-	NextUpdate              string     `json:"nextUpdate"`
-	FMSPC                   string     `json:"fmspc"`
-	PCEID                   string     `json:"pceId"`
-	TCBType                 int        `json:"tcbType"`
-	TCBEvaluationDataNumber uint32     `json:"tcbEvaluationDataNumber"`
-	TDXModule               TDXModule  `json:"tdxModule,omitempty"`
-	TCBLevels               []TCBLevel `json:"tcbLevels"`
+	ID                      string              `json:"id"`
+	Version                 int                 `json:"version"`
+	IssueDate               string              `json:"issueDate"`
+	NextUpdate              string              `json:"nextUpdate"`
+	FMSPC                   string              `json:"fmspc"`
+	PCEID                   string              `json:"pceId"`
+	TCBType                 int                 `json:"tcbType"`
+	TCBEvaluationDataNumber uint32              `json:"tcbEvaluationDataNumber"`
+	TDXModule               TDXModule           `json:"tdxModule,omitempty"`
+	TDXModuleIdentities     []TDXModuleIdentity `json:"tdxModuleIdentities,omitempty"`
+	TCBLevels               []TCBLevel          `json:"tcbLevels"`
 }
 
-func (ti *TCBInfo) validate(ts time.Time, policy *QuotePolicy) error {
-	if ti.ID != requiredTCBInfoID {
-		return fmt.Errorf("pcs/tcb: unexpected TCB info identifier: %s", ti.ID)
+func (ti *TCBInfo) validate(teeType TeeType, ts time.Time, policy *QuotePolicy) error {
+	switch teeType {
+	case TeeTypeSGX:
+		if ti.ID != tcbInfoSGX {
+			return fmt.Errorf("pcs/tcb: unexpected TCB info identifier: %s", ti.ID)
+		}
+	case TeeTypeTDX:
+		if ti.ID != tcbInfoTDX {
+			return fmt.Errorf("pcs/tcb: unexpected TCB info identifier: %s", ti.ID)
+		}
+	default:
+		return fmt.Errorf("pcs/tcb: unsupported TEE type")
 	}
 
 	if ti.Version != requiredTCBInfoVersion {
@@ -270,10 +294,11 @@ func (ti *TCBInfo) validateFMSPC(fmspc []byte) error {
 }
 
 func (ti *TCBInfo) validateTCBLevel(
-	tcbCompSvn [16]int32,
+	sgxCompSvn [16]int32,
+	tdxCompSvn *[16]byte,
 	pcesvn uint16,
 ) error {
-	tcbLevel, err := ti.getTCBLevel(tcbCompSvn, pcesvn)
+	tcbLevel, err := ti.getTCBLevel(sgxCompSvn, tdxCompSvn, pcesvn)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: failed to get TCB level: %w", err)
 	}
@@ -299,13 +324,14 @@ func (ti *TCBInfo) validateTCBLevel(
 }
 
 func (ti *TCBInfo) getTCBLevel(
-	tcbCompSvn [16]int32,
+	sgxCompSvn [16]int32,
+	tdxCompSvn *[16]byte,
 	pcesvn uint16,
 ) (*TCBLevel, error) {
 	// Find first matching TCB level.
 	var matchedTCBLevel *TCBLevel
 	for i, tcbLevel := range ti.TCBLevels {
-		if !tcbLevel.matches(tcbCompSvn, pcesvn) {
+		if !tcbLevel.matches(sgxCompSvn, tdxCompSvn, pcesvn) {
 			continue
 		}
 		matchedTCBLevel = &ti.TCBLevels[i]
@@ -317,6 +343,51 @@ func (ti *TCBInfo) getTCBLevel(
 
 	if matchedTCBLevel.Status == statusFieldMissing {
 		return nil, fmt.Errorf("pcs/tcb: missing TCB status")
+	}
+
+	if ti.ID == tcbInfoTDX {
+		// Perform additional TCB status evaluation for TDX module in case TEE TCB SVN at index 1 is
+		// greater or equal to 1, otherwise finish the comparison logic.
+		if tdxCompSvn == nil {
+			return nil, fmt.Errorf("pcs/tcb: missing TDX SVN components")
+		}
+		if tdxModuleVersion := (*tdxCompSvn)[1]; tdxModuleVersion >= 1 {
+			// In order to determine TCB status of TDX module, find a matching TDX Module Identity
+			// (in tdxModuleIdentities array of TCB Info) with its id set to "TDX_<version>" where
+			// <version> matches the value of TEE TCB SVN at index 1. If a matching TDX Module
+			// Identity cannot be found, fail.
+			tdxModuleID := fmt.Sprintf("TDX_%02d", tdxModuleVersion)
+			idx := slices.IndexFunc(ti.TDXModuleIdentities, func(tm TDXModuleIdentity) bool {
+				return tm.ID == tdxModuleID
+			})
+			if idx < 0 {
+				return nil, fmt.Errorf("pcs/tcb: TDX module not supported")
+			}
+			// Otherwise, for the selected TDX Module Identity go over the sorted collection of TCB
+			// Levels starting from the first item on the list and compare its isvsvn value to the
+			// TEE TCB SVN at index 0. If TEE TCB SVN at index 0 is greater or equal to its value,
+			// read tcbStatus assigned to this TCB level, otherwise move to the next item on TCB
+			// levels list.
+			tdxModule := ti.TDXModuleIdentities[idx]
+			var matchedModuleTCBLevel *EnclaveTCBLevel
+			for i, tcbLevel := range tdxModule.TCBLevels {
+				if tcbLevel.TCB.ISVSVN > uint16((*tdxCompSvn)[0]) {
+					continue
+				}
+				matchedModuleTCBLevel = &tdxModule.TCBLevels[i]
+				break
+			}
+			if matchedModuleTCBLevel == nil {
+				return nil, fmt.Errorf("pcs/tcb: TDX module TCB level not supported")
+			}
+			if matchedModuleTCBLevel.Status != StatusUpToDate {
+				return nil, &TCBOutOfDateError{
+					Kind:        TCBKindEnclave,
+					Status:      matchedModuleTCBLevel.Status,
+					AdvisoryIDs: matchedModuleTCBLevel.AdvisoryIDs,
+				}
+			}
+		}
 	}
 
 	return matchedTCBLevel, nil
@@ -376,23 +447,44 @@ type TCBLevel struct {
 }
 
 // matches performs the SVN comparison.
-func (tl *TCBLevel) matches(tcbCompSvn [16]int32, pcesvn uint16) bool {
+func (tl *TCBLevel) matches(sgxCompSvn [16]int32, tdxCompSvn *[16]byte, pcesvn uint16) bool {
 	// a) Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to
 	//    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
 	//    certificate are greater or equal to the corresponding values in TCB Level, go to b,
 	//    otherwise move to the next item on TCB Levels list.
 	for i, comp := range tl.TCB.SGXComponents {
 		// At least one SVN is lower, no match.
-		if tcbCompSvn[i] < comp.SVN {
+		if sgxCompSvn[i] < comp.SVN {
 			return false
 		}
 	}
 
 	// b) Compare PCESVN value retrieved from the SGX PCK certificate with the corresponding value
 	//    in the TCB Level. If it is greater or equal to the value in TCB Level, read status
-	//    assigned to this TCB level. Otherwise, move to the next item on TCB Levels list.
-	if tl.TCB.PCESVN < pcesvn { //nolint:gosimple // Explicit is better.
+	//    assigned to this TCB level (in case of SGX) or go to c (in case of TDX). Otherwise, move
+	//    to the next item on TCB Levels list.
+	if tl.TCB.PCESVN < pcesvn {
 		return false
+	}
+
+	if tdxCompSvn != nil {
+		// c) Compare SVNs in TEE TCB SVN array retrieved from TD Report in Quote (from index 0 to
+		//    15 if TEE TCB SVN at index 1 is set to 0, or from index 2 to 15 otherwise) with the
+		//    corresponding values of SVNs in tdxtcbcomponents array of TCB Level. If all TEE TCB
+		//    SVNs in the TD Report are greater or equal to the corresponding values in TCB Level,
+		//    read tcbStatus assigned to this TCB level. Otherwise, move to the next item on TCB
+		//    Levels list.
+		var offset int
+		if (*tdxCompSvn)[1] != 0 {
+			offset = 2
+		}
+
+		for i, comp := range tl.TCB.TDXComponents[offset:] {
+			// At least one SVN is lower, no match.
+			if int32((*tdxCompSvn)[offset+i]) < comp.SVN {
+				return false
+			}
+		}
 	}
 
 	// Match.
@@ -465,7 +557,7 @@ type SignedQEIdentity struct {
 }
 
 // Open verifies the signature and unmarshals the inner Quoting Enclave identity.
-func (sq *SignedQEIdentity) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*QEIdentity, error) {
+func (sq *SignedQEIdentity) open(teeType TeeType, ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*QEIdentity, error) {
 	if err := verifyTCBSignature(sq.EnclaveIdentity, sq.Signature, pk); err != nil {
 		return nil, err
 	}
@@ -474,11 +566,16 @@ func (sq *SignedQEIdentity) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.Pu
 	if err := json.Unmarshal(sq.EnclaveIdentity, &qeIdentity); err != nil {
 		return nil, fmt.Errorf("pcs/tcb: malformed QE identity body: %w", err)
 	}
-	if err := qeIdentity.validate(ts, policy); err != nil {
+	if err := qeIdentity.validate(teeType, ts, policy); err != nil {
 		return nil, err
 	}
 	return &qeIdentity, nil
 }
+
+const (
+	qeIDSgx = "QE"
+	qeIDTdx = "TD_QE"
+)
 
 // QEIdentity is the Quoting Enclave identity.
 type QEIdentity struct {
@@ -497,9 +594,18 @@ type QEIdentity struct {
 	AdvisoryIDs             []int             `json:"advisoryIDs,omitempty"`
 }
 
-func (qe *QEIdentity) validate(ts time.Time, policy *QuotePolicy) error {
-	if qe.ID != requiredQEID {
-		return fmt.Errorf("pcs/tcb: unexpected QE identity ID: %s", qe.ID)
+func (qe *QEIdentity) validate(teeType TeeType, ts time.Time, policy *QuotePolicy) error {
+	switch teeType {
+	case TeeTypeSGX:
+		if qe.ID != qeIDSgx {
+			return fmt.Errorf("pcs/tcb: unexpected QE identity ID: %s", qe.ID)
+		}
+	case TeeTypeTDX:
+		if qe.ID != qeIDTdx {
+			return fmt.Errorf("pcs/tcb: unexpected QE identity ID: %s", qe.ID)
+		}
+	default:
+		return fmt.Errorf("pcs/tcb: unsupported TEE type")
 	}
 	if qe.Version != requiredQEIdentityVersion {
 		return fmt.Errorf("pcs/tcb: unexpected QE identity version: %d", qe.Version)
@@ -531,20 +637,20 @@ func (qe *QEIdentity) validate(ts time.Time, policy *QuotePolicy) error {
 	return nil
 }
 
-func (qe *QEIdentity) verify(report *ReportBody) error {
+func (qe *QEIdentity) verify(report *SgxReport) error {
 	// Verify if MRSIGNER field retrieved from SGX Enclave Report is equal to the value of mrsigner
 	// field in QE Identity.
 	var expectedMrSigner sgx.MrSigner
 	if err := expectedMrSigner.UnmarshalHex(qe.MRSIGNER); err != nil {
 		return fmt.Errorf("pcs/tcb: malformed QE MRSIGNER: %w", err)
 	}
-	if expectedMrSigner != report.MRSIGNER {
+	if expectedMrSigner != report.mrSigner {
 		return fmt.Errorf("pcs/tcb: invalid QE MRSIGNER")
 	}
 
 	// Verify if ISVPRODID field retrieved from SGX Enclave Report is equal to the value of
 	// isvprodid field in QE Identity.
-	if qe.ISVProdID != report.ISVProdID {
+	if qe.ISVProdID != report.isvProdID {
 		return fmt.Errorf("pcs/tcb: invalid QE ISVProdID")
 	}
 
@@ -567,7 +673,7 @@ func (qe *QEIdentity) verify(report *ReportBody) error {
 	}
 	expectedMiscselect := binary.LittleEndian.Uint32(rawMiscselect)
 	miscselectMask := binary.LittleEndian.Uint32(rawMiscselectMask)
-	if report.MiscSelect&miscselectMask != expectedMiscselect {
+	if report.miscSelect&miscselectMask != expectedMiscselect {
 		return fmt.Errorf("pcs/tcb: invalid QE miscselect")
 	}
 
@@ -592,10 +698,10 @@ func (qe *QEIdentity) verify(report *ReportBody) error {
 	expectedXfrm := binary.LittleEndian.Uint64(rawAttributes[8:])
 	flagsMask := binary.LittleEndian.Uint64(rawAttributesMask[:])
 	xfrmMask := binary.LittleEndian.Uint64(rawAttributesMask[8:])
-	if uint64(report.Attributes.Flags)&flagsMask != expectedFlags {
+	if uint64(report.attributes.Flags)&flagsMask != expectedFlags {
 		return fmt.Errorf("pcs/tcb: invalid QE attributes")
 	}
-	if report.Attributes.Xfrm&xfrmMask != expectedXfrm {
+	if report.attributes.Xfrm&xfrmMask != expectedXfrm {
 		return fmt.Errorf("pcs/tcb: invalid QE attributes")
 	}
 
@@ -605,7 +711,7 @@ func (qe *QEIdentity) verify(report *ReportBody) error {
 	// lower or equal to the ISVSVN value from SGX Enclave Report.
 	var matchedTCBLevel *EnclaveTCBLevel
 	for i, tcbLevel := range qe.TCBLevels {
-		if tcbLevel.TCB.ISVSVN > report.ISVSVN {
+		if tcbLevel.TCB.ISVSVN > report.isvSvn {
 			continue
 		}
 		matchedTCBLevel = &qe.TCBLevels[i]

@@ -23,9 +23,9 @@ impl<'a, T: 'a> TakePrefix for &'a [T] {
 impl<'a, T: 'a + Clone> TakePrefix for Cow<'a, [T]> {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if mid <= self.len() {
-            match self {
-                &mut Cow::Borrowed(ref mut slice) => slice.take_prefix(mid).map(Cow::Borrowed),
-                &mut Cow::Owned(ref mut vec) => {
+            match *self {
+                Cow::Borrowed(ref mut slice) => slice.take_prefix(mid).map(Cow::Borrowed),
+                Cow::Owned(ref mut vec) => {
                     let rest = vec.split_off(mid);
                     Ok(Cow::Owned(mem::replace(vec, rest)))
                 }
@@ -54,9 +54,9 @@ impl<'a> TakePrefix for &'a str {
 impl<'a> TakePrefix for Cow<'a, str> {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if mid <= self.len() {
-            match self {
-                &mut Cow::Borrowed(ref mut slice) => slice.take_prefix(mid).map(Cow::Borrowed),
-                &mut Cow::Owned(ref mut vec) => {
+            match *self {
+                Cow::Borrowed(ref mut slice) => slice.take_prefix(mid).map(Cow::Borrowed),
+                Cow::Owned(ref mut vec) => {
                     let rest = vec.split_off(mid);
                     Ok(Cow::Owned(mem::replace(vec, rest)))
                 }

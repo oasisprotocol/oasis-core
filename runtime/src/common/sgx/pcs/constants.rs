@@ -1,9 +1,7 @@
 use chrono::Duration;
 
 // Required values of various TCB fields.
-pub const REQUIRED_TCB_INFO_ID: &str = "SGX";
 pub const REQUIRED_TCB_INFO_VERSION: u32 = 3;
-pub const REQUIRED_QE_ID: &str = "QE";
 pub const REQUIRED_QE_IDENTITY_VERSION: u32 = 2;
 
 pub const DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER: u32 = 12; // As of 2022-08-01.
@@ -21,11 +19,16 @@ pub const QE_VENDOR_ID_INTEL: [u8; 16] = [
     0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3, 0x95, 0x7f, 0x06, 0x07,
 ];
 
+pub const TDX_MRSIGNER_INTEL: [u8; 48] = [0; 48];
+
 pub const QUOTE_HEADER_LEN: usize = 48;
 pub const ECDSA_P256_SIGNATURE_LEN: usize = 64;
 pub const ECDSA_P256_PUBLIC_KEY_LEN: usize = 64;
 pub const QE_VENDOR_ID_LEN: usize = 16;
 pub const QE_USER_DATA_LEN: usize = 20;
-pub const REPORT_BODY_LEN: usize = 384;
+pub const SGX_REPORT_BODY_LEN: usize = 384;
+pub const TDX_REPORT_BODY_LEN: usize = 584;
 pub const CPUSVN_LEN: usize = 16;
+
 pub const QUOTE_VERSION_3: u16 = 3;
+pub const QUOTE_VERSION_4: u16 = 4;

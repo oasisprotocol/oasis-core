@@ -1871,6 +1871,7 @@ dependencies = [
  "base64-serde",
  "bech32",
  "bincode",
+ "bitflags 2.6.0",
  "byteorder",
  "cfg-if 1.0.0",
  "chrono",

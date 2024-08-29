@@ -7,7 +7,9 @@ use rustc_hex::FromHex;
 use serde_json::value::RawValue;
 use sgx_isa::Report;
 
-use super::{certificates::PCS_TRUST_ROOT, constants::*, Error, QuotePolicy};
+use super::{
+    certificates::PCS_TRUST_ROOT, constants::*, policy::QuotePolicy, quote::TeeType, Error,
+};
 
 /// The TCB bundle contains all the required components to verify a quote's TCB.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
@@ -115,22 +117,33 @@ fn open_signed_tcb<'a, T: serde::Deserialize<'a>>(
 impl SignedTCBInfo {
     pub fn open(
         &self,
+        tee_type: TeeType,
         ts: DateTime<Utc>,
         policy: &QuotePolicy,
         pk: &mut mbedtls::pk::Pk,
     ) -> Result<TCBInfo, Error> {
         let ti: TCBInfo = open_signed_tcb(self.tcb_info.get(), &self.signature, pk)?;
-        ti.validate(ts, policy)?;
+        ti.validate(tee_type, ts, policy)?;
 
         Ok(ti)
     }
+}
+
+/// TCB info identifier.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
+pub enum TCBInfoID {
+    SGX,
+    TDX,
+    #[serde(other)]
+    #[default]
+    Invalid,
 }
 
 /// TCB info body.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct TCBInfo {
     #[serde(rename = "id")]
-    pub id: String,
+    pub id: TCBInfoID,
 
     #[serde(rename = "version")]
     pub version: u32,
@@ -156,17 +169,29 @@ pub struct TCBInfo {
     #[serde(default, rename = "tdxModule")]
     pub tdx_module: TDXModule,
 
+    #[serde(default, rename = "tdxModuleIdentities")]
+    pub tdx_module_identities: Vec<TDXModuleIdentity>,
+
     #[serde(rename = "tcbLevels")]
     pub tcb_levels: Vec<TCBLevel>,
 }
 
 impl TCBInfo {
     /// Validate the TCB info against the quote policy.
-    pub fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
-        if self.id != REQUIRED_TCB_INFO_ID {
-            return Err(Error::TCBParseError(anyhow::anyhow!(
-                "unexpected TCB info identifier"
-            )));
+    pub fn validate(
+        &self,
+        tee_type: TeeType,
+        ts: DateTime<Utc>,
+        policy: &QuotePolicy,
+    ) -> Result<(), Error> {
+        match (self.id, tee_type) {
+            (TCBInfoID::SGX, TeeType::SGX) => {}
+            (TCBInfoID::TDX, TeeType::TDX) => {}
+            _ => {
+                return Err(Error::TCBParseError(anyhow::anyhow!(
+                    "unexpected TCB info identifier"
+                )))
+            }
         }
 
         if self.version != REQUIRED_TCB_INFO_VERSION {
@@ -212,7 +237,8 @@ impl TCBInfo {
     pub fn verify(
         &self,
         fmspc: &[u8],
-        tcb_comp_svn: [u32; 16],
+        sgx_comp_svn: &[u32; 16],
+        tdx_comp_svn: Option<&[u32; 16]>,
         pcesvn: u32,
     ) -> Result<TCBLevel, Error> {
         // Validate FMSPC matches.
@@ -228,25 +254,72 @@ impl TCBInfo {
         let level = self
             .tcb_levels
             .iter()
-            .find(|level| level.matches(&tcb_comp_svn, pcesvn))
+            .find(|level| level.matches(sgx_comp_svn, tdx_comp_svn, pcesvn))
             .ok_or(Error::TCBOutOfDate)?
             .clone();
+
+        if self.id == TCBInfoID::TDX {
+            // Perform additional TCB status evaluation for TDX module in case TEE TCB SVN at index
+            // 1 is greater or equal to 1, otherwise finish the comparison logic.
+            let tdx_comp_svn = tdx_comp_svn.ok_or(Error::TCBMismatch)?;
+            let tdx_module_version = tdx_comp_svn[1];
+            if tdx_module_version >= 1 {
+                // In order to determine TCB status of TDX module, find a matching TDX Module
+                // Identity (in tdxModuleIdentities array of TCB Info) with its id set to
+                // "TDX_<version>" where <version> matches the value of TEE TCB SVN at index 1. If a
+                // matching TDX Module Identity cannot be found, fail.
+                let tdx_module_id = format!("TDX_{:02}", tdx_module_version);
+                let tdx_module = self
+                    .tdx_module_identities
+                    .iter()
+                    .find(|tm| tm.id == tdx_module_id)
+                    .ok_or(Error::TCBOutOfDate)?;
+
+                // Otherwise, for the selected TDX Module Identity go over the sorted collection of
+                // TCB Levels starting from the first item on the list and compare its isvsvn value
+                // to the TEE TCB SVN at index 0. If TEE TCB SVN at index 0 is greater or equal to
+                // its value, read tcbStatus assigned to this TCB level, otherwise move to the next
+                // item on TCB levels list.
+                let tdx_module_level = tdx_module
+                    .tcb_levels
+                    .iter()
+                    .find(|level| level.tcb.isv_svn as u32 <= tdx_comp_svn[0])
+                    .ok_or(Error::TCBOutOfDate)?;
+                if tdx_module_level.status != TCBStatus::UpToDate {
+                    return Err(Error::TCBOutOfDate);
+                }
+            }
+        }
 
         Ok(level)
     }
 }
 
-/// A representation of the properties of Intel’s TDX SEAM module.
+/// A representation of the properties of Intel's TDX SEAM module.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct TDXModule {
     #[serde(rename = "mrsigner")]
     pub mr_signer: String,
 
     #[serde(rename = "attributes")]
-    pub attributes: [u8; 8],
+    pub attributes: String,
 
     #[serde(rename = "attributesMask")]
-    pub attributes_mask: [u8; 8],
+    pub attributes_mask: String,
+}
+
+/// A representation of the identity of the Intel's TDX SEAM module in case the platform supports
+/// more than one TDX SEAM module.
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct TDXModuleIdentity {
+    #[serde(rename = "id")]
+    pub id: String,
+
+    #[serde(flatten)]
+    pub module: TDXModule,
+
+    #[serde(rename = "tcbLevels")]
+    pub tcb_levels: Vec<EnclaveTCBLevel>,
 }
 
 /// A platform TCB level.
@@ -267,23 +340,47 @@ pub struct TCBLevel {
 
 impl TCBLevel {
     /// Whether the TCB level matches the given TCB components and PCESVN.
-    pub fn matches(&self, tcb_comp_svn: &[u32], pcesvn: u32) -> bool {
+    pub fn matches(
+        &self,
+        sgx_comp_svn: &[u32],
+        tdx_comp_svn: Option<&[u32; 16]>,
+        pcesvn: u32,
+    ) -> bool {
         // a) Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to
         //    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
         //    certificate are greater or equal to the corresponding values in TCB Level, go to b,
         //    otherwise move to the next item on TCB Levels list.
         for (i, comp) in self.tcb.sgx_components.iter().enumerate() {
             // At least one SVN is lower, no match.
-            if tcb_comp_svn[i] < comp.svn {
+            if sgx_comp_svn[i] < comp.svn {
                 return false;
             }
         }
 
         // b) Compare PCESVN value retrieved from the SGX PCK certificate with the corresponding value
         //    in the TCB Level. If it is greater or equal to the value in TCB Level, read status
-        //    assigned to this TCB level. Otherwise, move to the next item on TCB Levels list.
+        //    assigned to this TCB level (in case of SGX) or go to c (in case of TDX). Otherwise,
+        //    move to the next item on TCB Levels list.
         if self.tcb.pcesvn < pcesvn {
             return false;
+        }
+
+        if let Some(tdx_comp_svn) = tdx_comp_svn {
+            // c) Compare SVNs in TEE TCB SVN array retrieved from TD Report in Quote (from index 0 to
+            //    15 if TEE TCB SVN at index 1 is set to 0, or from index 2 to 15 otherwise) with the
+            //    corresponding values of SVNs in tdxtcbcomponents array of TCB Level. If all TEE TCB
+            //    SVNs in the TD Report are greater or equal to the corresponding values in TCB Level,
+            //    read tcbStatus assigned to this TCB level. Otherwise, move to the next item on TCB
+            //    Levels list.
+            let comps = self.tcb.tdx_components.iter().enumerate();
+            let offset = if tdx_comp_svn[1] != 0 { 2 } else { 0 };
+
+            for (i, comp) in comps.skip(offset) {
+                // At least one SVN is lower, no match.
+                if tdx_comp_svn[i] < comp.svn {
+                    return false;
+                }
+            }
         }
 
         // Match.
@@ -318,7 +415,7 @@ pub struct TCBComponent {
 }
 
 /// TCB status.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
 pub enum TCBStatus {
     UpToDate,
     SWHardeningNeeded,
@@ -328,13 +425,8 @@ pub enum TCBStatus {
     OutOfDateConfigurationNeeded,
     Revoked,
     #[serde(other)]
+    #[default]
     Invalid,
-}
-
-impl Default for TCBStatus {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 /// A signed QE identity structure.
@@ -365,22 +457,34 @@ impl Eq for SignedQEIdentity {}
 impl SignedQEIdentity {
     pub fn open(
         &self,
+        tee_type: TeeType,
         ts: DateTime<Utc>,
         policy: &QuotePolicy,
         pk: &mut mbedtls::pk::Pk,
     ) -> Result<QEIdentity, Error> {
         let qe: QEIdentity = open_signed_tcb(self.enclave_identity.get(), &self.signature, pk)?;
-        qe.validate(ts, policy)?;
+        qe.validate(tee_type, ts, policy)?;
 
         Ok(qe)
     }
+}
+
+/// QE identity identifier.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
+#[allow(non_camel_case_types)]
+pub enum QEIdentityID {
+    QE,
+    TD_QE,
+    #[serde(other)]
+    #[default]
+    Invalid,
 }
 
 /// QE identity body.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct QEIdentity {
     #[serde(rename = "id")]
-    pub id: String,
+    pub id: QEIdentityID,
 
     #[serde(rename = "version")]
     pub version: u32,
@@ -421,10 +525,18 @@ pub struct QEIdentity {
 
 impl QEIdentity {
     /// Validate the QE identity against the quote policy.
-    pub fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
-        if self.id != REQUIRED_QE_ID {
-            return Err(Error::TCBParseError(anyhow::anyhow!("unexpected QE ID")));
+    pub fn validate(
+        &self,
+        tee_type: TeeType,
+        ts: DateTime<Utc>,
+        policy: &QuotePolicy,
+    ) -> Result<(), Error> {
+        match (self.id, tee_type) {
+            (QEIdentityID::QE, TeeType::SGX) => {}
+            (QEIdentityID::TD_QE, TeeType::TDX) => {}
+            _ => return Err(Error::TCBParseError(anyhow::anyhow!("unexpected QE ID"))),
         }
+
         if self.version != REQUIRED_QE_IDENTITY_VERSION {
             return Err(Error::TCBParseError(anyhow::anyhow!(
                 "unexpected QE identity version"

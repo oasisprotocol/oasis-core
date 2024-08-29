@@ -110,6 +110,11 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures) error {
 		return fmt.Errorf("unsupported SGX constraints version: %d", sc.V)
 	}
 
+	// Check for TDX enablement.
+	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
+		return fmt.Errorf("TDX policy not supported")
+	}
+
 	return nil
 }
 
