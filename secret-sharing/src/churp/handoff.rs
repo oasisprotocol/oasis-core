@@ -78,255 +78,293 @@ impl HandoffKind {
     }
 }
 
-/// Handoff proactivizes the shared secret (changes associated shares) while
-/// transferring the secret from an old committee to a new, possibly
-/// intersecting one.
-pub struct Handoff<G: Group + GroupEncoding> {
-    /// Handoff kind.
-    kind: HandoffKind,
-
-    /// The share reduction phase of the handoff.
-    share_reduction: Option<DimensionSwitch<G>>,
-
-    /// The share distribution phase of the handoff.
-    share_distribution: Option<DimensionSwitch<G>>,
-}
-
-impl<G> Handoff<G>
-where
-    G: Group + GroupEncoding,
-{
-    /// Creates a new handoff using the given shareholders (new committee)
-    /// to proactivize the shared secret.
-    pub fn new(
-        threshold: u8,
-        me: G::Scalar,
-        shareholders: Vec<G::Scalar>,
-        kind: HandoffKind,
-    ) -> Result<Self> {
-        let (share_reduction, share_distribution) = match kind {
-            HandoffKind::DealingPhase => {
-                let share_distribution = DimensionSwitch::new_full_share_distribution(
-                    threshold,
-                    me,
-                    shareholders,
-                    kind,
-                )?;
-                share_distribution.skip_accumulating()?;
-                share_distribution.start_merging(None)?;
-
-                (None, Some(share_distribution))
-            }
-            HandoffKind::CommitteeUnchanged => {
-                let share_distribution = DimensionSwitch::new_full_share_distribution(
-                    threshold,
-                    me,
-                    shareholders,
-                    kind,
-                )?;
-                share_distribution.skip_accumulating()?;
-
-                (None, Some(share_distribution))
-            }
-            HandoffKind::CommitteeChanged => {
-                let share_reduction =
-                    DimensionSwitch::new_share_reduction(threshold, me, shareholders, kind)?;
-
-                let share_distribution = DimensionSwitch::new_full_share_distribution(
-                    threshold,
-                    me,
-                    Vec::new(), // Skip proactivization.
-                    kind,
-                )?;
-
-                (Some(share_reduction), Some(share_distribution))
-            }
-        };
-
-        Ok(Self {
-            kind,
-            share_reduction,
-            share_distribution,
-        })
-    }
-
+/// Handoff generates a new shared secret and distributes the associated
+/// shares among committee members, or proactivizes an existing secret by
+/// randomizing the shares while transferring the secret from an old committee
+/// to a new, possibly intersecting one.
+pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
     /// Checks if the handoff needs the verification matrix from the previous
     /// handoff.
-    pub fn needs_verification_matrix(&self) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        let needs = self
-            .share_reduction
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .is_waiting_for_verification_matrix();
-
-        Ok(needs)
+    fn needs_verification_matrix(&self) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Sets the verification matrix from the previous handoff.
-    pub fn set_verification_matrix(&self, vm: VerificationMatrix<G>) -> Result<()> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_reduction
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .start_accumulating(vm)
+    fn set_verification_matrix(&self, _vm: VerificationMatrix<G>) -> Result<()> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Checks if the handoff needs the shareholder from the previous handoff.
-    pub fn needs_shareholder(&self) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeUnchanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        let needs = self
-            .share_distribution
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .is_waiting_for_shareholder();
-
-        Ok(needs)
+    fn needs_shareholder(&self) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Sets the shareholder from the previous handoff.
-    pub fn set_shareholder(&self, shareholder: Arc<Shareholder<G>>) -> Result<()> {
-        if self.kind != HandoffKind::CommitteeUnchanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_distribution
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .start_merging(Some(shareholder))
+    fn set_shareholder(&self, _shareholder: Arc<Shareholder<G>>) -> Result<()> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Checks if share reduction needs a switch point from the given
     /// shareholder.
-    pub fn needs_share_reduction_switch_point(&self, x: &G::Scalar) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_reduction
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .needs_switch_point(x)
+    fn needs_share_reduction_switch_point(&self, _x: &G::Scalar) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Adds the given switch point to share reduction.
-    pub fn add_share_reduction_switch_point(&self, x: G::Scalar, bij: G::Scalar) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_reduction
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .add_switch_point(x, bij)
+    fn add_share_reduction_switch_point(&self, _x: G::Scalar, _bij: G::Scalar) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Checks if full share distribution needs a switch point from the given
     /// shareholder.
-    pub fn needs_full_share_distribution_switch_point(&self, x: &G::Scalar) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_distribution
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .needs_switch_point(x)
+    fn needs_full_share_distribution_switch_point(&self, _x: &G::Scalar) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Adds the given switch point to full share distribution.
-    pub fn add_full_share_distribution_switch_point(
+    fn add_full_share_distribution_switch_point(
         &self,
-        x: G::Scalar,
-        bij: G::Scalar,
+        _x: G::Scalar,
+        _bij: G::Scalar,
     ) -> Result<bool> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_distribution
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .add_switch_point(x, bij)
+        Err(Error::InvalidKind.into())
     }
 
     /// Checks if bivariate share is needed from the given shareholder.
-    pub fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
-        let ds = match self.kind {
-            HandoffKind::DealingPhase => &self.share_distribution,
-            HandoffKind::CommitteeUnchanged => &self.share_distribution,
-            HandoffKind::CommitteeChanged => &self.share_reduction,
-        };
-
-        ds.as_ref()
-            .ok_or(Error::InvalidState)?
-            .needs_bivariate_share(x)
+    fn needs_bivariate_share(&self, _x: &G::Scalar) -> Result<bool> {
+        Err(Error::InvalidKind.into())
     }
 
     /// Adds the given bivariate share.
-    pub fn add_bivariate_share(
+    fn add_bivariate_share(
+        &self,
+        _x: &G::Scalar,
+        _verifiable_share: VerifiableSecretShare<G>,
+    ) -> Result<bool> {
+        Err(Error::InvalidKind.into())
+    }
+
+    /// Returns the shareholder resulting from share reduction.
+    fn get_reduced_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        Err(Error::InvalidKind.into())
+    }
+
+    /// Returns the shareholder resulting from full share distribution.
+    fn get_full_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        Err(Error::InvalidKind.into())
+    }
+}
+
+/// A handoff where the committee collaboratively generates a random secret
+/// and secret shares.
+pub struct DealingPhase<G: Group + GroupEncoding> {
+    /// The share distribution phase of the handoff.
+    share_distribution: DimensionSwitch<G>,
+}
+
+impl<G> DealingPhase<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Creates a new handoff where the given shareholders will generate
+    /// a random secret and receive corresponding secret shares.
+    pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        let share_distribution = DimensionSwitch::new_full_share_distribution(
+            threshold,
+            me,
+            shareholders,
+            HandoffKind::DealingPhase,
+        )?;
+        share_distribution.skip_accumulating()?;
+        share_distribution.start_merging(None)?;
+
+        Ok(Self { share_distribution })
+    }
+}
+
+impl<G> Handoff<G> for DealingPhase<G>
+where
+    G: Group + GroupEncoding,
+{
+    fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
+        self.share_distribution.needs_bivariate_share(x)
+    }
+
+    fn add_bivariate_share(
         &self,
         x: &G::Scalar,
         verifiable_share: VerifiableSecretShare<G>,
     ) -> Result<bool> {
-        let ds = match self.kind {
-            HandoffKind::DealingPhase => &self.share_distribution,
-            HandoffKind::CommitteeUnchanged => &self.share_distribution,
-            HandoffKind::CommitteeChanged => &self.share_reduction,
-        };
+        self.share_distribution
+            .add_bivariate_share(x, verifiable_share)
+    }
 
-        let res = ds
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .add_bivariate_share(x, verifiable_share);
+    fn get_full_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        self.share_distribution.get_shareholder()
+    }
+}
+
+/// A handoff where the committee remains the same. During this handoff,
+/// committee members randomize their secret shares without altering
+/// the shared secret.
+pub struct CommitteeUnchanged<G: Group + GroupEncoding> {
+    /// The share distribution phase of the handoff.
+    share_distribution: DimensionSwitch<G>,
+}
+
+impl<G> CommitteeUnchanged<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Creates a new handoff where the secret shares of the given shareholders
+    /// will be randomized.
+    pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        let share_distribution = DimensionSwitch::new_full_share_distribution(
+            threshold,
+            me,
+            shareholders,
+            HandoffKind::CommitteeUnchanged,
+        )?;
+        share_distribution.skip_accumulating()?;
+
+        Ok(Self { share_distribution })
+    }
+}
+
+impl<G> Handoff<G> for CommitteeUnchanged<G>
+where
+    G: Group + GroupEncoding,
+{
+    fn needs_shareholder(&self) -> Result<bool> {
+        Ok(self.share_distribution.is_waiting_for_shareholder())
+    }
+
+    fn set_shareholder(&self, shareholder: Arc<Shareholder<G>>) -> Result<()> {
+        self.share_distribution.start_merging(Some(shareholder))
+    }
+
+    fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
+        self.share_distribution.needs_bivariate_share(x)
+    }
+
+    fn add_bivariate_share(
+        &self,
+        x: &G::Scalar,
+        verifiable_share: VerifiableSecretShare<G>,
+    ) -> Result<bool> {
+        self.share_distribution
+            .add_bivariate_share(x, verifiable_share)
+    }
+
+    fn get_full_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        self.share_distribution.get_shareholder()
+    }
+}
+
+/// A handoff where the committee changes. During this handoff, committee
+/// members transfer the shared secret to the new committee.
+pub struct CommitteeChanged<G: Group + GroupEncoding> {
+    /// The share reduction phase of the handoff.
+    share_reduction: DimensionSwitch<G>,
+
+    /// The share distribution phase of the handoff.
+    share_distribution: DimensionSwitch<G>,
+}
+
+impl<G> CommitteeChanged<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Creates a new handoff where the shared secret will be transferred
+    /// to a new committee composed of the given shareholders.
+    pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        let share_reduction = DimensionSwitch::new_share_reduction(
+            threshold,
+            me,
+            shareholders,
+            HandoffKind::CommitteeChanged,
+        )?;
+
+        let share_distribution = DimensionSwitch::new_full_share_distribution(
+            threshold,
+            me,
+            Vec::new(), // Skip proactivization.
+            HandoffKind::CommitteeChanged,
+        )?;
+
+        Ok(Self {
+            share_reduction,
+            share_distribution,
+        })
+    }
+}
+
+impl<G> Handoff<G> for CommitteeChanged<G>
+where
+    G: Group + GroupEncoding,
+{
+    fn needs_verification_matrix(&self) -> Result<bool> {
+        Ok(self.share_reduction.is_waiting_for_verification_matrix())
+    }
+
+    fn set_verification_matrix(&self, vm: VerificationMatrix<G>) -> Result<()> {
+        self.share_reduction.start_accumulating(vm)
+    }
+
+    fn needs_share_reduction_switch_point(&self, x: &G::Scalar) -> Result<bool> {
+        self.share_reduction.needs_switch_point(x)
+    }
+
+    fn add_share_reduction_switch_point(&self, x: G::Scalar, bij: G::Scalar) -> Result<bool> {
+        self.share_reduction.add_switch_point(x, bij)
+    }
+
+    fn needs_full_share_distribution_switch_point(&self, x: &G::Scalar) -> Result<bool> {
+        self.share_distribution.needs_switch_point(x)
+    }
+
+    fn add_full_share_distribution_switch_point(
+        &self,
+        x: G::Scalar,
+        bij: G::Scalar,
+    ) -> Result<bool> {
+        self.share_distribution.add_switch_point(x, bij)
+    }
+
+    fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
+        self.share_reduction.needs_bivariate_share(x)
+    }
+
+    fn add_bivariate_share(
+        &self,
+        x: &G::Scalar,
+        verifiable_share: VerifiableSecretShare<G>,
+    ) -> Result<bool> {
+        let done = self
+            .share_reduction
+            .add_bivariate_share(x, verifiable_share)?;
 
         // Start full share distribution if share reduction has completed.
-        if self.kind == HandoffKind::CommitteeChanged && res.as_ref().is_ok_and(|&done| done) {
+        if done {
             let vm = self
                 .share_reduction
-                .as_ref()
-                .ok_or(Error::InvalidState)?
                 .get_shareholder()?
                 .verifiable_share()
                 .verification_matrix()
                 .clone();
 
-            self.share_distribution
-                .as_ref()
-                .ok_or(Error::InvalidState)?
-                .start_accumulating(vm)?;
+            self.share_distribution.start_accumulating(vm)?;
         }
 
-        res
+        Ok(done)
     }
 
-    /// Returns the shareholder resulting from share reduction.
-    pub fn get_reduced_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
-        if self.kind != HandoffKind::CommitteeChanged {
-            return Err(Error::InvalidKind.into());
-        }
-
-        self.share_reduction
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .get_shareholder()
+    fn get_reduced_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        self.share_reduction.get_shareholder()
     }
 
-    /// Returns the shareholder resulting from full share distribution.
-    pub fn get_full_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
-        self.share_distribution
-            .as_ref()
-            .ok_or(Error::InvalidState)?
-            .get_shareholder()
+    fn get_full_shareholder(&self) -> Result<Arc<Shareholder<G>>> {
+        self.share_distribution.get_shareholder()
     }
 }
 
@@ -337,7 +375,7 @@ mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use crate::{
-        churp::{self, HandoffKind, VerifiableSecretShare},
+        churp::{self, Handoff, HandoffKind, VerifiableSecretShare},
         suites::{self, p384},
     };
 
@@ -346,7 +384,9 @@ mod tests {
     type PrimeField = <Suite as suites::Suite>::PrimeField;
     type Shareholder = churp::Shareholder<Group>;
     type Dealer = churp::Dealer<Group>;
-    type Handoff = churp::Handoff<Group>;
+    type DealingPhase = churp::DealingPhase<Group>;
+    type CommitteeUnchanged = churp::CommitteeUnchanged<Group>;
+    type CommitteeChanged = churp::CommitteeChanged<Group>;
 
     fn prepare_shareholders(ids: &[u64]) -> Vec<PrimeField> {
         ids.into_iter().map(|&id| id.into()).collect()
@@ -389,17 +429,16 @@ mod tests {
         let threshold = 2;
 
         // Handoff 0: Dealing phase.
-        let kind = HandoffKind::DealingPhase;
         let committee = prepare_shareholders(&[1, 2, 3, 4]); // At least 4 (threshold + 2).
         let dealers = prepare_dealers(threshold, true, committee.len(), &mut rng);
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for alice in committee.iter() {
-            let handoff = Handoff::new(threshold, alice.clone(), committee.clone(), kind).unwrap();
+            let handoff = DealingPhase::new(threshold, alice.clone(), committee.clone()).unwrap();
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), kind);
+                let share = dealer.make_share(alice.clone(), HandoffKind::DealingPhase);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 
@@ -434,18 +473,12 @@ mod tests {
         verify_shareholders(&shareholders, threshold, true);
 
         // Handoff 1: Committee remains unchanged.
-        let kind = HandoffKind::CommitteeUnchanged;
         let dealers = prepare_dealers(threshold, false, committee.len(), &mut rng);
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for (i, alice) in committee.iter().enumerate() {
-            let handoff = Handoff::new(
-                threshold,
-                alice.clone(),
-                committee.clone(),
-                HandoffKind::CommitteeUnchanged,
-            )
-            .unwrap();
+            let handoff =
+                CommitteeUnchanged::new(threshold, alice.clone(), committee.clone()).unwrap();
 
             let shareholder = shareholders.get(i).unwrap().clone();
 
@@ -454,7 +487,7 @@ mod tests {
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), kind);
+                let share = dealer.make_share(alice.clone(), HandoffKind::CommitteeUnchanged);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 
@@ -489,19 +522,13 @@ mod tests {
         verify_shareholders(&shareholders, threshold, true);
 
         // Handoff 2: Committee changed.
-        let kind = HandoffKind::CommitteeChanged;
         let committee = prepare_shareholders(&[3, 4, 5, 6, 7]); // At least 5 (2 * threshold + 1).
         let dealers = prepare_dealers(threshold, false, committee.len(), &mut rng);
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for alice in committee.iter() {
-            let handoff = Handoff::new(
-                threshold,
-                alice.clone(),
-                committee.clone(),
-                HandoffKind::CommitteeChanged,
-            )
-            .unwrap();
+            let handoff =
+                CommitteeChanged::new(threshold, alice.clone(), committee.clone()).unwrap();
 
             // Fetch verification matrix from the old committee.
             assert!(handoff.needs_verification_matrix().unwrap());
@@ -535,7 +562,7 @@ mod tests {
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), kind);
+                let share = dealer.make_share(alice.clone(), HandoffKind::CommitteeChanged);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 

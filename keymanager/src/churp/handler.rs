@@ -33,7 +33,10 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{encode_shareholder, Dealer, Handoff, HandoffKind, Shareholder, VerifiableSecretShare},
+    churp::{
+        encode_shareholder, CommitteeChanged, CommitteeUnchanged, Dealer, DealingPhase, Handoff,
+        HandoffKind, Shareholder, VerifiableSecretShare,
+    },
     kdc::KeySharer,
     poly::{scalar_from_bytes, scalar_to_bytes},
     suites::{p384, Suite},
@@ -114,10 +117,10 @@ struct HandoffInfo<G: Group + GroupEncoding> {
     /// The handoff epoch.
     epoch: EpochTime,
     /// The handoff associated with this information.
-    handoff: Arc<Handoff<G>>,
+    handoff: Arc<Box<dyn Handoff<G>>>,
 }
 
-pub(crate) trait Handler {
+pub(crate) trait Handler: Send + Sync {
     /// Returns the verification matrix of the shared secret bivariate
     /// polynomial from the last successfully completed handoff.
     ///
@@ -340,7 +343,7 @@ pub struct Churp {
     churp_state: ChurpState,
 
     /// Cached instances.
-    instances: Mutex<HashMap<u8, Arc<dyn Handler + Send + Sync>>>,
+    instances: Mutex<HashMap<u8, Arc<dyn Handler>>>,
     /// Cached verified policies.
     policies: Arc<VerifiedPolicies>,
 }
@@ -369,11 +372,7 @@ impl Churp {
         }
     }
 
-    fn get_instance(
-        &self,
-        churp_id: u8,
-        runtime_id: Namespace,
-    ) -> Result<Arc<dyn Handler + Send + Sync>> {
+    fn get_instance(&self, churp_id: u8, runtime_id: Namespace) -> Result<Arc<dyn Handler>> {
         // Ensure runtime_id matches.
         if self.runtime_id != runtime_id {
             return Err(Error::RuntimeMismatch.into());
@@ -597,7 +596,7 @@ impl<S: Suite> Instance<S> {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S::Group>,
+        handoff: &Arc<Box<dyn Handoff<S::Group>>>,
         client: &RemoteClient,
     ) -> Result<bool> {
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
@@ -652,7 +651,7 @@ impl<S: Suite> Instance<S> {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S::Group>,
+        handoff: &Arc<Box<dyn Handoff<S::Group>>>,
         client: &RemoteClient,
     ) -> Result<bool> {
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
@@ -686,7 +685,7 @@ impl<S: Suite> Instance<S> {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S::Group>,
+        handoff: &Arc<Box<dyn Handoff<S::Group>>>,
         client: &RemoteClient,
     ) -> Result<bool> {
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
@@ -930,7 +929,7 @@ impl<S: Suite> Instance<S> {
     }
 
     /// Returns the handoff for the given epoch.
-    fn get_handoff(&self, epoch: EpochTime) -> Result<Arc<Handoff<S::Group>>> {
+    fn get_handoff(&self, epoch: EpochTime) -> Result<Arc<Box<dyn Handoff<S::Group>>>> {
         let handoff_guard = self.handoff.lock().unwrap();
 
         let handoff_info = handoff_guard
@@ -943,7 +942,7 @@ impl<S: Suite> Instance<S> {
 
     /// Creates a handoff for the next handoff epoch. If a handoff already
     /// exists, the existing one is returned.
-    fn get_or_create_handoff(&self, status: &Status) -> Result<Arc<Handoff<S::Group>>> {
+    fn get_or_create_handoff(&self, status: &Status) -> Result<Arc<Box<dyn Handoff<S::Group>>>> {
         // Make sure to lock the handoff so that we don't create two handoffs
         // for the same epoch.
         let mut handoff_guard = self.handoff.lock().unwrap();
@@ -965,8 +964,21 @@ impl<S: Suite> Instance<S> {
             shareholders.push(x);
         }
         let kind = Self::handoff_kind(status);
-        let handoff = Handoff::new(threshold, me, shareholders, kind)?;
-        let handoff = Arc::new(handoff);
+        let handoff: Arc<Box<dyn Handoff<S::Group>>> = match kind {
+            HandoffKind::DealingPhase => {
+                Arc::new(Box::new(DealingPhase::new(threshold, me, shareholders)?))
+            }
+            HandoffKind::CommitteeUnchanged => Arc::new(Box::new(CommitteeUnchanged::new(
+                threshold,
+                me,
+                shareholders,
+            )?)),
+            HandoffKind::CommitteeChanged => Arc::new(Box::new(CommitteeChanged::new(
+                threshold,
+                me,
+                shareholders,
+            )?)),
+        };
 
         // If the committee hasn't changed, we need the latest shareholder
         // to randomize its share.
