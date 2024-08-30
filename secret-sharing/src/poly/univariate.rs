@@ -7,6 +7,7 @@ use std::{
 use group::ff::PrimeField;
 use rand_core::RngCore;
 use subtle::{Choice, CtOption};
+use zeroize::Zeroize;
 
 use crate::poly::powers;
 
@@ -23,7 +24,7 @@ use crate::poly::powers;
 /// degree are consistently represented by vectors of the same size, resulting
 /// in encodings of equal length.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Polynomial<F> {
+pub struct Polynomial<F: PrimeField> {
     pub(crate) a: Vec<F>,
 }
 
@@ -526,6 +527,17 @@ where
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum
+    }
+}
+
+impl<F> Zeroize for Polynomial<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        for ai in self.a.iter_mut() {
+            ai.zeroize();
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use group::ff::PrimeField;
 use rand_core::RngCore;
 use subtle::{Choice, CtOption};
+use zeroize::Zeroize;
 
 use crate::poly::powers;
 
@@ -241,6 +242,19 @@ where
         }
 
         Polynomial::with_coefficients(a)
+    }
+}
+
+impl<F> Zeroize for BivariatePolynomial<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        for bi in self.b.iter_mut() {
+            for bij in bi.iter_mut() {
+                bij.zeroize();
+            }
+        }
     }
 }
 
