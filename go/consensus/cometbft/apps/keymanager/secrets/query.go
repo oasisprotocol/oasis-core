@@ -10,6 +10,7 @@ import (
 
 // Query is the key manager secrets query interface.
 type Query interface {
+	ConsensusParameters(context.Context) (*secrets.ConsensusParameters, error)
 	Status(context.Context, common.Namespace) (*secrets.Status, error)
 	Statuses(context.Context) ([]*secrets.Status, error)
 	MasterSecret(context.Context, common.Namespace) (*secrets.SignedEncryptedMasterSecret, error)
@@ -19,6 +20,11 @@ type Query interface {
 
 type querier struct {
 	state *secretsState.ImmutableState
+}
+
+// ConsensusParameters implements Query.
+func (q *querier) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
 // Status implements Query.
@@ -43,6 +49,11 @@ func (q *querier) EphemeralSecret(ctx context.Context, runtimeID common.Namespac
 
 // Genesis implements Query.
 func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
+	parameters, err := q.state.ConsensusParameters(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	statuses, err := q.state.Statuses(ctx)
 	if err != nil {
 		return nil, err
@@ -53,7 +64,10 @@ func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
 		status.Nodes = nil
 	}
 
-	gen := secrets.Genesis{Statuses: statuses}
+	gen := secrets.Genesis{
+		Parameters: *parameters,
+		Statuses:   statuses,
+	}
 	return &gen, nil
 }
 

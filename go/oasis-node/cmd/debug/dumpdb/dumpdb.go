@@ -326,11 +326,18 @@ func dumpKeyManager(ctx context.Context, qs *dumpQueryState) (*keymanager.Genesi
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create key manager query: %w", err)
 	}
-	st, err := q.Secrets().Genesis(ctx)
+	secrets, err := q.Secrets().Genesis(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to dump key manager state: %w", err)
 	}
-	return st, nil
+	churp, err := q.Churp().Genesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to dump key manager state: %w", err)
+	}
+	return &keymanager.Genesis{
+		Genesis: *secrets,
+		Churp:   churp,
+	}, nil
 }
 
 func dumpScheduler(ctx context.Context, qs *dumpQueryState) (*scheduler.Genesis, error) {

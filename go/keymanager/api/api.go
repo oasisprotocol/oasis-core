@@ -48,7 +48,15 @@ type Backend interface {
 }
 
 // Genesis is the key manager management genesis state.
-type Genesis = secrets.Genesis
+type Genesis struct {
+	// Genesis is the secret genesis state.
+	//
+	// Embedded to ensure backward compatibility.
+	secrets.Genesis
+
+	// Churp is the optional CHURP genesis state.
+	Churp *churp.Genesis `json:"churp,omitempty"`
+}
 
 func init() {
 	// Old `INSECURE_SIGNING_KEY_PKCS8`.

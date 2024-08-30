@@ -314,9 +314,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Test keymanager genesis checks.
 	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
-		Statuses: []*secrets.Status{
-			{
-				ID: testRuntimeID,
+		Genesis: secrets.Genesis{
+			Statuses: []*secrets.Status{
+				{
+					ID: testRuntimeID,
+				},
 			},
 		},
 	}
@@ -324,10 +326,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
-		Statuses: []*secrets.Status{
-			{
-				ID:    validNS,
-				Nodes: []signature.PublicKey{invalidPK},
+		Genesis: secrets.Genesis{
+			Statuses: []*secrets.Status{
+				{
+					ID:    validNS,
+					Nodes: []signature.PublicKey{invalidPK},
+				},
 			},
 		},
 	}

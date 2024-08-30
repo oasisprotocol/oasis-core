@@ -14,6 +14,7 @@ type Query interface {
 	Status(context.Context, common.Namespace, uint8) (*churp.Status, error)
 	Statuses(context.Context, common.Namespace) ([]*churp.Status, error)
 	AllStatuses(context.Context) ([]*churp.Status, error)
+	Genesis(context.Context) (*churp.Genesis, error)
 }
 
 type querier struct {

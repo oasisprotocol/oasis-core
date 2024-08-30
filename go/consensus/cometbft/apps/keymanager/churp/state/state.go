@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -38,7 +37,7 @@ func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.Conse
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	if raw == nil {
-		return nil, fmt.Errorf("cometbft/keymanager/churp: expected consensus parameters to be present in app state")
+		return &churp.ConsensusParameters{}, nil
 	}
 
 	var params churp.ConsensusParameters
