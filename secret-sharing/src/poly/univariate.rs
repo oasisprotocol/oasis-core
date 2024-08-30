@@ -173,14 +173,40 @@ where
     }
 }
 
+//
+// Implementations of the `core::ops` traits.
+//
+
 impl<F> Add for Polynomial<F>
 where
     F: PrimeField,
 {
-    type Output = Self;
+    type Output = Polynomial<F>;
 
-    fn add(self, other: Self) -> Self {
-        &self + &other
+    fn add(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        &self + &rhs
+    }
+}
+
+impl<F> Add<&Polynomial<F>> for Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn add(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        &self + rhs
+    }
+}
+
+impl<F> Add<Polynomial<F>> for &Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn add(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        self + &rhs
     }
 }
 
@@ -190,17 +216,17 @@ where
 {
     type Output = Polynomial<F>;
 
-    fn add(self, other: Self) -> Self::Output {
-        let max_len = max(self.a.len(), other.a.len());
-        let min_len = min(self.a.len(), other.a.len());
+    fn add(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        let max_len = max(self.a.len(), rhs.a.len());
+        let min_len = min(self.a.len(), rhs.a.len());
         let mut a = Vec::with_capacity(max_len);
 
         for i in 0..min_len {
-            a.push(self.a[i] + other.a[i]);
+            a.push(self.a[i] + rhs.a[i]);
         }
 
         a.extend(self.a[min_len..].iter());
-        a.extend(other.a[min_len..].iter());
+        a.extend(rhs.a[min_len..].iter());
 
         Polynomial::with_coefficients(a)
     }
@@ -210,23 +236,23 @@ impl<F> AddAssign for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn add_assign(&mut self, other: Self) {
-        *self += &other
+    fn add_assign(&mut self, rhs: Polynomial<F>) {
+        *self += &rhs
     }
 }
 
-impl<F> AddAssign<&Self> for Polynomial<F>
+impl<F> AddAssign<&Polynomial<F>> for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn add_assign(&mut self, other: &Self) {
-        let min_len = min(self.a.len(), other.a.len());
+    fn add_assign(&mut self, rhs: &Polynomial<F>) {
+        let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
-            self.a[i] += other.a[i];
+            self.a[i] += rhs.a[i];
         }
 
-        self.a.extend(other.a[min_len..].iter());
+        self.a.extend(rhs.a[min_len..].iter());
     }
 }
 
@@ -234,10 +260,32 @@ impl<F> Sub for Polynomial<F>
 where
     F: PrimeField,
 {
-    type Output = Self;
+    type Output = Polynomial<F>;
 
-    fn sub(self, other: Self) -> Self {
-        &self - &other
+    fn sub(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        &self - &rhs
+    }
+}
+
+impl<F> Sub<&Polynomial<F>> for Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn sub(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        &self - rhs
+    }
+}
+
+impl<F> Sub<Polynomial<F>> for &Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn sub(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        self - &rhs
     }
 }
 
@@ -247,17 +295,17 @@ where
 {
     type Output = Polynomial<F>;
 
-    fn sub(self, other: Self) -> Self::Output {
-        let max_len = max(self.a.len(), other.a.len());
-        let min_len = min(self.a.len(), other.a.len());
+    fn sub(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        let max_len = max(self.a.len(), rhs.a.len());
+        let min_len = min(self.a.len(), rhs.a.len());
         let mut a = Vec::with_capacity(max_len);
 
         for i in 0..min_len {
-            a.push(self.a[i] - other.a[i]);
+            a.push(self.a[i] - rhs.a[i]);
         }
 
         a.extend(self.a[min_len..].iter());
-        a.extend(other.a[min_len..].iter().map(|ai| ai.neg()));
+        a.extend(rhs.a[min_len..].iter().map(|ai| ai.neg()));
 
         Polynomial::with_coefficients(a)
     }
@@ -267,23 +315,23 @@ impl<F> SubAssign for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn sub_assign(&mut self, other: Self) {
-        *self -= &other
+    fn sub_assign(&mut self, rhs: Polynomial<F>) {
+        *self -= &rhs
     }
 }
 
-impl<F> SubAssign<&Self> for Polynomial<F>
+impl<F> SubAssign<&Polynomial<F>> for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn sub_assign(&mut self, other: &Self) {
-        let min_len = min(self.a.len(), other.a.len());
+    fn sub_assign(&mut self, rhs: &Polynomial<F>) {
+        let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
-            self.a[i] -= other.a[i];
+            self.a[i] -= rhs.a[i];
         }
 
-        self.a.extend(other.a[min_len..].iter().map(|ai| ai.neg()));
+        self.a.extend(rhs.a[min_len..].iter().map(|ai| ai.neg()));
     }
 }
 
@@ -291,10 +339,32 @@ impl<F> Mul for Polynomial<F>
 where
     F: PrimeField,
 {
-    type Output = Self;
+    type Output = Polynomial<F>;
 
-    fn mul(self, other: Self) -> Self {
-        &self * &other
+    fn mul(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        &self * &rhs
+    }
+}
+
+impl<F> Mul<&Polynomial<F>> for Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn mul(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        &self * rhs
+    }
+}
+
+impl<F> Mul<Polynomial<F>> for &Polynomial<F>
+where
+    F: PrimeField,
+{
+    type Output = Polynomial<F>;
+
+    fn mul(self, rhs: Polynomial<F>) -> Polynomial<F> {
+        self * &rhs
     }
 }
 
@@ -304,11 +374,11 @@ where
 {
     type Output = Polynomial<F>;
 
-    fn mul(self, other: Self) -> Self::Output {
-        let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 1);
+    fn mul(self, rhs: &Polynomial<F>) -> Polynomial<F> {
+        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 1);
         for i in 0..self.a.len() {
-            for j in 0..other.a.len() {
-                let aij = self.a[i] * other.a[j];
+            for j in 0..rhs.a.len() {
+                let aij = self.a[i] * rhs.a[j];
                 if i + j < a.len() {
                     a[i + j] += aij;
                 } else {
@@ -324,20 +394,20 @@ impl<F> MulAssign for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn mul_assign(&mut self, other: Self) {
-        *self *= &other
+    fn mul_assign(&mut self, rhs: Polynomial<F>) {
+        *self *= &rhs
     }
 }
 
-impl<F> MulAssign<&Self> for Polynomial<F>
+impl<F> MulAssign<&Polynomial<F>> for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn mul_assign(&mut self, other: &Self) {
-        let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 2);
+    fn mul_assign(&mut self, rhs: &Polynomial<F>) {
+        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 2);
         for i in 0..self.a.len() {
-            for j in 0..other.a.len() {
-                let aij = self.a[i] * other.a[j];
+            for j in 0..rhs.a.len() {
+                let aij = self.a[i] * rhs.a[j];
                 if i + j < a.len() {
                     a[i + j] += aij;
                 } else {
@@ -353,10 +423,10 @@ impl<F> Mul<F> for Polynomial<F>
 where
     F: PrimeField,
 {
-    type Output = Self;
+    type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: F) -> Self {
+    fn mul(self, scalar: F) -> Polynomial<F> {
         &self * &scalar
     }
 }
@@ -365,9 +435,9 @@ impl<F> Mul<&F> for Polynomial<F>
 where
     F: PrimeField,
 {
-    type Output = Self;
+    type Output = Polynomial<F>;
 
-    fn mul(self, scalar: &F) -> Self {
+    fn mul(self, scalar: &F) -> Polynomial<F> {
         &self * scalar
     }
 }
@@ -379,7 +449,7 @@ where
     type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: F) -> Self::Output {
+    fn mul(self, scalar: F) -> Polynomial<F> {
         self * &scalar
     }
 }
@@ -390,7 +460,7 @@ where
 {
     type Output = Polynomial<F>;
 
-    fn mul(self, scalar: &F) -> Self::Output {
+    fn mul(self, scalar: &F) -> Polynomial<F> {
         let mut a = Vec::with_capacity(self.a.len());
 
         for i in 0..self.a.len() {
@@ -425,18 +495,18 @@ impl<F> Sum for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+    fn sum<I: Iterator<Item = Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum
     }
 }
 
-impl<'a, F> Sum<&'a Self> for Polynomial<F>
+impl<'a, F> Sum<&'a Polynomial<F>> for Polynomial<F>
 where
     F: PrimeField,
 {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Polynomial<F> {
+    fn sum<I: Iterator<Item = &'a Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum
@@ -586,22 +656,31 @@ mod tests {
         ];
 
         for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
-            // Test add.
             let f = Polynomial::with_coefficients(scalars(&coefficients_f));
             let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            for h in vec![&f + &g, f + g] {
-                assert_eq!(h.a, scalars(&coefficients_h));
-            }
+            let h = Polynomial::with_coefficients(scalars(&coefficients_h));
+
+            // Test add.
+            let v = f.clone() + g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = f.clone() + &g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() + g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() + &g.clone();
+            assert_eq!(v.a, h.a);
 
             // Test add assign.
-            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
-            let mut f2 = f1.clone();
-            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            f1 += &g;
-            f2 += g;
-            for f in vec![f1, f2] {
-                assert_eq!(f.a, scalars(&coefficients_h));
-            }
+            let mut v = f.clone();
+            v += g.clone();
+            assert_eq!(v.a, h.a);
+
+            let mut v = f.clone();
+            v += &g.clone();
+            assert_eq!(v.a, h.a);
         }
     }
 
@@ -619,22 +698,31 @@ mod tests {
         ];
 
         for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
-            // Test sub.
             let f = Polynomial::with_coefficients(scalars(&coefficients_f));
             let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            for h in vec![&f - &g, f - g] {
-                assert_eq!(h.a, scalars(&coefficients_h));
-            }
+            let h = Polynomial::with_coefficients(scalars(&coefficients_h));
+
+            // Test sub.
+            let v = f.clone() - g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = f.clone() - &g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() - g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() - &g.clone();
+            assert_eq!(v.a, h.a);
 
             // Test sub assign.
-            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
-            let mut f2 = f1.clone();
-            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            f1 -= &g;
-            f2 -= g;
-            for f in vec![f1, f2] {
-                assert_eq!(f.a, scalars(&coefficients_h));
-            }
+            let mut v = f.clone();
+            v -= g.clone();
+            assert_eq!(v.a, h.a);
+
+            let mut v = f.clone();
+            v -= &g.clone();
+            assert_eq!(v.a, h.a);
         }
     }
 
@@ -648,22 +736,31 @@ mod tests {
         ];
 
         for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
-            // Test mul.
             let f = Polynomial::with_coefficients(scalars(&coefficients_f));
             let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            for h in vec![&f * &g, f * g] {
-                assert_eq!(h.a, scalars(&coefficients_h));
-            }
+            let h = Polynomial::with_coefficients(scalars(&coefficients_h));
+
+            // Test mul.
+            let v = f.clone() * g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = f.clone() * &g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() * g.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() * &g.clone();
+            assert_eq!(v.a, h.a);
 
             // Test mul assign.
-            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
-            let mut f2 = f1.clone();
-            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
-            f1 *= &g;
-            f2 *= g;
-            for f in vec![f1, f2] {
-                assert_eq!(f.a, scalars(&coefficients_h));
-            }
+            let mut v = f.clone();
+            v *= g.clone();
+            assert_eq!(v.a, h.a);
+
+            let mut v = f.clone();
+            v *= &g.clone();
+            assert_eq!(v.a, h.a);
         }
     }
 
@@ -676,23 +773,32 @@ mod tests {
             (vec![1, 2, 3], 0, vec![0, 0, 0]),
         ];
 
-        for (coefficients_f, scalar_s, coefficients_s) in test_cases {
-            // Test scalar mul.
+        for (coefficients_f, scalar_s, coefficients_h) in test_cases {
             let f = Polynomial::with_coefficients(scalars(&coefficients_f));
             let s = scalar(scalar_s);
-            for g in vec![&f * &s, f.clone() * s, &f * s, f * &s] {
-                assert_eq!(g.a, scalars(&coefficients_s));
-            }
+            let h = Polynomial::with_coefficients(scalars(&coefficients_h));
+
+            // Test scalar mul.
+            let v = f.clone() * s.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = f.clone() * &s.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() * s.clone();
+            assert_eq!(v.a, h.a);
+
+            let v = &f.clone() * &s.clone();
+            assert_eq!(v.a, h.a);
 
             // Test scalar mul assign.
-            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
-            let mut f2 = f1.clone();
-            let s = scalar(scalar_s);
-            f1 *= &s;
-            f2 *= s;
-            for f in vec![f1, f2] {
-                assert_eq!(f.a, scalars(&coefficients_s));
-            }
+            let mut v = f.clone();
+            v *= s.clone();
+            assert_eq!(v.a, h.a);
+
+            let mut v = f.clone();
+            v *= &s.clone();
+            assert_eq!(v.a, h.a);
         }
     }
 
@@ -705,19 +811,20 @@ mod tests {
             (vec![vec![1, 2, 3], vec![2, 4], vec![3]], vec![6, 6, 3]),
         ];
 
-        for (coefficients_ps, coefficients_s) in test_cases {
+        for (coefficients_ps, coefficients_h) in test_cases {
             let ps: Vec<_> = coefficients_ps
                 .iter()
                 .map(|s| Polynomial::with_coefficients(scalars(s)))
                 .collect();
+            let h = Polynomial::with_coefficients(scalars(&coefficients_h));
 
             // Sum references.
-            let s = ps.iter().sum::<Polynomial>();
-            assert_eq!(s.a, scalars(&coefficients_s));
+            let v = ps.iter().sum::<Polynomial>();
+            assert_eq!(v.a, h.a);
 
             // Sum values.
-            let s = ps.into_iter().sum::<Polynomial>();
-            assert_eq!(s.a, scalars(&coefficients_s));
+            let v = ps.into_iter().sum::<Polynomial>();
+            assert_eq!(v.a, h.a);
         }
     }
 }
