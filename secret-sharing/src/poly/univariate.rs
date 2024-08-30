@@ -183,6 +183,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn add(self, rhs: Polynomial<F>) -> Polynomial<F> {
         &self + &rhs
     }
@@ -194,6 +195,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn add(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         &self + rhs
     }
@@ -205,6 +207,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn add(self, rhs: Polynomial<F>) -> Polynomial<F> {
         self + &rhs
     }
@@ -236,6 +239,7 @@ impl<F> AddAssign for Polynomial<F>
 where
     F: PrimeField,
 {
+    #[inline]
     fn add_assign(&mut self, rhs: Polynomial<F>) {
         *self += &rhs
     }
@@ -262,6 +266,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn sub(self, rhs: Polynomial<F>) -> Polynomial<F> {
         &self - &rhs
     }
@@ -273,6 +278,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn sub(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         &self - rhs
     }
@@ -284,6 +290,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn sub(self, rhs: Polynomial<F>) -> Polynomial<F> {
         self - &rhs
     }
@@ -315,6 +322,7 @@ impl<F> SubAssign for Polynomial<F>
 where
     F: PrimeField,
 {
+    #[inline]
     fn sub_assign(&mut self, rhs: Polynomial<F>) {
         *self -= &rhs
     }
@@ -341,6 +349,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn mul(self, rhs: Polynomial<F>) -> Polynomial<F> {
         &self * &rhs
     }
@@ -352,6 +361,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn mul(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         &self * rhs
     }
@@ -363,6 +373,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn mul(self, rhs: Polynomial<F>) -> Polynomial<F> {
         self * &rhs
     }
@@ -394,6 +405,7 @@ impl<F> MulAssign for Polynomial<F>
 where
     F: PrimeField,
 {
+    #[inline]
     fn mul_assign(&mut self, rhs: Polynomial<F>) {
         *self *= &rhs
     }
@@ -426,6 +438,7 @@ where
     type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
+    #[inline]
     fn mul(self, scalar: F) -> Polynomial<F> {
         &self * &scalar
     }
@@ -437,6 +450,7 @@ where
 {
     type Output = Polynomial<F>;
 
+    #[inline]
     fn mul(self, scalar: &F) -> Polynomial<F> {
         &self * scalar
     }
@@ -449,6 +463,7 @@ where
     type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
+    #[inline]
     fn mul(self, scalar: F) -> Polynomial<F> {
         self * &scalar
     }
@@ -475,6 +490,7 @@ impl<F> MulAssign<F> for Polynomial<F>
 where
     F: PrimeField,
 {
+    #[inline]
     fn mul_assign(&mut self, scalar: F) {
         *self *= &scalar
     }
