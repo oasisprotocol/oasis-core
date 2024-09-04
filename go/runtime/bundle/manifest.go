@@ -46,6 +46,11 @@ func (m *Manifest) Hash() hash.Hash {
 	return hash.NewFrom(m)
 }
 
+// IsLegacy returns true iff this is a legacy manifest that defines executables at the top level.
+func (m *Manifest) IsLegacy() bool {
+	return len(m.Executable) > 0 || m.SGX != nil
+}
+
 // Validate validates the manifest structure for well-formedness.
 func (m *Manifest) Validate() error {
 	byID := make(map[component.ID]struct{})
@@ -62,7 +67,7 @@ func (m *Manifest) Validate() error {
 		}
 	}
 
-	if _, ok := byID[component.ID_RONL]; ok && len(m.Executable) > 0 {
+	if _, ok := byID[component.ID_RONL]; ok && m.IsLegacy() {
 		return fmt.Errorf("manifest defines both legacy and componentized RONL component")
 	}
 
@@ -105,7 +110,7 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 	}
 
 	// We also support legacy manifests which define the RONL component at the top-level.
-	if id.IsRONL() && len(m.Executable) > 0 {
+	if id.IsRONL() && m.IsLegacy() {
 		return &Component{
 			Kind:       component.RONL,
 			Executable: m.Executable,
@@ -141,8 +146,8 @@ type Component struct {
 	// provided by a runtime.
 	Name string `json:"name,omitempty"`
 
-	// Executable is the name of the runtime ELF executable file.
-	Executable string `json:"executable"`
+	// Executable is the name of the runtime ELF executable file if any.
+	Executable string `json:"executable,omitempty"`
 
 	// SGX is the SGX specific manifest metadata if any.
 	SGX *SGXMetadata `json:"sgx,omitempty"`
@@ -164,9 +169,6 @@ func (c *Component) Matches(id component.ID) bool {
 
 // Validate validates the component structure for well-formedness.
 func (c *Component) Validate() error {
-	if c.Executable == "" {
-		return fmt.Errorf("executable must be set")
-	}
 	if c.SGX != nil {
 		err := c.SGX.Validate()
 		if err != nil {
@@ -178,6 +180,9 @@ func (c *Component) Validate() error {
 	case component.RONL:
 		if c.Name != "" {
 			return fmt.Errorf("RONL component must have an empty name")
+		}
+		if c.Executable == "" {
+			return fmt.Errorf("RONL component must define an executable")
 		}
 		if c.Disabled {
 			return fmt.Errorf("RONL component cannot be disabled")
@@ -199,4 +204,9 @@ func (c *Component) IsNetworkAllowed() bool {
 		// Network access is generally not allowed.
 		return false
 	}
+}
+
+// IsTEERequired returns true iff the component only provides TEE executables.
+func (c *Component) IsTEERequired() bool {
+	return c.Executable == "" && c.SGX != nil
 }
