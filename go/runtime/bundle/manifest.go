@@ -137,6 +137,22 @@ func (s *SGXMetadata) Validate() error {
 	return nil
 }
 
+// TDXMetadata is the TDX specific manifest metadata.
+type TDXMetadata struct {
+	// Image is the name of the VM image file.
+	Image string `json:"image"`
+
+	// TODO: We may also need the corresponding measurements if these cannot be computed.
+}
+
+// Validate validates the TDX metadata structure for well-formedness.
+func (t *TDXMetadata) Validate() error {
+	if t.Image == "" {
+		return fmt.Errorf("VM image must be set")
+	}
+	return nil
+}
+
 // Component is a runtime component.
 type Component struct {
 	// Kind is the component kind.
@@ -151,6 +167,9 @@ type Component struct {
 
 	// SGX is the SGX specific manifest metadata if any.
 	SGX *SGXMetadata `json:"sgx,omitempty"`
+
+	// TDX is the TDX specific manifest metadata if any.
+	TDX *TDXMetadata `json:"tdx,omitempty"`
 
 	// Disabled specifies whether the component is disabled by default and needs to be explicitly
 	// enabled via node configuration to be used.
@@ -169,10 +188,22 @@ func (c *Component) Matches(id component.ID) bool {
 
 // Validate validates the component structure for well-formedness.
 func (c *Component) Validate() error {
+	if !common.AtMostOneTrue(
+		c.SGX != nil,
+		c.TDX != nil,
+	) {
+		return fmt.Errorf("each component can only include metadata for a single TEE")
+	}
 	if c.SGX != nil {
 		err := c.SGX.Validate()
 		if err != nil {
 			return fmt.Errorf("sgx: %w", err)
+		}
+	}
+	if c.TDX != nil {
+		err := c.TDX.Validate()
+		if err != nil {
+			return fmt.Errorf("tdx: %w", err)
 		}
 	}
 
@@ -208,5 +239,5 @@ func (c *Component) IsNetworkAllowed() bool {
 
 // IsTEERequired returns true iff the component only provides TEE executables.
 func (c *Component) IsTEERequired() bool {
-	return c.Executable == "" && c.SGX != nil
+	return c.Executable == "" && (c.SGX != nil || c.TDX != nil)
 }

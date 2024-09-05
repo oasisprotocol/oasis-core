@@ -60,6 +60,16 @@ func (bnd *Bundle) Validate() error {
 				}...,
 			)
 		}
+		if tdx := comp.TDX; tdx != nil {
+			needFiles = append(needFiles,
+				[]bundleFile{
+					{
+						descr: fmt.Sprintf("%s: TDX VM image", id),
+						fn:    tdx.Image,
+					},
+				}...,
+			)
+		}
 	}
 	for _, v := range needFiles {
 		if v.fn == "" {
