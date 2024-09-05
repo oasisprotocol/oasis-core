@@ -169,12 +169,21 @@ where
     /// Creates a new handoff where the given shareholders will generate
     /// a random secret and receive corresponding secret shares.
     pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        // The number of shareholders must be at least threshold t + 2,
+        // ensuring that even if t Byzantine dealers reveal their secret,
+        // an honest shareholder cannot compute the combined bivariate
+        // polynomial.
+        if shareholders.len() < threshold as usize + 2 {
+            return Err(Error::NotEnoughShareholders.into());
+        }
+
         let share_distribution = DimensionSwitch::new_full_share_distribution(
             threshold,
             me,
             shareholders,
             HandoffKind::DealingPhase,
         )?;
+
         share_distribution.skip_accumulating()?;
         share_distribution.start_merging(None)?;
 
@@ -219,12 +228,17 @@ where
     /// Creates a new handoff where the secret shares of the given shareholders
     /// will be randomized.
     pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        if shareholders.len() < threshold as usize + 1 {
+            return Err(Error::NotEnoughShareholders.into());
+        }
+
         let share_distribution = DimensionSwitch::new_full_share_distribution(
             threshold,
             me,
             shareholders,
             HandoffKind::CommitteeUnchanged,
         )?;
+
         share_distribution.skip_accumulating()?;
 
         Ok(Self { share_distribution })
@@ -278,6 +292,10 @@ where
     /// Creates a new handoff where the shared secret will be transferred
     /// to a new committee composed of the given shareholders.
     pub fn new(threshold: u8, me: G::Scalar, shareholders: Vec<G::Scalar>) -> Result<Self> {
+        if shareholders.len() < threshold as usize + 1 {
+            return Err(Error::NotEnoughShareholders.into());
+        }
+
         let share_reduction = DimensionSwitch::new_share_reduction(
             threshold,
             me,

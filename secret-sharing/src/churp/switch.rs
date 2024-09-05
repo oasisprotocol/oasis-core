@@ -494,16 +494,7 @@ where
         handoff: HandoffKind,
         shareholder: Option<Arc<Shareholder<G>>>,
     ) -> Result<Self> {
-        // During the dealing phase, the number of shares must be at least
-        // threshold + 2, ensuring that even if t Byzantine dealers reveal
-        // their secret, an honest shareholder cannot compute the combined
-        // bivariate polynomial.
-        let min = match handoff {
-            HandoffKind::DealingPhase => threshold as usize + 2,
-            HandoffKind::CommitteeUnchanged => 1,
-            HandoffKind::CommitteeChanged => 1,
-        };
-        if shareholders.len() < min {
+        if shareholders.is_empty() {
             return Err(Error::NotEnoughShareholders.into());
         }
 
@@ -775,13 +766,13 @@ mod tests {
         let me = prepare_shareholder(1);
         let shareholders = prepare_shareholders(&[1, 2, 3]);
 
-        // Dealing phase requires at least threshold + 2 dealers.
+        // There should be at least 1 shareholder.
         let res = BivariateShares::<Group>::new(
             threshold,
             me,
-            shareholders.clone(),
+            vec![],
             DimensionSwitchKind::ShareReduction,
-            HandoffKind::DealingPhase,
+            hkind,
             None,
         );
         assert!(res.is_err());
