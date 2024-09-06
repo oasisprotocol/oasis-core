@@ -66,8 +66,23 @@ func (bnd *Bundle) Validate() error {
 			needFiles = append(needFiles,
 				[]bundleFile{
 					{
-						descr: fmt.Sprintf("%s: TDX VM image", id),
-						fn:    tdx.Image,
+						descr: fmt.Sprintf("%s: TDX virtual firmware", id),
+						fn:    tdx.Firmware,
+					},
+					{
+						descr:    fmt.Sprintf("%s: TDX kernel image", id),
+						fn:       tdx.Kernel,
+						optional: true,
+					},
+					{
+						descr:    fmt.Sprintf("%s: TDX initrd image", id),
+						fn:       tdx.InitRD,
+						optional: true,
+					},
+					{
+						descr:    fmt.Sprintf("%s: TDX VM stage 2 image", id),
+						fn:       tdx.Stage2Image,
+						optional: true,
 					},
 				}...,
 			)

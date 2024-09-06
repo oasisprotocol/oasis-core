@@ -30,7 +30,7 @@ const (
 // Client is an Intel SGX PCS client interface.
 type Client interface {
 	// GetTCBBundle retrieves the signed TCB artifacts needed to verify a quote.
-	GetTCBBundle(ctx context.Context, fmspc []byte, update UpdateType) (*TCBBundle, error)
+	GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, update UpdateType) (*TCBBundle, error)
 
 	// GetPCKCertificateChain retrieves the PCK certificate chain for the given platform data or PPID.
 	//

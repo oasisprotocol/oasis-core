@@ -15,7 +15,7 @@ use crate::{
     common::{
         crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
-        process,
+        panic::AbortOnPanic,
         sgx::QuotePolicy,
     },
     consensus::{
@@ -97,21 +97,6 @@ pub struct PostInitState {
     pub txn_dispatcher: Option<Box<dyn TxnDispatcher>>,
     /// Optional ROFL application.
     pub app: Option<Box<dyn rofl::App>>,
-}
-
-/// A guard that will abort the process if dropped while panicking.
-///
-/// This is to ensure that the runtime will terminate in case there is
-/// a panic encountered during dispatch and the runtime is built with
-/// a non-abort panic handler.
-struct AbortOnPanic;
-
-impl Drop for AbortOnPanic {
-    fn drop(&mut self) {
-        if thread::panicking() {
-            process::abort();
-        }
-    }
 }
 
 impl From<tokio::task::JoinError> for Error {

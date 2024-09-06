@@ -1,11 +1,13 @@
-package sgx
+package common
 
 import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 var (
@@ -15,7 +17,7 @@ var (
 			Name: "oasis_tee_attestations_performed",
 			Help: "Number of TEE attestations performed.",
 		},
-		[]string{"runtime"},
+		[]string{"runtime", "kind"},
 	)
 
 	// Number of successful TEE attestations.
@@ -24,7 +26,7 @@ var (
 			Name: "oasis_tee_attestations_successful",
 			Help: "Number of successful TEE attestations.",
 		},
-		[]string{"runtime"},
+		[]string{"runtime", "kind"},
 	)
 
 	// Number of failed TEE attestations.
@@ -33,7 +35,7 @@ var (
 			Name: "oasis_tee_attestations_failed",
 			Help: "Number of failed TEE attestations.",
 		},
-		[]string{"runtime"},
+		[]string{"runtime", "kind"},
 	)
 
 	teeCollectors = []prometheus.Collector{
@@ -45,22 +47,25 @@ var (
 	metricsOnce sync.Once
 )
 
-// updateAttestationMetrics updates the attestation metrics if metrics are enabled.
-func updateAttestationMetrics(runtime string, err error) {
+// UpdateAttestationMetrics updates the attestation metrics if metrics are enabled.
+func UpdateAttestationMetrics(runtimeID common.Namespace, kind component.TEEKind, err error) {
 	if !metrics.Enabled() {
 		return
 	}
 
-	teeAttestationsPerformed.With(prometheus.Labels{"runtime": runtime}).Inc()
+	runtime := runtimeID.String()
+	kindStr := kind.String()
+
+	teeAttestationsPerformed.With(prometheus.Labels{"runtime": runtime, "kind": kindStr}).Inc()
 	if err != nil {
-		teeAttestationsFailed.With(prometheus.Labels{"runtime": runtime}).Inc()
+		teeAttestationsFailed.With(prometheus.Labels{"runtime": runtime, "kind": kindStr}).Inc()
 	} else {
-		teeAttestationsSuccessful.With(prometheus.Labels{"runtime": runtime}).Inc()
+		teeAttestationsSuccessful.With(prometheus.Labels{"runtime": runtime, "kind": kindStr}).Inc()
 	}
 }
 
-// initMetrics registers the metrics collectors if metrics are enabled.
-func initMetrics() {
+// InitMetrics registers the metrics collectors if metrics are enabled.
+func InitMetrics() {
 	if !metrics.Enabled() {
 		return
 	}

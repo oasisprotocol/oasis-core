@@ -368,6 +368,23 @@ func TestQuoteV4_TDX_ECDSA_P256_OutOfDate(t *testing.T) {
 	require.ErrorContains(err, "TCB level not supported", "Verify quote signature") // The quote is out of date.
 }
 
+func TestQuoteV4_TDX_ECDSA_P256_TrailingData(t *testing.T) {
+	require := require.New(t)
+
+	rawQuote, err := os.ReadFile("testdata/quote_v4_tdx_ecdsa_p256_trailing.bin")
+	require.NoError(err, "Read test vector")
+
+	var quote Quote
+	err = quote.UnmarshalBinary(rawQuote)
+	require.Error(err, "Parse quote (trailing data not allowed)")
+
+	size, err := quote.UnmarshalBinaryWithTrailing(rawQuote, true)
+	require.NoError(err, "Parse quote (trailing data allowed)")
+
+	err = quote.UnmarshalBinary(rawQuote[:size])
+	require.NoError(err, "Parse quote (trimmed)")
+}
+
 func FuzzQuoteUnmarshal(f *testing.F) {
 	// Seed corpus.
 	raw1, _ := os.ReadFile("testdata/quote_v3_ecdsa_p256_pck_chain.bin")

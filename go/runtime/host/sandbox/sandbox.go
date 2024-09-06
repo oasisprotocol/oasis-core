@@ -25,7 +25,6 @@ import (
 var errRuntimeNotReady = errors.New("runtime is not yet ready")
 
 const (
-	runtimeConnectTimeout      = 5 * time.Second
 	runtimeInitTimeout         = 1 * time.Second
 	runtimeExtendedInitTimeout = 120 * time.Second
 	runtimeInterruptTimeout    = 1 * time.Second
@@ -68,6 +67,7 @@ type Config struct {
 // HostInitializerParams contains parameters for the HostInitializer function.
 type HostInitializerParams struct {
 	Runtime    host.Runtime
+	Config     *host.Config
 	Version    version.Version
 	Process    process.Process
 	Connection protocol.Connection
@@ -302,15 +302,18 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		}
 	}()
 
+	cfg, err := r.cfg.GetSandboxConfig(r.rtCfg, connector, runtimeDir)
+	if err != nil {
+		return fmt.Errorf("failed to configure process: %w", err)
+	}
+	if err = connector.Configure(&r.rtCfg, &cfg); err != nil {
+		return err
+	}
+
 	switch r.cfg.InsecureNoSandbox {
 	case true:
 		// No sandbox.
 		r.logger.Warn("starting an UNSANDBOXED runtime")
-
-		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, connector, runtimeDir)
-		if cErr != nil {
-			return fmt.Errorf("failed to configure process: %w", cErr)
-		}
 
 		p, err = process.NewNaked(cfg)
 		if err != nil {
@@ -318,18 +321,6 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		}
 	case false:
 		// With sandbox.
-		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, connector, runtimeDir)
-		if cErr != nil {
-			return fmt.Errorf("failed to configure sandbox: %w", cErr)
-		}
-
-		if cfg.BindRW == nil {
-			cfg.BindRW = make(map[string]string)
-		}
-		if err = connector.ConfigureSandbox(&cfg); err != nil {
-			return err
-		}
-
 		p, err = process.NewBubbleWrap(cfg)
 		if err != nil {
 			return fmt.Errorf("failed to spawn sandbox: %w", err)
@@ -395,6 +386,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 
 	hp := &HostInitializerParams{
 		Runtime:                   r,
+		Config:                    &r.rtCfg,
 		Version:                   *rtVersion,
 		Process:                   p,
 		Connection:                pc,
@@ -611,31 +603,22 @@ func (r *sandboxedRuntime) manager() {
 
 // DefaultGetSandboxConfig is the default function for generating sandbox configuration.
 func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
-	return func(hostCfg host.Config, conn Connector, _ string) (process.Config, error) {
-		if numComps := len(hostCfg.Components); numComps != 1 {
-			return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
-		}
-		comp := hostCfg.Bundle.Manifest.GetComponentByID(hostCfg.Components[0])
-		if comp == nil {
-			return process.Config{}, fmt.Errorf("component '%s' not available", hostCfg.Components[0])
+	return func(hostCfg host.Config, _ Connector, _ string) (process.Config, error) {
+		comp, err := hostCfg.GetComponent()
+		if err != nil {
+			return process.Config{}, err
 		}
 
 		logWrapper := host.NewRuntimeLogWrapper(
 			logger,
 			"runtime_id", hostCfg.Bundle.Manifest.ID,
 			"runtime_name", hostCfg.Bundle.Manifest.Name,
-			"component", comp.Kind,
+			"component", comp.ID(),
+			"provisioner", "sandbox",
 		)
-		us, ok := conn.(*UnixSocketConnector)
-		if !ok {
-			return process.Config{}, fmt.Errorf("UNIX socket connector is required")
-		}
 
 		return process.Config{
-			Path: hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
-			Env: map[string]string{
-				"OASIS_WORKER_HOST": us.GetGuestSocketPath(),
-			},
+			Path:              hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
 			Stderr:            logWrapper,

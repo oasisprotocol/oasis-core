@@ -7,7 +7,14 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox/process"
+)
+
+const (
+	runtimeConnectTimeout = 5 * time.Second
+	hostSocketEnvName     = "OASIS_WORKER_HOST"
+	hostSocketBindPath    = "/host.sock"
 )
 
 // ConnectorFactoryFunc is the runtime connector factory function.
@@ -15,8 +22,8 @@ type ConnectorFactoryFunc func(logger *logging.Logger, runtimeDir string, sandbo
 
 // Connector is the runtime connection establishment interface.
 type Connector interface {
-	// ConfigureSandbox configures the process sandbox if needed.
-	ConfigureSandbox(cfg *process.Config) error
+	// Configure configures the connector and/or process sandbox if needed.
+	Configure(rtCfg *host.Config, cfg *process.Config) error
 
 	// Connect establishes a connection to the runtime.
 	Connect(p process.Process) (net.Conn, error)
@@ -50,25 +57,29 @@ func NewUnixSocketConnector(logger *logging.Logger, runtimeDir string, sandboxed
 	}, nil
 }
 
-// GetHostSocketPath returns the UNIX socket path on the host.
-func (us *UnixSocketConnector) GetHostSocketPath() string {
-	return us.socketPath
-}
-
 // GetGuestSocketPath returns the UNIX socket path on the guest.
 func (us *UnixSocketConnector) GetGuestSocketPath() string {
 	if !us.sandboxed {
 		return us.socketPath
 	}
-	return "/host.sock"
+	return hostSocketBindPath
 }
 
-// ConfigureSandbox configures the process sandbox if needed.
-func (us *UnixSocketConnector) ConfigureSandbox(cfg *process.Config) error {
-	if !us.sandboxed {
-		return nil
+// Configure configures the connector and/or process sandbox if needed.
+func (us *UnixSocketConnector) Configure(_ *host.Config, cfg *process.Config) error {
+	// Configure host socket via an environment variable.
+	if cfg.Env == nil {
+		cfg.Env = make(map[string]string)
 	}
-	cfg.BindRW[us.GetHostSocketPath()] = us.GetGuestSocketPath()
+	cfg.Env[hostSocketEnvName] = us.GetGuestSocketPath()
+
+	if us.sandboxed {
+		// Sandboxed process, make sure the guest socket path is also bound.
+		if cfg.BindRW == nil {
+			cfg.BindRW = make(map[string]string)
+		}
+		cfg.BindRW[us.socketPath] = hostSocketBindPath
+	}
 	return nil
 }
 
@@ -79,13 +90,12 @@ func (us *UnixSocketConnector) Connect(p process.Process) (net.Conn, error) {
 	}
 
 	// Spawn goroutine that waits for a connection to be established.
+	err := us.listener.SetDeadline(time.Now().Add(runtimeConnectTimeout))
+	if err != nil {
+		return nil, err
+	}
 	connCh := make(chan interface{})
 	go func() {
-		lerr := us.listener.SetDeadline(time.Now().Add(runtimeConnectTimeout))
-		if lerr != nil {
-			connCh <- lerr
-			return
-		}
 		conn, lerr := us.listener.Accept()
 		if lerr != nil {
 			connCh <- lerr

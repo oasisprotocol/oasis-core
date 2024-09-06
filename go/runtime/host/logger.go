@@ -1,6 +1,7 @@
 package host
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 
 // Max number of bytes to buffer in the runtime log wrapper, i.e. roughly
 // the longest expected valid log line from the runtime.
-const maxLogBufferSize = 10_000_000
+const maxLogBufferSize = 10_000
 
 // RuntimeLogWrapper is a Writer that interprets data written to it as JSON-formatted
 // runtime logs, and re-logs the messages as oasis-node logs. For example, it
@@ -76,6 +77,9 @@ func (w *RuntimeLogWrapper) rtLogger(module string) *logging.Logger {
 }
 
 func (w RuntimeLogWrapper) processLogLine(line []byte) {
+	// Trim extra whitespace.
+	line = bytes.TrimSpace(line)
+
 	// Interpret line as JSON.
 	var m map[string]interface{}
 	if err := json.Unmarshal(line, &m); err != nil {

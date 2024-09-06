@@ -11,6 +11,10 @@ members = [
     "tests/runtimes/simple-keymanager",
     "tests/runtimes/simple-rofl",
 ]
+exclude = [
+    # Example TDX runtime.
+    "tests/runtimes/simple-rofl-tdx",
+]
 resolver = "2"
 
 [profile.release]

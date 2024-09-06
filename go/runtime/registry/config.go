@@ -30,6 +30,7 @@ import (
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
+	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
 )
 
 const (
@@ -179,6 +180,15 @@ func newConfig( //nolint: gocyclo
 			ConsensusChainContext:    chainCtx,
 		}
 
+		// Create the PCS client and quote service.
+		pc, err := pcs.NewHTTPClient(&pcs.HTTPClientConfig{
+			// TODO: Support configuring the API key.
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
+		}
+		qs := pcs.NewCachingQuoteService(pc, commonStore)
+
 		// Register provisioners based on the configured provisioner.
 		var insecureNoSandbox bool
 		sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
@@ -238,15 +248,6 @@ func newConfig( //nolint: gocyclo
 				// SGX may be needed, but we don't have a loader configured.
 				break
 			default:
-				// Configure the provided SGX loader.
-				var pc pcs.Client
-				pc, err = pcs.NewHTTPClient(&pcs.HTTPClientConfig{
-					// TODO: Support configuring the API key.
-				})
-				if err != nil {
-					return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
-				}
-
 				// Configure mock SGX if configured and we are in a debug mode.
 				insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 				if insecureMock && !cmdFlags.DebugDontBlameOasis() {
@@ -258,7 +259,7 @@ func newConfig( //nolint: gocyclo
 					CommonStore:           commonStore,
 					LoaderPath:            sgxLoader,
 					IAS:                   ias,
-					PCS:                   pc,
+					PCS:                   qs,
 					Consensus:             consensus,
 					Identity:              identity,
 					SandboxBinaryPath:     sandboxBinary,
@@ -272,6 +273,20 @@ func newConfig( //nolint: gocyclo
 			}
 		default:
 			return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
+		}
+
+		// Configure TDX provisioner.
+		// TODO: Allow provisioner selection in the future, currently we only have QEMU.
+		provisioners[component.TEEKindTDX], err = hostTdx.NewQemu(hostTdx.QemuConfig{
+			HostInfo:              hostInfo,
+			CommonStore:           commonStore,
+			PCS:                   qs,
+			Consensus:             consensus,
+			Identity:              identity,
+			RuntimeAttestInterval: attestInterval,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TDX runtime provisioner: %w", err)
 		}
 
 		// Configure optional load balancing.

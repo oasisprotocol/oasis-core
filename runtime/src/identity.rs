@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 use base64::prelude::*;
 use rand::{rngs::OsRng, Rng};
-use sgx_isa::{Report, Targetinfo};
+use sgx_isa::Targetinfo;
 use thiserror::Error;
 use tiny_keccak::{Hasher, TupleHash};
 
@@ -23,6 +23,7 @@ use crate::{
         time::insecure_posix_time,
     },
     consensus::registry::EndorsedCapabilityTEE,
+    TeeType, BUILD_INFO,
 };
 
 /// Context used for computing the RAK digest.
@@ -31,10 +32,8 @@ const RAK_HASH_CONTEXT: &[u8] = b"oasis-core/node: TEE RAK binding";
 const QUOTE_NONCE_CONTEXT: &[u8] = b"oasis-core/node: TEE quote nonce";
 
 /// A dummy RAK seed for use in non-SGX tests where integrity is not needed.
-#[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
 const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
 /// A dummy REK seed for use in non-SGX tests where confidentiality is not needed.
-#[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
 const INSECURE_REK_SEED: &str = "ekiden test key manager REK seed";
 
 /// Identity-related error.
@@ -49,6 +48,8 @@ enum IdentityError {
 /// Quote-related errors.
 #[derive(Error, Debug)]
 enum QuoteError {
+    #[error("target info not set")]
+    TargetInfoNotSet,
     #[error("malformed target_info")]
     MalformedTargetInfo,
     #[error("MRENCLAVE mismatch")]
@@ -101,15 +102,24 @@ impl Default for Identity {
 impl Identity {
     /// Create an uninitialized runtime identity.
     pub fn new() -> Self {
-        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
-        let rak = signature::PrivateKey::generate();
-        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
-        let rek = x25519::PrivateKey::generate();
+        let (rak, rek) = match BUILD_INFO.tee_type {
+            TeeType::None => {
+                // Use insecure mock keys for insecure non-TEE builds.
+                assert!(!BUILD_INFO.is_secure);
 
-        #[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
-        let rak = signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string());
-        #[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
-        let rek = x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string());
+                (
+                    signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string()),
+                    x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string()),
+                )
+            }
+            _ => {
+                // Generate ephemeral RAK and REK.
+                (
+                    signature::PrivateKey::generate(),
+                    x25519::PrivateKey::generate(),
+                )
+            }
+        };
 
         Self {
             inner: RwLock::new(Inner {
@@ -156,50 +166,82 @@ impl Identity {
 
     /// Initialize the SGX target info.
     pub(crate) fn init_target_info(&self, target_info: Vec<u8>) -> Result<()> {
-        let mut inner = self.inner.write().unwrap();
+        match BUILD_INFO.tee_type {
+            TeeType::Sgx => {
+                let mut inner = self.inner.write().unwrap();
 
-        // Set the Quoting Enclave target_info first, as unlike key generation
-        // it can fail.
-        let target_info = match Targetinfo::try_copy_from(&target_info) {
-            Some(target_info) => target_info,
-            None => return Err(QuoteError::MalformedTargetInfo.into()),
-        };
-        inner.target_info = Some(target_info);
+                // Set the Quoting Enclave target_info first, as unlike key generation
+                // it can fail.
+                let target_info = match Targetinfo::try_copy_from(&target_info) {
+                    Some(target_info) => target_info,
+                    None => return Err(QuoteError::MalformedTargetInfo.into()),
+                };
+                inner.target_info = Some(target_info);
 
-        Ok(())
+                Ok(())
+            }
+            TeeType::Tdx => {
+                // Target info configuration is not needed on TDX and MUST be empty.
+                if !target_info.is_empty() {
+                    return Err(QuoteError::MalformedTargetInfo.into());
+                }
+
+                Ok(())
+            }
+            TeeType::None => Ok(()),
+        }
     }
 
     /// Initialize the attestation report.
-    pub(crate) fn init_report(&self) -> (signature::PublicKey, x25519::PublicKey, Report, String) {
+    pub(crate) fn init_report(
+        &self,
+    ) -> Result<(signature::PublicKey, x25519::PublicKey, Vec<u8>, String)> {
         let rak_pub = self.public_rak();
         let rek_pub = self.public_rek();
-        let target_info = self
-            .get_sgx_target_info()
-            .expect("target_info must be configured");
 
         // Generate a new anti-replay nonce.
         let nonce = Self::generate_nonce();
-        // The derived nonce is only used in case IAS-based attestation is used
-        // as it is included in the outer AVR envelope. But given that the body
-        // also includes the nonce in our specific case, this is not relevant.
-        let quote_nonce = BASE64_STANDARD.encode(&nonce[..24]);
-
         // Generate report body.
         let report_body = Self::report_body_for_rak(&rak_pub);
         let mut report_data = [0; 64];
         report_data[0..32].copy_from_slice(report_body.as_ref());
         report_data[32..64].copy_from_slice(nonce.as_ref());
 
-        let report = sgx::report_for(&target_info, &report_data);
+        let result = match BUILD_INFO.tee_type {
+            TeeType::Sgx => {
+                let target_info = self
+                    .get_sgx_target_info()
+                    .ok_or(QuoteError::TargetInfoNotSet)?;
 
-        // This used to reset the quote, but that is now done in the external
-        // accessor combined with a freshness check.
+                // The derived nonce is only used in case IAS-based attestation is used
+                // as it is included in the outer AVR envelope. But given that the body
+                // also includes the nonce in our specific case, this is not relevant.
+                let quote_nonce = BASE64_STANDARD.encode(&nonce[..24]);
+
+                let report = sgx::report_for(&target_info, &report_data);
+                let report: &[u8] = report.as_ref();
+                let report = report.to_vec();
+
+                // This used to reset the quote, but that is now done in the external
+                // accessor combined with a freshness check.
+
+                (rak_pub, rek_pub, report, quote_nonce)
+            }
+            #[cfg(feature = "tdx")]
+            TeeType::Tdx => {
+                // In TDX we can immediately generate a quote. Do it and return it as a "report".
+                let quote = crate::common::tdx::report::get_quote(&report_data)?;
+
+                (rak_pub, rek_pub, quote, String::new())
+            }
+            _ => panic!("init_report called outside TEE environment"),
+        };
 
         // Cache the nonce, the report was generated.
         let mut inner = self.inner.write().unwrap();
         inner.nonce = Some(nonce);
 
-        (rak_pub, rek_pub, report, quote_nonce)
+        Ok(result)
     }
 
     /// Configure the remote attestation quote for RAK.
@@ -212,8 +254,7 @@ impl Identity {
 
         let mut inner = self.inner.write().unwrap();
 
-        // If there is no anti-replay nonce set, we aren't in the process
-        // of attesting.
+        // If there is no anti-replay nonce set, we aren't in the process of attesting.
         let expected_nonce = match &inner.nonce {
             Some(nonce) => *nonce,
             None => return Err(QuoteError::NonceMismatch.into()),

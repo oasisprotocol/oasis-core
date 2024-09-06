@@ -7,9 +7,9 @@ use std::{
 use lazy_static::lazy_static;
 use slog::error;
 
-use crate::common::logger::get_logger;
+use crate::common::{logger::get_logger, process};
 
-const INITIAL_MINIMUM_TIME: i64 = 1659312000; // Mon, 01 Aug 2022 00:00:00 UTC
+const INITIAL_MINIMUM_TIME: i64 = 1704067200; // Mon, 01 Jan 2024 00:00:00 UTC
 
 struct TimeSource {
     inner: Mutex<Inner>,
@@ -36,7 +36,7 @@ pub fn insecure_posix_time() -> i64 {
             get_logger("runtime/time"),
             "clock appeared to have ran backwards"
         );
-        panic!("time: clock appeared to have ran backwards")
+        process::abort();
     }
     inner.timestamp = now;
 

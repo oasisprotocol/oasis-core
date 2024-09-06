@@ -63,6 +63,7 @@ pub enum Error {
 
 pub use policy::{QuotePolicy, TdxModulePolicy, TdxQuotePolicy};
 pub use quote::{Quote, QuoteBundle};
+pub use report::{td_enclave_identity, TdAttributes, TdReport};
 pub use tcb::TCBBundle;
 
 #[cfg(test)]

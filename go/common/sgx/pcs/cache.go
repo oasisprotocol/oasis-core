@@ -1,4 +1,4 @@
-package sgx
+package pcs
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 )
 
 const (
@@ -18,23 +17,23 @@ const (
 	tcbCacheSlowRefreshInterval = 24 * time.Hour
 )
 
-func readBundleMinTimestamp(bundle *pcs.TCBBundle) (time.Time, error) {
+func readBundleMinTimestamp(bundle *TCBBundle) (time.Time, error) {
 	var err error
-	var info pcs.TCBInfo
+	var info TCBInfo
 	if err = json.Unmarshal(bundle.TCBInfo.TCBInfo, &info); err != nil {
 		return time.Time{}, fmt.Errorf("could not unmarshal TCB bundle info: %w", err)
 	}
 	var bundleUpdate time.Time
-	if bundleUpdate, err = time.Parse(pcs.TimestampFormat, info.NextUpdate); err != nil {
+	if bundleUpdate, err = time.Parse(TimestampFormat, info.NextUpdate); err != nil {
 		return time.Time{}, fmt.Errorf("unreadable TCB bundle info next update timestamp: %w", err)
 	}
 
-	var identity pcs.QEIdentity
+	var identity QEIdentity
 	if err = json.Unmarshal(bundle.QEIdentity.EnclaveIdentity, &identity); err != nil {
 		return time.Time{}, fmt.Errorf("could not unmarshal TCB bundle QE identity: %w", err)
 	}
 	var identityUpdate time.Time
-	if identityUpdate, err = time.Parse(pcs.TimestampFormat, identity.NextUpdate); err != nil {
+	if identityUpdate, err = time.Parse(TimestampFormat, identity.NextUpdate); err != nil {
 		return time.Time{}, fmt.Errorf("unreadable TCB bundle QE identity next update timestamp: %w", err)
 	}
 
@@ -45,10 +44,10 @@ func readBundleMinTimestamp(bundle *pcs.TCBBundle) (time.Time, error) {
 }
 
 type tcbBundleCache struct {
-	Bundle         *pcs.TCBBundle `json:"bundle"`
-	FMSPC          []byte         `json:"fmspc"`
-	ExpectedExpiry time.Time      `json:"expected_expiry"`
-	LastUpdate     time.Time      `json:"last_update"`
+	Bundle         *TCBBundle `json:"bundle"`
+	FMSPC          []byte     `json:"fmspc"`
+	ExpectedExpiry time.Time  `json:"expected_expiry"`
+	LastUpdate     time.Time  `json:"last_update"`
 }
 
 type tcbCache struct {
@@ -57,7 +56,7 @@ type tcbCache struct {
 	now          func() time.Time
 }
 
-func (tc *tcbCache) check(fmspc []byte) (*pcs.TCBBundle, bool) {
+func (tc *tcbCache) check(fmspc []byte) (*TCBBundle, bool) {
 	var err error
 
 	// Check if we have a copy in the local store.
@@ -98,7 +97,7 @@ func (tc *tcbCache) check(fmspc []byte) (*pcs.TCBBundle, bool) {
 	return stored.Bundle, refresh
 }
 
-func (tc *tcbCache) cache(tcbBundle *pcs.TCBBundle, fmspc []byte) {
+func (tc *tcbCache) cache(tcbBundle *TCBBundle, fmspc []byte) {
 	expectedExpiry, err := readBundleMinTimestamp(tcbBundle)
 	if err != nil {
 		tc.logger.Error("could not determine next update timestamp from TCB bundle",

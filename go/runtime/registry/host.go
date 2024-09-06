@@ -64,15 +64,10 @@ type RuntimeHostNode struct {
 // started automatically, you must call Start explicitly.
 func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.RichRuntime, protocol.Notifier, error) {
 	runtime := n.factory.GetRuntime()
-
-	// Ensure registry descriptor is ready as it is required for obtaining Host configuration.
-	_, err := runtime.RegistryDescriptor(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to wait for registry descriptor: %w", err)
-	}
-	cfgs, provisioner, err := runtime.Host()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get runtime host: %w", err)
+	cfgs := runtime.HostConfig()
+	provisioner := runtime.HostProvisioner()
+	if cfgs == nil || provisioner == nil {
+		return nil, nil, fmt.Errorf("runtime provisioner is not available")
 	}
 
 	// Provision the handler that implements the host RHP methods.
@@ -84,7 +79,8 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		rtCfg.MessageHandler = msgHandler
 
 		// Provision the runtime.
-		if rts[version], err = composite.New(rtCfg, provisioner); err != nil {
+		var err error
+		if rts[version], err = composite.NewHost(rtCfg, provisioner); err != nil {
 			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
 		}
 	}

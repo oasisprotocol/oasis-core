@@ -6,8 +6,8 @@ use slog::{info, Logger};
 
 use crate::{
     common::{
-        crypto::signature::Signer, logger::get_logger, namespace::Namespace, sgx::Quote,
-        version::Version,
+        crypto::signature::Signer, logger::get_logger, namespace::Namespace, panic::AbortOnPanic,
+        sgx::Quote, version::Version,
     },
     consensus::{
         registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
@@ -76,17 +76,20 @@ impl Handler {
     }
 
     fn target_info_init(&self, target_info: Vec<u8>) -> Result<Body> {
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
+
         info!(self.logger, "Initializing the runtime target info");
         self.identity.init_target_info(target_info)?;
         Ok(Body::RuntimeCapabilityTEERakInitResponse {})
     }
 
     fn report_init(&self) -> Result<Body> {
-        info!(self.logger, "Initializing the runtime key report");
-        let (rak_pub, rek_pub, report, nonce) = self.identity.init_report();
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
 
-        let report: &[u8] = report.as_ref();
-        let report = report.to_vec();
+        info!(self.logger, "Initializing the runtime key report");
+        let (rak_pub, rek_pub, report, nonce) = self.identity.init_report()?;
 
         Ok(Body::RuntimeCapabilityTEERakReportResponse {
             rak_pub,
@@ -122,6 +125,9 @@ impl Handler {
     }
 
     async fn set_quote(&self, quote: Quote) -> Result<Body> {
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
+
         // Ensure a quote policy is configured.
         self.set_quote_policy().await?;
 

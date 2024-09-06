@@ -6,20 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
 )
 
 type teeStateEPID struct {
-	teeStateImplCommon
-
+	cfg     *host.Config
 	epidGID uint32
 
 	// prevIAS is the index of the IAS server that was used for the last successful attestation.
@@ -28,14 +27,13 @@ type teeStateEPID struct {
 	prevIAS int
 }
 
-func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
+func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, cfg *host.Config) ([]byte, error) {
 	qi, err := sp.aesm.InitQuote(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)
 	}
 
-	ep.runtimeID = runtimeID
-	ep.version = version
+	ep.cfg = cfg
 	ep.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
 
 	return qi.TargetInfo, nil
@@ -109,23 +107,21 @@ func (ep *teeStateEPID) update(
 		return nil, fmt.Errorf("error while getting quote: %w", err)
 	}
 
-	// Get current quote policy from the consensus layer.
-	var quotePolicy *cmnIAS.QuotePolicy
-	var policies *sgxQuote.Policy
-	policies, err = ep.getQuotePolicies(ctx, sp)
+	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, ep.cfg, sp.consensus, nil)
 	if err != nil {
 		return nil, err
 	}
-	if policies != nil {
-		quotePolicy = policies.IAS
+	var minTCBEvaluationDataNumber uint32
+	if quotePolicy != nil && quotePolicy.IAS != nil {
+		minTCBEvaluationDataNumber = quotePolicy.IAS.MinTCBEvaluationDataNumber
 	}
 
 	evidence := ias.Evidence{
-		RuntimeID:                  ep.runtimeID,
+		RuntimeID:                  ep.cfg.Bundle.Manifest.ID,
 		Quote:                      quote,
 		Nonce:                      nonce,
 		EarlyTCBUpdate:             true,
-		MinTCBEvaluationDataNumber: quotePolicy.MinTCBEvaluationDataNumber,
+		MinTCBEvaluationDataNumber: minTCBEvaluationDataNumber,
 	}
 
 	// First try with early updating. If that fails, fall back to normal.
@@ -148,11 +144,11 @@ func (ep *teeStateEPID) update(
 	if decErr != nil {
 		return nil, fmt.Errorf("unable to decode AVR: %w", decErr)
 	}
-	if avr.TCBEvaluationDataNumber < quotePolicy.MinTCBEvaluationDataNumber {
+	if avr.TCBEvaluationDataNumber < minTCBEvaluationDataNumber {
 		return nil, fmt.Errorf(
 			"AVR TCB data evaluation number invalid (%v < %v)",
 			avr.TCBEvaluationDataNumber,
-			quotePolicy.MinTCBEvaluationDataNumber,
+			minTCBEvaluationDataNumber,
 		)
 	}
 

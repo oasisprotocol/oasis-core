@@ -112,14 +112,11 @@ type Runtime interface {
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
 
-	// HasHost checks whether this runtime can be hosted by the current node.
-	HasHost() bool
+	// HostConfig returns the runtime host configuration when available. Otherwise returns nil.
+	HostConfig() map[version.Version]*runtimeHost.Config
 
-	// Host returns the runtime host configuration and provisioner if configured.
-	//
-	// If the runtime is not yet registered an error is returned. Use `RegistryDescriptor` to
-	// wait for the runtime to be registered.
-	Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error)
+	// HostProvisioner returns the runtime host provisioner when available. Otherwise returns nil.
+	HostProvisioner() runtimeHost.Provisioner
 
 	// HostVersions returns a list of supported runtime versions.
 	HostVersions() []version.Version
@@ -248,15 +245,12 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
 }
 
-func (r *runtime) HasHost() bool {
-	return r.hostProvisioner != nil && r.hostConfig != nil
+func (r *runtime) HostConfig() map[version.Version]*runtimeHost.Config {
+	return r.hostConfig
 }
 
-func (r *runtime) Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
-	if r.hostProvisioner == nil || r.hostConfig == nil {
-		return nil, nil, ErrRuntimeHostNotConfigured
-	}
-	return r.hostConfig, r.hostProvisioner, nil
+func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
+	return r.hostProvisioner
 }
 
 func (r *runtime) HostVersions() []version.Version {

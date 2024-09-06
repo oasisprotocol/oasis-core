@@ -203,7 +203,7 @@ func TestFileData(t *testing.T) {
 	fn := filepath.Join(tmpDir, "test.bin")
 
 	data := []byte("this is a test")
-	err := os.WriteFile(fn, data, 0o666)
+	err := os.WriteFile(fn, data, 0o600)
 	require.NoError(err)
 
 	fd := NewFileData(fn)
