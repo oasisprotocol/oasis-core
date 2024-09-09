@@ -5,9 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -33,16 +31,18 @@ const (
 	runtimeInterruptTimeout    = 1 * time.Second
 	resetTickerTimeout         = 15 * time.Minute
 
-	bindHostSocketPath = "/host.sock"
-
 	ctrlChannelBufferSize = 16
 )
 
 // GetSandboxConfigFunc is the function used to generate the sandbox configuration.
-type GetSandboxConfigFunc func(cfg host.Config, socketPath, runtimeDir string) (process.Config, error)
+type GetSandboxConfigFunc func(cfg host.Config, conn Connector, runtimeDir string) (process.Config, error)
 
 // Config contains the sandbox provisioner configuration options.
 type Config struct {
+	// Connector is the runtime connector factory that is used to establish a connection with the
+	// runtime via the Runtime Host Protocol.
+	Connector ConnectorFactoryFunc
+
 	// GetSandboxConfig is a function that generates the sandbox configuration. In case it is not
 	// specified a default function is used.
 	GetSandboxConfig GetSandboxConfigFunc
@@ -285,16 +285,12 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	// has been mounted into the sandbox and is no longer needed.
 	defer os.RemoveAll(runtimeDir)
 
-	// Create unix socket.
-	hostSocket := filepath.Join(runtimeDir, "host.sock")
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: hostSocket})
+	// Create a new connector.
+	connector, err := r.cfg.Connector(r.logger, runtimeDir, !r.cfg.InsecureNoSandbox)
 	if err != nil {
-		return fmt.Errorf("failed to create host socket: %w", err)
+		return err
 	}
-
-	// Since we only accept a single connection, we should close the listener
-	// in any case.
-	defer listener.Close()
+	defer connector.Close()
 
 	// Create the sandbox as configured.
 	var p process.Process
@@ -311,7 +307,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		// No sandbox.
 		r.logger.Warn("starting an UNSANDBOXED runtime")
 
-		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, hostSocket, runtimeDir)
+		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, connector, runtimeDir)
 		if cErr != nil {
 			return fmt.Errorf("failed to configure process: %w", cErr)
 		}
@@ -322,7 +318,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		}
 	case false:
 		// With sandbox.
-		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, bindHostSocketPath, runtimeDir)
+		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, connector, runtimeDir)
 		if cErr != nil {
 			return fmt.Errorf("failed to configure sandbox: %w", cErr)
 		}
@@ -330,7 +326,9 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		if cfg.BindRW == nil {
 			cfg.BindRW = make(map[string]string)
 		}
-		cfg.BindRW[hostSocket] = bindHostSocketPath
+		if err = connector.ConfigureSandbox(&cfg); err != nil {
+			return err
+		}
 
 		p, err = process.NewBubbleWrap(cfg)
 		if err != nil {
@@ -343,44 +341,9 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		"pid", p.GetPID(),
 	)
 
-	// Spawn goroutine that waits for a connection to be established.
-	connCh := make(chan interface{})
-	go func() {
-		lerr := listener.SetDeadline(time.Now().Add(runtimeConnectTimeout))
-		if lerr != nil {
-			connCh <- lerr
-			return
-		}
-		conn, lerr := listener.Accept()
-		if lerr != nil {
-			connCh <- lerr
-			return
-		}
-
-		connCh <- conn
-		close(connCh)
-	}()
-
-	var conn net.Conn
-	select {
-	case res := <-connCh:
-		// Got a connection or timed out while accepting a connection.
-		switch r := res.(type) {
-		case error:
-			return fmt.Errorf("error while accepting runtime connection: %w", r)
-		case net.Conn:
-			conn = r
-		default:
-			panic("invalid type")
-		}
-	case <-p.Wait():
-		// Runtime has terminated before a connection was accepted.
-		r.logger.Debug("runtime process exited unexpectedly",
-			"pid", p.GetPID(),
-			"err", p.Error(),
-		)
-
-		return fmt.Errorf("terminated while waiting for runtime to connect")
+	conn, err := connector.Connect(p)
+	if err != nil {
+		return err
 	}
 
 	// Initialize the connection.
@@ -648,7 +611,7 @@ func (r *sandboxedRuntime) manager() {
 
 // DefaultGetSandboxConfig is the default function for generating sandbox configuration.
 func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
-	return func(hostCfg host.Config, socketPath, _ string) (process.Config, error) {
+	return func(hostCfg host.Config, conn Connector, _ string) (process.Config, error) {
 		if numComps := len(hostCfg.Components); numComps != 1 {
 			return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
 		}
@@ -663,10 +626,15 @@ func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) G
 			"runtime_name", hostCfg.Bundle.Manifest.Name,
 			"component", comp.Kind,
 		)
+		us, ok := conn.(*UnixSocketConnector)
+		if !ok {
+			return process.Config{}, fmt.Errorf("UNIX socket connector is required")
+		}
+
 		return process.Config{
 			Path: hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
 			Env: map[string]string{
-				"OASIS_WORKER_HOST": socketPath,
+				"OASIS_WORKER_HOST": us.GetGuestSocketPath(),
 			},
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
@@ -681,6 +649,10 @@ func New(cfg Config) (host.Provisioner, error) {
 	// Use a default Logger if none was provided.
 	if cfg.Logger == nil {
 		cfg.Logger = logging.GetLogger("runtime/host/sandbox")
+	}
+	// Use a default Connector if none was provided.
+	if cfg.Connector == nil {
+		cfg.Connector = NewUnixSocketConnector
 	}
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {

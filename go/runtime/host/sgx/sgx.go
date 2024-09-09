@@ -242,13 +242,18 @@ func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 	return "", fmt.Errorf("no SGX device was found on this system")
 }
 
-func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
+func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
 	if numComps := len(rtCfg.Components); numComps != 1 {
 		return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
 	}
 	comp := rtCfg.Bundle.Manifest.GetComponentByID(rtCfg.Components[0])
 	if comp == nil {
 		return process.Config{}, fmt.Errorf("component '%s' not available", rtCfg.Components[0])
+	}
+
+	us, ok := conn.(*sandbox.UnixSocketConnector)
+	if !ok {
+		return process.Config{}, fmt.Errorf("UNIX socket connector is required")
 	}
 
 	// To try to avoid bad things from happening if the signature/enclave
@@ -272,7 +277,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 
 		var cfg process.Config
 		gsc := sandbox.DefaultGetSandboxConfig(s.logger, s.cfg.SandboxBinaryPath)
-		cfg, err = gsc(rtCfg, socketPath, runtimeDir)
+		cfg, err = gsc(rtCfg, conn, runtimeDir)
 		if err != nil {
 			return process.Config{}, err
 		}
@@ -301,7 +306,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 	)
 
 	args := []string{
-		"--host-socket", socketPath,
+		"--host-socket", us.GetGuestSocketPath(),
 		"--type", "sgxs",
 		"--signature", signaturePath,
 		runtimePath,
