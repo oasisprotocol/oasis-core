@@ -12,7 +12,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -25,6 +24,7 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
+	hostComposite "github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	hostLoadBalance "github.com/oasisprotocol/oasis-core/go/runtime/host/loadbalance"
 	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -65,8 +65,8 @@ func (cfg *RuntimeConfig) Runtimes() (runtimes []common.Namespace) {
 
 // RuntimeHostConfig is configuration for a node that hosts runtimes.
 type RuntimeHostConfig struct {
-	// Provisioners contains a set of supported runtime provisioners, based on TEE hardware.
-	Provisioners map[node.TEEHardware]runtimeHost.Provisioner
+	// Provisioner is the runtime provisioner to use.
+	Provisioner runtimeHost.Provisioner
 
 	// Runtimes contains per-runtime provisioning configuration. Some fields may be omitted as they
 	// are provided when the runtime is provisioned.
@@ -183,7 +183,7 @@ func newConfig( //nolint: gocyclo
 		var insecureNoSandbox bool
 		sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
 		attestInterval := config.GlobalConfig.Runtime.AttestInterval
-		rh.Provisioners = make(map[node.TEEHardware]runtimeHost.Provisioner)
+		provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
 		switch p := config.GlobalConfig.Runtime.Provisioner; p {
 		case rtConfig.RuntimeProvisionerMock:
 			// Mock provisioner, only supported when the runtime requires no TEE hardware.
@@ -191,7 +191,7 @@ func newConfig( //nolint: gocyclo
 				return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
 			}
 
-			rh.Provisioners[node.TEEHardwareInvalid] = hostMock.New()
+			provisioners[component.TEEKindNone] = hostMock.New()
 		case rtConfig.RuntimeProvisionerUnconfined:
 			// Unconfined provisioner, can be used with no TEE or with Intel SGX.
 			if !cmdFlags.DebugDontBlameOasis() {
@@ -210,7 +210,7 @@ func newConfig( //nolint: gocyclo
 			}
 
 			// Configure the non-TEE provisioner.
-			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
+			provisioners[component.TEEKindNone], err = hostSandbox.New(hostSandbox.Config{
 				HostInfo:          hostInfo,
 				InsecureNoSandbox: insecureNoSandbox,
 				SandboxBinaryPath: sandboxBinary,
@@ -223,7 +223,7 @@ func newConfig( //nolint: gocyclo
 			switch sgxLoader := config.GlobalConfig.Runtime.SGXLoader; {
 			case forceNoSGX:
 				// Remap SGX to non-SGX when forced to do so.
-				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
+				provisioners[component.TEEKindSGX], err = hostSandbox.New(hostSandbox.Config{
 					HostInfo:          hostInfo,
 					InsecureNoSandbox: insecureNoSandbox,
 					SandboxBinaryPath: sandboxBinary,
@@ -253,7 +253,7 @@ func newConfig( //nolint: gocyclo
 					return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
 				}
 
-				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
+				provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
 					HostInfo:              hostInfo,
 					CommonStore:           commonStore,
 					LoaderPath:            sgxLoader,
@@ -275,11 +275,14 @@ func newConfig( //nolint: gocyclo
 		}
 
 		// Configure optional load balancing.
-		for tee, rp := range rh.Provisioners {
-			rh.Provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
+		for tee, rp := range provisioners {
+			provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
 				NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
 			})
 		}
+
+		// Create a composite provisioner to provision the individual components.
+		rh.Provisioner = hostComposite.NewProvisioner(provisioners)
 
 		// Configure runtimes.
 		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)

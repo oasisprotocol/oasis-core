@@ -148,8 +148,8 @@ type runtime struct { // nolint: maligned
 	activeDescriptorCh         chan struct{}
 	activeDescriptorNotifier   *pubsub.Broker
 
-	hostProvisioners map[node.TEEHardware]runtimeHost.Provisioner
-	hostConfig       map[version.Version]*runtimeHost.Config
+	hostProvisioner runtimeHost.Provisioner
+	hostConfig      map[version.Version]*runtimeHost.Config
 
 	logger *logging.Logger
 }
@@ -249,26 +249,14 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 }
 
 func (r *runtime) HasHost() bool {
-	return r.hostProvisioners != nil && r.hostConfig != nil
+	return r.hostProvisioner != nil && r.hostConfig != nil
 }
 
 func (r *runtime) Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
-	if r.hostProvisioners == nil || r.hostConfig == nil {
+	if r.hostProvisioner == nil || r.hostConfig == nil {
 		return nil, nil, ErrRuntimeHostNotConfigured
 	}
-
-	r.RLock()
-	defer r.RUnlock()
-	if r.registryDescriptor == nil {
-		return nil, nil, fmt.Errorf("runtime not yet registered")
-	}
-
-	provisioner, ok := r.hostProvisioners[r.registryDescriptor.TEEHardware]
-	if !ok {
-		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", r.registryDescriptor.TEEHardware)
-	}
-
-	return r.hostConfig, provisioner, nil
+	return r.hostConfig, r.hostProvisioner, nil
 }
 
 func (r *runtime) HostVersions() []version.Version {
@@ -598,7 +586,7 @@ func newRuntime(
 
 	// Configure runtime host if needed.
 	if cfg.Host != nil {
-		rt.hostProvisioners = cfg.Host.Provisioners
+		rt.hostProvisioner = cfg.Host.Provisioner
 		rt.hostConfig = cfg.Host.Runtimes[id]
 	}
 

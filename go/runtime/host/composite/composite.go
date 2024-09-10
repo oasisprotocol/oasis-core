@@ -191,3 +191,35 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 		return crh, nil
 	}
 }
+
+type provisioner struct {
+	kinds map[component.TEEKind]host.Provisioner
+}
+
+// Implements host.Provisioner.
+func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
+	if len(cfg.Components) != 1 {
+		return nil, fmt.Errorf("host/composite: exactly one component should be selected")
+	}
+
+	comp := cfg.Bundle.Manifest.GetComponentByID(cfg.Components[0])
+	if comp == nil {
+		return nil, fmt.Errorf("host/composite: component not available")
+	}
+	provisioner, ok := p.kinds[comp.TEEKind()]
+	if !ok {
+		return nil, fmt.Errorf("host/composite: provisioner for kind '%s' is not available", comp.TEEKind())
+	}
+	return provisioner.NewRuntime(cfg)
+}
+
+// Implements host.Provisioner.
+func (p *provisioner) Name() string {
+	return "composite"
+}
+
+// NewProvisioner returns a composite provisioner that dispatches to the actual provisioner based
+// on the component kind.
+func NewProvisioner(kinds map[component.TEEKind]host.Provisioner) host.Provisioner {
+	return &provisioner{kinds: kinds}
+}

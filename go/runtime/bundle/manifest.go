@@ -239,5 +239,17 @@ func (c *Component) IsNetworkAllowed() bool {
 
 // IsTEERequired returns true iff the component only provides TEE executables.
 func (c *Component) IsTEERequired() bool {
-	return c.Executable == "" && (c.SGX != nil || c.TDX != nil)
+	return c.Executable == "" && c.TEEKind() != component.TEEKindNone
+}
+
+// TEEKind returns the kind of TEE supported by the component.
+func (c *Component) TEEKind() component.TEEKind {
+	switch {
+	case c.TDX != nil:
+		return component.TEEKindTDX
+	case c.SGX != nil:
+		return component.TEEKindSGX
+	default:
+		return component.TEEKindNone
+	}
 }
