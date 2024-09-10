@@ -8,31 +8,7 @@ use crate::{
     vss::{VerificationMatrix, VerificationVector},
 };
 
-use super::{Error, HandoffKind, SecretShare, Shareholder, VerifiableSecretShare};
-
-/// Dimension switch kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DimensionSwitchKind {
-    /// In share reduction, shareholders switch from the degree-t dimension
-    /// of the secret bivariate polynomial B(x,y) to the degree-2t dimension.
-    /// As a result, each shareholders in the new committee obtains a reduced
-    /// share B(x,j) and proactivizes it to B'(x,j).
-    ShareReduction,
-    /// In full share distribution, new shares B'(i,y) are generated from
-    /// proactive reduced shares, by switching back to the degree-t dimension
-    /// of B'(x,y).
-    FullShareDistribution,
-}
-
-impl DimensionSwitchKind {
-    /// Indicates whether bivariate shares should be full or reduced shares.
-    pub fn require_full_shares(&self) -> bool {
-        match &self {
-            DimensionSwitchKind::ShareReduction => false,
-            DimensionSwitchKind::FullShareDistribution => true,
-        }
-    }
-}
+use super::{Error, SecretShare, Shareholder, VerifiableSecretShare};
 
 /// Dimension switch state.
 enum DimensionSwitchState<G>
@@ -76,11 +52,12 @@ where
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
 
-    /// The kind of handoff.
-    handoff: HandoffKind,
+    /// Indicates whether bivariate shares should be derived from a zero-hole
+    /// bivariate polynomial.
+    zero_hole: bool,
 
-    /// The kind of dimension switch.
-    kind: DimensionSwitchKind,
+    /// Indicates whether bivariate shares should be full or reduced shares.
+    full_share: bool,
 
     /// The encoded identity.
     me: G::Scalar,
@@ -98,41 +75,48 @@ where
     G: Group + GroupEncoding,
 {
     /// Creates a new share reduction dimension switch.
+    ///
+    /// In share reduction, shareholders switch from the degree-t dimension
+    /// of the secret bivariate polynomial B(x,y) to the degree-2t dimension.
+    /// As a result, each shareholders in the new committee obtains a reduced
+    /// share B(x,j) and proactivizes it to B'(x,j).
     pub(crate) fn new_share_reduction(
         threshold: u8,
+        zero_hole: bool,
         me: G::Scalar,
         shareholders: Vec<G::Scalar>,
-        handoff: HandoffKind,
     ) -> Result<Self> {
-        let kind = DimensionSwitchKind::ShareReduction;
-        Self::new(threshold, me, shareholders, kind, handoff)
+        Self::new(threshold, zero_hole, false, me, shareholders)
     }
 
     /// Creates a new full share distribution dimension switch.
+    ///
+    /// In full share distribution, new shares B'(i,y) are generated from
+    /// proactive reduced shares, by switching back to the degree-t dimension
+    /// of B'(x,y).
     pub(crate) fn new_full_share_distribution(
         threshold: u8,
+        zero_hole: bool,
         me: G::Scalar,
         shareholders: Vec<G::Scalar>,
-        handoff: HandoffKind,
     ) -> Result<Self> {
-        let kind = DimensionSwitchKind::FullShareDistribution;
-        Self::new(threshold, me, shareholders, kind, handoff)
+        Self::new(threshold, zero_hole, true, me, shareholders)
     }
 
     /// Creates a new dimension switch.
     fn new(
         threshold: u8,
+        zero_hole: bool,
+        full_share: bool,
         me: G::Scalar,
         shareholders: Vec<G::Scalar>,
-        kind: DimensionSwitchKind,
-        handoff: HandoffKind,
     ) -> Result<Self> {
         let state = Mutex::new(DimensionSwitchState::WaitingForVerificationMatrix);
 
         Ok(Self {
             threshold,
-            kind,
-            handoff,
+            zero_hole,
+            full_share,
             me,
             shareholders,
             state,
@@ -166,7 +150,7 @@ where
             _ => return Err(Error::InvalidState.into()),
         }
 
-        let sp = SwitchPoints::new(self.threshold, self.me, vm, self.kind)?;
+        let sp = SwitchPoints::new(self.threshold, self.full_share, self.me, vm)?;
         *state = DimensionSwitchState::Accumulating(sp);
 
         Ok(())
@@ -206,10 +190,10 @@ where
             } else {
                 let bs = BivariateShares::new(
                     self.threshold,
+                    self.zero_hole,
+                    self.full_share,
                     self.me,
                     self.shareholders.clone(),
-                    self.kind,
-                    self.handoff,
                     Some(shareholder),
                 )?;
                 *state = DimensionSwitchState::Merging(bs);
@@ -236,10 +220,10 @@ where
 
         let bs = BivariateShares::new(
             self.threshold,
+            self.zero_hole,
+            self.full_share,
             self.me,
             self.shareholders.clone(),
-            self.kind,
-            self.handoff,
             shareholder,
         )?;
         *state = DimensionSwitchState::Merging(bs);
@@ -340,9 +324,9 @@ where
     /// Creates a new accumulator for switch points.
     fn new(
         threshold: u8,
+        full_share: bool,
         me: G::Scalar,
         vm: VerificationMatrix<G>,
-        kind: DimensionSwitchKind,
     ) -> Result<Self> {
         let threshold = threshold as usize;
         let rows = threshold + 1;
@@ -354,17 +338,9 @@ where
 
         // Precomputing the verification vector speeds up switch point
         // validation.
-        let (n, vv) = match kind {
-            DimensionSwitchKind::ShareReduction => {
-                let vv = vm.verification_vector_for_x(&me);
-                let n = rows;
-                (n, vv)
-            }
-            DimensionSwitchKind::FullShareDistribution => {
-                let vv = vm.verification_vector_for_y(&me);
-                let n = cols;
-                (n, vv)
-            }
+        let (n, vv) = match full_share {
+            false => (rows, vm.verification_vector_for_x(&me)),
+            true => (cols, vm.verification_vector_for_y(&me)),
         };
 
         // Wrap the identifier and the matrix in an option so that we can take
@@ -456,9 +432,6 @@ where
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
 
-    /// Field element representing the identity of the shareholder.
-    me: G::Scalar,
-
     /// Indicates whether bivariate shares should be derived from a zero-hole
     /// bivariate polynomial.
     zero_hole: bool,
@@ -466,19 +439,23 @@ where
     /// Indicates whether bivariate shares should be full or reduced shares.
     full_share: bool,
 
+    /// Field element representing the identity of the shareholder.
+    me: G::Scalar,
+
     /// A set of shareholders providing bivariate shares.
     shareholders: Vec<G::Scalar>,
+
     /// A set of shareholders whose bivariate share still needs to be received.
     pending_shareholders: Vec<G::Scalar>,
+
+    /// The shareholder to be proactivized with bivariate shares.
+    shareholder: Option<Arc<Shareholder<G>>>,
 
     /// The sum of the received bivariate shares.
     p: Option<Polynomial<G::Scalar>>,
 
     /// The sum of the verification matrices of the received bivariate shares.
     vm: Option<VerificationMatrix<G>>,
-
-    /// The shareholder to be proactivized with bivariate shares.
-    shareholder: Option<Arc<Shareholder<G>>>,
 }
 
 impl<G> BivariateShares<G>
@@ -488,39 +465,28 @@ where
     /// Creates a new accumulator for bivariate shares.
     fn new(
         threshold: u8,
+        zero_hole: bool,
+        full_share: bool,
         me: G::Scalar,
         shareholders: Vec<G::Scalar>,
-        kind: DimensionSwitchKind,
-        handoff: HandoffKind,
         shareholder: Option<Arc<Shareholder<G>>>,
     ) -> Result<Self> {
-        // During the dealing phase, the number of shares must be at least
-        // threshold + 2, ensuring that even if t Byzantine dealers reveal
-        // their secret, an honest shareholder cannot compute the combined
-        // bivariate polynomial.
-        let min = match handoff {
-            HandoffKind::DealingPhase => threshold as usize + 2,
-            HandoffKind::CommitteeUnchanged => 1,
-            HandoffKind::CommitteeChanged => 1,
-        };
-        if shareholders.len() < min {
+        if shareholders.is_empty() {
             return Err(Error::NotEnoughShareholders.into());
         }
 
         let pending_shareholders = shareholders.clone();
-        let zero_hole = handoff.require_zero_hole();
-        let full_share = kind.require_full_shares();
 
         Ok(Self {
             threshold,
-            me,
             zero_hole,
             full_share,
+            me,
             shareholders,
             pending_shareholders,
+            shareholder,
             p: None,
             vm: None,
-            shareholder,
         })
     }
 
@@ -609,13 +575,13 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
-        churp::{HandoffKind, SecretShare, VerifiableSecretShare},
+        churp::{SecretShare, VerifiableSecretShare},
         poly,
         suites::{self, p384},
         vss,
     };
 
-    use super::{BivariateShares, DimensionSwitchKind, Error, SwitchPoints};
+    use super::{BivariateShares, Error, SwitchPoints};
 
     type Suite = p384::Sha3_384;
     type Group = <Suite as suites::Suite>::Group;
@@ -636,13 +602,13 @@ mod tests {
         sh: u64,
         bp: &BivariatePolynomial,
         sp: &mut SwitchPoints<Group>,
-        kind: DimensionSwitchKind,
+        full_share: bool,
     ) -> Result<bool> {
         let x = prepare_shareholder(sh);
         let y = prepare_shareholder(me);
-        let bij = match kind {
-            DimensionSwitchKind::ShareReduction => bp.eval(&x, &y),
-            DimensionSwitchKind::FullShareDistribution => bp.eval(&y, &x),
+        let bij = match full_share {
+            false => bp.eval(&x, &y),
+            true => bp.eval(&y, &x),
         };
         let res = sp.add_point(x, bij);
         res
@@ -659,16 +625,13 @@ mod tests {
         let vm = VerificationMatrix::from(&bp);
         let me = prepare_shareholder(1);
 
-        for kind in vec![
-            DimensionSwitchKind::ShareReduction,
-            DimensionSwitchKind::FullShareDistribution,
-        ] {
-            let mut sp = SwitchPoints::<Group>::new(threshold, me, vm.clone(), kind).unwrap();
+        for full_share in vec![false, true] {
+            let mut sp = SwitchPoints::<Group>::new(threshold, full_share, me, vm.clone()).unwrap();
             let me = 1;
             let mut sh = 2;
 
             // Add invalid point (switch x and y).
-            let res = add_point(sh, me, &bp, &mut sp, kind);
+            let res = add_point(sh, me, &bp, &mut sp, full_share);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
@@ -676,18 +639,18 @@ mod tests {
             );
 
             // Add point.
-            let res = add_point(me, me, &bp, &mut sp, kind);
+            let res = add_point(me, me, &bp, &mut sp, full_share);
             assert!(res.is_ok());
             assert!(!res.unwrap());
 
             // Add another point twice.
             assert!(sp.needs_point(&prepare_shareholder(sh)));
 
-            let res = add_point(me, sh, &bp, &mut sp, kind);
+            let res = add_point(me, sh, &bp, &mut sp, full_share);
             assert!(res.is_ok());
             assert!(!res.unwrap());
 
-            let res = add_point(me, sh, &bp, &mut sp, kind);
+            let res = add_point(me, sh, &bp, &mut sp, full_share);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
@@ -708,9 +671,9 @@ mod tests {
             }
 
             // Full share distribution needs 2 * threshold points.
-            if kind == DimensionSwitchKind::FullShareDistribution {
+            if full_share {
                 for _ in 0..threshold {
-                    let res = add_point(me, sh, &bp, &mut sp, kind);
+                    let res = add_point(me, sh, &bp, &mut sp, full_share);
                     assert!(res.is_ok());
                     assert!(!res.unwrap());
                     sh += 1;
@@ -718,7 +681,7 @@ mod tests {
             }
 
             // Add the last point.
-            let res = add_point(me, sh, &bp, &mut sp, kind);
+            let res = add_point(me, sh, &bp, &mut sp, full_share);
             assert!(res.is_ok());
             assert!(res.unwrap()); // Enough points.
             sh += 1;
@@ -727,7 +690,7 @@ mod tests {
             assert!(!sp.needs_point(&prepare_shareholder(sh)));
 
             // Too many points.
-            let res = add_point(me, sh, &bp, &mut sp, kind);
+            let res = add_point(me, sh, &bp, &mut sp, full_share);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
@@ -742,24 +705,24 @@ mod tests {
 
     fn add_bivariate_shares(
         threshold: u8,
+        zero_hole: bool,
+        full_share: bool,
         me: u64,
         sh: u64,
         bs: &mut BivariateShares<Group>,
-        dkind: DimensionSwitchKind,
-        hkind: HandoffKind,
     ) -> Result<bool> {
         let deg_x = threshold;
         let deg_y = 2 * threshold;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::random(deg_x, deg_y, &mut rng);
-        if hkind.require_zero_hole() {
+        if zero_hole {
             bp.to_zero_hole();
         };
         let vm = VerificationMatrix::from(&bp);
         let x = prepare_shareholder(me);
-        let p = match dkind {
-            DimensionSwitchKind::ShareReduction => bp.eval_y(&x),
-            DimensionSwitchKind::FullShareDistribution => bp.eval_x(&x),
+        let p = match full_share {
+            false => bp.eval_y(&x),
+            true => bp.eval_x(&x),
         };
         let share = SecretShare::new(x, p);
         let verifiable_share = VerifiableSecretShare::new(share, vm);
@@ -770,20 +733,13 @@ mod tests {
     #[test]
     fn test_bivariate_shares() {
         let threshold = 2;
-        let hkind = HandoffKind::CommitteeChanged;
+        let zero_hole = true;
 
         let me = prepare_shareholder(1);
         let shareholders = prepare_shareholders(&[1, 2, 3]);
 
-        // Dealing phase requires at least threshold + 2 dealers.
-        let res = BivariateShares::<Group>::new(
-            threshold,
-            me,
-            shareholders.clone(),
-            DimensionSwitchKind::ShareReduction,
-            HandoffKind::DealingPhase,
-            None,
-        );
+        // There should be at least 1 shareholder.
+        let res = BivariateShares::<Group>::new(threshold, false, false, me, vec![], None);
         assert!(res.is_err());
         unsafe {
             assert_eq!(
@@ -793,16 +749,13 @@ mod tests {
         }
 
         // Happy path.
-        for dkind in vec![
-            DimensionSwitchKind::ShareReduction,
-            DimensionSwitchKind::FullShareDistribution,
-        ] {
+        for full_share in vec![false, true] {
             let mut bs = BivariateShares::<Group>::new(
                 threshold,
+                zero_hole,
+                full_share,
                 me,
                 shareholders.clone(),
-                dkind,
-                hkind,
                 None,
             )
             .unwrap();
@@ -811,7 +764,7 @@ mod tests {
             let mut sh = 2;
 
             // Add invalid share (invalid threshold).
-            let res = add_bivariate_shares(threshold + 1, me, me, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold + 1, zero_hole, full_share, me, me, &mut bs);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
@@ -819,18 +772,18 @@ mod tests {
             );
 
             // Add share.
-            let res = add_bivariate_shares(threshold, me, me, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, me, &mut bs);
             assert!(res.is_ok());
             assert!(!res.unwrap());
 
             // Add another share twice.
             assert!(bs.needs_bivariate_share(&prepare_shareholder(sh)));
 
-            let res = add_bivariate_shares(threshold, me, sh, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
             assert!(res.is_ok());
             assert!(!res.unwrap());
 
-            let res = add_bivariate_shares(threshold, me, sh, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
@@ -851,7 +804,7 @@ mod tests {
             }
 
             // Add the last share.
-            let res = add_bivariate_shares(threshold, me, sh, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
             assert!(res.is_ok());
             assert!(res.unwrap()); // Enough shares.
             sh += 1;
@@ -859,7 +812,7 @@ mod tests {
             // Unknown shareholder.
             assert!(!bs.needs_bivariate_share(&prepare_shareholder(sh)));
 
-            let res = add_bivariate_shares(threshold, me, sh, &mut bs, dkind, hkind);
+            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
             assert!(res.is_err());
             assert_eq!(
                 res.unwrap_err().to_string(),
