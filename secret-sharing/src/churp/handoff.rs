@@ -177,12 +177,9 @@ where
             return Err(Error::NotEnoughShareholders.into());
         }
 
-        let share_distribution = DimensionSwitch::new_full_share_distribution(
-            threshold,
-            me,
-            shareholders,
-            HandoffKind::DealingPhase,
-        )?;
+        let zero_hole = HandoffKind::DealingPhase.require_zero_hole();
+        let share_distribution =
+            DimensionSwitch::new_full_share_distribution(threshold, zero_hole, me, shareholders)?;
 
         share_distribution.skip_accumulating()?;
         share_distribution.start_merging(None)?;
@@ -232,12 +229,9 @@ where
             return Err(Error::NotEnoughShareholders.into());
         }
 
-        let share_distribution = DimensionSwitch::new_full_share_distribution(
-            threshold,
-            me,
-            shareholders,
-            HandoffKind::CommitteeUnchanged,
-        )?;
+        let zero_hole = HandoffKind::CommitteeUnchanged.require_zero_hole();
+        let share_distribution =
+            DimensionSwitch::new_full_share_distribution(threshold, zero_hole, me, shareholders)?;
 
         share_distribution.skip_accumulating()?;
 
@@ -296,19 +290,11 @@ where
             return Err(Error::NotEnoughShareholders.into());
         }
 
-        let share_reduction = DimensionSwitch::new_share_reduction(
-            threshold,
-            me,
-            shareholders,
-            HandoffKind::CommitteeChanged,
-        )?;
-
-        let share_distribution = DimensionSwitch::new_full_share_distribution(
-            threshold,
-            me,
-            Vec::new(), // Skip proactivization.
-            HandoffKind::CommitteeChanged,
-        )?;
+        let zero_hole = HandoffKind::CommitteeChanged.require_zero_hole();
+        let share_reduction =
+            DimensionSwitch::new_share_reduction(threshold, zero_hole, me, shareholders)?;
+        let share_distribution =
+            DimensionSwitch::new_full_share_distribution(threshold, zero_hole, me, Vec::new())?;
 
         Ok(Self {
             share_reduction,
