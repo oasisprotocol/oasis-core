@@ -985,7 +985,8 @@ impl Dispatcher {
 
             Ok(())
         })
-        .await??;
+        .await
+        .unwrap()?; // Propagate panics during key manager status update.
 
         debug!(self.logger, "KM status update request complete");
 
@@ -1018,7 +1019,8 @@ impl Dispatcher {
 
             Ok(())
         })
-        .await??;
+        .await
+        .unwrap()?; // Propagate panics during key manager quote policy update.
 
         debug!(self.logger, "KM quote policy update request complete");
 
