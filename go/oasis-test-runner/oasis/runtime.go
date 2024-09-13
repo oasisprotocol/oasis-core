@@ -274,7 +274,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 		if err != nil {
 			return nil, fmt.Errorf("oasis/runtime: failed to read ELF binary: %w", err)
 		}
-		_ = bnd.Add(elfBin, binBuf)
+		_ = bnd.Add(elfBin, bundle.NewBytesData(binBuf))
 
 		comp := &bundle.Component{
 			Kind:       compCfg.Kind,
@@ -289,7 +289,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 			comp.SGX = &bundle.SGXMetadata{
 				Executable: sgxBin,
 			}
-			_ = bnd.Add(sgxBin, binBuf)
+			_ = bnd.Add(sgxBin, bundle.NewBytesData(binBuf))
 		}
 
 		bnd.Manifest.Components = append(bnd.Manifest.Components, comp)

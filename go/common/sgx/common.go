@@ -83,25 +83,10 @@ func (m *MrEnclave) UnmarshalHex(text string) error {
 // FromSgxs derives a MrEnclave from r, under the assumption that r will
 // provide the entire `.sgxs` file.
 func (m *MrEnclave) FromSgxs(r io.Reader) error {
-	// A `.sgxs` file's SHA256 digest is conveniently the MRENCLAVE.
-	var buf [32768]byte
-
 	h := sha256.New()
-readLoop:
-	for {
-		l, err := r.Read(buf[:])
-		if l > 0 {
-			_, _ = h.Write(buf[:l])
-		}
-		switch err {
-		case nil:
-		case io.EOF:
-			break readLoop
-		default:
-			return fmt.Errorf("sgx: failed to read .sgxs: %w", err)
-		}
+	if _, err := io.Copy(h, r); err != nil {
+		return fmt.Errorf("sgx: failed to read sgxs: %w", err)
 	}
-
 	sum := h.Sum(nil)
 	return m.UnmarshalBinary(sum)
 }

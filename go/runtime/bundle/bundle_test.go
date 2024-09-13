@@ -58,9 +58,9 @@ func TestBundle(t *testing.T) {
 			return b
 		}
 
-		err := bundle.Add(manifest.Components[0].Executable, execBuf)
+		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(execBuf))
 		require.NoError(t, err, "bundle.Add(elf)")
-		err = bundle.Add(manifest.Components[0].SGX.Executable, randomBuffer())
+		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randomBuffer()))
 		require.NoError(t, err, "bundle.Add(sgx)")
 
 		err = bundle.Write(bundleFn)
@@ -76,7 +76,7 @@ func TestBundle(t *testing.T) {
 		delete(bundle2.Manifest.Digests, manifestName)
 		delete(bundle2.Data, manifestName)
 
-		require.EqualValues(t, bundle, bundle2, "opened bundle mismatch")
+		ensureBundlesEqual(t, bundle, bundle2, "opened bundle mismatch")
 	})
 
 	t.Run("ResetManifest", func(t *testing.T) {
@@ -150,9 +150,9 @@ func TestDeatchedBundle(t *testing.T) {
 			return b
 		}
 
-		err := bundle.Add(manifest.Components[0].Executable, execBuf)
+		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(execBuf))
 		require.NoError(t, err, "bundle.Add(elf)")
-		err = bundle.Add(manifest.Components[0].SGX.Executable, randomBuffer())
+		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randomBuffer()))
 		require.NoError(t, err, "bundle.Add(sgx)")
 
 		err = bundle.Write(bundleFn)
@@ -168,7 +168,7 @@ func TestDeatchedBundle(t *testing.T) {
 		delete(bundle2.Manifest.Digests, manifestName)
 		delete(bundle2.Data, manifestName)
 
-		require.EqualValues(t, bundle, bundle2, "opened bundle mismatch")
+		ensureBundlesEqual(t, bundle, bundle2, "opened bundle mismatch")
 	})
 
 	t.Run("Explode", func(t *testing.T) {
@@ -180,4 +180,52 @@ func TestDeatchedBundle(t *testing.T) {
 		err = bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded(again)")
 	})
+}
+
+func TestBytesData(t *testing.T) {
+	require := require.New(t)
+
+	data := []byte("this is a test")
+	bd := NewBytesData(data)
+	rdData, err := ReadAllData(bd)
+	require.NoError(err)
+	require.EqualValues(data, rdData)
+
+	hData, err := HashAllData(bd)
+	require.NoError(err)
+	require.EqualValues("6c53016ac6f75b6a86dbd56070cbed58a5880071fa3ae44f1211ec72958ae941", hData.Hex())
+}
+
+func TestFileData(t *testing.T) {
+	require := require.New(t)
+
+	tmpDir := t.TempDir()
+	fn := filepath.Join(tmpDir, "test.bin")
+
+	data := []byte("this is a test")
+	err := os.WriteFile(fn, data, 0o666)
+	require.NoError(err)
+
+	fd := NewFileData(fn)
+	rdData, err := ReadAllData(fd)
+	require.NoError(err)
+	require.EqualValues(data, rdData)
+
+	hData, err := HashAllData(fd)
+	require.NoError(err)
+	require.EqualValues("6c53016ac6f75b6a86dbd56070cbed58a5880071fa3ae44f1211ec72958ae941", hData.Hex())
+}
+
+func ensureBundlesEqual(t *testing.T, b1, b2 *Bundle, msg string) {
+	require.EqualValues(t, len(b1.Data), len(b2.Data), msg)
+	for fn := range b1.Data {
+		require.Contains(t, b2.Data, fn, msg)
+
+		d1, err := ReadAllData(b1.Data[fn])
+		require.NoError(t, err, "b1.ReadAllData")
+		d2, err := ReadAllData(b2.Data[fn])
+		require.NoError(t, err, "b2.ReadAllData")
+
+		require.EqualValues(t, d1, d2, msg)
+	}
 }

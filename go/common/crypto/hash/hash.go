@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"hash"
+	"io"
 
 	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 
@@ -147,6 +148,15 @@ func NewFrom(v interface{}) (h Hash) {
 func NewFromBytes(data ...[]byte) (h Hash) {
 	h.FromBytes(data...)
 	return
+}
+
+// NewFromReader creates a new hash by hashing data from the provided reader until EOF.
+func NewFromReader(reader io.Reader) (Hash, error) {
+	b := NewBuilder()
+	if _, err := io.Copy(b, reader); err != nil {
+		return Hash{}, err
+	}
+	return b.Build(), nil
 }
 
 // LoadFromHexBytes creates a new hash by loading it from the given CometBFT
