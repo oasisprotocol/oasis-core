@@ -18,6 +18,38 @@ pub struct TrustedSigners {
     pub threshold: u64,
 }
 
+#[cfg(feature = "debug-mock-sgx")]
+impl TrustedSigners {
+    /// An UNSAFE set of trusted signers using well-known debug keys.
+    pub fn unsafe_mock() -> Self {
+        use oasis_core_runtime::{
+            common::crypto::signature::PrivateKey as OasisPrivateKey, BUILD_INFO,
+        };
+
+        // Do a runtime check to ensure that this is only ever called in debug builds to avoid any
+        // use of this set in production. Note that this is implied by debug-mock-sgx feature.
+        assert!(!BUILD_INFO.is_secure);
+
+        Self {
+            signers: {
+                let mut set = HashSet::new();
+                for seed in [
+                    "ekiden key manager test multisig key 0",
+                    "ekiden key manager test multisig key 1",
+                    "ekiden key manager test multisig key 2",
+                ]
+                .iter()
+                {
+                    let private_key = OasisPrivateKey::from_test_seed(seed.to_string());
+                    set.insert(private_key.public_key());
+                }
+                set
+            },
+            threshold: 2,
+        }
+    }
+}
+
 impl Default for TrustedSigners {
     fn default() -> Self {
         Self {
@@ -29,7 +61,7 @@ impl Default for TrustedSigners {
 
 impl TrustedSigners {
     /// Verifies that signed data has valid signatures and that enough of them
-    // are from trusted signers.
+    /// are from trusted signers.
     pub fn verify<'a, P>(&self, signed_data: &'a impl SignedData<P>) -> Result<&'a P> {
         let data = signed_data.verify()?;
         self.verify_trusted_signers(signed_data)?;
