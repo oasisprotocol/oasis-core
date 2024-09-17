@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/x509"
-	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/codes"
@@ -34,7 +33,7 @@ func (auth *PeerCertAuthenticator) AuthFunc(ctx context.Context, _ interface{}) 
 		return status.Errorf(codes.PermissionDenied, "grpc: unexpected peer authentication credentials")
 	}
 	if nPeerCerts := len(tlsAuth.State.PeerCertificates); nPeerCerts != 1 {
-		return status.Errorf(codes.PermissionDenied, fmt.Sprintf("grpc: unexpected number of peer certificates: %d", nPeerCerts))
+		return status.Errorf(codes.PermissionDenied, "grpc: unexpected number of peer certificates: %d", nPeerCerts)
 	}
 	peerCert := tlsAuth.State.PeerCertificates[0]
 	subject := accessctl.SubjectFromX509Certificate(peerCert)
