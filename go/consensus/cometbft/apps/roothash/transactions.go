@@ -49,7 +49,6 @@ func (app *rootHashApplication) executorCommit(
 	if ctx.IsCheckOnly() {
 		// Notify subscribers about observed commitments.
 		for _, ec := range cc.Commits {
-			ec := ec
 			app.ecn.DeliverExecutorCommitment(cc.ID, &ec)
 		}
 		return nil

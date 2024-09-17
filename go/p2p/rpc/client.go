@@ -392,8 +392,6 @@ func (c *client) CallMulti(
 	resultCh := make(chan result, len(peers))
 
 	for _, peer := range peers {
-		peer := peer // Make sure goroutine below operates on the right instance.
-
 		pool.Submit(func() {
 			// Abort early in case we are done.
 			select {

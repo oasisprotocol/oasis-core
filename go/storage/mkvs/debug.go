@@ -46,6 +46,6 @@ func (t *tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, 
 
 		fmt.Fprintf(w, "%s- %s -> %v [%v/%s]", prefix, n.Key, value, n.Clean, n.Hash)
 	default:
-		fmt.Fprintf(w, prefix+"<UNKNOWN>")
+		fmt.Fprintf(w, "%s", prefix+"<UNKNOWN>")
 	}
 }
