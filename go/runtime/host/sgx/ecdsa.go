@@ -102,12 +102,12 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 	}
 
 	// Check what information we need to retrieve based on what is in the quote.
-	qs, ok := quote.Signature.(*pcs.QuoteSignatureECDSA_P256)
+	qs, ok := quote.Signature().(*pcs.QuoteSignatureECDSA_P256)
 	if !ok {
-		return nil, fmt.Errorf("unsupported attestation key type: %s", quote.Signature.AttestationKeyType())
+		return nil, fmt.Errorf("unsupported attestation key type: %s", qs.AttestationKeyType())
 	}
 
-	switch qs.CertificationData.(type) {
+	switch qs.CertificationData().(type) {
 	case *pcs.CertificationData_PCKCertificateChain:
 		// We have a PCK certificate chain and so are good to go.
 	case *pcs.CertificationData_PPID:
@@ -120,7 +120,7 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		//       cannot be easily implemented. Instead we rely on a quote provider to be installed.
 		return nil, fmt.Errorf("PPID certification data not yet supported; please install a quote provider")
 	default:
-		return nil, fmt.Errorf("unsupported certification data type: %s", qs.CertificationData.CertificationDataType())
+		return nil, fmt.Errorf("unsupported certification data type: %s", qs.CertificationData().CertificationDataType())
 	}
 
 	// Verify PCK certificate and extract the information required to get the TCB bundle.

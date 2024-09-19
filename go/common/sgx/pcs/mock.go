@@ -84,14 +84,14 @@ func NewMockQuote(rawReport []byte) ([]byte, error) {
 	case reportBodyWithMacLen:
 		// If the raw report contains a MAC, truncate it as the MAC is meant for QE authentication
 		// which we don't need to verify.
-		rawReport = rawReport[:reportBodyLen]
-	case reportBodyLen:
+		rawReport = rawReport[:reportBodySgxLen]
+	case reportBodySgxLen:
 	default:
 		return nil, fmt.Errorf("invalid report size: %d", len(rawReport))
 	}
 
 	// Sanity check report.
-	var report ReportBody
+	var report SgxReport
 	if err := report.UnmarshalBinary(rawReport); err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func NewMockQuote(rawReport []byte) ([]byte, error) {
 	var header [quoteHeaderLen]byte
 	binary.LittleEndian.PutUint16(header[0:], 3)                                // Version.
 	binary.LittleEndian.PutUint16(header[2:], uint16(AttestationKeyECDSA_P256)) // Attestation key type.
-	binary.LittleEndian.PutUint32(header[4:], teeTypeSGX)                       // TEE type.
+	binary.LittleEndian.PutUint32(header[4:], 0)                                // Reserved.
 	binary.LittleEndian.PutUint16(header[8:], 9)                                // QESVN.
 	binary.LittleEndian.PutUint16(header[10:], 13)                              // PCESVN.
 	copy(header[12:], QEVendorID_Intel)                                         // QE vendor ID.

@@ -27,6 +27,9 @@ type TEEFeaturesSGX struct {
 
 	// DefaultMaxAttestationAge is the default maximum attestation age (in blocks).
 	DefaultMaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
+
+	// TDX is a feature flag specifying whether support for TDX is enabled.
+	TDX bool `json:"tdx,omitempty"`
 }
 
 // ApplyDefaultConstraints applies configured SGX constraint defaults to the given structure.
