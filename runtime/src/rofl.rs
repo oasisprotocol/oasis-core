@@ -5,6 +5,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 
 use crate::{
+    common::sgx,
     consensus::roothash,
     dispatcher::{Initializer, PostInitState, PreInitState},
     host::Host,
@@ -23,6 +24,24 @@ pub trait App: Send + Sync {
     fn on_init(&mut self, host: Arc<dyn Host>) -> Result<()> {
         // Default implementation does nothing.
         Ok(())
+    }
+
+    /// Quote policy to use for verifying our own enclave identity.
+    async fn quote_policy(&self) -> Result<sgx::QuotePolicy> {
+        // Default implementation uses a sane policy.
+        Ok(sgx::QuotePolicy {
+            ias: Some(sgx::ias::QuotePolicy {
+                disabled: true, // Disable legacy EPID attestation.
+                ..Default::default()
+            }),
+            pcs: Some(sgx::pcs::QuotePolicy {
+                // Allow TDX since that is not part of the default policy.
+                tdx: Some(sgx::pcs::TdxQuotePolicy {
+                    allowed_tdx_modules: vec![],
+                }),
+                ..Default::default()
+            }),
+        })
     }
 
     /// Called on new runtime block being received.

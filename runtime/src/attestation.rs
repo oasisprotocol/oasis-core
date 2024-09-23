@@ -16,6 +16,7 @@ use crate::{
     host::Host,
     identity::Identity,
     policy::PolicyVerifier,
+    rofl::App,
     types::Body,
 };
 
@@ -26,7 +27,8 @@ pub struct Handler {
     host: Arc<dyn Host>,
     consensus_verifier: Arc<dyn Verifier>,
     runtime_id: Namespace,
-    version: Option<Version>,
+    version: Version,
+    app: Arc<dyn App>,
     logger: Logger,
 }
 
@@ -37,7 +39,8 @@ impl Handler {
         host: Arc<dyn Host>,
         consensus_verifier: Arc<dyn Verifier>,
         runtime_id: Namespace,
-        version: Option<Version>,
+        version: Version,
+        app: Arc<dyn App>,
     ) -> Self {
         Self {
             identity,
@@ -45,6 +48,7 @@ impl Handler {
             consensus_verifier,
             runtime_id,
             version,
+            app,
             logger: get_logger("runtime/attestation"),
         }
     }
@@ -92,21 +96,34 @@ impl Handler {
         })
     }
 
-    async fn set_quote(&self, quote: Quote) -> Result<Body> {
-        if self.identity.quote_policy().is_none() {
-            info!(self.logger, "Configuring quote policy");
+    async fn set_quote_policy(&self) -> Result<()> {
+        info!(self.logger, "Configuring quote policy");
 
+        // Use the correct quote policy for verifying our own identity based on what kind of
+        // application this is. For ROFL, ask the application, for RONL, query consensus.
+        let policy = if self.app.is_supported() {
+            // ROFL, ask the app for policy.
+            self.app.quote_policy().await?
+        } else {
+            // RONL.
             // TODO: Make async.
             let consensus_verifier = self.consensus_verifier.clone();
             let version = self.version;
             let runtime_id = self.runtime_id;
-            let policy = tokio::task::block_in_place(move || {
+            tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.
-                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, version)
-            })?;
+                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, Some(version))
+            })?
+        };
 
-            self.identity.set_quote_policy(policy)?;
-        }
+        self.identity.set_quote_policy(policy)?;
+
+        Ok(())
+    }
+
+    async fn set_quote(&self, quote: Quote) -> Result<Body> {
+        // Ensure a quote policy is configured.
+        self.set_quote_policy().await?;
 
         info!(
             self.logger,

@@ -59,8 +59,6 @@ enum QuoteError {
     NonceMismatch,
     #[error("quote policy not set")]
     QuotePolicyNotSet,
-    #[error("quote policy already set")]
-    QuotePolicyAlreadySet,
     #[error("node identity not set")]
     NodeIdentityNotSet,
     #[error("endorsed quote mismatch")]
@@ -287,9 +285,6 @@ impl Identity {
     /// Configure the runtime quote policy.
     pub(crate) fn set_quote_policy(&self, policy: QuotePolicy) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
-        if inner.quote_policy.is_some() {
-            return Err(QuoteError::QuotePolicyAlreadySet.into());
-        }
         inner.quote_policy = Some(Arc::new(policy));
 
         Ok(())

@@ -265,19 +265,12 @@ impl Dispatcher {
             error!(self.logger, "ROFL application initialization failed"; "err" => ?err);
         }
 
-        // Determine what runtime version to support during remote attestation. For runtimes that
-        // define a ROFL application, we use `None` to signal that the active version is used.
-        let version = if app.is_supported() {
-            None
-        } else {
-            Some(protocol.get_config().version)
-        };
-
+        let app: Arc<dyn rofl::App> = Arc::from(app);
         let state = State {
             protocol: protocol.clone(),
             consensus_verifier: consensus_verifier.clone(),
             dispatcher: self.clone(),
-            app: Arc::from(app),
+            app: app.clone(),
             rpc_demux: Arc::new(rpc_demux),
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
@@ -286,7 +279,8 @@ impl Dispatcher {
                 protocol.clone(),
                 consensus_verifier.clone(),
                 protocol.get_runtime_id(),
-                version,
+                protocol.get_config().version,
+                app,
             ),
             policy_verifier: Arc::new(PolicyVerifier::new(consensus_verifier)),
             cache_set: cache::CacheSet::new(protocol.clone()),
