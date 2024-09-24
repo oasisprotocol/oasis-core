@@ -9,13 +9,14 @@ use std::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use futures::stream::{FuturesUnordered, StreamExt};
 use group::GroupEncoding;
 use lru::LruCache;
 use rand::{prelude::SliceRandom, rngs::OsRng};
 
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{self, PublicKey},
+        crypto::signature::PublicKey,
         namespace::{Namespace, NAMESPACE_SIZE},
         sgx::{EnclaveIdentity, QuotePolicy},
     },
@@ -123,7 +124,6 @@ impl RemoteClient {
         consensus_verifier: Arc<dyn Verifier>,
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
-        nodes: Vec<signature::PublicKey>,
     ) -> Self {
         Self::new(
             runtime_id,
@@ -136,7 +136,6 @@ impl RemoteClient {
                     .remote_runtime_id(km_runtime_id),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
-                nodes,
             ),
             consensus_verifier,
             keys_cache_sizes,
@@ -156,7 +155,6 @@ impl RemoteClient {
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
         signers: TrustedSigners,
-        nodes: Vec<signature::PublicKey>,
     ) -> Self {
         // When using a non-empty policy signer set we set enclaves to an empty set so until we get
         // a policy we will not accept any enclave identities (as we don't know what they should
@@ -187,7 +185,6 @@ impl RemoteClient {
             consensus_verifier,
             identity,
             keys_cache_sizes,
-            nodes,
         )
     }
 
@@ -225,11 +222,6 @@ impl RemoteClient {
         self.rpc_client.update_quote_policy(policy);
     }
 
-    /// Set allowed key manager nodes.
-    pub fn set_nodes(&self, nodes: Vec<signature::PublicKey>) {
-        self.rpc_client.update_nodes(nodes);
-    }
-
     fn verify_public_key(
         &self,
         key: &SignedPublicKey,
@@ -257,25 +249,23 @@ impl RemoteClient {
         let mut shares = Vec::with_capacity(min_shares);
 
         // Fetch key shares in random order.
-        // TODO: Optimize by fetching key shares concurrently.
         let mut committee = status.committee;
         committee.shuffle(&mut OsRng);
 
-        for node_id in committee {
-            // Stop fetching when enough shares are received.
-            if shares.len() == min_shares {
-                break;
-            }
+        // Fetch key shares concurrently.
+        let mut futures = FuturesUnordered::new();
 
-            // Fetch key share from the current node.
-            self.rpc_client
-                .update_nodes_async(vec![node_id])
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        loop {
+            // Continuously add new key share requests until the required
+            // number of key shares is received, ensuring the future queue
+            // remains filled even if some requests fail.
+            while shares.len() + futures.len() < min_shares {
+                let node_id = match committee.pop() {
+                    Some(node_id) => node_id,
+                    None => return Err(KeyManagerError::InsufficientKeyShares),
+                };
 
-            let response = self
-                .rpc_client
-                .secure_call(
+                let future = self.rpc_client.secure_call(
                     METHOD_SGX_POLICY_KEY_SHARE,
                     KeyShareRequest {
                         id: status.id,
@@ -284,10 +274,20 @@ impl RemoteClient {
                         key_runtime_id: self.runtime_id,
                         key_id,
                     },
-                )
-                .await
-                .into_result_with_feedback()
-                .await;
+                    vec![node_id],
+                );
+
+                futures.push(future);
+            }
+
+            // Wait for the next future to finish.
+            let response = match futures.next().await {
+                Some(response) => response,
+                None => break,
+            };
+
+            // Send back peer feedback.
+            let response = response.into_result_with_feedback().await;
 
             // Decode the response.
             let encoded_share: EncodedEncryptedPoint = match response {
@@ -386,6 +386,7 @@ impl KeyManagerClient for RemoteClient {
                     key_pair_id,
                     generation,
                 },
+                vec![],
             )
             .await
             .into_result_with_feedback()
@@ -436,6 +437,7 @@ impl KeyManagerClient for RemoteClient {
                     key_pair_id,
                     generation,
                 },
+                vec![],
             )
             .await
             .into_result_with_feedback()
@@ -484,6 +486,7 @@ impl KeyManagerClient for RemoteClient {
                     key_pair_id,
                     epoch,
                 },
+                vec![],
             )
             .await
             .into_result_with_feedback()
@@ -541,6 +544,7 @@ impl KeyManagerClient for RemoteClient {
                     key_pair_id,
                     epoch,
                 },
+                vec![],
             )
             .await
             .into_result_with_feedback()
@@ -560,6 +564,7 @@ impl KeyManagerClient for RemoteClient {
     async fn replicate_master_secret(
         &self,
         generation: u64,
+        nodes: Vec<PublicKey>,
     ) -> Result<VerifiableSecret, KeyManagerError> {
         let height = self
             .consensus_verifier
@@ -574,6 +579,7 @@ impl KeyManagerClient for RemoteClient {
                     height: Some(height),
                     generation,
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()
@@ -588,6 +594,7 @@ impl KeyManagerClient for RemoteClient {
     async fn replicate_ephemeral_secret(
         &self,
         epoch: EpochTime,
+        nodes: Vec<PublicKey>,
     ) -> Result<Secret, KeyManagerError> {
         let height = self
             .consensus_verifier
@@ -602,6 +609,7 @@ impl KeyManagerClient for RemoteClient {
                     height: Some(height),
                     epoch,
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()
@@ -614,6 +622,7 @@ impl KeyManagerClient for RemoteClient {
         &self,
         churp_id: u8,
         epoch: EpochTime,
+        nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         self.rpc_client
             .insecure_call(
@@ -624,6 +633,7 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                     node_id: None,
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()
@@ -636,6 +646,7 @@ impl KeyManagerClient for RemoteClient {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
+        nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         self.rpc_client
             .secure_call(
@@ -646,6 +657,7 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                     node_id: Some(node_id),
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()
@@ -658,6 +670,7 @@ impl KeyManagerClient for RemoteClient {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
+        nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         self.rpc_client
             .secure_call(
@@ -668,6 +681,7 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                     node_id: Some(node_id),
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()
@@ -680,6 +694,7 @@ impl KeyManagerClient for RemoteClient {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
+        nodes: Vec<PublicKey>,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         self.rpc_client
             .secure_call(
@@ -690,6 +705,7 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                     node_id: Some(node_id),
                 },
+                nodes,
             )
             .await
             .into_result_with_feedback()

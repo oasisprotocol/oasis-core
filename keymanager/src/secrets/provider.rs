@@ -50,8 +50,11 @@ impl SecretProvider for KeyManagerSecretProvider {
                 inner.last_node = idx;
                 counter += 1;
 
-                inner.client.set_nodes(vec![inner.nodes[idx]]);
-                if let Ok(secret) = block_on(inner.client.replicate_master_secret(generation)) {
+                if let Ok(secret) = block_on(
+                    inner
+                        .client
+                        .replicate_master_secret(generation, vec![inner.nodes[idx]]),
+                ) {
                     return Some(secret);
                 }
             }
@@ -78,8 +81,11 @@ impl SecretProvider for KeyManagerSecretProvider {
                 inner.last_node = idx;
                 counter += 1;
 
-                inner.client.set_nodes(vec![inner.nodes[idx]]);
-                if let Ok(secret) = block_on(inner.client.replicate_ephemeral_secret(epoch)) {
+                if let Ok(secret) = block_on(
+                    inner
+                        .client
+                        .replicate_ephemeral_secret(epoch, vec![inner.nodes[idx]]),
+                ) {
                     return Some(secret);
                 }
             }

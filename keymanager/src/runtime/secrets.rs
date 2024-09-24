@@ -467,7 +467,6 @@ impl Secrets {
             self.consensus_verifier.clone(),
             self.identity.clone(),
             1, // Not used, doesn't matter.
-            vec![],
         )
     }
 
