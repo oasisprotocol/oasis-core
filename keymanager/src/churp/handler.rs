@@ -620,11 +620,13 @@ impl<S: Suite> Instance<S> {
         }
 
         // Fetch from the remote node.
-        client.set_nodes(vec![node_id]);
-
         if handoff.needs_verification_matrix()? {
             // The remote verification matrix needs to be verified.
-            let vm = block_on(client.churp_verification_matrix(self.churp_id, status.handoff))?;
+            let vm = block_on(client.churp_verification_matrix(
+                self.churp_id,
+                status.handoff,
+                vec![node_id],
+            ))?;
             let checksum = self.checksum_verification_matrix_bytes(&vm, status.handoff);
             let status_checksum = status.checksum.ok_or(Error::InvalidHandoff)?; // Should never happen.
             if checksum != status_checksum {
@@ -640,6 +642,7 @@ impl<S: Suite> Instance<S> {
             self.churp_id,
             status.next_handoff,
             self.node_id,
+            vec![node_id],
         ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
@@ -669,11 +672,11 @@ impl<S: Suite> Instance<S> {
         }
 
         // Fetch from the remote node.
-        client.set_nodes(vec![node_id]);
         let point = block_on(client.churp_share_distribution_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
+            vec![node_id],
         ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
@@ -706,11 +709,11 @@ impl<S: Suite> Instance<S> {
         }
 
         // Fetch from the remote node.
-        client.set_nodes(vec![node_id]);
         let share = block_on(client.churp_bivariate_share(
             self.churp_id,
             status.next_handoff,
             self.node_id,
+            vec![node_id],
         ))?;
 
         // The remote verification matrix needs to be verified.
@@ -1131,7 +1134,6 @@ impl<S: Suite> Instance<S> {
             self.consensus_verifier.clone(),
             self.identity.clone(),
             1, // Not used, doesn't matter.
-            vec![],
         );
 
         Ok(client)

@@ -51,13 +51,13 @@ enum Command {
     Call(
         types::Request,
         types::Kind,
+        Vec<signature::PublicKey>,
         oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
     ),
     PeerFeedback(u64, types::PeerFeedback, types::Kind),
     UpdateEnclaves(Option<HashSet<EnclaveIdentity>>),
     UpdateQuotePolicy(QuotePolicy),
     UpdateRuntimeID(Option<Namespace>),
-    UpdateNodes(Vec<signature::PublicKey>),
     #[cfg(test)]
     Ping(oneshot::Sender<()>),
 }
@@ -87,8 +87,6 @@ impl MultiplexedSession {
 }
 
 struct Controller {
-    /// Allowed nodes.
-    nodes: Vec<signature::PublicKey>,
     /// Multiplexed session.
     session: MultiplexedSession,
     /// Used transport.
@@ -101,7 +99,9 @@ impl Controller {
     async fn run(mut self) {
         while let Some(cmd) = self.cmdq.recv().await {
             match cmd {
-                Command::Call(request, kind, sender) => self.call(request, kind, sender).await,
+                Command::Call(request, kind, nodes, sender) => {
+                    self.call(request, kind, nodes, sender).await
+                }
                 Command::PeerFeedback(pfid, peer_feedback, kind) => {
                     self.transport.set_peer_feedback(pfid, Some(peer_feedback));
 
@@ -141,9 +141,6 @@ impl Controller {
                         mem::take(&mut self.session.builder).remote_runtime_id(id);
                     self.reset().await;
                 }
-                Command::UpdateNodes(nodes) => {
-                    self.nodes = nodes;
-                }
                 #[cfg(test)]
                 Command::Ping(sender) => {
                     let _ = sender.send(());
@@ -159,6 +156,7 @@ impl Controller {
         &mut self,
         request: types::Request,
         kind: types::Kind,
+        nodes: Vec<signature::PublicKey>,
         sender: oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
     ) {
         let result = async {
@@ -166,14 +164,14 @@ impl Controller {
                 types::Kind::NoiseSession => {
                     // Attempt to establish a connection. This will not do anything in case the
                     // session has already been established.
-                    self.connect().await?;
+                    self.connect(nodes).await?;
 
                     // Perform the call.
                     self.secure_call_raw(request).await
                 }
                 types::Kind::InsecureQuery => {
                     // Perform the call.
-                    self.insecure_call_raw(request).await
+                    self.insecure_call_raw(request, nodes).await
                 }
                 _ => Err(RpcClientError::UnsupportedRpcKind),
             }
@@ -196,10 +194,10 @@ impl Controller {
         let _ = sender.send(result.map(|rsp| (pfid, rsp)));
     }
 
-    async fn connect(&mut self) -> Result<(), RpcClientError> {
+    async fn connect(&mut self, nodes: Vec<signature::PublicKey>) -> Result<(), RpcClientError> {
         // No need to create a new session if we are connected to one of the nodes.
         if self.session.inner.is_connected()
-            && (self.nodes.is_empty() || self.session.inner.is_connected_to(&self.nodes))
+            && (nodes.is_empty() || self.session.inner.is_connected_to(&nodes))
         {
             return Ok(());
         }
@@ -217,7 +215,7 @@ impl Controller {
 
         let (data, node) = self
             .transport
-            .write_noise_session(session_id, buffer, String::new(), self.nodes.clone())
+            .write_noise_session(session_id, buffer, String::new(), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -286,10 +284,11 @@ impl Controller {
     async fn insecure_call_raw(
         &mut self,
         request: types::Request,
+        nodes: Vec<signature::PublicKey>,
     ) -> Result<types::Response, RpcClientError> {
         let (data, _) = self
             .transport
-            .write_insecure_query(cbor::to_vec(request), self.nodes.clone())
+            .write_insecure_query(cbor::to_vec(request), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -405,17 +404,12 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    fn new(
-        transport: Box<dyn Transport>,
-        builder: Builder,
-        nodes: Vec<signature::PublicKey>,
-    ) -> Self {
+    fn new(transport: Box<dyn Transport>, builder: Builder) -> Self {
         // Create the command channel.
         let (tx, rx) = mpsc::channel(CMDQ_BACKLOG);
 
         // Create the controller task and start it.
         let controller = Controller {
-            nodes,
             session: MultiplexedSession::new(builder),
             transport,
             cmdq: rx,
@@ -426,38 +420,47 @@ impl RpcClient {
     }
 
     /// Construct an unconnected RPC client with runtime-internal transport.
-    pub fn new_runtime(
-        builder: Builder,
-        protocol: Arc<Protocol>,
-        endpoint: &str,
-        nodes: Vec<signature::PublicKey>,
-    ) -> Self {
-        Self::new(
-            Box::new(RuntimeTransport::new(protocol, endpoint)),
-            builder,
-            nodes,
-        )
+    pub fn new_runtime(builder: Builder, protocol: Arc<Protocol>, endpoint: &str) -> Self {
+        Self::new(Box::new(RuntimeTransport::new(protocol, endpoint)), builder)
     }
 
     /// Call a remote method using an encrypted and authenticated Noise session.
-    pub async fn secure_call<C, O>(&self, method: &'static str, args: C) -> Response<O>
+    pub async fn secure_call<C, O>(
+        &self,
+        method: &'static str,
+        args: C,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
     {
-        self.call(method, args, types::Kind::NoiseSession).await
+        self.call(method, args, types::Kind::NoiseSession, nodes)
+            .await
     }
 
     /// Call a remote method over an insecure channel where messages are sent in plain text.
-    pub async fn insecure_call<C, O>(&self, method: &'static str, args: C) -> Response<O>
+    pub async fn insecure_call<C, O>(
+        &self,
+        method: &'static str,
+        args: C,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
     {
-        self.call(method, args, types::Kind::InsecureQuery).await
+        self.call(method, args, types::Kind::InsecureQuery, nodes)
+            .await
     }
 
-    async fn call<C, O>(&self, method: &'static str, args: C, kind: types::Kind) -> Response<O>
+    async fn call<C, O>(
+        &self,
+        method: &'static str,
+        args: C,
+        kind: types::Kind,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -474,9 +477,10 @@ impl RpcClient {
             .max_delay(std::time::Duration::from_millis(250))
             .take(MAX_TRANSPORT_ERROR_RETRIES);
 
-        let result =
-            tokio_retry::Retry::spawn(retry_strategy, || self.execute_call(request.clone(), kind))
-                .await;
+        let result = tokio_retry::Retry::spawn(retry_strategy, || {
+            self.execute_call(request.clone(), kind, nodes.clone())
+        })
+        .await;
 
         let (pfid, inner) = match result {
             Ok((pfid, response)) => match response.body {
@@ -500,10 +504,11 @@ impl RpcClient {
         &self,
         request: types::Request,
         kind: types::Kind,
+        nodes: Vec<signature::PublicKey>,
     ) -> Result<(u64, types::Response), RpcClientError> {
         let (tx, rx) = oneshot::channel();
         self.cmdq
-            .send(Command::Call(request, kind, tx))
+            .send(Command::Call(request, kind, nodes, tx))
             .await
             .map_err(|_| RpcClientError::Dropped)?;
 
@@ -543,28 +548,6 @@ impl RpcClient {
         self.cmdq
             .blocking_send(Command::UpdateRuntimeID(id))
             .unwrap();
-    }
-
-    /// Update allowed nodes.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if called within an asynchronous execution context.
-    pub fn update_nodes(&self, nodes: Vec<signature::PublicKey>) {
-        self.cmdq
-            .blocking_send(Command::UpdateNodes(nodes))
-            .unwrap();
-    }
-
-    /// Update allowed nodes.
-    pub async fn update_nodes_async(
-        &self,
-        nodes: Vec<signature::PublicKey>,
-    ) -> Result<(), RpcClientError> {
-        self.cmdq
-            .send(Command::UpdateNodes(nodes))
-            .await
-            .map_err(|_| RpcClientError::Dropped)
     }
 
     /// Wait for the controller to process all queued messages.
@@ -729,13 +712,13 @@ mod test {
         let _guard = rt.enter(); // Ensure Tokio runtime is available.
         let transport = MockTransport::new();
         let builder = session::Builder::default();
-        let client = RpcClient::new(Box::new(transport.clone()), builder, vec![]);
+        let client = RpcClient::new(Box::new(transport.clone()), builder);
 
         // Basic secure call.
         let result: u64 = rt
             .block_on(async {
                 client
-                    .secure_call("test", 42)
+                    .secure_call("test", 42, vec![])
                     .await
                     .into_result_with_feedback()
                     .await
@@ -759,7 +742,7 @@ mod test {
         let result: u64 = rt
             .block_on(async {
                 client
-                    .secure_call("test", 43)
+                    .secure_call("test", 43, vec![])
                     .await
                     .into_result_with_feedback()
                     .await
@@ -785,7 +768,7 @@ mod test {
         let result: u64 = rt
             .block_on(async {
                 client
-                    .secure_call("test", 44)
+                    .secure_call("test", 44, vec![])
                     .await
                     .into_result_with_feedback()
                     .await
@@ -809,7 +792,7 @@ mod test {
         let result: u64 = rt
             .block_on(async {
                 client
-                    .insecure_call("test", 45)
+                    .insecure_call("test", 45, vec![])
                     .await
                     .into_result_with_feedback()
                     .await
@@ -831,7 +814,7 @@ mod test {
         let result: u64 = rt
             .block_on(async {
                 client
-                    .insecure_call("test", 46)
+                    .insecure_call("test", 46, vec![])
                     .await
                     .into_result_with_feedback()
                     .await

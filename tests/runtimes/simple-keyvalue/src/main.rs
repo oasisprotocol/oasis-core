@@ -388,7 +388,6 @@ pub fn main_with_version(version: Version) {
             state.identity.clone(),
             1024,
             trusted_signers(),
-            vec![],
         ));
 
         let key_manager = km_client.clone();

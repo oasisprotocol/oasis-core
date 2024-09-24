@@ -109,6 +109,7 @@ impl KeyManagerClient for MockClient {
     async fn replicate_master_secret(
         &self,
         _generation: u64,
+        _nodes: Vec<PublicKey>,
     ) -> Result<VerifiableSecret, KeyManagerError> {
         unimplemented!();
     }
@@ -116,6 +117,7 @@ impl KeyManagerClient for MockClient {
     async fn replicate_ephemeral_secret(
         &self,
         _epoch: EpochTime,
+        _nodes: Vec<PublicKey>,
     ) -> Result<Secret, KeyManagerError> {
         unimplemented!();
     }
@@ -124,6 +126,7 @@ impl KeyManagerClient for MockClient {
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
+        _nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         unimplemented!();
     }
@@ -133,6 +136,7 @@ impl KeyManagerClient for MockClient {
         _churp_id: u8,
         _epoch: EpochTime,
         _node_id: PublicKey,
+        _nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         unimplemented!();
     }
@@ -142,6 +146,7 @@ impl KeyManagerClient for MockClient {
         _churp_id: u8,
         _epoch: EpochTime,
         _node_id: PublicKey,
+        _nodes: Vec<PublicKey>,
     ) -> Result<Vec<u8>, KeyManagerError> {
         unimplemented!();
     }
@@ -151,6 +156,7 @@ impl KeyManagerClient for MockClient {
         _churp_id: u8,
         _epoch: EpochTime,
         _node_id: PublicKey,
+        _nodes: Vec<PublicKey>,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         unimplemented!();
     }
