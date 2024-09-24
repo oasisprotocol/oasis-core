@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use oasis_core_runtime::{common::crypto::signature::PublicKey, consensus::beacon::EpochTime};
+use oasis_core_runtime::{
+    common::{crypto::signature::PublicKey, namespace::Namespace},
+    consensus::beacon::EpochTime,
+};
 
 use crate::{
     api::KeyManagerError,
@@ -14,6 +17,13 @@ use crate::{
 /// Key manager client interface.
 #[async_trait]
 pub trait KeyManagerClient: Send + Sync {
+    /// Key manager runtime identifier this client is connected to. It may be `None` in case the
+    /// identifier is not known yet (e.g. the client has not yet been initialized).
+    fn runtime_id(&self) -> Option<Namespace>;
+
+    /// Key manager runtime signing key used to sign messages from the key manager.
+    fn runtime_signing_key(&self) -> Option<PublicKey>;
+
     /// Clear local key cache.
     ///
     /// This will make the client re-fetch the keys from the key manager.
@@ -108,6 +118,14 @@ pub trait KeyManagerClient: Send + Sync {
 
 #[async_trait]
 impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
+    fn runtime_id(&self) -> Option<Namespace> {
+        KeyManagerClient::runtime_id(&**self)
+    }
+
+    fn runtime_signing_key(&self) -> Option<PublicKey> {
+        KeyManagerClient::runtime_signing_key(&**self)
+    }
+
     fn clear_cache(&self) {
         KeyManagerClient::clear_cache(&**self)
     }
