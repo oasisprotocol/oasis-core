@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use futures::stream::{FuturesUnordered, StreamExt};
 use group::GroupEncoding;
 use lru::LruCache;
 use rand::{prelude::SliceRandom, rngs::OsRng};
@@ -248,20 +249,23 @@ impl RemoteClient {
         let mut shares = Vec::with_capacity(min_shares);
 
         // Fetch key shares in random order.
-        // TODO: Optimize by fetching key shares concurrently.
         let mut committee = status.committee;
         committee.shuffle(&mut OsRng);
 
-        for node_id in committee {
-            // Stop fetching when enough shares are received.
-            if shares.len() == min_shares {
-                break;
-            }
+        // Fetch key shares concurrently.
+        let mut futures = FuturesUnordered::new();
 
-            // Fetch key share from the current node.
-            let response = self
-                .rpc_client
-                .secure_call(
+        loop {
+            // Continuously add new key share requests until the required
+            // number of key shares is received, ensuring the future queue
+            // remains filled even if some requests fail.
+            while shares.len() + futures.len() < min_shares {
+                let node_id = match committee.pop() {
+                    Some(node_id) => node_id,
+                    None => return Err(KeyManagerError::InsufficientKeyShares),
+                };
+
+                let future = self.rpc_client.secure_call(
                     METHOD_SGX_POLICY_KEY_SHARE,
                     KeyShareRequest {
                         id: status.id,
@@ -271,10 +275,19 @@ impl RemoteClient {
                         key_id,
                     },
                     vec![node_id],
-                )
-                .await
-                .into_result_with_feedback()
-                .await;
+                );
+
+                futures.push(future);
+            }
+
+            // Wait for the next future to finish.
+            let response = match futures.next().await {
+                Some(response) => response,
+                None => break,
+            };
+
+            // Send back peer feedback.
+            let response = response.into_result_with_feedback().await;
 
             // Decode the response.
             let encoded_share: EncodedEncryptedPoint = match response {
