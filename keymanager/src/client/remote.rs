@@ -82,6 +82,8 @@ pub struct RemoteClient {
     ephemeral_public_keys: RwLock<LruCache<(KeyPairId, EpochTime), SignedPublicKey>>,
     /// Local cache for the state keys.
     state_keys: RwLock<LruCache<(KeyPairId, u8), StateKey>>,
+    /// Key manager runtime ID.
+    key_manager_id: RwLock<Option<Namespace>>,
     /// Key manager's runtime signing key.
     rsk: RwLock<Option<PublicKey>>,
 }
@@ -104,6 +106,7 @@ impl RemoteClient {
             ephemeral_private_keys: RwLock::new(LruCache::new(cap)),
             ephemeral_public_keys: RwLock::new(LruCache::new(cap)),
             state_keys: RwLock::new(LruCache::new(cap)),
+            key_manager_id: RwLock::new(None),
             rsk: RwLock::new(None),
         }
     }
@@ -196,6 +199,7 @@ impl RemoteClient {
         }
 
         // Set key manager runtime ID.
+        *self.key_manager_id.write().unwrap() = Some(status.id);
         self.rpc_client.update_runtime_id(Some(status.id));
 
         // Verify and apply the policy, if set.
@@ -322,6 +326,14 @@ impl RemoteClient {
 
 #[async_trait]
 impl KeyManagerClient for RemoteClient {
+    fn runtime_id(&self) -> Option<Namespace> {
+        *self.key_manager_id.read().unwrap()
+    }
+
+    fn runtime_signing_key(&self) -> Option<PublicKey> {
+        *self.rsk.read().unwrap()
+    }
+
     fn clear_cache(&self) {
         // We explicitly only take one lock at a time.
 

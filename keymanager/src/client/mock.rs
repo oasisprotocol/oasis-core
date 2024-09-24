@@ -4,7 +4,10 @@ use std::{collections::HashMap, sync::Mutex};
 use async_trait::async_trait;
 
 use oasis_core_runtime::{
-    common::crypto::signature::{PublicKey, Signature},
+    common::{
+        crypto::signature::{PublicKey, Signature},
+        namespace::Namespace,
+    },
     consensus::beacon::EpochTime,
 };
 
@@ -35,6 +38,14 @@ impl MockClient {
 
 #[async_trait]
 impl KeyManagerClient for MockClient {
+    fn runtime_id(&self) -> Option<Namespace> {
+        Some(Namespace::default())
+    }
+
+    fn runtime_signing_key(&self) -> Option<PublicKey> {
+        None
+    }
+
     fn clear_cache(&self) {}
 
     async fn get_or_create_keys(
