@@ -180,24 +180,13 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
 			Request: data,
 			Kind:    kind,
+			PeerID:  []byte(peerID),
 		},
 	}
 
 	rt := w.GetHostedRuntime()
 	if rt == nil {
 		return nil, fmt.Errorf("not initialized")
-	}
-	rtInfo, err := rt.GetInfo(ctx)
-	if err != nil {
-		w.logger.Error("failed to fetch runtime features",
-			"err", err,
-		)
-		return nil, fmt.Errorf("not initialized")
-	}
-
-	// Only include PeerIDs if the runtime supports it.
-	if rtInfo.Features.RPCPeerID {
-		req.RuntimeRPCCallRequest.PeerID = []byte(peerID)
 	}
 
 	response, err := rt.Call(ctx, req)
