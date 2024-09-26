@@ -260,6 +260,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, rtIndex)
 			}
 			fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, rtIndex)
+			fixture.Clients[0].Entity = 1
 
 			// Runtime state paths to use to initialize the runtime with.
 			if len(runtimeStatePaths) <= i {
