@@ -496,8 +496,6 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 type ClientFixture struct {
 	NodeFixture
 
-	Entity int `json:"entity"`
-
 	AllowErrorTermination bool `json:"allow_error_termination"`
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 

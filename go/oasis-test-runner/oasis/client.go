@@ -58,11 +58,6 @@ func (client *Client) ModifyConfig() error {
 
 	client.Config.P2P.Port = client.p2pPort
 
-	if !client.entity.isDebugTestEntity {
-		entityID, _ := client.entity.ID().MarshalText() // Cannot fail.
-		client.Config.Registration.EntityID = string(entityID)
-	}
-
 	if len(client.runtimes) > 0 {
 		client.Config.Mode = config.ModeClient
 		client.Config.Runtime.Provisioner = client.runtimeProvisioner
