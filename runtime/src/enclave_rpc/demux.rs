@@ -1,6 +1,7 @@
 //! Session demultiplexer.
 use std::{
     collections::{BTreeSet, HashMap},
+    hash::Hash,
     io::Write,
     sync::{Arc, Mutex},
 };
@@ -48,17 +49,14 @@ impl From<Error> for crate::types::Error {
     }
 }
 
-/// Peer identifier.
-type PeerID = Vec<u8>;
-
 /// Shared pointer to a multiplexed session.
-type SharedSession = Arc<tokio::sync::Mutex<MultiplexedSession>>;
+type SharedSession<PeerID> = Arc<tokio::sync::Mutex<MultiplexedSession<PeerID>>>;
 
 /// Key for use in the by-idle-time index.
-type SessionByTimeKey = (i64, PeerID, SessionID);
+type SessionByTimeKey<PeerID> = (i64, PeerID, SessionID);
 
 /// Structure used for session accounting.
-struct SessionMeta {
+struct SessionMeta<PeerID: Clone + Ord + Hash> {
     /// Peer identifier.
     peer_id: PeerID,
     /// Session identifier.
@@ -66,18 +64,21 @@ struct SessionMeta {
     /// Timestamp when the session was last accessed.
     last_access_time: i64,
     /// The shared session pointer that needs to be locked for access.
-    inner: SharedSession,
+    inner: SharedSession<PeerID>,
 }
 
-impl SessionMeta {
+impl<PeerID> SessionMeta<PeerID>
+where
+    PeerID: Clone + Ord + Hash,
+{
     /// Key for ordering in the by-idle-time index.
-    fn by_time_key(&self) -> SessionByTimeKey {
+    fn by_time_key(&self) -> SessionByTimeKey<PeerID> {
         (self.last_access_time, self.peer_id.clone(), self.session_id)
     }
 }
 
 /// Session indices and management operations.
-struct Sessions {
+struct Sessions<PeerID: Clone + Ord + Hash> {
     /// Session builder.
     builder: Builder,
     /// Maximum number of sessions.
@@ -88,12 +89,15 @@ struct Sessions {
     stale_session_timeout: i64,
 
     /// A map of sessions for each peer.
-    by_peer: HashMap<PeerID, HashMap<SessionID, SessionMeta>>,
+    by_peer: HashMap<PeerID, HashMap<SessionID, SessionMeta<PeerID>>>,
     /// A set of all sessions, ordered by idle time.
-    by_idle_time: BTreeSet<SessionByTimeKey>,
+    by_idle_time: BTreeSet<SessionByTimeKey<PeerID>>,
 }
 
-impl Sessions {
+impl<PeerID> Sessions<PeerID>
+where
+    PeerID: Clone + Ord + Hash,
+{
     /// Create a new session management instance.
     fn new(
         builder: Builder,
@@ -117,7 +121,7 @@ impl Sessions {
         peer_id: PeerID,
         session_id: SessionID,
         now: i64,
-    ) -> SessionMeta {
+    ) -> SessionMeta<PeerID> {
         // If no quote policy is set, use the local one.
         if builder.get_quote_policy().is_none() {
             let policy = builder
@@ -140,7 +144,7 @@ impl Sessions {
     }
 
     /// Fetch an existing session given its identifier.
-    fn get(&mut self, peer_id: &PeerID, session_id: &SessionID) -> Option<SharedSession> {
+    fn get(&mut self, peer_id: &PeerID, session_id: &SessionID) -> Option<SharedSession<PeerID>> {
         // Check if peer exists.
         let sessions = match self.by_peer.get_mut(peer_id) {
             Some(sessions) => sessions,
@@ -169,7 +173,7 @@ impl Sessions {
     fn remove_from(
         &mut self,
         peer_id: &PeerID,
-    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession>>, Error> {
+    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession<PeerID>>>, Error> {
         // Check if peer exists.
         let sessions = match self.by_peer.get_mut(peer_id) {
             Some(sessions) => sessions,
@@ -212,14 +216,14 @@ impl Sessions {
     fn remove_one(
         &mut self,
         now: i64,
-    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession>>, Error> {
+    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession<PeerID>>>, Error> {
         // Check if there are too many sessions. If so, remove one or return an error.
         if self.by_idle_time.len() < self.max_sessions {
             return Ok(None);
         }
 
         // Attempt to prune stale sessions, starting with the oldest ones.
-        let mut remove_session: Option<OwnedMutexGuard<MultiplexedSession>> = None;
+        let mut remove_session: Option<OwnedMutexGuard<MultiplexedSession<PeerID>>> = None;
 
         for (last_process_frame_time, peer_id, session_id) in self.by_idle_time.iter() {
             if now.saturating_sub(*last_process_frame_time) < self.stale_session_timeout {
@@ -255,7 +259,7 @@ impl Sessions {
         peer_id: PeerID,
         session_id: SessionID,
         now: i64,
-    ) -> Result<SharedSession, Error> {
+    ) -> Result<SharedSession<PeerID>, Error> {
         if self.by_idle_time.len() >= self.max_sessions {
             return Err(Error::MaxConcurrentSessions);
         }
@@ -274,7 +278,7 @@ impl Sessions {
     }
 
     /// Remove a session that must be currently owned by the caller.
-    fn remove(&mut self, session: &OwnedMutexGuard<MultiplexedSession>) {
+    fn remove(&mut self, session: &OwnedMutexGuard<MultiplexedSession<PeerID>>) {
         let sessions = self.by_peer.get_mut(&session.peer_id).unwrap();
         let session_meta = sessions.get(&session.session_id).unwrap();
         let key = session_meta.by_time_key();
@@ -308,11 +312,11 @@ impl Sessions {
 
 /// Session demultiplexer.
 pub struct Demux {
-    sessions: Mutex<Sessions>,
+    sessions: Mutex<Sessions<Vec<u8>>>,
 }
 
 /// A multiplexed session.
-pub struct MultiplexedSession {
+pub struct MultiplexedSession<PeerID> {
     /// Peer identifier (needed for resolution when only given the shared pointer).
     peer_id: PeerID,
     /// Session identifier (needed for resolution when only given the shared pointer).
@@ -321,7 +325,7 @@ pub struct MultiplexedSession {
     inner: Session,
 }
 
-impl MultiplexedSession {
+impl<PeerID> MultiplexedSession<PeerID> {
     /// Session information.
     pub fn info(&self) -> Option<Arc<SessionInfo>> {
         self.inner.session_info()
@@ -362,9 +366,9 @@ impl Demux {
 
     async fn get_or_create_session(
         &self,
-        peer_id: PeerID,
+        peer_id: Vec<u8>,
         session_id: SessionID,
-    ) -> Result<OwnedMutexGuard<MultiplexedSession>, Error> {
+    ) -> Result<OwnedMutexGuard<MultiplexedSession<Vec<u8>>>, Error> {
         let session = {
             let mut sessions = self.sessions.lock().unwrap();
             match sessions.get(&peer_id, &session_id) {
@@ -386,10 +390,16 @@ impl Demux {
     /// Any data that needs to be transmitted back to the peer is written to the passed writer.
     pub async fn process_frame<W: Write>(
         &self,
-        peer_id: PeerID,
+        peer_id: Vec<u8>,
         data: Vec<u8>,
         writer: W,
-    ) -> Result<(OwnedMutexGuard<MultiplexedSession>, Option<Message>), Error> {
+    ) -> Result<
+        (
+            OwnedMutexGuard<MultiplexedSession<Vec<u8>>>,
+            Option<Message>,
+        ),
+        Error,
+    > {
         // Decode frame.
         let frame: Frame = cbor::from_slice(&data)?;
         // Get the existing session or create a new one.
@@ -422,7 +432,7 @@ impl Demux {
     /// Any data that needs to be transmitted back to the peer is written to the passed writer.
     pub fn close<W: Write>(
         &self,
-        mut session: OwnedMutexGuard<MultiplexedSession>,
+        mut session: OwnedMutexGuard<MultiplexedSession<Vec<u8>>>,
         writer: W,
     ) -> Result<(), Error> {
         let mut sessions = self.sessions.lock().unwrap();
