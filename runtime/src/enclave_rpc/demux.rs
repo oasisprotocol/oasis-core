@@ -139,92 +139,138 @@ impl Sessions {
         }
     }
 
-    /// Fetch an existing session given its identifier or create a new one.
-    fn get_or_create(
-        &mut self,
-        peer_id: PeerID,
-        session_id: SessionID,
-    ) -> Result<(SharedSession, bool), Error> {
-        let now = insecure_posix_time();
-
+    /// Fetch an existing session given its identifier.
+    fn get(&mut self, peer_id: &PeerID, session_id: &SessionID) -> Option<SharedSession> {
         // Check if peer exists.
-        if let Some(sessions) = self.by_peer.get_mut(&peer_id) {
-            // Check if the session exists. If so, return it.
-            if let Some(session) = sessions.get_mut(&session_id) {
-                // Remove old idle time.
-                self.by_idle_time.remove(&session.by_time_key());
-                // Update idle time.
-                session.last_access_time = now;
-                self.by_idle_time.insert(session.by_time_key());
+        let sessions = match self.by_peer.get_mut(peer_id) {
+            Some(sessions) => sessions,
+            None => return None,
+        };
 
-                return Ok((session.inner.clone(), false));
-            }
+        // Check if the session exists. If so, return it.
+        let session = match sessions.get_mut(session_id) {
+            Some(session) => session,
+            None => return None,
+        };
 
-            // Check if the peer has max sessions or if no more sessions are available globally. If
-            // so, remove the oldest or return an error.
-            if sessions.len() >= self.max_sessions_per_peer
-                || self.by_idle_time.len() >= self.max_sessions
-            {
-                // Force close the oldest idle session so we can start a new one.
-                let inner = sessions
-                    .iter()
-                    .min_by_key(|(_, s)| {
-                        if let Ok(_inner) = s.inner.try_lock() {
-                            s.last_access_time
-                        } else {
-                            i64::MAX // Session is currently in use.
-                        }
-                    })
-                    .map(|(_, s)| s.inner.clone())
-                    .ok_or(Error::MaxConcurrentSessions)?;
+        // Remove old idle time.
+        self.by_idle_time.remove(&session.by_time_key());
 
-                if let Ok(inner) = inner.try_lock_owned() {
-                    self.remove(&inner);
-                } else {
-                    // All sessions are in use.
-                    return Err(Error::MaxConcurrentSessions);
-                }
-            }
+        // Update idle time.
+        session.last_access_time = insecure_posix_time();
+        self.by_idle_time.insert(session.by_time_key());
+
+        Some(session.inner.clone())
+    }
+
+    /// Remove one existing session from the given peer if the peer has reached
+    /// the maximum number of sessions or if the total number of sessions exceeds
+    /// the global session limit.
+    fn remove_from(
+        &mut self,
+        peer_id: &PeerID,
+    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession>>, Error> {
+        // Check if peer exists.
+        let sessions = match self.by_peer.get_mut(peer_id) {
+            Some(sessions) => sessions,
+            None => return Ok(None),
+        };
+
+        // Check if the peer has max sessions or if no more sessions are available globally.
+        // If so, remove the oldest or return an error.
+        if sessions.len() < self.max_sessions_per_peer
+            && self.by_idle_time.len() < self.max_sessions
+        {
+            return Ok(None);
         }
 
-        // Check if there are too many sessions. If so, remove one or return an error.
-        if self.by_idle_time.len() >= self.max_sessions {
-            // Attempt to prune stale sessions, starting with the oldest ones.
-            let mut remove_session: Option<OwnedMutexGuard<MultiplexedSession>> = None;
-            for (last_process_frame_time, peer_id, session_id) in self.by_idle_time.iter() {
-                if now.saturating_sub(*last_process_frame_time) < self.stale_session_timeout {
-                    // This is the oldest session, all next ones will be more fresh.
-                    return Err(Error::MaxConcurrentSessions);
+        // Force close the oldest idle session.
+        let remove_session = sessions
+            .iter()
+            .min_by_key(|(_, s)| {
+                if let Ok(_inner) = s.inner.try_lock() {
+                    s.last_access_time
+                } else {
+                    i64::MAX // Session is currently in use.
                 }
+            })
+            .map(|(_, s)| s.inner.clone())
+            .ok_or(Error::MaxConcurrentSessions)?;
 
-                // Fetch session and attempt to lock it.
-                if let Some(sessions) = self.by_peer.get(peer_id) {
-                    if let Some(session) = sessions.get(session_id) {
-                        if let Ok(session) = session.inner.clone().try_lock_owned() {
-                            remove_session = Some(session);
-                            break;
-                        }
+        let session = match remove_session.try_lock_owned() {
+            Ok(inner) => inner,
+            Err(_) => return Err(Error::MaxConcurrentSessions), // All sessions are in use.
+        };
+
+        self.remove(&session);
+
+        Ok(Some(session))
+    }
+
+    /// Remove one stale session if the total number of sessions exceeds
+    /// the global session limit.
+    fn remove_one(
+        &mut self,
+        now: i64,
+    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession>>, Error> {
+        // Check if there are too many sessions. If so, remove one or return an error.
+        if self.by_idle_time.len() < self.max_sessions {
+            return Ok(None);
+        }
+
+        // Attempt to prune stale sessions, starting with the oldest ones.
+        let mut remove_session: Option<OwnedMutexGuard<MultiplexedSession>> = None;
+
+        for (last_process_frame_time, peer_id, session_id) in self.by_idle_time.iter() {
+            if now.saturating_sub(*last_process_frame_time) < self.stale_session_timeout {
+                // This is the oldest session, all next ones will be more fresh.
+                return Err(Error::MaxConcurrentSessions);
+            }
+
+            // Fetch session and attempt to lock it.
+            if let Some(sessions) = self.by_peer.get(peer_id) {
+                if let Some(session) = sessions.get(session_id) {
+                    if let Ok(session) = session.inner.clone().try_lock_owned() {
+                        remove_session = Some(session);
+                        break;
                     }
                 }
             }
-
-            if let Some(session) = remove_session {
-                // We found a session that can be removed.
-                self.remove(&session);
-            } else {
-                // All stale sessions are in use.
-                return Err(Error::MaxConcurrentSessions);
-            }
         }
 
-        // Create a new session.
+        // Check if we found a session that can be removed.
+        let session = match remove_session {
+            Some(session) => session,
+            None => return Err(Error::MaxConcurrentSessions), // All stale sessions are in use.
+        };
+
+        self.remove(&session);
+
+        Ok(Some(session))
+    }
+
+    /// Create a new session if there is an available spot.
+    fn create(
+        &mut self,
+        peer_id: PeerID,
+        session_id: SessionID,
+        now: i64,
+    ) -> Result<SharedSession, Error> {
+        if self.by_idle_time.len() >= self.max_sessions {
+            return Err(Error::MaxConcurrentSessions);
+        }
+
         let sessions = self.by_peer.entry(peer_id.clone()).or_default();
+        if sessions.len() >= self.max_sessions_per_peer {
+            return Err(Error::MaxConcurrentSessions);
+        }
+
         let session = Self::create_session(self.builder.clone(), peer_id.clone(), session_id, now);
         let inner = session.inner.clone();
         sessions.insert(session_id, session);
         self.by_idle_time.insert((now, peer_id, session_id));
 
-        Ok((inner, true))
+        Ok(inner)
     }
 
     /// Remove a session that must be currently owned by the caller.
@@ -319,9 +365,17 @@ impl Demux {
         peer_id: PeerID,
         session_id: SessionID,
     ) -> Result<OwnedMutexGuard<MultiplexedSession>, Error> {
-        let (session, _) = {
+        let session = {
             let mut sessions = self.sessions.lock().unwrap();
-            sessions.get_or_create(peer_id, session_id)?
+            match sessions.get(&peer_id, &session_id) {
+                Some(session) => session,
+                None => {
+                    let now = insecure_posix_time();
+                    let _ = sessions.remove_from(&peer_id)?;
+                    let _ = sessions.remove_one(now)?;
+                    sessions.create(peer_id, session_id, now)?
+                }
+            }
         };
 
         Ok(session.lock_owned().await)
@@ -392,240 +446,222 @@ mod test {
     use super::{Error, Sessions};
 
     fn ids() -> (Vec<Vec<u8>>, Vec<SessionID>) {
-        let peer_ids: Vec<Vec<u8>> = (1..16).map(|x| vec![x]).collect();
-        let session_ids: Vec<SessionID> = (1..16).map(|_| SessionID::random()).collect();
+        let peer_ids: Vec<Vec<u8>> = (1..8).map(|x| vec![x]).collect();
+        let session_ids: Vec<SessionID> = (1..8).map(|_| SessionID::random()).collect();
 
         (peer_ids, session_ids)
     }
 
     #[test]
-    fn test_namespacing() {
+    fn test_create() {
         let (peer_ids, session_ids) = ids();
-        let mut sessions = Sessions::new(Builder::default(), 16, 4, 60);
+        let mut sessions = Sessions::new(Builder::default(), 4, 2, 60);
 
-        let (s1, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let s1_owned = s1.try_lock().unwrap();
-        assert_eq!(&s1_owned.peer_id, &peer_ids[0]);
-        assert_eq!(&s1_owned.session_id, &session_ids[0]);
-        drop(s1_owned);
-        assert_eq!(sessions.session_count(), 1);
-        assert_eq!(sessions.peer_count(), 1);
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0], 1, 1, true),
+            (&peer_ids[0], &session_ids[1], 2, 1, true), // Different session ID.
+            (&peer_ids[0], &session_ids[2], 2, 1, false), // Too many sessions per peer.
+            (&peer_ids[1], &session_ids[0], 3, 2, true), // Different peer ID.
+            (&peer_ids[2], &session_ids[2], 4, 3, true), // Different peer ID and session ID.
+            (&peer_ids[3], &session_ids[3], 4, 3, false), // Too many sessions.
+        ];
 
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
+        let now = 0;
+        for (peer_id, session_id, num_sessions, num_peers, created) in test_vector {
+            let res = sessions.create(peer_id.clone(), session_id.clone(), now);
+            match created {
+                true => {
+                    assert!(res.is_ok(), "session should be created");
+                    let s = res.unwrap();
+                    let s_owned = s.try_lock().unwrap();
+                    assert_eq!(&s_owned.peer_id, peer_id);
+                    assert_eq!(&s_owned.session_id, session_id);
+                }
+                false => {
+                    assert!(res.is_err(), "session should not be created");
+                    assert!(matches!(res, Err(Error::MaxConcurrentSessions)));
+                }
+            };
+            assert_eq!(sessions.session_count(), num_sessions);
+            assert_eq!(sessions.peer_count(), num_peers);
+        }
+    }
+
+    #[test]
+    fn test_get() {
+        let (peer_ids, session_ids) = ids();
+        let mut sessions = Sessions::new(Builder::default(), 8, 2, 60);
+
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0], true),
+            (&peer_ids[0], &session_ids[1], false), // Different peer ID.
+            (&peer_ids[1], &session_ids[0], false), // Different session ID.
+            (&peer_ids[1], &session_ids[1], false), // Different peer ID and session ID.
+        ];
+
+        let now = 0;
+        for (peer_id, session_id, create) in test_vector {
+            if create {
+                let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            }
+
+            let maybe_s = sessions.get(peer_id, session_id);
+            match create {
+                true => assert!(maybe_s.is_some(), "session should exist"),
+                false => assert!(maybe_s.is_none(), "session should not exist"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_remove_from() {
+        let (peer_ids, session_ids) = ids();
+        let mut sessions = Sessions::new(Builder::default(), 4, 2, 60);
+
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0]),
+            (&peer_ids[1], &session_ids[1]),
+            (&peer_ids[2], &session_ids[2]),
+            (&peer_ids[2], &session_ids[3]), // Max sessions per peer reached.
+                                             // Max sessions reached.
+        ];
+
+        let mut now = 0;
+        for (peer_id, session_id) in test_vector.clone() {
+            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            now += 1;
+        }
+
+        // Removing one session from an unknown peer should have no effect,
+        // even if all global session slots are occupied.
+        let res = sessions.remove_from(&peer_ids[3]);
+        assert!(res.is_ok(), "remove_from should succeed");
+        let maybe_s_owned = res.unwrap();
+        assert!(maybe_s_owned.is_none(), "no sessions should be removed");
         assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
+        assert_eq!(sessions.peer_count(), 3);
 
-        // Requesting an existing session for an existing peer should return it.
-        let (s1r, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(!created, "session should be reused");
-        let s1r_owned = s1r.try_lock().unwrap();
-        assert_eq!(&s1r_owned.peer_id, &peer_ids[0]);
-        assert_eq!(&s1r_owned.session_id, &session_ids[0]);
-        drop(s1r_owned);
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
+        // Removing one session for one of the existing peers should work
+        // as it should force evict an old session.
+        // Note that each peer has 2 available slots, but globally there are
+        // only 4 slots so if global slots are full this should trigger peer
+        // session eviction.
+        let res = sessions.remove_from(&peer_ids[0]);
+        assert!(res.is_ok(), "remove_from should succeed");
+        let maybe_s_owned = res.unwrap();
+        assert!(maybe_s_owned.is_some(), "one session should be removed");
+        let s_owned = maybe_s_owned.unwrap();
+        assert_eq!(&s_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s_owned.session_id, &session_ids[0]);
+        assert_eq!(sessions.session_count(), 3);
+        assert_eq!(sessions.peer_count(), 2);
 
-        // Sessions should be properly namespaced by peer.
-        let (s5, created) = sessions
-            .get_or_create(peer_ids[1].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created due to namespacing");
-        let s5_owned = s5.try_lock().unwrap();
-        assert_eq!(&s5_owned.peer_id, &peer_ids[1]);
-        assert_eq!(&s5_owned.session_id, &session_ids[0]);
-        drop(s5_owned);
-        assert_eq!(sessions.session_count(), 5);
+        // Removing another session should fail as one global session slot
+        // is available.
+        for peer_id in vec![&peer_ids[0], &peer_ids[1]] {
+            let res = sessions.remove_from(peer_id);
+            assert!(res.is_ok(), "remove_from should succeed");
+            let maybe_s_owned = res.unwrap();
+            assert!(maybe_s_owned.is_none(), "no sessions should be removed");
+            assert_eq!(sessions.session_count(), 3);
+            assert_eq!(sessions.peer_count(), 2);
+        }
+
+        // Removing one session from a peer with max sessions should succeed
+        // even if one global slot is available.
+        let res = sessions.remove_from(&peer_ids[2]);
+        assert!(res.is_ok(), "remove_from should succeed");
+        let maybe_s_owned = res.unwrap();
+        assert!(maybe_s_owned.is_some(), "one session should be removed");
+        let s_owned = maybe_s_owned.unwrap();
+        assert_eq!(&s_owned.peer_id, &peer_ids[2]);
+        assert_eq!(&s_owned.session_id, &session_ids[2]);
+        assert_eq!(sessions.session_count(), 2);
         assert_eq!(sessions.peer_count(), 2);
     }
 
     #[test]
-    fn test_max_sessions_per_peer() {
+    fn test_remove_one() {
         let (peer_ids, session_ids) = ids();
-        let mut sessions = Sessions::new(Builder::default(), 16, 4, 60); // Stale timeout is ignored.
+        let mut sessions = Sessions::new(Builder::default(), 4, 2, 60);
 
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0]),
+            (&peer_ids[1], &session_ids[1]),
+            (&peer_ids[2], &session_ids[2]),
+            (&peer_ids[2], &session_ids[3]), // Max sessions reached.
+        ];
 
-        // Sleep to make sure the first session is the oldest.
-        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let mut now = 0;
+        for (peer_id, session_id) in test_vector.clone() {
+            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            now += 1;
+        }
 
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
+        // Forward time (stale_session_timeout - test_vector.len() - 1).
+        now += 60 - 4 - 1;
+
+        // Removing one session should fail as there are none stale sessions.
+        let res = sessions.remove_one(now);
+        assert!(res.is_err(), "remove_one should fail");
+        assert!(matches!(res, Err(Error::MaxConcurrentSessions)));
         assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
+        assert_eq!(sessions.peer_count(), 3);
 
-        // Creating more sessions for the same peer should result in the oldest session being
-        // closed.
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[4])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
+        // Forward time.
+        now += 1;
 
-        // Only the oldest session should be closed.
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(!created, "session should be reused");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(!created, "session should be reused");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(!created, "session should be reused");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
+        // Removing one session should succeed as no session slots
+        // are available and there is one stale session.
+        let res = sessions.remove_one(now);
+        assert!(res.is_ok(), "remove_one should succeed");
+        let maybe_s_owned = res.unwrap();
+        assert!(maybe_s_owned.is_some(), "one session should be removed");
+        let s_owned = maybe_s_owned.unwrap();
+        assert_eq!(&s_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s_owned.session_id, &session_ids[0]);
+        assert_eq!(sessions.session_count(), 3);
+        assert_eq!(sessions.peer_count(), 2);
 
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 1);
-    }
+        // Forward time.
+        now += 100;
 
-    #[test]
-    fn test_max_sessions() {
-        let (peer_ids, session_ids) = ids();
-        let mut sessions = Sessions::new(Builder::default(), 4, 4, 60);
-
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[1].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[2].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[3].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 4);
-
-        // Creating more sessions for a different peer should fail as no sessions are available and
-        // none are stale.
-        let res = sessions.get_or_create(peer_ids[4].clone(), session_ids[4]);
-        assert!(
-            matches!(res, Err(Error::MaxConcurrentSessions)),
-            "get_or_create should fail"
-        );
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 4);
-
-        // Creating more sessions for one of the existing peers should still work as it should force
-        // evict an old session. Note that each peer has 4 available slots, but globally there are
-        // only 4 slots so if global slots are full this should still trigger peer session eviction.
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[5])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 4);
-    }
-
-    #[test]
-    fn test_max_sessions_prune_stale() {
-        let (peer_ids, session_ids) = ids();
-        let mut sessions = Sessions::new(Builder::default(), 4, 4, 0); // Stale timeout is zero.
-
-        let (_, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[1].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[2].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[3].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 4);
-
-        // Creating more sessions for a different peer should succeed as one of the stale sessions
-        // should be removed to make room for a new session.
-        let (_, created) = sessions
-            .get_or_create(peer_ids[4].clone(), session_ids[4])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 4);
+        // Removing one session should fail even though there are stale sessions
+        // because there is one session slot available.
+        let res = sessions.remove_one(now);
+        assert!(res.is_ok(), "remove_one should succeed");
+        let maybe_s_owned = res.unwrap();
+        assert!(maybe_s_owned.is_none(), "no sessions should be removed");
+        assert_eq!(sessions.session_count(), 3);
+        assert_eq!(sessions.peer_count(), 2);
     }
 
     #[test]
     fn test_remove() {
         let (peer_ids, session_ids) = ids();
-        let mut sessions = Sessions::new(Builder::default(), 16, 4, 0); // Stale timeout is zero.
+        let mut sessions = Sessions::new(Builder::default(), 8, 2, 60);
 
-        let (s1, created) = sessions
-            .get_or_create(peer_ids[0].clone(), session_ids[0])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (s2, created) = sessions
-            .get_or_create(peer_ids[1].clone(), session_ids[1])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[1].clone(), session_ids[2])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        let (_, created) = sessions
-            .get_or_create(peer_ids[2].clone(), session_ids[3])
-            .expect("get_or_create should succeed");
-        assert!(created, "new session should be created");
-        assert_eq!(sessions.session_count(), 4);
-        assert_eq!(sessions.peer_count(), 3);
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0], 3, 2),
+            (&peer_ids[1], &session_ids[1], 2, 1),
+            (&peer_ids[2], &session_ids[2], 1, 1),
+            (&peer_ids[2], &session_ids[3], 0, 0),
+        ];
 
-        let s1r = s1.try_lock_owned().unwrap();
-        sessions.remove(&s1r);
-        assert_eq!(sessions.session_count(), 3);
-        assert_eq!(sessions.peer_count(), 2);
+        let now = 0;
+        for (peer_id, session_id, _, _) in test_vector.clone() {
+            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+        }
 
-        let s2r = s2.try_lock_owned().unwrap();
-        sessions.remove(&s2r);
-        assert_eq!(sessions.session_count(), 2);
-        assert_eq!(sessions.peer_count(), 2);
+        for (peer_id, session_id, num_sessions, num_peers) in test_vector {
+            let maybe_s = sessions.get(peer_id, session_id);
+            assert!(maybe_s.is_some(), "session should exist");
+            let s = maybe_s.unwrap();
+            let s_owned = s.try_lock_owned().unwrap();
+
+            sessions.remove(&s_owned);
+            assert_eq!(sessions.session_count(), num_sessions);
+            assert_eq!(sessions.peer_count(), num_peers);
+        }
     }
 }
