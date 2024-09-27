@@ -5,6 +5,7 @@ pub mod context;
 pub mod demux;
 pub mod dispatcher;
 pub mod session;
+pub mod sessions;
 mod transport;
 pub mod types;
 
