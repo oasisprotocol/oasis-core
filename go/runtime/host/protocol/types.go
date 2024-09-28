@@ -480,7 +480,7 @@ type HostRPCCallRequest struct {
 
 	// Nodes are optional node identities in case the request should be forwarded to specific
 	// node instances and not to randomly chosen ones as selected by the host.
-	Nodes []signature.PublicKey `json:"nodes,omitempty"`
+	Nodes []signature.PublicKey `json:"nodes"`
 	// PeerFeedback contains optional peer feedback for the last RPC call under the given endpoint.
 	//
 	// This enables the runtime to notify the node whether the given peer should continue to be used
@@ -495,7 +495,7 @@ type HostRPCCallResponse struct {
 	// Response is a response to a HostRPCCallRequest.
 	Response []byte `json:"response"`
 	// Node is the identifier of the node that handled the request.
-	Node *signature.PublicKey `json:"node,omitempty"`
+	Node signature.PublicKey `json:"node"`
 }
 
 // HostStorageEndpoint is the host storage endpoint.

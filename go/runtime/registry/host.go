@@ -250,15 +250,9 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 		if err != nil {
 			return nil, err
 		}
-		// Don't send node identity if the runtime doesn't support explicit key manager RPC calls.
-		if rq.Nodes == nil {
-			return &protocol.HostRPCCallResponse{
-				Response: res,
-			}, nil
-		}
 		return &protocol.HostRPCCallResponse{
 			Response: res,
-			Node:     &node,
+			Node:     node,
 		}, nil
 	default:
 		return nil, fmt.Errorf("endpoint not supported")
