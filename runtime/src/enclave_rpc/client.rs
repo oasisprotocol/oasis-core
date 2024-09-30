@@ -1,6 +1,16 @@
 //! Enclave RPC client.
-use std::{collections::HashSet, mem, sync::Arc};
+use std::{
+    collections::HashSet,
+    mem,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
+use lazy_static::lazy_static;
+#[cfg(not(test))]
+use rand::{rngs::OsRng, RngCore};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
@@ -23,6 +33,11 @@ use super::transport::{RuntimeTransport, Transport};
 const CMDQ_BACKLOG: usize = 32;
 /// Maximum number of retries on transport errors.
 const MAX_TRANSPORT_ERROR_RETRIES: usize = 3;
+
+lazy_static! {
+    /// The ID of the next RPC client.
+    static ref NEXT_CLIENT_ID: AtomicU32 = AtomicU32::new(RpcClient::random_client_id());
+}
 
 /// RPC client error.
 #[derive(Error, Debug)]
@@ -93,6 +108,10 @@ struct Controller {
     transport: Box<dyn Transport>,
     /// Internal command queue (receiver part).
     cmdq: mpsc::Receiver<Command>,
+    /// The ID of the client.
+    client_id: u32,
+    /// The total number of requests sent.
+    sent_request_count: u32,
 }
 
 impl Controller {
@@ -102,8 +121,11 @@ impl Controller {
                 Command::Call(request, kind, nodes, sender) => {
                     self.call(request, kind, nodes, sender).await
                 }
-                Command::PeerFeedback(pfid, peer_feedback, kind) => {
-                    self.transport.set_peer_feedback(pfid, Some(peer_feedback));
+                Command::PeerFeedback(request_id, peer_feedback, kind) => {
+                    let _ = self
+                        .transport
+                        .submit_peer_feedback(request_id, peer_feedback)
+                        .await; // Ignore error.
 
                     // In case the peer feedback is bad, reset the session so a new peer can be
                     // selected for a subsequent session.
@@ -178,12 +200,15 @@ impl Controller {
         }
         .await;
 
-        // Update peer feedback for next request.
-        let pfid = self.transport.get_peer_feedback_id();
+        let request_id = self.get_request_id();
+
         if result.is_err() {
             // Set peer feedback immediately so retries can try new peers.
-            self.transport
-                .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
+            let _ = self
+                .transport
+                .submit_peer_feedback(request_id, types::PeerFeedback::Failure)
+                .await; // Ignore error.
+
             // In case there was a transport error we need to reset the session immediately as no
             // progress is possible.
             if kind == types::Kind::NoiseSession {
@@ -191,7 +216,7 @@ impl Controller {
             }
         }
 
-        let _ = sender.send(result.map(|rsp| (pfid, rsp)));
+        let _ = sender.send(result.map(|rsp| (request_id, rsp)));
     }
 
     async fn connect(&mut self, nodes: Vec<signature::PublicKey>) -> Result<(), RpcClientError> {
@@ -213,26 +238,41 @@ impl Controller {
             .expect("initiation must always succeed");
         let session_id = self.session.id;
 
-        let (data, node) = self
+        let request_id = self.increment_request_id();
+
+        let rsp = self
             .transport
-            .write_noise_session(session_id, buffer, String::new(), nodes)
+            .write_noise_session(request_id, session_id, buffer, String::new(), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
         // Update the session with the identity of the remote node. The latter still needs to be
         // verified using the RAK from the consensus layer.
-        self.session.inner.set_remote_node(node)?;
+        self.session.inner.set_remote_node(rsp.node)?;
 
         // Handshake2 -> Transport
         let mut buffer = vec![];
         self.session
             .inner
-            .process_data(data, &mut buffer)
+            .process_data(rsp.data, &mut buffer)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
+        let _ = self
+            .transport
+            .submit_peer_feedback(request_id, types::PeerFeedback::Success)
+            .await; // Ignore error.
+
+        let request_id = self.increment_request_id();
+
         self.transport
-            .write_noise_session(session_id, buffer, String::new(), vec![node])
+            .write_noise_session(
+                request_id,
+                session_id,
+                buffer,
+                String::new(),
+                vec![rsp.node],
+            )
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -241,6 +281,11 @@ impl Controller {
         if self.session.inner.is_unauthenticated() {
             return Err(RpcClientError::Transport);
         }
+
+        let _ = self
+            .transport
+            .submit_peer_feedback(request_id, types::PeerFeedback::Success)
+            .await; // Ignore error.
 
         Ok(())
     }
@@ -261,9 +306,11 @@ impl Controller {
         let node = self.session.inner.get_node()?;
 
         // Send the request and receive the response.
-        let (data, _) = self
+        let request_id = self.increment_request_id();
+
+        let rsp = self
             .transport
-            .write_noise_session(self.session.id, buffer, method, vec![node])
+            .write_noise_session(request_id, self.session.id, buffer, method, vec![node])
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -271,7 +318,7 @@ impl Controller {
         let msg = self
             .session
             .inner
-            .process_data(data, vec![])
+            .process_data(rsp.data, vec![])
             .await?
             .expect("message must be decoded if there is no error");
 
@@ -286,13 +333,15 @@ impl Controller {
         request: types::Request,
         nodes: Vec<signature::PublicKey>,
     ) -> Result<types::Response, RpcClientError> {
-        let (data, _) = self
+        let request_id = self.increment_request_id();
+
+        let rsp = self
             .transport
-            .write_insecure_query(cbor::to_vec(request), nodes)
+            .write_insecure_query(request_id, cbor::to_vec(request), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
-        cbor::from_slice(&data).map_err(RpcClientError::DecodeError)
+        cbor::from_slice(&rsp.data).map_err(RpcClientError::DecodeError)
     }
 
     async fn reset(&mut self) {
@@ -311,11 +360,22 @@ impl Controller {
             .write_message(types::Message::Close, &mut buffer)
             .map_err(|_| RpcClientError::Transport)?;
 
+        let request_id = self.increment_request_id();
+
         self.transport
-            .write_noise_session(self.session.id, buffer, String::new(), vec![node])
+            .write_noise_session(
+                request_id,
+                self.session.id,
+                buffer,
+                String::new(),
+                vec![node],
+            )
             .await
             .map_err(|_| RpcClientError::Transport)
-            .map(|(data, _)| data)
+            .map(|rsp| rsp.data)
+
+        // Skipping peer feedback, as the request was sent only to inform
+        // the other side of a graceful session close.
     }
 
     async fn close(&mut self) -> Result<(), RpcClientError> {
@@ -339,6 +399,15 @@ impl Controller {
             msg => Err(RpcClientError::ExpectedCloseMessage(msg)),
         }
     }
+
+    fn get_request_id(&self) -> u64 {
+        ((self.client_id as u64) << 32) + (self.sent_request_count as u64)
+    }
+
+    fn increment_request_id(&mut self) -> u64 {
+        self.sent_request_count = self.sent_request_count.wrapping_add(1);
+        self.get_request_id()
+    }
 }
 
 /// An EnclaveRPC response that can be used to provide peer feedback.
@@ -346,7 +415,7 @@ pub struct Response<T> {
     inner: Result<T, RpcClientError>,
     kind: types::Kind,
     cmdq: mpsc::WeakSender<Command>,
-    pfid: Option<u64>,
+    request_id: Option<u64>,
 }
 
 impl<T> Response<T> {
@@ -388,10 +457,12 @@ impl<T> Response<T> {
 
     /// Send peer feedback.
     async fn send_peer_feedback(&mut self, pf: types::PeerFeedback) {
-        if let Some(pfid) = self.pfid.take() {
+        if let Some(request_id) = self.request_id.take() {
             // Only count feedback once.
             if let Some(cmdq) = self.cmdq.upgrade() {
-                let _ = cmdq.send(Command::PeerFeedback(pfid, pf, self.kind)).await;
+                let _ = cmdq
+                    .send(Command::PeerFeedback(request_id, pf, self.kind))
+                    .await;
             }
         }
     }
@@ -408,11 +479,16 @@ impl RpcClient {
         // Create the command channel.
         let (tx, rx) = mpsc::channel(CMDQ_BACKLOG);
 
+        // Ensure every client has a unique ID.
+        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::SeqCst); // Wraps if overflows.
+
         // Create the controller task and start it.
         let controller = Controller {
             session: MultiplexedSession::new(builder),
             transport,
             cmdq: rx,
+            client_id,
+            sent_request_count: 0,
         };
         tokio::spawn(controller.run());
 
@@ -482,12 +558,15 @@ impl RpcClient {
         })
         .await;
 
-        let (pfid, inner) = match result {
-            Ok((pfid, response)) => match response.body {
-                types::Body::Success(value) => {
-                    (Some(pfid), cbor::from_value(value).map_err(Into::into))
+        let (request_id, inner) = match result {
+            Ok((request_id, response)) => match response.body {
+                types::Body::Success(value) => (
+                    Some(request_id),
+                    cbor::from_value(value).map_err(Into::into),
+                ),
+                types::Body::Error(error) => {
+                    (Some(request_id), Err(RpcClientError::CallFailed(error)))
                 }
-                types::Body::Error(error) => (Some(pfid), Err(RpcClientError::CallFailed(error))),
             },
             Err(err) => (None, Err(err)),
         };
@@ -496,7 +575,7 @@ impl RpcClient {
             inner,
             kind,
             cmdq: self.cmdq.downgrade(),
-            pfid,
+            request_id,
         }
     }
 
@@ -550,6 +629,15 @@ impl RpcClient {
             .unwrap();
     }
 
+    /// Generate a random client ID.
+    fn random_client_id() -> u32 {
+        #[cfg(test)]
+        return 0;
+
+        #[cfg(not(test))]
+        OsRng.next_u32()
+    }
+
     /// Wait for the controller to process all queued messages.
     #[cfg(test)]
     async fn flush_cmd_queue(&self) -> Result<(), RpcClientError> {
@@ -575,7 +663,7 @@ mod test {
 
     use crate::{
         common::crypto::signature,
-        enclave_rpc::{demux::Demux, session, types},
+        enclave_rpc::{demux::Demux, session, transport::EnclaveResponse, types},
     };
 
     use super::{super::transport::Transport, RpcClient};
@@ -584,8 +672,7 @@ mod test {
     struct MockTransport {
         demux: Arc<Demux>,
         next_error: Arc<AtomicBool>,
-        peer_feedback: Arc<Mutex<(u64, Option<types::PeerFeedback>)>>,
-        peer_feedback_history: Arc<Mutex<Vec<(u64, Option<types::PeerFeedback>)>>>,
+        peer_feedback_history: Arc<Mutex<Vec<(u64, types::PeerFeedback)>>>,
     }
 
     impl MockTransport {
@@ -593,7 +680,6 @@ mod test {
             Self {
                 demux: Arc::new(Demux::new(session::Builder::default(), 4, 4, 60)),
                 next_error: Arc::new(AtomicBool::new(false)),
-                peer_feedback: Arc::new(Mutex::new((0, None))),
                 peer_feedback_history: Arc::new(Mutex::new(Vec::new())),
             }
         }
@@ -606,15 +692,9 @@ mod test {
             self.next_error.store(true, Ordering::SeqCst);
         }
 
-        fn take_peer_feedback_history(&self) -> Vec<(u64, Option<types::PeerFeedback>)> {
-            let mut pfh: Vec<_> = {
-                let mut pfh = self.peer_feedback_history.lock().unwrap();
-                std::mem::take(&mut pfh)
-            };
-            // Also add the pending feedback.
-            let pf = self.peer_feedback.lock().unwrap();
-            pfh.push(pf.clone());
-            pfh
+        fn take_peer_feedback_history(&self) -> Vec<(u64, types::PeerFeedback)> {
+            let mut pfh = self.peer_feedback_history.lock().unwrap();
+            pfh.drain(..).collect()
         }
     }
 
@@ -622,22 +702,11 @@ mod test {
     impl Transport for MockTransport {
         async fn write_message_impl(
             &self,
+            _request_id: u64,
             request: Vec<u8>,
             kind: types::Kind,
             _nodes: Vec<signature::PublicKey>,
-        ) -> Result<(Vec<u8>, signature::PublicKey), anyhow::Error> {
-            let pf = {
-                let mut pf = self.peer_feedback.lock().unwrap();
-                let peer_feedback = pf.1.take();
-
-                if !matches!(peer_feedback, None | Some(types::PeerFeedback::Success)) {
-                    pf.0 += 1;
-                }
-
-                (pf.0, peer_feedback)
-            };
-            self.peer_feedback_history.lock().unwrap().push(pf);
-
+        ) -> Result<EnclaveResponse, anyhow::Error> {
             // Induce error when configured to do so.
             if self
                 .next_error
@@ -669,13 +738,21 @@ mod test {
                             let response = types::Message::Response(types::Response { body });
 
                             let mut buffer = Vec::new();
-                            Ok(session
-                                .write_message(response, &mut buffer)
-                                .map(|_| (buffer, Default::default()))?)
+                            session.write_message(response, &mut buffer)?;
+
+                            let rsp = EnclaveResponse {
+                                data: buffer,
+                                node: Default::default(),
+                            };
+                            Ok(rsp)
                         }
                         None => {
                             // Handshake.
-                            Ok((buffer, Default::default()))
+                            let rsp = EnclaveResponse {
+                                data: buffer,
+                                node: Default::default(),
+                            };
+                            Ok(rsp)
                         }
                     }
                 }
@@ -684,7 +761,11 @@ mod test {
                     let rq: types::Request = cbor::from_slice(&request).unwrap();
                     let body = types::Body::Success(rq.args);
                     let response = types::Response { body };
-                    return Ok((cbor::to_vec(response), Default::default()));
+                    let rsp = EnclaveResponse {
+                        data: cbor::to_vec(response),
+                        node: Default::default(),
+                    };
+                    return Ok(rsp);
                 }
                 types::Kind::LocalQuery => {
                     panic!("unhandled RPC kind")
@@ -692,17 +773,17 @@ mod test {
             }
         }
 
-        fn set_peer_feedback(&self, pfid: u64, peer_feedback: Option<types::PeerFeedback>) {
-            let mut pf = self.peer_feedback.lock().unwrap();
-            if pf.0 != pfid {
-                return;
-            }
+        async fn submit_peer_feedback(
+            &self,
+            request_id: u64,
+            peer_feedback: types::PeerFeedback,
+        ) -> Result<(), anyhow::Error> {
+            self.peer_feedback_history
+                .lock()
+                .unwrap()
+                .push((request_id, peer_feedback));
 
-            pf.1 = peer_feedback;
-        }
-
-        fn get_peer_feedback_id(&self) -> u64 {
-            self.peer_feedback.lock().unwrap().0
+            Ok(())
         }
     }
 
@@ -729,10 +810,9 @@ mod test {
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
-                (0, None),                               // Handshake.
-                (0, None),                               // Handshake.
-                (0, None),                               // Call.
-                (0, Some(types::PeerFeedback::Success)), // Handled call.
+                (1, types::PeerFeedback::Success), // Handshake.
+                (2, types::PeerFeedback::Success), // Handshake.
+                (3, types::PeerFeedback::Success), // Handled call.
             ]
         );
 
@@ -753,11 +833,10 @@ mod test {
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
-                (0, Some(types::PeerFeedback::Success)), // Previous handled call.
-                (1, Some(types::PeerFeedback::Failure)), // Failed call due to session reset.
-                (1, None),                               // New handshake.
-                (1, None),                               // New handshake.
-                (1, Some(types::PeerFeedback::Success)), // Handled call.
+                (4, types::PeerFeedback::Failure), // Failed call due to session reset.
+                (5, types::PeerFeedback::Success), // New handshake.
+                (6, types::PeerFeedback::Success), // New handshake.
+                (7, types::PeerFeedback::Success), // Handled call.
             ]
         );
 
@@ -779,12 +858,11 @@ mod test {
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
-                (1, Some(types::PeerFeedback::Success)), // Previous handled call.
-                (2, Some(types::PeerFeedback::Failure)), // Failed call due to induced error.
-                (2, None),                               // Session close.
-                (2, None),                               // New handshake.
-                (2, None),                               // New handshake.
-                (2, Some(types::PeerFeedback::Success)), // Handled call.
+                (8, types::PeerFeedback::Failure), // Handshake failed due to induced error.
+                // (9, types::PeerFeedback::Failure), // Session close failed due to decrypt error (handshake not completed). [skipped]
+                (10, types::PeerFeedback::Success), // New handshake.
+                (11, types::PeerFeedback::Success), // New handshake.
+                (12, types::PeerFeedback::Success), // Handled call.
             ]
         );
 
@@ -803,8 +881,7 @@ mod test {
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
-                (2, Some(types::PeerFeedback::Success)), // Previous handled call.
-                (2, Some(types::PeerFeedback::Success)), // Handled call.
+                (13, types::PeerFeedback::Success), // Handled call.
             ]
         );
 
@@ -825,9 +902,8 @@ mod test {
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
-                (2, Some(types::PeerFeedback::Success)), // Previous handled call.
-                (3, Some(types::PeerFeedback::Failure)), // Failed call due to induced error.
-                (3, Some(types::PeerFeedback::Success)), // Handled call.
+                (14, types::PeerFeedback::Failure), // Failed call due to induced error.
+                (15, types::PeerFeedback::Success), // Handled call.
             ]
         );
     }

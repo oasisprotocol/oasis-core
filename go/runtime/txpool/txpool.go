@@ -882,13 +882,10 @@ func New(
 	host RuntimeHostProvisioner,
 	history history.History,
 	txPublisher TransactionPublisher,
-) (TransactionPool, error) {
+) TransactionPool {
 	initMetrics()
 
-	seenCache, err := lru.New(lru.Capacity(cfg.MaxLastSeenCacheSize, false))
-	if err != nil {
-		return nil, fmt.Errorf("error creating seen cache: %w", err)
-	}
+	seenCache := lru.New(lru.Capacity(cfg.MaxLastSeenCacheSize, false))
 
 	// The transaction check queue should be 10% larger than the transaction pool to allow for some
 	// buffer in case the schedule queue is full and is being rechecked.
@@ -921,5 +918,5 @@ func New(
 		mainQueue:            mq,
 		proposedTxs:          make(map[hash.Hash]*TxQueueMeta),
 		republishCh:          channels.NewRingChannel(1),
-	}, nil
+	}
 }

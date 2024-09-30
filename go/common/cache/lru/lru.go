@@ -181,23 +181,21 @@ func (c *Cache) getValueSize(value interface{}) uint64 {
 }
 
 // New creates a new LRU cache instance with the specified options.
-func New(options ...Option) (*Cache, error) {
+func New(options ...Option) *Cache {
 	c := &Cache{
 		lru:     list.New(),
 		entries: make(map[interface{}]*list.Element),
 	}
 
 	for _, v := range options {
-		if err := v(c); err != nil {
-			return nil, err
-		}
+		v(c)
 	}
 
-	return c, nil
+	return c
 }
 
 // Option is a configuration option used when instantiating a cache.
-type Option func(c *Cache) error
+type Option func(c *Cache)
 
 // Capacity sets the capacity of the new cache.  If the capacity is set
 // as `inBytes`, it is assumed that all values inserted will implement
@@ -205,17 +203,15 @@ type Option func(c *Cache) error
 //
 // If no capacity is specified, the cache will have an unlimited size.
 func Capacity(capacity uint64, inBytes bool) Option {
-	return func(c *Cache) error {
+	return func(c *Cache) {
 		c.capacityInBytes = inBytes
 		c.capacity = capacity
-		return nil
 	}
 }
 
 // OnEvict sets the on-evict callback.
 func OnEvict(fn OnEvictFunc) Option {
-	return func(c *Cache) error {
+	return func(c *Cache) {
 		c.onEvict = fn
-		return nil
 	}
 }
