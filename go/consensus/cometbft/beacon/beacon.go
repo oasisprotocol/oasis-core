@@ -398,10 +398,7 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 		return nil, err
 	}
 
-	epochCache, err := lru.New(lru.Capacity(epochCacheCapacity, false))
-	if err != nil {
-		return nil, err
-	}
+	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
 
 	sc := &serviceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),

@@ -881,17 +881,13 @@ func NewNode(
 	n.RuntimeHostNode = rhn
 
 	// Prepare transaction pool.
-	txPool, err := txpool.New(runtime.ID(), txPoolCfg, n, runtime.History(), n)
-	if err != nil {
-		return nil, fmt.Errorf("error creating transaction pool: %w", err)
-	}
-	n.TxPool = txPool
+	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, n, runtime.History(), n)
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})
 
 	// Register transaction sync service.
-	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), txPool))
+	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), n.TxPool))
 
 	return n, nil
 }
