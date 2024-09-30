@@ -12,6 +12,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -246,14 +247,51 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 		if err != nil {
 			return nil, err
 		}
-		res, node, err := kmCli.CallEnclave(ctx, rq.Request, rq.Nodes, rq.Kind, rq.PeerFeedback)
+
+		if rq.RequestID == 0 {
+			var (
+				res  []byte
+				node signature.PublicKey
+			)
+
+			res, node, err = kmCli.CallEnclaveDeprecated(ctx, rq.Request, rq.Nodes, rq.Kind, rq.PeerFeedback) //nolint:staticcheck // Suppress SA1019 deprecation warning
+			if err != nil {
+				return nil, err
+			}
+
+			return &protocol.HostRPCCallResponse{
+				Response: res,
+				Node:     node,
+			}, nil
+		}
+
+		res, err := kmCli.CallEnclave(ctx, rq.RequestID, rq.Request, rq.Nodes, rq.Kind)
 		if err != nil {
 			return nil, err
 		}
+
 		return &protocol.HostRPCCallResponse{
-			Response: res,
-			Node:     node,
+			Response: res.Data,
+			Node:     res.Node,
 		}, nil
+	default:
+		return nil, fmt.Errorf("endpoint not supported")
+	}
+}
+
+func (h *runtimeHostHandler) handleHostSubmitPeerFeedback(
+	rq *protocol.HostSubmitPeerFeedbackRequest,
+) (*protocol.Empty, error) {
+	switch rq.Endpoint {
+	case runtimeKeymanager.EnclaveRPCEndpoint:
+		kmCli, err := h.env.GetKeyManagerClient()
+		if err != nil {
+			return nil, err
+		}
+
+		kmCli.SubmitPeerFeedback(rq.RequestID, rq.PeerFeedback)
+
+		return &protocol.Empty{}, nil
 	default:
 		return nil, fmt.Errorf("endpoint not supported")
 	}
@@ -508,6 +546,9 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostRPCCallRequest != nil:
 		// RPC.
 		rsp.HostRPCCallResponse, err = h.handleHostRPCCall(ctx, rq.HostRPCCallRequest)
+	case rq.HostSubmitPeerFeedbackRequest != nil:
+		// Peer feedback.
+		rsp.HostSubmitPeerFeedbackResponse, err = h.handleHostSubmitPeerFeedback(rq.HostSubmitPeerFeedbackRequest)
 	case rq.HostStorageSyncRequest != nil:
 		// Storage sync.
 		rsp.HostStorageSyncResponse, err = h.handleHostStorageSync(ctx, rq.HostStorageSyncRequest)

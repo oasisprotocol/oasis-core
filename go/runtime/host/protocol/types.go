@@ -109,6 +109,8 @@ type Body struct {
 	// Host interface.
 	HostRPCCallRequest               *HostRPCCallRequest               `json:",omitempty"`
 	HostRPCCallResponse              *HostRPCCallResponse              `json:",omitempty"`
+	HostSubmitPeerFeedbackRequest    *HostSubmitPeerFeedbackRequest    `json:",omitempty"`
+	HostSubmitPeerFeedbackResponse   *Empty                            `json:",omitempty"`
 	HostStorageSyncRequest           *HostStorageSyncRequest           `json:",omitempty"`
 	HostStorageSyncResponse          *HostStorageSyncResponse          `json:",omitempty"`
 	HostLocalStorageGetRequest       *HostLocalStorageGetRequest       `json:",omitempty"`
@@ -474,13 +476,15 @@ type RuntimeConsensusSyncRequest struct {
 
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {
-	Endpoint string          `json:"endpoint"`
-	Request  []byte          `json:"request"`
-	Kind     enclaverpc.Kind `json:"kind,omitempty"`
+	Endpoint  string          `json:"endpoint"`
+	RequestID uint64          `json:"request_id"`
+	Request   []byte          `json:"request"`
+	Kind      enclaverpc.Kind `json:"kind,omitempty"`
 
 	// Nodes are optional node identities in case the request should be forwarded to specific
 	// node instances and not to randomly chosen ones as selected by the host.
 	Nodes []signature.PublicKey `json:"nodes"`
+
 	// PeerFeedback contains optional peer feedback for the last RPC call under the given endpoint.
 	//
 	// This enables the runtime to notify the node whether the given peer should continue to be used
@@ -496,6 +500,21 @@ type HostRPCCallResponse struct {
 	Response []byte `json:"response"`
 	// Node is the identifier of the node that handled the request.
 	Node signature.PublicKey `json:"node"`
+}
+
+// HostSubmitPeerFeedbackRequest is a host submit peer feedback request message body.
+type HostSubmitPeerFeedbackRequest struct {
+	// Endpoint is the RPC endpoint.
+	Endpoint string `json:"endpoint"`
+
+	// RequestID is the ID of the RPC request to which the feedback belongs.
+	RequestID uint64 `json:"request_id"`
+
+	// PeerFeedback contains feedback related to the given RPC call.
+	//
+	// This enables the runtime to notify the node whether the given peer should continue to be used
+	// or not based on higher-level logic that lives in the runtime.
+	PeerFeedback enclaverpc.PeerFeedback `json:"peer_feedback"`
 }
 
 // HostStorageEndpoint is the host storage endpoint.

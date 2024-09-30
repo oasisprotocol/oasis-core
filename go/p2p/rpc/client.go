@@ -46,7 +46,7 @@ type PeerFeedback interface {
 	// The peer will be ignored during peer selection.
 	RecordBadPeer()
 
-	// PeerID returns the id of the peer.
+	// PeerID returns the ID of the peer.
 	PeerID() core.PeerID
 }
 

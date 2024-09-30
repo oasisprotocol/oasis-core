@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core"
 	"golang.org/x/exp/maps"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
@@ -18,7 +20,18 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
+)
+
+const (
+	// peerFeedbackCacheSize is the maximum number of peer feedbacks
+	// in the cache.
+	peerFeedbackCacheSize = 100
+
+	// maxPeerFeedbackAge is the maximum age of peer feedback in the cache
+	// before it is discarded.
+	maxPeerFeedbackAge = time.Minute
 )
 
 // KeyManagerClientWrapper is a wrapper for the key manager P2P client that handles deferred
@@ -37,6 +50,7 @@ type KeyManagerClientWrapper struct {
 	logger       *logging.Logger
 
 	lastPeerFeedback rpc.PeerFeedback
+	peerFeedbacks    *lru.Cache
 }
 
 // Initialized returns a channel that gets closed when the client is initialized.
@@ -84,10 +98,11 @@ func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 	}
 
 	km.lastPeerFeedback = nil
+	km.peerFeedbacks.Clear()
 }
 
-// CallEnclave implements runtimeKeymanager.Client.
-func (km *KeyManagerClientWrapper) CallEnclave(
+// CallEnclaveDeprecated implements runtimeKeymanager.Client.
+func (km *KeyManagerClientWrapper) CallEnclaveDeprecated(
 	ctx context.Context,
 	data []byte,
 	nodes []signature.PublicKey,
@@ -160,13 +175,109 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 	return rsp.Data, node, nil
 }
 
+// CallEnclave implements runtimeKeymanager.Client.
+func (km *KeyManagerClientWrapper) CallEnclave(
+	ctx context.Context,
+	requestID uint64,
+	data []byte,
+	nodes []signature.PublicKey,
+	kind enclaverpc.Kind,
+) (*runtimeKeymanager.EnclaveResponse, error) {
+	cli, err := km.getKeyManagerClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Call only members of the key manager committee. If no nodes are given, use all members.
+	kmNodes := km.nt.Nodes(nodes)
+	if len(kmNodes) == 0 && len(nodes) > 0 {
+		return nil, fmt.Errorf("nodes not in committee")
+	}
+	peers := maps.Keys(kmNodes)
+
+	req := &keymanagerP2P.CallEnclaveRequest{
+		Data: data,
+		Kind: kind,
+	}
+
+	rsp, feedback, err := cli.CallEnclave(ctx, req, peers)
+	if err != nil {
+		return nil, err
+	}
+
+	node, ok := kmNodes[feedback.PeerID()]
+	if !ok {
+		return nil, fmt.Errorf("unknown peer id")
+	}
+
+	info := peerFeedbackInfo{
+		requestID: requestID,
+		feedback:  feedback,
+		timestamp: time.Now(),
+	}
+
+	// Put is expected to never fail since byte capacity is not enabled.
+	_ = km.peerFeedbacks.Put(requestID, &info)
+
+	return &runtimeKeymanager.EnclaveResponse{
+		Data: rsp.Data,
+		Node: node,
+	}, nil
+}
+
+// SubmitPeerFeedback implements runtimeKeymanager.Client.
+func (km *KeyManagerClientWrapper) SubmitPeerFeedback(requestID uint64, feedback enclaverpc.PeerFeedback) {
+	var info *peerFeedbackInfo
+
+	// Pop peer feedback info.
+	item, ok := km.peerFeedbacks.Peek(requestID)
+	if ok {
+		_ = km.peerFeedbacks.Remove(requestID)
+		info = item.(*peerFeedbackInfo)
+	}
+
+	// Discard expired feedbacks.
+	valid := ok && time.Since(info.timestamp) <= maxPeerFeedbackAge
+
+	km.logger.Debug("received peer feedback from runtime",
+		"request_id", requestID,
+		"peer_feedback", feedback,
+		"valid", valid,
+	)
+
+	if !valid {
+		return
+	}
+
+	switch feedback {
+	case enclaverpc.PeerFeedbackSuccess:
+		info.feedback.RecordSuccess()
+	case enclaverpc.PeerFeedbackFailure:
+		info.feedback.RecordFailure()
+	case enclaverpc.PeerFeedbackBadPeer:
+		info.feedback.RecordBadPeer()
+	default:
+	}
+}
+
+func (km *KeyManagerClientWrapper) getKeyManagerClient() (keymanagerP2P.Client, error) {
+	km.l.Lock()
+	defer km.l.Unlock()
+
+	if km.cli == nil {
+		return nil, fmt.Errorf("key manager not available")
+	}
+	return km.cli, nil
+}
+
 // NewKeyManagerClientWrapper creates a new key manager client wrapper.
 func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Backend, chainContext string, logger *logging.Logger) *KeyManagerClientWrapper {
 	return &KeyManagerClientWrapper{
-		p2p:          p2p,
-		consensus:    consensus,
-		chainContext: chainContext,
-		logger:       logger,
+		p2p:           p2p,
+		consensus:     consensus,
+		chainContext:  chainContext,
+		logger:        logger,
+		peerFeedbacks: lru.New(lru.Capacity(peerFeedbackCacheSize, false)),
 	}
 }
 
@@ -316,4 +427,14 @@ func newKeyManagerNodeTracker(p2p p2p.Service, consensus consensus.Backend, keym
 		startOne:     cmSync.NewOne(),
 		logger:       logging.GetLogger("worker/common/committee/keymanager/nodetracker"),
 	}
+}
+
+// peerFeedbackInfo stores information related to peer feedback.
+type peerFeedbackInfo struct {
+	// requestID is the ID of the request.
+	requestID uint64
+	// feedback holds the peer feedback stored in this node.
+	feedback rpc.PeerFeedback
+	// timestamp is the time when the feedback was added to the cache.
+	timestamp time.Time
 }
