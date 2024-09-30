@@ -35,14 +35,17 @@ type CheckpointerConfig struct {
 
 // Validate validates the configuration settings.
 func (c *Config) Validate() error {
-	_, err := db.GetBackendByName(c.Backend)
-	return err
+	if c.Backend != "auto" {
+		_, err := db.GetBackendByName(c.Backend)
+		return err
+	}
+	return nil
 }
 
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		Backend:                "badger",
+		Backend:                "auto",
 		MaxCacheSize:           "64mb",
 		FetcherCount:           4,
 		PublicRPCEnabled:       false,

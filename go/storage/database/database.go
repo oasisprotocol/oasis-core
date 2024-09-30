@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
+	"slices"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -14,10 +17,16 @@ import (
 )
 
 const (
+	// BackendNameAuto is the name of the automatic backend detection "backend".
+	BackendNameAuto = "auto"
 	// BackendNameBadgerDB is the name of the BadgerDB backed database backend.
 	BackendNameBadgerDB = "badger"
 	// BackendNamePathBadger is the name of the PathBadger database backend.
 	BackendNamePathBadger = "pathbadger"
+
+	// defaultBackendName is the default backend in case automatic backend detection is enabled and
+	// no previous backend exists.
+	defaultBackendName = BackendNamePathBadger
 
 	checkpointDir = "checkpoints"
 )
@@ -39,6 +48,10 @@ type databaseBackend struct {
 
 // New constructs a new database backed storage Backend instance.
 func New(cfg *api.Config) (api.LocalBackend, error) {
+	if err := autoDetectBackend(cfg); err != nil {
+		return nil, err
+	}
+
 	ndb, err := db.New(cfg.Backend, cfg.ToNodeDB())
 	if err != nil {
 		return nil, fmt.Errorf("storage/database: failed to create node database: %w", err)
@@ -163,4 +176,60 @@ func (ba *databaseBackend) Checkpointer() checkpoint.CreateRestorer {
 // Implements api.LocalBackend.
 func (ba *databaseBackend) NodeDB() dbApi.NodeDB {
 	return ba.ndb
+}
+
+// autoDetectBackend attempts automatic backend detection, modifying the configuration in place.
+func autoDetectBackend(cfg *api.Config) error {
+	if cfg.Backend != BackendNameAuto {
+		return nil
+	}
+
+	// Make sure that the DefaultFileName was used to derive the subdirectory. Otherwise automatic
+	// detection cannot be performed.
+	if filepath.Base(cfg.DB) != DefaultFileName(cfg.Backend) {
+		return fmt.Errorf("storage/database: 'auto' backend selected using a non-default path")
+	}
+
+	// Perform automatic database backend detection if selected. Detection will be based on existing
+	// database directories. If multiple directories are available, the most recently modified is
+	// selected.
+	type foundBackend struct {
+		path      string
+		timestamp time.Time
+		name      string
+	}
+	var backends []foundBackend
+
+	for _, b := range db.Backends {
+		// Generate expected filename for the given backend.
+		fn := DefaultFileName(b.Name())
+		maybeDb := filepath.Join(filepath.Dir(cfg.DB), fn)
+		fi, err := os.Stat(maybeDb)
+		if err != nil {
+			continue
+		}
+
+		backends = append(backends, foundBackend{
+			path:      maybeDb,
+			timestamp: fi.ModTime(),
+			name:      b.Name(),
+		})
+	}
+	slices.SortFunc(backends, func(a, b foundBackend) int {
+		return a.timestamp.Compare(b.timestamp)
+	})
+
+	// If no existing backends are available, use default.
+	if len(backends) == 0 {
+		cfg.Backend = defaultBackendName
+		cfg.DB = filepath.Join(filepath.Dir(cfg.DB), DefaultFileName(cfg.Backend))
+		return nil
+	}
+
+	// Otherwise, use the backend that has been updated most recently.
+	b := backends[len(backends)-1]
+	cfg.Backend = b.name
+	cfg.DB = b.path
+
+	return nil
 }

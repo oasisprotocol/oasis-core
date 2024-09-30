@@ -51,3 +51,92 @@ func doTestImpl(t *testing.T, backend string) {
 	genesisTestHelpers.SetTestChainContext()
 	tests.StorageImplementationTests(t, impl, impl, testNs, 0)
 }
+
+func TestAutoBackend(t *testing.T) {
+	t.Run("NoExistingDir", func(t *testing.T) {
+		require := require.New(t)
+
+		tmpDir, err := os.MkdirTemp("", "oasis-storage-database-test")
+		require.NoError(err, "TempDir()")
+		defer os.RemoveAll(tmpDir)
+
+		// When there is no existing database directory, the default should be used.
+		cfg := api.Config{
+			Backend: "auto",
+			DB:      filepath.Join(tmpDir, DefaultFileName("auto")),
+		}
+		impl, err := New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		require.Equal(defaultBackendName, cfg.Backend)
+		require.Equal(filepath.Join(tmpDir, DefaultFileName(defaultBackendName)), cfg.DB)
+	})
+
+	t.Run("OneExistingDir", func(t *testing.T) {
+		require := require.New(t)
+
+		tmpDir, err := os.MkdirTemp("", "oasis-storage-database-test")
+		require.NoError(err, "TempDir()")
+		defer os.RemoveAll(tmpDir)
+
+		// Create a badger database first.
+		cfg := api.Config{
+			Backend: "badger",
+			DB:      filepath.Join(tmpDir, DefaultFileName("badger")),
+		}
+		impl, err := New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		// When there is an existing backend, it should be used.
+		cfg = api.Config{
+			Backend: "auto",
+			DB:      filepath.Join(tmpDir, DefaultFileName("auto")),
+		}
+		impl, err = New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		require.Equal("badger", cfg.Backend)
+		require.Equal(filepath.Join(tmpDir, DefaultFileName("badger")), cfg.DB)
+	})
+
+	t.Run("MultiExistingDirs", func(t *testing.T) {
+		require := require.New(t)
+
+		tmpDir, err := os.MkdirTemp("", "oasis-storage-database-test")
+		require.NoError(err, "TempDir()")
+		defer os.RemoveAll(tmpDir)
+
+		// Create a badger database first.
+		cfg := api.Config{
+			Backend: "badger",
+			DB:      filepath.Join(tmpDir, DefaultFileName("badger")),
+		}
+		impl, err := New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		// Then create a pathbadger database.
+		cfg = api.Config{
+			Backend: "pathbadger",
+			DB:      filepath.Join(tmpDir, DefaultFileName("pathbadger")),
+		}
+		impl, err = New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		// When there are multiple existing backends, the most recent one should be used.
+		cfg = api.Config{
+			Backend: "auto",
+			DB:      filepath.Join(tmpDir, DefaultFileName("auto")),
+		}
+		impl, err = New(&cfg)
+		require.NoError(err)
+		impl.Cleanup()
+
+		require.Equal("pathbadger", cfg.Backend)
+		require.Equal(filepath.Join(tmpDir, DefaultFileName("pathbadger")), cfg.DB)
+	})
+}
