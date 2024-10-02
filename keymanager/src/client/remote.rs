@@ -64,6 +64,14 @@ use super::KeyManagerClient;
 
 /// Key manager RPC endpoint.
 const KEY_MANAGER_ENDPOINT: &str = "key-manager";
+/// Maximum total number of EnclaveRPC sessions.
+const RPC_MAX_SESSIONS: usize = 32;
+/// Maximum concurrent EnclaveRPC sessions per peer. In case more sessions are open, old sessions
+/// will be closed to make room for new sessions.
+const RPC_MAX_SESSIONS_PER_PEER: usize = 2;
+/// EnclaveRPC sessions without any processed frame for more than RPC_STALE_SESSION_TIMEOUT_SECS
+/// seconds can be closed to make room for new sessions.
+const RPC_STALE_SESSION_TIMEOUT_SECS: i64 = 10;
 
 /// A key manager client which talks to a remote key manager enclave.
 pub struct RemoteClient {
@@ -125,17 +133,22 @@ impl RemoteClient {
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
     ) -> Self {
+        let builder = session::Builder::default()
+            .remote_enclaves(enclaves)
+            .quote_policy(policy)
+            .local_identity(identity)
+            .consensus_verifier(Some(consensus_verifier.clone()))
+            .remote_runtime_id(km_runtime_id);
+
         Self::new(
             runtime_id,
             RpcClient::new_runtime(
-                session::Builder::default()
-                    .remote_enclaves(enclaves)
-                    .quote_policy(policy)
-                    .local_identity(identity)
-                    .consensus_verifier(Some(consensus_verifier.clone()))
-                    .remote_runtime_id(km_runtime_id),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
+                builder,
+                RPC_MAX_SESSIONS,
+                RPC_MAX_SESSIONS_PER_PEER,
+                RPC_STALE_SESSION_TIMEOUT_SECS,
             ),
             consensus_verifier,
             keys_cache_sizes,

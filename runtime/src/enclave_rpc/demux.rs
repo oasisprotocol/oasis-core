@@ -79,9 +79,9 @@ impl Demux {
                 Some(session) => session,
                 None => {
                     let now = insecure_posix_time();
-                    let _ = sessions.remove_from(&peer_id)?;
-                    let _ = sessions.remove_one(now)?;
-                    sessions.create(peer_id, session_id, now)?
+                    let _ = sessions.remove_for(&peer_id, now)?;
+                    let session = sessions.create_responder(peer_id, session_id);
+                    sessions.add(session, now)?
                 }
             }
         };
@@ -149,6 +149,6 @@ impl Demux {
     /// Resets all open sessions.
     pub fn reset(&self) {
         let mut sessions = self.sessions.lock().unwrap();
-        sessions.clear();
+        let _ = sessions.clear();
     }
 }

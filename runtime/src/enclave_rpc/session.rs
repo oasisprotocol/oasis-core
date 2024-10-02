@@ -314,7 +314,7 @@ impl Session {
     }
 
     /// Return remote node identifier.
-    pub fn get_node(&self) -> Result<signature::PublicKey> {
+    pub fn get_remote_node(&self) -> Result<signature::PublicKey> {
         self.remote_node.ok_or(SessionError::NodeNotSet.into())
     }
 

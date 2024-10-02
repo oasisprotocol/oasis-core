@@ -1,8 +1,9 @@
 //! Session demultiplexer.
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     hash::Hash,
     io::Write,
+    mem,
     sync::Arc,
 };
 
@@ -14,7 +15,12 @@ use super::{
     session::{Builder, Session, SessionInfo},
     types::{Message, SessionID},
 };
-use crate::common::time::insecure_posix_time;
+use crate::common::{
+    crypto::signature,
+    namespace::Namespace,
+    sgx::{EnclaveIdentity, QuotePolicy},
+    time::insecure_posix_time,
+};
 
 /// Shared pointer to a multiplexed session.
 pub type SharedSession<PeerID> = Arc<tokio::sync::Mutex<MultiplexedSession<PeerID>>>;
@@ -40,6 +46,21 @@ pub struct MultiplexedSession<PeerID> {
 }
 
 impl<PeerID> MultiplexedSession<PeerID> {
+    /// Return the session's peer ID.
+    pub fn get_peer_id(&self) -> &PeerID {
+        &self.peer_id
+    }
+
+    /// Set the session's peer ID.
+    pub fn set_peer_id(&mut self, peer_id: PeerID) {
+        self.peer_id = peer_id;
+    }
+
+    /// Return the session ID.
+    pub fn get_session_id(&self) -> &SessionID {
+        &self.session_id
+    }
+
     /// Session information.
     pub fn info(&self) -> Option<Arc<SessionInfo>> {
         self.inner.session_info()
@@ -62,6 +83,36 @@ impl<PeerID> MultiplexedSession<PeerID> {
     /// Write message to session and generate a response.
     pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Result<()> {
         self.inner.write_message(msg, &mut writer)
+    }
+
+    /// Return remote node identifier.
+    pub fn get_remote_node(&self) -> Result<signature::PublicKey> {
+        self.inner.get_remote_node()
+    }
+
+    /// Set the remote node identifier.
+    pub fn set_remote_node(&mut self, node: signature::PublicKey) -> Result<()> {
+        self.inner.set_remote_node(node)
+    }
+
+    /// Whether the session handshake has completed and the session
+    /// is in transport mode.
+    pub fn is_connected(&self) -> bool {
+        self.inner.is_connected()
+    }
+
+    /// Whether the session is in unauthenticated transport state. In this state the session can
+    /// only be used to transmit a close notification.
+    pub fn is_unauthenticated(&self) -> bool {
+        self.inner.is_unauthenticated()
+    }
+
+    /// Mark the session as closed.
+    ///
+    /// After the session is closed it can no longer be used to transmit
+    /// or receive messages and any such use will result in an error.
+    pub fn close(&mut self) {
+        self.inner.close()
     }
 }
 
@@ -125,31 +176,69 @@ where
         }
     }
 
-    /// Create a new multiplexed session.
-    pub fn create_session(
-        mut builder: Builder,
+    /// Update remote enclave identity verification in the session builder.
+    pub fn update_enclaves(&mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> bool {
+        if self.builder.get_remote_enclaves() == &enclaves {
+            return false;
+        }
+
+        self.builder = mem::take(&mut self.builder).remote_enclaves(enclaves);
+        true
+    }
+
+    /// Update quote policy used for remote quote verification in the session builder.
+    pub fn update_quote_policy(&mut self, policy: QuotePolicy) -> bool {
+        let policy = Some(Arc::new(policy));
+        if self.builder.get_quote_policy() == &policy {
+            return false;
+        }
+
+        self.builder = mem::take(&mut self.builder).quote_policy(policy);
+        true
+    }
+
+    /// Update remote runtime ID for node identity verification in the session builder.
+    pub fn update_runtime_id(&mut self, id: Option<Namespace>) -> bool {
+        if self.builder.get_remote_runtime_id() == &id {
+            return false;
+        }
+
+        self.builder = mem::take(&mut self.builder).remote_runtime_id(id);
+        true
+    }
+
+    /// Create a new multiplexed responder session.
+    pub fn create_responder(
+        &mut self,
         peer_id: PeerID,
         session_id: SessionID,
-        now: i64,
-    ) -> SessionMeta<PeerID> {
+    ) -> MultiplexedSession<PeerID> {
         // If no quote policy is set, use the local one.
-        if builder.get_quote_policy().is_none() {
-            let policy = builder
+        if self.builder.get_quote_policy().is_none() {
+            let policy = self
+                .builder
                 .get_local_identity()
                 .as_ref()
                 .and_then(|id| id.quote_policy());
-            builder = builder.quote_policy(policy);
+
+            self.builder = mem::take(&mut self.builder).quote_policy(policy);
         }
 
-        SessionMeta {
-            inner: Arc::new(tokio::sync::Mutex::new(MultiplexedSession {
-                peer_id: peer_id.clone(),
-                session_id,
-                inner: builder.build_responder(),
-            })),
-            peer_id,
+        MultiplexedSession {
+            peer_id: peer_id.clone(),
             session_id,
-            last_access_time: now,
+            inner: self.builder.clone().build_responder(),
+        }
+    }
+
+    /// Create a new multiplexed initiator session.
+    pub fn create_initiator(&self, peer_id: PeerID) -> MultiplexedSession<PeerID> {
+        let session_id = SessionID::random();
+
+        MultiplexedSession {
+            peer_id: peer_id.clone(),
+            session_id,
+            inner: self.builder.clone().build_initiator(),
         }
     }
 
@@ -266,6 +355,18 @@ where
         Some(session.inner.clone())
     }
 
+    /// Remove one session to free up a slot for the given peer.
+    pub fn remove_for(
+        &mut self,
+        peer_id: &PeerID,
+        now: i64,
+    ) -> Result<Option<OwnedMutexGuard<MultiplexedSession<PeerID>>>, Error> {
+        if let Some(session) = self.remove_from(peer_id)? {
+            return Ok(Some(session));
+        }
+        self.remove_one(now)
+    }
+
     /// Remove one existing session from the given peer if the peer has reached
     /// the maximum number of sessions or if the total number of sessions exceeds
     /// the global session limit.
@@ -352,26 +453,34 @@ where
         Ok(Some(session))
     }
 
-    /// Create a new session if there is an available spot.
-    pub fn create(
+    /// Add a session if there is an available spot.
+    pub fn add(
         &mut self,
-        peer_id: PeerID,
-        session_id: SessionID,
+        session: MultiplexedSession<PeerID>,
         now: i64,
     ) -> Result<SharedSession<PeerID>, Error> {
         if self.by_idle_time.len() >= self.max_sessions {
             return Err(Error::MaxConcurrentSessions);
         }
 
-        let sessions = self.by_peer.entry(peer_id.clone()).or_default();
+        let sessions = self.by_peer.entry(session.peer_id.clone()).or_default();
         if sessions.len() >= self.max_sessions_per_peer {
             return Err(Error::MaxConcurrentSessions);
         }
 
-        let session = Self::create_session(self.builder.clone(), peer_id.clone(), session_id, now);
+        let peer_id = session.peer_id.clone();
+        let session_id = session.session_id;
+
+        let session = SessionMeta {
+            inner: Arc::new(tokio::sync::Mutex::new(session)),
+            peer_id,
+            session_id,
+            last_access_time: now,
+        };
         let inner = session.inner.clone();
-        sessions.insert(session_id, session);
-        self.by_idle_time.insert((now, peer_id, session_id));
+
+        self.by_idle_time.insert(session.by_time_key());
+        sessions.insert(session.session_id, session);
 
         Ok(inner)
     }
@@ -391,9 +500,17 @@ where
     }
 
     /// Clear all sessions.
-    pub fn clear(&mut self) {
-        self.by_peer.clear();
+    pub fn clear(&mut self) -> Vec<SharedSession<PeerID>> {
         self.by_idle_time.clear();
+
+        let mut all_sessions = vec![];
+        for (_, mut sessions) in self.by_peer.drain() {
+            for (_, session) in sessions.drain() {
+                all_sessions.push(session.inner);
+            }
+        }
+
+        all_sessions
     }
 
     fn update_access_time(
@@ -435,7 +552,7 @@ mod test {
     }
 
     #[test]
-    fn test_create() {
+    fn test_add() {
         let (peer_ids, session_ids) = ids();
         let mut sessions = Sessions::new(Builder::default(), 4, 2, 60);
 
@@ -450,7 +567,8 @@ mod test {
 
         let now = 0;
         for (peer_id, session_id, num_sessions, num_peers, created) in test_vector {
-            let res = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let res = sessions.add(session, now);
             match created {
                 true => {
                     assert!(res.is_ok(), "session should be created");
@@ -484,7 +602,8 @@ mod test {
         let now = 0;
         for (peer_id, session_id, create) in test_vector {
             if create {
-                let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+                let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+                let _ = sessions.add(session, now);
             }
 
             let maybe_s = sessions.get(peer_id, session_id);
@@ -518,7 +637,8 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector {
-            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
             now += 1
         }
 
@@ -586,7 +706,8 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector {
-            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
             now += 1
         }
 
@@ -652,7 +773,8 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector.clone() {
-            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
             now += 1;
         }
 
@@ -718,7 +840,8 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector.clone() {
-            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
             now += 1;
         }
 
@@ -774,7 +897,8 @@ mod test {
 
         let now = 0;
         for (peer_id, session_id, _, _) in test_vector.clone() {
-            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
         }
 
         for (peer_id, session_id, num_sessions, num_peers) in test_vector {
@@ -787,5 +911,29 @@ mod test {
             assert_eq!(sessions.session_count(), num_sessions);
             assert_eq!(sessions.peer_count(), num_peers);
         }
+    }
+
+    #[test]
+    fn test_clear() {
+        let (peer_ids, session_ids) = ids();
+        let mut sessions = Sessions::new(Builder::default(), 8, 2, 60);
+
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0]),
+            (&peer_ids[1], &session_ids[1]),
+            (&peer_ids[2], &session_ids[2]),
+            (&peer_ids[2], &session_ids[3]),
+        ];
+
+        let now = 0;
+        for (peer_id, session_id) in test_vector.clone() {
+            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let _ = sessions.add(session, now);
+        }
+
+        let removed_sessions = sessions.clear();
+        assert_eq!(removed_sessions.len(), 4);
+        assert_eq!(sessions.session_count(), 0);
+        assert_eq!(sessions.peer_count(), 0);
     }
 }
