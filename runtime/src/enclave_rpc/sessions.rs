@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::Result;
+use rand::{rngs::OsRng, Rng};
 use tokio::sync::OwnedMutexGuard;
 
 use super::{
@@ -170,12 +171,97 @@ where
             None => return None,
         };
 
-        // Remove old idle time.
-        self.by_idle_time.remove(&session.by_time_key());
+        Self::update_access_time(session, &mut self.by_idle_time);
 
-        // Update idle time.
-        session.last_access_time = insecure_posix_time();
-        self.by_idle_time.insert(session.by_time_key());
+        Some(session.inner.clone())
+    }
+
+    /// Fetch an existing session from one of the given peers. If no peers
+    /// are provided, a session from any peer will be returned.
+    pub fn find(&mut self, peer_ids: &[PeerID]) -> Option<SharedSession<PeerID>> {
+        match peer_ids.is_empty() {
+            true => self.find_any(),
+            false => self.find_one(peer_ids),
+        }
+    }
+
+    /// Fetch an existing session from any peer.
+    pub fn find_any(&mut self) -> Option<SharedSession<PeerID>> {
+        if self.by_idle_time.is_empty() {
+            return None;
+        }
+
+        // Check if there is a session that is not currently in use.
+        for (_, peer_id, session_id) in self.by_idle_time.iter() {
+            let session = self
+                .by_peer
+                .get_mut(peer_id)
+                .unwrap()
+                .get_mut(session_id)
+                .unwrap();
+
+            if session.inner.clone().try_lock_owned().is_ok() {
+                Self::update_access_time(session, &mut self.by_idle_time);
+                return Some(session.inner.clone());
+            }
+        }
+
+        // If all sessions are in use, return a random one.
+        let n = OsRng.gen_range(0..self.by_idle_time.len());
+        let (_, peer_id, session_id) = self.by_idle_time.iter().nth(n).unwrap();
+        let session = self
+            .by_peer
+            .get_mut(peer_id)
+            .unwrap()
+            .get_mut(session_id)
+            .unwrap();
+
+        Self::update_access_time(session, &mut self.by_idle_time);
+
+        Some(session.inner.clone())
+    }
+
+    /// Fetch an existing session from one of the given peers.
+    pub fn find_one(&mut self, peer_ids: &[PeerID]) -> Option<SharedSession<PeerID>> {
+        let mut all_sessions = vec![];
+
+        for peer_id in peer_ids.iter() {
+            let sessions = match self.by_peer.get_mut(peer_id) {
+                Some(sessions) => sessions,
+                None => return None,
+            };
+
+            // Check if peer has a session that is not currently in use.
+            let session = sessions
+                .values_mut()
+                .filter(|s| s.inner.clone().try_lock_owned().is_ok())
+                .min_by_key(|s| s.last_access_time);
+
+            if let Some(session) = session {
+                Self::update_access_time(session, &mut self.by_idle_time);
+                return Some(session.inner.clone());
+            }
+
+            for session in sessions.values() {
+                all_sessions.push((session.peer_id.clone(), session.session_id));
+            }
+        }
+
+        if all_sessions.is_empty() {
+            return None;
+        }
+
+        // If all sessions are in use, return a random one.
+        let n = OsRng.gen_range(0..all_sessions.len());
+        let (peer_id, session_id) = all_sessions.get(n).unwrap();
+        let session = self
+            .by_peer
+            .get_mut(peer_id)
+            .unwrap()
+            .get_mut(session_id)
+            .unwrap();
+
+        Self::update_access_time(session, &mut self.by_idle_time);
 
         Some(session.inner.clone())
     }
@@ -310,6 +396,18 @@ where
         self.by_idle_time.clear();
     }
 
+    fn update_access_time(
+        session: &mut SessionMeta<PeerID>,
+        by_idle_time: &mut BTreeSet<SessionByTimeKey<PeerID>>,
+    ) {
+        // Remove old idle time.
+        by_idle_time.remove(&session.by_time_key());
+
+        // Update idle time.
+        session.last_access_time = insecure_posix_time();
+        by_idle_time.insert(session.by_time_key());
+    }
+
     /// Number of all sessions.
     #[cfg(test)]
     fn session_count(&self) -> usize {
@@ -391,10 +489,152 @@ mod test {
 
             let maybe_s = sessions.get(peer_id, session_id);
             match create {
-                true => assert!(maybe_s.is_some(), "session should exist"),
+                true => {
+                    assert!(maybe_s.is_some(), "session should exist");
+                    let s = maybe_s.unwrap();
+                    let s_owned = s.try_lock_owned().unwrap();
+                    assert_eq!(&s_owned.peer_id, peer_id);
+                    assert_eq!(&s_owned.session_id, session_id);
+                }
                 false => assert!(maybe_s.is_none(), "session should not exist"),
             }
         }
+    }
+
+    #[test]
+    fn test_find_any() {
+        let (peer_ids, session_ids) = ids();
+        let mut sessions = Sessions::new(Builder::default(), 8, 2, 60);
+
+        let test_vector = vec![
+            (&peer_ids[0], &session_ids[0]),
+            (&peer_ids[0], &session_ids[1]),
+            (&peer_ids[1], &session_ids[2]),
+        ];
+
+        // No sessions.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_none(), "session should not be found");
+
+        let mut now = 0;
+        for (peer_id, session_id) in test_vector {
+            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            now += 1
+        }
+
+        // No sessions in use.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s1_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s1_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s1_owned.session_id, &session_ids[0]);
+
+        // One session in use.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s2_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s2_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s2_owned.session_id, &session_ids[1]); // Different session found.
+
+        // Two sessions in use.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s3_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s3_owned.peer_id, &peer_ids[1]);
+        assert_eq!(&s3_owned.session_id, &session_ids[2]); // Different session found.
+
+        // All sessions in use.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let res = s.try_lock_owned(); // Session now in use.
+        assert!(res.is_err(), "session should be in use");
+
+        // Free one session.
+        drop(s2_owned);
+
+        // Two sessions in use.
+        let maybe_s = sessions.find_any();
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s_owned.session_id, &session_ids[1]);
+    }
+
+    #[test]
+    fn test_find_one() {
+        let (peer_ids, session_ids) = ids();
+        let mut sessions = Sessions::new(Builder::default(), 8, 2, 60);
+
+        let test_vector = vec![
+            (&peer_ids[2], &session_ids[0]), // Incorrect peer.
+            (&peer_ids[0], &session_ids[0]),
+            (&peer_ids[3], &session_ids[1]), // Incorrect peer.
+            (&peer_ids[0], &session_ids[1]),
+            (&peer_ids[3], &session_ids[2]), // Incorrect peer.
+            (&peer_ids[1], &session_ids[2]),
+            (&peer_ids[2], &session_ids[2]), // Incorrect peer.
+        ];
+
+        // No sessions.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_none(), "session should not be found");
+
+        let mut now = 0;
+        for (peer_id, session_id) in test_vector {
+            let _ = sessions.create(peer_id.clone(), session_id.clone(), now);
+            now += 1
+        }
+
+        // Peers without sessions.
+        let maybe_s = sessions.find_one(&peer_ids[4..]);
+        assert!(maybe_s.is_none(), "session should not be found");
+
+        // No sessions in use.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s1_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s1_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s1_owned.session_id, &session_ids[0]);
+
+        // One session in use.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s2_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s2_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s2_owned.session_id, &session_ids[1]); // Different session found.
+
+        // Two sessions in use.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s3_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s3_owned.peer_id, &peer_ids[1]);
+        assert_eq!(&s3_owned.session_id, &session_ids[2]); // Different session found.
+
+        // All sessions in use.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let res = s.try_lock_owned(); // Session now in use.
+        assert!(res.is_err(), "session should be in use");
+
+        // Free one session.
+        drop(s2_owned);
+
+        // Two sessions in use.
+        let maybe_s = sessions.find_one(&peer_ids[0..2]);
+        assert!(maybe_s.is_some(), "session should be found");
+        let s = maybe_s.unwrap();
+        let s_owned = s.try_lock_owned().unwrap(); // Session now in use.
+        assert_eq!(&s_owned.peer_id, &peer_ids[0]);
+        assert_eq!(&s_owned.session_id, &session_ids[1]);
     }
 
     #[test]
