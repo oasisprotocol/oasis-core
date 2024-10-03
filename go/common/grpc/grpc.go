@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -701,6 +702,60 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	}
 	dialOpts = append(dialOpts, opts...)
 	return grpc.Dial(target, dialOpts...)
+}
+
+// IsSocketAddress checks if the gRPC address is a socket address.
+func IsSocketAddress(addr string) bool {
+	if strings.HasPrefix(addr, "unix:") || strings.HasPrefix(addr, "unix-abstract:") {
+		return true
+	}
+	if strings.HasPrefix(addr, "vsock:") {
+		return true
+	}
+	return false
+}
+
+// IsLocalAddress checks if the gRPC address points to a local socket or loopback address.
+//
+// This function takes a conservative approach and may return false for complex addresses
+// such as those with authorities or non-standard schemes.
+//
+// The expected format for the gRPC address is specified at:
+// https://github.com/grpc/grpc/blob/master/doc/naming.md
+func IsLocalAddress(addr string) bool {
+	// Sockets are considered local.
+	if IsSocketAddress(addr) {
+		return true
+	}
+
+	// Strip dns: scheme if present, other schemes are not supported.
+	if strings.HasPrefix(addr, "dns:") {
+		addr = strings.TrimPrefix(addr, "dns:")
+
+		// If authority is present, consider the address non-local as it might rely on complex resolver logic.
+		if strings.HasPrefix(addr, "//") {
+			return false
+		}
+	}
+
+	// Validate the address.
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// Try parsing with a port.
+		host, _, err = net.SplitHostPort(addr + ":" + "80")
+		if err != nil {
+			// This means that the scheme was not trimmed (e.g. was not 'dns:').
+			// Consider such addresses non-local as they might rely on complex resolver logic.
+			return false
+		}
+		// The address is parsed fine with port attached, continue.
+	}
+
+	ip, err := net.LookupIP(host)
+	if err != nil || len(ip) == 0 {
+		return false
+	}
+	return ip[0].IsLoopback()
 }
 
 func init() {

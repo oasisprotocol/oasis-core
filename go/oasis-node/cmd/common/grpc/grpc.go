@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -27,6 +26,8 @@ const (
 	CfgAddress = "address"
 	// CfgWait waits for the remote address to become available.
 	CfgWait = "wait"
+	// CfgInsecureLoopback allows non-TLS connection to loopback addresses.
+	CfgInsecureLoopback = "insecure"
 
 	defaultAddress = "unix:" + common.InternalSocketName
 )
@@ -81,9 +82,14 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	}
 
 	var creds credentials.TransportCredentials
-	if strings.HasPrefix(addr, "unix:") {
+	switch {
+	case cmnGrpc.IsSocketAddress(addr):
 		creds = insecure.NewCredentials()
-	} else {
+	case viper.GetBool(CfgInsecureLoopback) && cmnGrpc.IsLocalAddress(addr):
+		creds = insecure.NewCredentials()
+	case viper.GetBool(CfgInsecureLoopback):
+		return nil, fmt.Errorf("insecure loopback requested but address is not loopback: %s", addr)
+	default:
 		creds = credentials.NewTLS(&tls.Config{})
 	}
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
@@ -112,6 +118,7 @@ func init() {
 
 	ClientFlags.StringP(CfgAddress, "a", defaultAddress, "remote gRPC address")
 	ClientFlags.Bool(CfgWait, false, "wait for gRPC address to become available")
+	ClientFlags.BoolP(CfgInsecureLoopback, "k", false, "allows non-TLS connection to loopback addresses")
 	ClientFlags.AddFlagSet(cmnGrpc.Flags)
 	_ = viper.BindPFlags(ClientFlags)
 }
