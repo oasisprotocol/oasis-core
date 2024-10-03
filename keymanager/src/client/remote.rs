@@ -202,7 +202,7 @@ impl RemoteClient {
     }
 
     /// Set allowed enclaves and runtime signing key from key manager status.
-    pub fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
+    pub async fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
         // Set runtime signing key.
         if let Some(rsk) = status.rsk {
             self.rsk.write().unwrap().replace(rsk);
@@ -210,7 +210,7 @@ impl RemoteClient {
 
         // Set key manager runtime ID.
         *self.key_manager_id.write().unwrap() = Some(status.id);
-        self.rpc_client.update_runtime_id(Some(status.id));
+        self.rpc_client.update_runtime_id(Some(status.id)).await;
 
         // Verify and apply the policy, if set.
         let untrusted_policy = match status.policy {
@@ -224,15 +224,15 @@ impl RemoteClient {
         if !Policy::unsafe_skip() {
             let enclaves: HashSet<EnclaveIdentity> =
                 HashSet::from_iter(policy.enclaves.keys().cloned());
-            self.rpc_client.update_enclaves(Some(enclaves));
+            self.rpc_client.update_enclaves(Some(enclaves)).await;
         }
 
         Ok(())
     }
 
     /// Set key manager's quote policy.
-    pub fn set_quote_policy(&self, policy: QuotePolicy) {
-        self.rpc_client.update_quote_policy(policy);
+    pub async fn set_quote_policy(&self, policy: QuotePolicy) {
+        self.rpc_client.update_quote_policy(policy).await;
     }
 
     fn verify_public_key(

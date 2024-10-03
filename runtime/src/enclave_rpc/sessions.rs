@@ -74,7 +74,7 @@ impl<PeerID> MultiplexedSession<PeerID> {
     /// Process incoming session data.
     pub async fn process_data<W: Write>(
         &mut self,
-        data: Vec<u8>,
+        data: &[u8],
         writer: W,
     ) -> Result<Option<Message>> {
         self.inner.process_data(data, writer).await
@@ -176,35 +176,41 @@ where
         }
     }
 
-    /// Update remote enclave identity verification in the session builder.
-    pub fn update_enclaves(&mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> bool {
+    /// Update remote enclave identity verification in the session builder
+    /// and clear all sessions if the identity has changed.
+    pub fn update_enclaves(
+        &mut self,
+        enclaves: Option<HashSet<EnclaveIdentity>>,
+    ) -> Vec<SharedSession<PeerID>> {
         if self.builder.get_remote_enclaves() == &enclaves {
-            return false;
+            return vec![];
         }
 
         self.builder = mem::take(&mut self.builder).remote_enclaves(enclaves);
-        true
+        self.drain()
     }
 
-    /// Update quote policy used for remote quote verification in the session builder.
-    pub fn update_quote_policy(&mut self, policy: QuotePolicy) -> bool {
+    /// Update quote policy used for remote quote verification in the session builder
+    /// and clear all sessions if the policy has changed.
+    pub fn update_quote_policy(&mut self, policy: QuotePolicy) -> Vec<SharedSession<PeerID>> {
         let policy = Some(Arc::new(policy));
         if self.builder.get_quote_policy() == &policy {
-            return false;
+            return vec![];
         }
 
         self.builder = mem::take(&mut self.builder).quote_policy(policy);
-        true
+        self.drain()
     }
 
-    /// Update remote runtime ID for node identity verification in the session builder.
-    pub fn update_runtime_id(&mut self, id: Option<Namespace>) -> bool {
+    /// Update remote runtime ID for node identity verification in the session builder
+    /// and clear all sessions if the runtime ID has changed.
+    pub fn update_runtime_id(&mut self, id: Option<Namespace>) -> Vec<SharedSession<PeerID>> {
         if self.builder.get_remote_runtime_id() == &id {
-            return false;
+            return vec![];
         }
 
         self.builder = mem::take(&mut self.builder).remote_runtime_id(id);
-        true
+        self.drain()
     }
 
     /// Create a new multiplexed responder session.
@@ -499,8 +505,8 @@ where
         }
     }
 
-    /// Clear all sessions.
-    pub fn clear(&mut self) -> Vec<SharedSession<PeerID>> {
+    /// Removes and returns all sessions.
+    pub fn drain(&mut self) -> Vec<SharedSession<PeerID>> {
         self.by_idle_time.clear();
 
         let mut all_sessions = vec![];
@@ -931,7 +937,7 @@ mod test {
             let _ = sessions.add(session, now);
         }
 
-        let removed_sessions = sessions.clear();
+        let removed_sessions = sessions.drain();
         assert_eq!(removed_sessions.len(), 4);
         assert_eq!(sessions.session_count(), 0);
         assert_eq!(sessions.peer_count(), 0);

@@ -81,7 +81,9 @@ impl Demux {
                     let now = insecure_posix_time();
                     let _ = sessions.remove_for(&peer_id, now)?;
                     let session = sessions.create_responder(peer_id, session_id);
-                    sessions.add(session, now)?
+                    sessions
+                        .add(session, now)
+                        .expect("there should be space for the new session")
                 }
             }
         };
@@ -109,7 +111,7 @@ impl Demux {
         // Get the existing session or create a new one.
         let mut session = self.get_or_create_session(peer_id, frame.session).await?;
         // Process session data.
-        match session.process_data(frame.payload, writer).await {
+        match session.process_data(&frame.payload, writer).await {
             Ok(msg) => {
                 if let Some(Message::Request(ref req)) = msg {
                     // Make sure that the untrusted_plaintext matches the request's method.
@@ -149,6 +151,6 @@ impl Demux {
     /// Resets all open sessions.
     pub fn reset(&self) {
         let mut sessions = self.sessions.lock().unwrap();
-        let _ = sessions.clear();
+        let _ = sessions.drain();
     }
 }
