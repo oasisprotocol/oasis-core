@@ -30,14 +30,6 @@ where
         Self { poly }
     }
 
-    /// Proactively refreshes the secret polynomial.
-    pub fn proactivize(&mut self, rng: &mut impl RngCore) {
-        let deg = self.poly.size() - 1;
-        let mut poly = Polynomial::random(deg as u8, rng);
-        poly.to_zero_hole();
-        self.poly += poly;
-    }
-
     /// Generates shares of the secret for the given shareholders.
     pub fn make_shares(&self, xs: Vec<F>) -> Vec<Point<F>> {
         xs.into_iter().map(|x| self.make_share(x)).collect()
