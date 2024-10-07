@@ -41,7 +41,7 @@ const (
 	defaultVRFInterval        = 20
 	defaultVRFSubmissionDelay = 5
 
-	defaultStorageBackend = database.BackendNamePathBadger
+	defaultStorageBackend = database.BackendNameAuto
 
 	logNodeFile        = "node.log"
 	logConsoleFile     = "console.log"
