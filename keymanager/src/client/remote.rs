@@ -64,6 +64,14 @@ use super::KeyManagerClient;
 
 /// Key manager RPC endpoint.
 const KEY_MANAGER_ENDPOINT: &str = "key-manager";
+/// Maximum total number of EnclaveRPC sessions.
+const RPC_MAX_SESSIONS: usize = 32;
+/// Maximum concurrent EnclaveRPC sessions per peer. In case more sessions are open, old sessions
+/// will be closed to make room for new sessions.
+const RPC_MAX_SESSIONS_PER_PEER: usize = 2;
+/// EnclaveRPC sessions without any processed frame for more than RPC_STALE_SESSION_TIMEOUT_SECS
+/// seconds can be closed to make room for new sessions.
+const RPC_STALE_SESSION_TIMEOUT_SECS: i64 = 10;
 
 /// A key manager client which talks to a remote key manager enclave.
 pub struct RemoteClient {
@@ -125,17 +133,22 @@ impl RemoteClient {
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
     ) -> Self {
+        let builder = session::Builder::default()
+            .remote_enclaves(enclaves)
+            .quote_policy(policy)
+            .local_identity(identity)
+            .consensus_verifier(Some(consensus_verifier.clone()))
+            .remote_runtime_id(km_runtime_id);
+
         Self::new(
             runtime_id,
             RpcClient::new_runtime(
-                session::Builder::default()
-                    .remote_enclaves(enclaves)
-                    .quote_policy(policy)
-                    .local_identity(identity)
-                    .consensus_verifier(Some(consensus_verifier.clone()))
-                    .remote_runtime_id(km_runtime_id),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
+                builder,
+                RPC_MAX_SESSIONS,
+                RPC_MAX_SESSIONS_PER_PEER,
+                RPC_STALE_SESSION_TIMEOUT_SECS,
             ),
             consensus_verifier,
             keys_cache_sizes,
@@ -189,7 +202,7 @@ impl RemoteClient {
     }
 
     /// Set allowed enclaves and runtime signing key from key manager status.
-    pub fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
+    pub async fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
         // Set runtime signing key.
         if let Some(rsk) = status.rsk {
             self.rsk.write().unwrap().replace(rsk);
@@ -197,7 +210,7 @@ impl RemoteClient {
 
         // Set key manager runtime ID.
         *self.key_manager_id.write().unwrap() = Some(status.id);
-        self.rpc_client.update_runtime_id(Some(status.id));
+        self.rpc_client.update_runtime_id(Some(status.id)).await;
 
         // Verify and apply the policy, if set.
         let untrusted_policy = match status.policy {
@@ -211,15 +224,15 @@ impl RemoteClient {
         if !Policy::unsafe_skip() {
             let enclaves: HashSet<EnclaveIdentity> =
                 HashSet::from_iter(policy.enclaves.keys().cloned());
-            self.rpc_client.update_enclaves(Some(enclaves));
+            self.rpc_client.update_enclaves(Some(enclaves)).await;
         }
 
         Ok(())
     }
 
     /// Set key manager's quote policy.
-    pub fn set_quote_policy(&self, policy: QuotePolicy) {
-        self.rpc_client.update_quote_policy(policy);
+    pub async fn set_quote_policy(&self, policy: QuotePolicy) {
+        self.rpc_client.update_quote_policy(policy).await;
     }
 
     fn verify_public_key(

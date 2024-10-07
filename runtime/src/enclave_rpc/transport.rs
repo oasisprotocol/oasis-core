@@ -62,7 +62,7 @@ pub trait Transport: Send + Sync {
     async fn submit_peer_feedback(
         &self,
         request_id: u64,
-        peer_feedback: types::PeerFeedback,
+        feedback: types::PeerFeedback,
     ) -> Result<(), AnyError>;
 }
 

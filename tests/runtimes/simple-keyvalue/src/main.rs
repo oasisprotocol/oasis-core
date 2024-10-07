@@ -394,8 +394,7 @@ pub fn main_with_version(version: Version) {
         state
             .rpc_dispatcher
             .set_keymanager_status_update_handler(Some(Box::new(move |status| {
-                key_manager
-                    .set_status(status)
+                block_on(key_manager.set_status(status))
                     .expect("failed to update km client status");
             })));
 
@@ -403,7 +402,7 @@ pub fn main_with_version(version: Version) {
         state
             .rpc_dispatcher
             .set_keymanager_quote_policy_update_handler(Some(Box::new(move |policy| {
-                key_manager.set_quote_policy(policy);
+                block_on(key_manager.set_quote_policy(policy));
             })));
 
         let dispatcher = Dispatcher::new(hi, km_client, state.consensus_verifier.clone());

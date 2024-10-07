@@ -116,7 +116,7 @@ impl Session {
     /// protocol replies need to be generated.
     pub async fn process_data<W: Write>(
         &mut self,
-        data: Vec<u8>,
+        data: &[u8],
         mut writer: W,
     ) -> Result<Option<Message>> {
         // Replace the state with a closed state. In case processing fails for whatever
@@ -134,7 +134,7 @@ impl Session {
                     writer.write_all(&self.buf[..len])?;
                 } else {
                     // <- e
-                    state.read_message(&data, &mut self.buf)?;
+                    state.read_message(data, &mut self.buf)?;
 
                     // -> e, ee, s, es
                     let len = state.write_message(&self.get_rak_binding(), &mut self.buf)?;
@@ -145,7 +145,7 @@ impl Session {
             }
             State::Handshake2(mut state) => {
                 // Process data sent during Handshake1 phase.
-                let len = state.read_message(&data, &mut self.buf)?;
+                let len = state.read_message(data, &mut self.buf)?;
                 let remote_static = state
                     .get_remote_static()
                     .expect("dh exchange just happened");
@@ -178,7 +178,7 @@ impl Session {
             }
             State::Transport(mut state) => {
                 // TODO: Restore session in case of errors.
-                let len = state.read_message(&data, &mut self.buf)?;
+                let len = state.read_message(data, &mut self.buf)?;
                 let msg = cbor::from_slice(&self.buf[..len])?;
 
                 self.state = State::Transport(state);
@@ -314,7 +314,7 @@ impl Session {
     }
 
     /// Return remote node identifier.
-    pub fn get_node(&self) -> Result<signature::PublicKey> {
+    pub fn get_remote_node(&self) -> Result<signature::PublicKey> {
         self.remote_node.ok_or(SessionError::NodeNotSet.into())
     }
 
