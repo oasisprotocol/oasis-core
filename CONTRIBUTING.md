@@ -25,8 +25,8 @@ repository as described below.
 * [Contributing Documentation](#contributing-documentation)
 * [Style Guides](#style-guides)
   * [Git Commit Messages](#git-commit-messages)
-  * [Rust Style Guide](#rust-style-guide)
   * [Go Style Guide](#go-style-guide)
+  * [Rust Style Guide](#rust-style-guide)
 
 ## Feature Requests
 
