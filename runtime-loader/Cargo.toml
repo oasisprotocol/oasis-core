@@ -5,9 +5,9 @@ authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 edition = "2018"
 
 [dependencies]
-clap = "4.5.17"
+clap = "4.5.20"
 anyhow = "1.0"
-futures = { version = "0.3.25", features = ["compat", "io-compat"] }
+futures = { version = "0.3.31", features = ["compat", "io-compat"] }
 tokio = { version = "1.40", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
