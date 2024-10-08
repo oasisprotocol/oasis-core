@@ -5,6 +5,7 @@ use anyhow::{bail, Result};
 use slog::{info, Logger};
 
 use crate::{
+    app::App,
     common::{
         crypto::signature::Signer, logger::get_logger, namespace::Namespace, panic::AbortOnPanic,
         sgx::Quote, version::Version,
@@ -16,7 +17,6 @@ use crate::{
     host::Host,
     identity::Identity,
     policy::PolicyVerifier,
-    rofl::App,
     types::Body,
 };
 
@@ -104,7 +104,7 @@ impl Handler {
 
         // Use the correct quote policy for verifying our own identity based on what kind of
         // application this is. For ROFL, ask the application, for RONL, query consensus.
-        let policy = if self.app.is_supported() {
+        let policy = if self.app.is_rofl() {
             // ROFL, ask the app for policy.
             self.app.quote_policy().await?
         } else {

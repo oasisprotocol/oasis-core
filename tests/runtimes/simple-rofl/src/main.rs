@@ -14,10 +14,11 @@ use rustls_mbedcrypto_provider::mbedtls_crypto_provider;
 use rustls_mbedpki_provider::MbedTlsServerCertVerifier;
 
 use oasis_core_runtime::{
+    app,
     common::version::Version,
     config::Config,
     consensus::{roothash, verifier::TrustRoot},
-    host, rofl,
+    host,
 };
 
 /// Root certificates used for TLS.
@@ -128,7 +129,7 @@ impl App {
 }
 
 #[async_trait]
-impl rofl::App for App {
+impl app::App for App {
     fn on_init(&mut self, host: Arc<dyn host::Host>) -> Result<()> {
         let notify = self.notify.clone();
 
@@ -189,7 +190,7 @@ pub fn main() {
 
     // Start the runtime.
     oasis_core_runtime::start_runtime(
-        rofl::new(Box::new(App::new())),
+        app::new(Box::new(App::new())),
         Config {
             version: Version::new(0, 0, 0),
             trust_root,

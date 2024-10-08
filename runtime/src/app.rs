@@ -1,4 +1,4 @@
-//! Runtime OFf-chain Logic (ROFL).
+//! Runtime apps.
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
@@ -11,12 +11,12 @@ use crate::{
     host::Host,
 };
 
-/// A ROFL application.
+/// An Oasis runtime app.
 #[allow(unused_variables)]
 #[async_trait]
 pub trait App: Send + Sync {
-    /// Whether dispatch is supported.
-    fn is_supported(&self) -> bool {
+    /// Whether this is a ROFL app.
+    fn is_rofl(&self) -> bool {
         true
     }
 
@@ -72,12 +72,12 @@ pub struct NoopApp;
 
 #[async_trait]
 impl App for NoopApp {
-    fn is_supported(&self) -> bool {
+    fn is_rofl(&self) -> bool {
         false
     }
 }
 
-/// Create a new ROFL runtime for an application.
+/// Create a new runtime initializer for an application.
 pub fn new(app: Box<dyn App>) -> Box<dyn Initializer> {
     Box::new(|_state: PreInitState<'_>| -> PostInitState {
         PostInitState {

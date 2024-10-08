@@ -23,6 +23,7 @@ extern crate base64_serde;
 
 #[macro_use]
 pub mod common;
+pub mod app;
 mod attestation;
 pub mod cache;
 pub mod config;
@@ -35,7 +36,6 @@ pub mod identity;
 pub mod init;
 pub mod policy;
 pub mod protocol;
-pub mod rofl;
 pub mod storage;
 pub mod transaction;
 pub mod types;
