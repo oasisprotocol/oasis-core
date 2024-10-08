@@ -8,13 +8,11 @@ an Oasis Core environment followed by [build instructions] for the respective
 environment (non-SGX or SGX). The following sections assume that you have
 successfully completed the required build steps.
 
-:::danger
-
-These instructions are for a development-only instance, do not use them
-for setting up any kind of production instances as they are unsafe and will
-result in insecure configurations leading to node compromise.
-
-:::
+> **danger**:
+>
+> These instructions are for a development-only instance, do not use them
+> for setting up any kind of production instances as they are unsafe and will
+> result in insecure configurations leading to node compromise.
 
 [prerequisites]: prerequisites.md
 [build instructions]: building.md
