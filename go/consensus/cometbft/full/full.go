@@ -688,7 +688,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	// else is setup.
 	t.startFn = func() (err error) {
 		defer func() {
-			// The node constructor can panic early in case an error occurrs during block replay as
+			// The node constructor can panic early in case an error occurs during block replay as
 			// the fail monitor is not yet initialized in that case. Propagate the error.
 			if p := recover(); p != nil {
 				switch pt := p.(type) {
