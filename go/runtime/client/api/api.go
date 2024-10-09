@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 const (
@@ -85,6 +86,10 @@ type RuntimeClient interface {
 
 	// WatchBlocks subscribes to blocks for a specific runtimes.
 	WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// State returns a MKVS read syncer that can be used to read runtime state from a remote node
+	// and verify it against the trusted local root.
+	State() syncer.ReadSyncer
 }
 
 // SubmitTxResult is the raw result of submitting a transaction for processing.

@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 var (
@@ -43,6 +44,12 @@ var (
 	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
 	// methodQuery is the Query method.
 	methodQuery = serviceName.NewMethod("Query", QueryRequest{})
+	// methodStateSyncGet is the StateSyncGet method.
+	methodStateSyncGet = serviceName.NewMethod("StateSyncGet", syncer.GetRequest{})
+	// methodStateSyncGetPrefixes is the StateSyncGetPrefixes method.
+	methodStateSyncGetPrefixes = serviceName.NewMethod("StateSyncGetPrefixes", syncer.GetPrefixesRequest{})
+	// methodStateSyncIterate is the StateSyncIterate method.
+	methodStateSyncIterate = serviceName.NewMethod("StateSyncIterate", syncer.IterateRequest{})
 
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", common.Namespace{})
@@ -99,6 +106,18 @@ var (
 			{
 				MethodName: methodQuery.ShortName(),
 				Handler:    handlerQuery,
+			},
+			{
+				MethodName: methodStateSyncGet.ShortName(),
+				Handler:    handlerStateSyncGet,
+			},
+			{
+				MethodName: methodStateSyncGetPrefixes.ShortName(),
+				Handler:    handlerStateSyncGetPrefixes,
+			},
+			{
+				MethodName: methodStateSyncIterate.ShortName(),
+				Handler:    handlerStateSyncIterate,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -422,6 +441,75 @@ func handlerQuery( // nolint: revive
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerStateSyncGet(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.GetRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).State().SyncGet(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncGet.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).State().SyncGet(ctx, req.(*syncer.GetRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerStateSyncGetPrefixes(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.GetPrefixesRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).State().SyncGetPrefixes(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncGetPrefixes.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).State().SyncGetPrefixes(ctx, req.(*syncer.GetPrefixesRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerStateSyncIterate(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.IterateRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).State().SyncIterate(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncIterate.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).State().SyncIterate(ctx, req.(*syncer.IterateRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
 func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	var runtimeID common.Namespace
 	if err := stream.RecvMsg(&runtimeID); err != nil {
@@ -546,6 +634,41 @@ func (c *runtimeClient) Query(ctx context.Context, request *QueryRequest) (*Quer
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+type stateReadSync struct {
+	c *runtimeClient
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncGet.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncGetPrefixes.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncIterate.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *runtimeClient) State() syncer.ReadSyncer {
+	return &stateReadSync{c}
 }
 
 func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {

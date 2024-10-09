@@ -13,8 +13,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/worker/client/committee"
 )
 
@@ -302,4 +304,40 @@ func (s *service) Query(ctx context.Context, request *api.QueryRequest) (*api.Qu
 		return nil, err
 	}
 	return &api.QueryResponse{Data: data}, nil
+}
+
+// Implements api.RuntimeClient.
+func (s *service) State() syncer.ReadSyncer {
+	return &storageRouter{r: s.w.commonWorker.RuntimeRegistry}
+}
+
+type storageRouter struct {
+	r runtimeRegistry.Registry
+}
+
+// Implements syncer.ReadSyncer.
+func (sr *storageRouter) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
+	rt, err := sr.r.GetRuntime(request.Tree.Root.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return rt.Storage().SyncGet(ctx, request)
+}
+
+// Implements syncer.ReadSyncer.
+func (sr *storageRouter) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+	rt, err := sr.r.GetRuntime(request.Tree.Root.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return rt.Storage().SyncGetPrefixes(ctx, request)
+}
+
+// Implements syncer.ReadSyncer.
+func (sr *storageRouter) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	rt, err := sr.r.GetRuntime(request.Tree.Root.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return rt.Storage().SyncIterate(ctx, request)
 }
