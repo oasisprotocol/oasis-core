@@ -68,6 +68,12 @@ impl Demux {
         }
     }
 
+    /// Set the session builder to use.
+    pub fn set_session_builder(&self, builder: Builder) {
+        let mut sessions = self.sessions.lock().unwrap();
+        sessions.set_builder(builder);
+    }
+
     async fn get_or_create_session(
         &self,
         peer_id: Vec<u8>,

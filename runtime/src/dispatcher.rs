@@ -11,11 +11,11 @@ use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
 
 use crate::{
-    attestation, cache,
+    app, attestation, cache,
     common::{
         crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
-        process,
+        panic::AbortOnPanic,
         sgx::QuotePolicy,
     },
     consensus::{
@@ -38,7 +38,6 @@ use crate::{
     identity::Identity,
     policy::PolicyVerifier,
     protocol::Protocol,
-    rofl,
     storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
@@ -96,22 +95,7 @@ pub struct PostInitState {
     /// Optional transaction dispatcher that should be used.
     pub txn_dispatcher: Option<Box<dyn TxnDispatcher>>,
     /// Optional ROFL application.
-    pub app: Option<Box<dyn rofl::App>>,
-}
-
-/// A guard that will abort the process if dropped while panicking.
-///
-/// This is to ensure that the runtime will terminate in case there is
-/// a panic encountered during dispatch and the runtime is built with
-/// a non-abort panic handler.
-struct AbortOnPanic;
-
-impl Drop for AbortOnPanic {
-    fn drop(&mut self) {
-        if thread::panicking() {
-            process::abort();
-        }
-    }
+    pub app: Option<Box<dyn app::App>>,
 }
 
 impl From<tokio::task::JoinError> for Error {
@@ -148,7 +132,7 @@ struct State {
     protocol: Arc<Protocol>,
     consensus_verifier: Arc<dyn Verifier>,
     dispatcher: Arc<Dispatcher>,
-    app: Arc<dyn rofl::App>,
+    app: Arc<dyn app::App>,
     rpc_demux: Arc<RpcDemux>,
     rpc_dispatcher: Arc<RpcDispatcher>,
     txn_dispatcher: Arc<dyn TxnDispatcher>,
@@ -258,26 +242,19 @@ impl Dispatcher {
             .unwrap_or_else(|| Box::<TxnNoopDispatcher>::default());
         let mut app = post_init_state
             .app
-            .unwrap_or_else(|| Box::new(rofl::NoopApp));
+            .unwrap_or_else(|| Box::new(app::NoopApp));
 
         // Initialize the application.
         if let Err(err) = app.on_init(protocol.clone()) {
             error!(self.logger, "ROFL application initialization failed"; "err" => ?err);
         }
 
-        // Determine what runtime version to support during remote attestation. For runtimes that
-        // define a ROFL application, we use `None` to signal that the active version is used.
-        let version = if app.is_supported() {
-            None
-        } else {
-            Some(protocol.get_config().version)
-        };
-
+        let app: Arc<dyn app::App> = Arc::from(app);
         let state = State {
             protocol: protocol.clone(),
             consensus_verifier: consensus_verifier.clone(),
             dispatcher: self.clone(),
-            app: Arc::from(app),
+            app: app.clone(),
             rpc_demux: Arc::new(rpc_demux),
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
@@ -286,7 +263,8 @@ impl Dispatcher {
                 protocol.clone(),
                 consensus_verifier.clone(),
                 protocol.get_runtime_id(),
-                version,
+                protocol.get_config().version,
+                app,
             ),
             policy_verifier: Arc::new(PolicyVerifier::new(consensus_verifier)),
             cache_set: cache::CacheSet::new(protocol.clone()),
@@ -451,7 +429,7 @@ impl Dispatcher {
             }
 
             // ROFL.
-            Body::RuntimeQueryRequest { method, args, .. } if state.app.is_supported() => state
+            Body::RuntimeQueryRequest { method, args, .. } if state.app.is_rofl() => state
                 .app
                 .query(&method, args)
                 .await

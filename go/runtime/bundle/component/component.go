@@ -81,3 +81,26 @@ func (c ID) IsRONL() bool {
 
 // ID_RONL is the identifier of the RONL component.
 var ID_RONL = ID{Kind: RONL, Name: ""} //nolint: revive
+
+// TEEKind is the kind of Trusted Execution Environment (TEE) supported by the component.
+type TEEKind uint8
+
+const (
+	TEEKindNone TEEKind = 0
+	TEEKindSGX  TEEKind = 1
+	TEEKindTDX  TEEKind = 2
+)
+
+// String returns a string representation of the TEE kind.
+func (tk TEEKind) String() string {
+	switch tk {
+	case TEEKindNone:
+		return "none"
+	case TEEKindSGX:
+		return "sgx"
+	case TEEKindTDX:
+		return "tdx"
+	default:
+		return fmt.Sprintf("[invalid: %d]", tk)
+	}
+}

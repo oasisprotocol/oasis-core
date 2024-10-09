@@ -160,7 +160,7 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 		}
 
 		provisioner := status.Runtimes[rt.ID()].Provisioner
-		if provisioner != "sandbox" && provisioner != "sgx" {
+		if provisioner == "none" {
 			return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
 		}
 

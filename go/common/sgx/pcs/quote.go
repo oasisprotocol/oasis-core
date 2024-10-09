@@ -37,6 +37,9 @@ const (
 
 	// DefaultMinTCBEvaluationDataNumber is the default minimum TCB evaluation data number.
 	DefaultMinTCBEvaluationDataNumber = 12 // As of 2022-08-01.
+
+	quoteVersionV3 = 3
+	quoteVersionV4 = 4
 )
 
 // Quote is an enclave quote.
@@ -46,15 +49,18 @@ type Quote struct {
 	signature  QuoteSignature
 }
 
-const (
-	quoteVersionV3 = 3
-	quoteVersionV4 = 4
-)
-
 // UnmarshalBinary decodes a Quote from a byte array.
 func (q *Quote) UnmarshalBinary(data []byte) error {
+	_, err := q.UnmarshalBinaryWithTrailing(data, false)
+	return err
+}
+
+// UnmarshalBinaryWithTrailing decodes a Quote from a byte array, optionally allowing trailing data.
+//
+// Returns the length of the decoded quote.
+func (q *Quote) UnmarshalBinaryWithTrailing(data []byte, allowTrailing bool) (int, error) {
 	if len(data) < quoteHeaderLen+reportBodySgxLen+quoteSigSizeLen {
-		return fmt.Errorf("pcs/quote: invalid quote length")
+		return 0, fmt.Errorf("pcs/quote: invalid quote length")
 	}
 
 	// Quote Header.
@@ -64,22 +70,22 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	case quoteVersionV3:
 		var qh QuoteHeaderV3
 		if err := qh.UnmarshalBinary(data[offset : offset+quoteHeaderLen]); err != nil {
-			return err
+			return 0, err
 		}
 		q.header = &qh
 	case quoteVersionV4:
 		var qh QuoteHeaderV4
 		if err := qh.UnmarshalBinary(data[offset : offset+quoteHeaderLen]); err != nil {
-			return err
+			return 0, err
 		}
 		q.header = &qh
 	default:
-		return fmt.Errorf("pcs/quote: unsupported quote version %d", version)
+		return 0, fmt.Errorf("pcs/quote: unsupported quote version %d", version)
 	}
 	offset += quoteHeaderLen
 
 	if !bytes.Equal(q.header.QEVendorID(), QEVendorID_Intel) {
-		return fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.header.QEVendorID())
+		return 0, fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.header.QEVendorID())
 	}
 
 	// Report body.
@@ -87,18 +93,18 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	case TeeTypeSGX:
 		var report SgxReport
 		if err := report.UnmarshalBinary(data[offset : offset+reportBodySgxLen]); err != nil {
-			return err
+			return 0, err
 		}
 		q.reportBody = &report
 		offset += reportBodySgxLen
 	case TeeTypeTDX:
 		if len(data) < offset+reportBodyTdLen+quoteSigSizeLen {
-			return fmt.Errorf("pcs/quote: invalid quote length")
+			return 0, fmt.Errorf("pcs/quote: invalid quote length")
 		}
 
 		var report TdReport
 		if err := report.UnmarshalBinary(data[offset : offset+reportBodyTdLen]); err != nil {
-			return err
+			return 0, err
 		}
 		q.reportBody = &report
 		offset += reportBodyTdLen
@@ -107,8 +113,11 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	// Quote Signature Length.
 	sigLen := int(binary.LittleEndian.Uint32(data[offset:]))
 	offset += quoteSigSizeLen
-	if len(data) != offset+sigLen {
-		return fmt.Errorf("pcs/quote: unexpected trailing data")
+	if len(data) < offset+sigLen {
+		return 0, fmt.Errorf("pcs/quote: unexpected trailing data")
+	}
+	if !allowTrailing && len(data) != offset+sigLen {
+		return 0, fmt.Errorf("pcs/quote: unexpected trailing data")
 	}
 
 	// Quote Signature.
@@ -116,14 +125,15 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	case AttestationKeyECDSA_P256:
 		var qs QuoteSignatureECDSA_P256
 		if err := qs.UnmarshalBinary(q.header.Version(), data[offset:offset+sigLen]); err != nil {
-			return err
+			return 0, err
 		}
 		q.signature = &qs
 	default:
-		return fmt.Errorf("pcs/quote: unsupported attestation key type: %s", q.header.AttestationKeyType())
+		return 0, fmt.Errorf("pcs/quote: unsupported attestation key type: %s", q.header.AttestationKeyType())
 	}
+	offset += sigLen
 
-	return nil
+	return offset, nil
 }
 
 // Verify verifies the quote.
@@ -195,6 +205,11 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 	}, nil
 }
 
+// Header returns the quote header.
+func (q *Quote) Header() QuoteHeader {
+	return q.header
+}
+
 // Signature returns the quote signature.
 func (q *Quote) Signature() QuoteSignature {
 	return q.signature
@@ -207,6 +222,18 @@ const (
 	TeeTypeSGX TeeType = 0x00000000
 	TeeTypeTDX TeeType = 0x00000081
 )
+
+// String returns a string representation of the TEE type.
+func (tt TeeType) String() string {
+	switch tt {
+	case TeeTypeSGX:
+		return "sgx"
+	case TeeTypeTDX:
+		return "tdx"
+	default:
+		return fmt.Sprintf("[unknown: %d]", tt)
+	}
+}
 
 // QuoteHeader is the quote header interface.
 type QuoteHeader interface {

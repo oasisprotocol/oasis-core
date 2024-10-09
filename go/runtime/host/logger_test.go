@@ -49,7 +49,7 @@ func TestRuntimeLogWrapper(t *testing.T) {
 		`{"level":"info","module":"runtime","msg":"My info\\nwith a newline","ts":"2022"}`,
 		`{"level":"debug","module":"runtime/dispatcher","msg":"My debug","ts":"2022-04-27"}`,
 		`{"err":"some explanation","level":"error","module":"runtime/protocol","msg":"My error","ts":"2022-04-28"}`,
-		`{"level":"warn","module":"runtime","msg":"\\t\\tRandom crap","ts":"[^"]+"}`,
+		`{"level":"warn","module":"runtime","msg":"Random crap","ts":"[^"]+"}`,
 		`{"level":"info","module":"runtime/foo","msg":"Should be recovered","ts":"2022"}`,
 		``, // Because we split on newline and the last log entry ends with a newline
 	}

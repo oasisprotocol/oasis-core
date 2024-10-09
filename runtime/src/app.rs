@@ -1,21 +1,22 @@
-//! Runtime OFf-chain Logic (ROFL).
+//! Runtime apps.
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 
 use crate::{
+    common::sgx,
     consensus::roothash,
     dispatcher::{Initializer, PostInitState, PreInitState},
     host::Host,
 };
 
-/// A ROFL application.
+/// An Oasis runtime app.
 #[allow(unused_variables)]
 #[async_trait]
 pub trait App: Send + Sync {
-    /// Whether dispatch is supported.
-    fn is_supported(&self) -> bool {
+    /// Whether this is a ROFL app.
+    fn is_rofl(&self) -> bool {
         true
     }
 
@@ -23,6 +24,24 @@ pub trait App: Send + Sync {
     fn on_init(&mut self, host: Arc<dyn Host>) -> Result<()> {
         // Default implementation does nothing.
         Ok(())
+    }
+
+    /// Quote policy to use for verifying our own enclave identity.
+    async fn quote_policy(&self) -> Result<sgx::QuotePolicy> {
+        // Default implementation uses a sane policy.
+        Ok(sgx::QuotePolicy {
+            ias: Some(sgx::ias::QuotePolicy {
+                disabled: true, // Disable legacy EPID attestation.
+                ..Default::default()
+            }),
+            pcs: Some(sgx::pcs::QuotePolicy {
+                // Allow TDX since that is not part of the default policy.
+                tdx: Some(sgx::pcs::TdxQuotePolicy {
+                    allowed_tdx_modules: vec![],
+                }),
+                ..Default::default()
+            }),
+        })
     }
 
     /// Called on new runtime block being received.
@@ -53,12 +72,12 @@ pub struct NoopApp;
 
 #[async_trait]
 impl App for NoopApp {
-    fn is_supported(&self) -> bool {
+    fn is_rofl(&self) -> bool {
         false
     }
 }
 
-/// Create a new ROFL runtime for an application.
+/// Create a new runtime initializer for an application.
 pub fn new(app: Box<dyn App>) -> Box<dyn Initializer> {
     Box::new(|_state: PreInitState<'_>| -> PostInitState {
         PostInitState {

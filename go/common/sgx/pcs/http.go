@@ -23,11 +23,13 @@ import (
 const (
 	pcsAPISubscriptionKeyHeader = "Ocp-Apim-Subscription-Key"
 	pcsAPITimeout               = 10 * time.Second
-	pcsAPIBaseURL               = "https://api.trustedservices.intel.com/sgx"
-	pcsAPIGetPCKCertificatePath = "/certification/v4/pckcert"
-	pcsAPIGetRevocationListPath = "/certification/v4/pckcrl"
-	pcsAPIGetTCBInfoPath        = "/certification/v4/tcb"
-	pcsAPIGetQEIdentityPath     = "/certification/v4/qe/identity"
+	pcsAPIBaseURL               = "https://api.trustedservices.intel.com"
+	pcsAPIGetPCKCertificatePath = "/sgx/certification/v4/pckcert"
+	pcsAPIGetRevocationListPath = "/sgx/certification/v4/pckcrl"
+	pcsAPIGetSgxTCBInfoPath     = "/sgx/certification/v4/tcb"
+	pcsAPIGetTdxTCBInfoPath     = "/tdx/certification/v4/tcb"
+	pcsAPIGetSgxQEIdentityPath  = "/sgx/certification/v4/qe/identity"
+	pcsAPIGetTdxQEIdentityPath  = "/tdx/certification/v4/qe/identity"
 	pcsAPICertChainHeader       = "TCB-Info-Issuer-Chain"
 	pcsAPIPCKIIssuerChainHeader = "SGX-PCK-Certificate-Issuer-Chain"
 )
@@ -88,8 +90,22 @@ func (hc *httpClient) getUrl(p string) *url.URL { // nolint: revive
 	return &u
 }
 
-func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte, update UpdateType) (*TCBBundle, error) {
-	var tcbBundle TCBBundle
+func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, update UpdateType) (*TCBBundle, error) {
+	var (
+		tcbBundle               TCBBundle
+		pcsAPIGetTCBInfoPath    string
+		pcsAPIGetQEIdentityPath string
+	)
+	switch teeType {
+	case TeeTypeSGX:
+		pcsAPIGetTCBInfoPath = pcsAPIGetSgxTCBInfoPath
+		pcsAPIGetQEIdentityPath = pcsAPIGetSgxQEIdentityPath
+	case TeeTypeTDX:
+		pcsAPIGetTCBInfoPath = pcsAPIGetTdxTCBInfoPath
+		pcsAPIGetQEIdentityPath = pcsAPIGetTdxQEIdentityPath
+	default:
+		return nil, fmt.Errorf("pcs: unsupported TEE type: %s", teeType)
+	}
 
 	// First fetch TCB info.
 	u := hc.getUrl(pcsAPIGetTCBInfoPath)

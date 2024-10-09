@@ -34,6 +34,10 @@ impl EnclaveIdentity {
                     mr_enclave: MrEnclave(report.mrenclave),
                     mr_signer: MrSigner(report.mrsigner),
                 })
+            } else if #[cfg(feature = "tdx")] {
+                // TDX builds, generate TD report.
+                let report = crate::common::tdx::report::get_report(&[0; 64]).expect("failed to get report");
+                Some(report.as_enclave_identity())
             } else if #[cfg(feature = "debug-mock-sgx")] {
                 // Non-SGX builds, mock SGX enabled, generate mock report. The mock MRENCLAVE is
                 // expected to be passed in by the mock SGX runner.

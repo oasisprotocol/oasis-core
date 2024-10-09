@@ -1,4 +1,4 @@
-package sgx
+package pcs
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 )
 
 const loggerModule = "runtime/host/sgx/tests"
@@ -23,7 +22,7 @@ func (ft *fakeTime) get() time.Time {
 	return ft.now
 }
 
-func testStorageRoundtrip(t *testing.T, store *persistent.ServiceStore, bundle *pcs.TCBBundle) {
+func testStorageRoundtrip(t *testing.T, store *persistent.ServiceStore, bundle *TCBBundle) {
 	require := require.New(t)
 	fmspc := []byte("fmspc")
 
@@ -34,7 +33,7 @@ func testStorageRoundtrip(t *testing.T, store *persistent.ServiceStore, bundle *
 	require.EqualValues(cached, bundle, "tcbCache.check")
 }
 
-func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle *pcs.TCBBundle) {
+func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle *TCBBundle) {
 	require := require.New(t)
 	fmspc := []byte("fmspc")
 	expiryTime, err := readBundleMinTimestamp(bundle)
@@ -44,7 +43,7 @@ func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle 
 	}
 	tcbCache := newMockTcbCache(store, logging.GetLogger(loggerModule), ft.get)
 
-	var cached *pcs.TCBBundle
+	var cached *TCBBundle
 	var refresh bool
 
 	// Cache initial and check.
@@ -64,7 +63,7 @@ func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle 
 	require.False(refresh, "tcbCache.check 3")
 }
 
-func testCheckIntervals(t *testing.T, store *persistent.ServiceStore, bundle *pcs.TCBBundle) {
+func testCheckIntervals(t *testing.T, store *persistent.ServiceStore, bundle *TCBBundle) {
 	require := require.New(t)
 	fmspc := []byte("fmspc")
 	expiryTime, err := readBundleMinTimestamp(bundle)
@@ -149,21 +148,21 @@ func TestTCBCache(t *testing.T) {
 	rawQEIdentity, err := os.ReadFile("testdata/qe_identity_v2.json") // From PCS V4 response.
 	require.NoError(err, "Read test vector")
 
-	var tcbInfo pcs.SignedTCBInfo
+	var tcbInfo SignedTCBInfo
 	err = json.Unmarshal(rawTCBInfo, &tcbInfo)
 	require.NoError(err, "Parse TCB info")
 
-	var qeIdentity pcs.SignedQEIdentity
+	var qeIdentity SignedQEIdentity
 	err = json.Unmarshal(rawQEIdentity, &qeIdentity)
 	require.NoError(err, "Parse QE identity")
 
-	tcbBundle := pcs.TCBBundle{
+	tcbBundle := TCBBundle{
 		TCBInfo:      tcbInfo,
 		QEIdentity:   qeIdentity,
 		Certificates: rawCerts,
 	}
 
-	for name, fun := range map[string]func(*testing.T, *persistent.ServiceStore, *pcs.TCBBundle){
+	for name, fun := range map[string]func(*testing.T, *persistent.ServiceStore, *TCBBundle){
 		"StorageRoundtrip":  testStorageRoundtrip,
 		"CheckIntervals":    testCheckIntervals,
 		"FMSPCInvalidation": testFMSPCInvalidation,

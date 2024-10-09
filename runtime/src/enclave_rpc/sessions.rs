@@ -176,6 +176,11 @@ where
         }
     }
 
+    /// Set the session builder to use.
+    pub fn set_builder(&mut self, builder: Builder) {
+        self.builder = builder;
+    }
+
     /// Update remote enclave identity verification in the session builder
     /// and clear all sessions if the identity has changed.
     pub fn update_enclaves(

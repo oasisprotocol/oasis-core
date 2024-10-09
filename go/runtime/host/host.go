@@ -3,6 +3,7 @@ package host
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -31,6 +32,18 @@ type Config struct {
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]interface{}
+}
+
+// GetComponent ensures that only a single component is configured for this runtime and returns it.
+func (cfg *Config) GetComponent() (*bundle.Component, error) {
+	if numComps := len(cfg.Components); numComps != 1 {
+		return nil, fmt.Errorf("expected a single component (got %d)", numComps)
+	}
+	comp := cfg.Bundle.Manifest.GetComponentByID(cfg.Components[0])
+	if comp == nil {
+		return nil, fmt.Errorf("component '%s' not available", cfg.Components[0])
+	}
+	return comp, nil
 }
 
 // RuntimeBundle is a exploded runtime bundle ready for execution.

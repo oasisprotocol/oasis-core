@@ -23,13 +23,54 @@ use crate::{
     identity::Identity,
     storage::KeyValue,
     types::{Body, Error, Message, MessageType, RuntimeInfoRequest, RuntimeInfoResponse},
-    BUILD_INFO,
+    TeeType, BUILD_INFO,
 };
 
-#[cfg(not(target_env = "sgx"))]
-pub type Stream = ::std::os::unix::net::UnixStream;
-#[cfg(target_env = "sgx")]
-pub type Stream = ::std::net::TcpStream;
+/// Stream used to communicate with the host.
+pub enum Stream {
+    #[cfg(not(target_env = "sgx"))]
+    Unix(std::os::unix::net::UnixStream),
+    Tcp(std::net::TcpStream),
+    #[cfg(feature = "tdx")]
+    Vsock(vsock::VsockStream),
+}
+
+impl Read for &Stream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        #[allow(clippy::borrow_deref_ref)]
+        match self {
+            #[cfg(not(target_env = "sgx"))]
+            Stream::Unix(stream) => (&*stream).read(buf),
+            Stream::Tcp(stream) => (&*stream).read(buf),
+            #[cfg(feature = "tdx")]
+            Stream::Vsock(stream) => (&*stream).read(buf),
+        }
+    }
+}
+
+impl Write for &Stream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        #[allow(clippy::borrow_deref_ref)]
+        match self {
+            #[cfg(not(target_env = "sgx"))]
+            Stream::Unix(stream) => (&*stream).write(buf),
+            Stream::Tcp(stream) => (&*stream).write(buf),
+            #[cfg(feature = "tdx")]
+            Stream::Vsock(stream) => (&*stream).write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        #[allow(clippy::borrow_deref_ref)]
+        match self {
+            #[cfg(not(target_env = "sgx"))]
+            Stream::Unix(stream) => (&*stream).flush(),
+            Stream::Tcp(stream) => (&*stream).flush(),
+            #[cfg(feature = "tdx")]
+            Stream::Vsock(stream) => (&*stream).flush(),
+        }
+    }
+}
 
 /// Maximum message size.
 const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024; // 16MiB
@@ -374,7 +415,6 @@ impl Protocol {
             }
 
             // Attestation-related requests.
-            #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
             Body::RuntimeCapabilityTEERakInitRequest { .. }
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
@@ -485,10 +525,14 @@ impl Protocol {
             .as_ref()
             .ok_or(ProtocolError::HostInfoNotConfigured)?;
 
-        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
-        self.identity
-            .quote()
-            .ok_or(ProtocolError::AttestationRequired)?;
+        match BUILD_INFO.tee_type {
+            TeeType::Sgx | TeeType::Tdx => {
+                self.identity
+                    .quote()
+                    .ok_or(ProtocolError::AttestationRequired)?;
+            }
+            TeeType::None => {}
+        }
 
         Ok(())
     }

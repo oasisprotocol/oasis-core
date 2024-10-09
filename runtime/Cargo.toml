@@ -63,6 +63,11 @@ lru = "0.12.5"
 async-trait = "0.1.83"
 cfg-if = "1.0"
 
+# TDX dependencies.
+libc = { version = "0.2.158", optional = true }
+nix = { version = "0.29.0", features = ["mount", "signal"], optional = true }
+vsock = { version = "0.5.1", optional = true }
+
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "1.40.0"
 features = ["full"]
@@ -75,6 +80,8 @@ tendermint-testgen = "0.39.1"
 
 [features]
 default = []
+# Enables build for TDX.
+tdx = ["dep:vsock", "dep:libc", "dep:nix"]
 # Enables debug-level logging in release builds.
 debug-logging = ["slog/max_level_debug", "slog/release_max_level_debug"]
 # Enables mock SGX in non-SGX builds.

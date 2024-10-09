@@ -69,40 +69,20 @@ enum State {
 
 /// An encrypted and authenticated RPC session.
 pub struct Session {
-    consensus_verifier: Option<Arc<dyn Verifier>>,
+    cfg: Config,
     local_static_pub: Vec<u8>,
-    identity: Option<Arc<Identity>>,
-    remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     remote_node: Option<signature::PublicKey>,
-    remote_runtime_id: Option<Namespace>,
-    policy: Option<Arc<QuotePolicy>>,
-    use_endorsement: bool,
     info: Option<Arc<SessionInfo>>,
     state: State,
     buf: Vec<u8>,
 }
 
 impl Session {
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        consensus_verifier: Option<Arc<dyn Verifier>>,
-        handshake_state: snow::HandshakeState,
-        local_static_pub: Vec<u8>,
-        identity: Option<Arc<Identity>>,
-        remote_enclaves: Option<HashSet<EnclaveIdentity>>,
-        remote_runtime_id: Option<Namespace>,
-        policy: Option<Arc<QuotePolicy>>,
-        use_endorsement: bool,
-    ) -> Self {
+    fn new(handshake_state: snow::HandshakeState, local_static_pub: Vec<u8>, cfg: Config) -> Self {
         Self {
-            consensus_verifier,
+            cfg,
             local_static_pub,
-            identity,
-            remote_enclaves,
             remote_node: None,
-            remote_runtime_id,
-            policy,
-            use_endorsement,
             info: None,
             state: State::Handshake1(handshake_state),
             buf: vec![0u8; 65535],
@@ -220,7 +200,7 @@ impl Session {
     }
 
     fn get_rak_binding(&self) -> Vec<u8> {
-        match self.identity {
+        match self.cfg.identity {
             Some(ref identity) => {
                 if identity.quote().is_none() {
                     return vec![];
@@ -230,7 +210,7 @@ impl Session {
                     .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)
                     .unwrap();
 
-                if self.use_endorsement {
+                if self.cfg.use_endorsement {
                     // Use endorsed TEE capability when available.
                     if let Some(ect) = identity.endorsed_capability_tee() {
                         return cbor::to_vec(RAKBinding::V2 { ect, binding });
@@ -259,22 +239,23 @@ impl Session {
         if rak_binding.is_empty() {
             // If enclave identity verification is required and no RAK binding
             // has been provided, we must abort the session.
-            if self.remote_enclaves.is_some() {
+            if self.cfg.remote_enclaves.is_some() {
                 return Err(SessionError::MismatchedEnclaveIdentity.into());
             }
             return Ok(None);
         }
 
         let policy = self
+            .cfg
             .policy
             .as_ref()
             .ok_or(SessionError::MissingQuotePolicy)?;
 
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
-        let vect = rak_binding.verify(remote_static, &self.remote_enclaves, policy)?;
+        let vect = rak_binding.verify(remote_static, &self.cfg.remote_enclaves, policy)?;
 
         // Verify node identity if verification is enabled.
-        if self.consensus_verifier.is_some() {
+        if self.cfg.consensus_verifier.is_some() {
             let rak = rak_binding.rak_pub();
             self.verify_node_identity(rak).await?;
         }
@@ -331,10 +312,14 @@ impl Session {
     /// obtained from the consensus layer registry service.
     async fn verify_node_identity(&self, rak: signature::PublicKey) -> Result<()> {
         let consensus_verifier = self
+            .cfg
             .consensus_verifier
             .as_ref()
             .expect("consensus verifier should be set");
-        let runtime_id = self.remote_runtime_id.ok_or(SessionError::RuntimeNotSet)?;
+        let runtime_id = self
+            .cfg
+            .remote_runtime_id
+            .ok_or(SessionError::RuntimeNotSet)?;
         let node = self.remote_node.ok_or(SessionError::NodeNotSet)?;
 
         let consensus_state = consensus_verifier.latest_state().await?;
@@ -455,9 +440,9 @@ impl RAKBinding {
     }
 }
 
-/// Session builder.
+/// Session configuration.
 #[derive(Clone, Default)]
-pub struct Builder {
+struct Config {
     consensus_verifier: Option<Arc<dyn Verifier>>,
     identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
@@ -466,134 +451,94 @@ pub struct Builder {
     policy: Option<Arc<QuotePolicy>>,
 }
 
+/// Session builder.
+#[derive(Clone, Default)]
+pub struct Builder {
+    cfg: Config,
+}
+
 impl Builder {
     /// Return remote enclave identities if configured in the builder.
     pub fn get_remote_enclaves(&self) -> &Option<HashSet<EnclaveIdentity>> {
-        &self.remote_enclaves
+        &self.cfg.remote_enclaves
     }
 
     /// Enable remote enclave identity verification.
     pub fn remote_enclaves(mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> Self {
-        self.remote_enclaves = enclaves;
+        self.cfg.remote_enclaves = enclaves;
         self
     }
 
     /// Return remote runtime ID if configured in the builder.
     pub fn get_remote_runtime_id(&self) -> &Option<Namespace> {
-        &self.remote_runtime_id
+        &self.cfg.remote_runtime_id
     }
 
     /// Set remote runtime ID for node identity verification.
     pub fn remote_runtime_id(mut self, id: Option<Namespace>) -> Self {
-        self.remote_runtime_id = id;
+        self.cfg.remote_runtime_id = id;
         self
     }
 
     /// Enable remote node identity verification.
     pub fn consensus_verifier(mut self, verifier: Option<Arc<dyn Verifier>>) -> Self {
-        self.consensus_verifier = verifier;
+        self.cfg.consensus_verifier = verifier;
         self
     }
 
     /// Return quote policy if configured in the builder.
     pub fn get_quote_policy(&self) -> &Option<Arc<QuotePolicy>> {
-        &self.policy
+        &self.cfg.policy
     }
 
     /// Configure quote policy used for remote quote verification.
     pub fn quote_policy(mut self, policy: Option<Arc<QuotePolicy>>) -> Self {
-        self.policy = policy;
+        self.cfg.policy = policy;
         self
     }
 
     /// Use endorsement from host node when establishing sessions.
     pub fn use_endorsement(mut self, use_endorsement: bool) -> Self {
-        self.use_endorsement = use_endorsement;
+        self.cfg.use_endorsement = use_endorsement;
         self
     }
 
     /// Return the local identity if configured in the builder.
     pub fn get_local_identity(&self) -> &Option<Arc<Identity>> {
-        &self.identity
+        &self.cfg.identity
     }
 
     /// Enable RAK binding.
     pub fn local_identity(mut self, identity: Arc<Identity>) -> Self {
-        self.identity = Some(identity);
+        self.cfg.identity = Some(identity);
         self
     }
 
-    #[allow(clippy::type_complexity)]
-    fn build<'a>(
-        mut self,
-    ) -> (
-        snow::Builder<'a>,
-        snow::Keypair,
-        Option<Namespace>,
-        Option<Arc<dyn Verifier>>,
-        Option<Arc<Identity>>,
-        Option<HashSet<EnclaveIdentity>>,
-        Option<Arc<QuotePolicy>>,
-        bool,
-    ) {
+    fn build<'a>(self) -> (snow::Builder<'a>, snow::Keypair, Config) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
-        let verifier = self.consensus_verifier.take();
-        let identity = self.identity.take();
-        let remote_enclaves = self.remote_enclaves.take();
-        let remote_runtime_id = self.remote_runtime_id.take();
-        let quote_policy = self.policy.take();
-        let use_endorsement = self.use_endorsement;
         let keypair = noise_builder.generate_keypair().unwrap();
+        let cfg = self.cfg;
 
-        (
-            noise_builder,
-            keypair,
-            remote_runtime_id,
-            verifier,
-            identity,
-            remote_enclaves,
-            quote_policy,
-            use_endorsement,
-        )
+        (noise_builder, keypair, cfg)
     }
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy, use_endorsement) =
-            self.build();
+        let (builder, keypair, cfg) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
             .unwrap();
-        Session::new(
-            verifier,
-            session,
-            keypair.public,
-            identity,
-            enclaves,
-            runtime_id,
-            policy,
-            use_endorsement,
-        )
+        Session::new(session, keypair.public, cfg)
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy, use_endorsement) =
-            self.build();
+        let (builder, keypair, cfg) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
             .unwrap();
-        Session::new(
-            verifier,
-            session,
-            keypair.public,
-            identity,
-            enclaves,
-            runtime_id,
-            policy,
-            use_endorsement,
-        )
+        Session::new(session, keypair.public, cfg)
     }
 }

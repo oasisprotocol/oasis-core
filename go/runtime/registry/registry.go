@@ -112,14 +112,11 @@ type Runtime interface {
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
 
-	// HasHost checks whether this runtime can be hosted by the current node.
-	HasHost() bool
+	// HostConfig returns the runtime host configuration when available. Otherwise returns nil.
+	HostConfig() map[version.Version]*runtimeHost.Config
 
-	// Host returns the runtime host configuration and provisioner if configured.
-	//
-	// If the runtime is not yet registered an error is returned. Use `RegistryDescriptor` to
-	// wait for the runtime to be registered.
-	Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error)
+	// HostProvisioner returns the runtime host provisioner when available. Otherwise returns nil.
+	HostProvisioner() runtimeHost.Provisioner
 
 	// HostVersions returns a list of supported runtime versions.
 	HostVersions() []version.Version
@@ -148,8 +145,8 @@ type runtime struct { // nolint: maligned
 	activeDescriptorCh         chan struct{}
 	activeDescriptorNotifier   *pubsub.Broker
 
-	hostProvisioners map[node.TEEHardware]runtimeHost.Provisioner
-	hostConfig       map[version.Version]*runtimeHost.Config
+	hostProvisioner runtimeHost.Provisioner
+	hostConfig      map[version.Version]*runtimeHost.Config
 
 	logger *logging.Logger
 }
@@ -248,27 +245,12 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
 }
 
-func (r *runtime) HasHost() bool {
-	return r.hostProvisioners != nil && r.hostConfig != nil
+func (r *runtime) HostConfig() map[version.Version]*runtimeHost.Config {
+	return r.hostConfig
 }
 
-func (r *runtime) Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
-	if r.hostProvisioners == nil || r.hostConfig == nil {
-		return nil, nil, ErrRuntimeHostNotConfigured
-	}
-
-	r.RLock()
-	defer r.RUnlock()
-	if r.registryDescriptor == nil {
-		return nil, nil, fmt.Errorf("runtime not yet registered")
-	}
-
-	provisioner, ok := r.hostProvisioners[r.registryDescriptor.TEEHardware]
-	if !ok {
-		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", r.registryDescriptor.TEEHardware)
-	}
-
-	return r.hostConfig, provisioner, nil
+func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
+	return r.hostProvisioner
 }
 
 func (r *runtime) HostVersions() []version.Version {
@@ -598,7 +580,7 @@ func newRuntime(
 
 	// Configure runtime host if needed.
 	if cfg.Host != nil {
-		rt.hostProvisioners = cfg.Host.Provisioners
+		rt.hostProvisioner = cfg.Host.Provisioner
 		rt.hostConfig = cfg.Host.Runtimes[id]
 	}
 

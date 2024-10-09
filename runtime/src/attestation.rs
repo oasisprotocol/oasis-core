@@ -5,9 +5,10 @@ use anyhow::{bail, Result};
 use slog::{info, Logger};
 
 use crate::{
+    app::App,
     common::{
-        crypto::signature::Signer, logger::get_logger, namespace::Namespace, sgx::Quote,
-        version::Version,
+        crypto::signature::Signer, logger::get_logger, namespace::Namespace, panic::AbortOnPanic,
+        sgx::Quote, version::Version,
     },
     consensus::{
         registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
@@ -26,7 +27,8 @@ pub struct Handler {
     host: Arc<dyn Host>,
     consensus_verifier: Arc<dyn Verifier>,
     runtime_id: Namespace,
-    version: Option<Version>,
+    version: Version,
+    app: Arc<dyn App>,
     logger: Logger,
 }
 
@@ -37,7 +39,8 @@ impl Handler {
         host: Arc<dyn Host>,
         consensus_verifier: Arc<dyn Verifier>,
         runtime_id: Namespace,
-        version: Option<Version>,
+        version: Version,
+        app: Arc<dyn App>,
     ) -> Self {
         Self {
             identity,
@@ -45,6 +48,7 @@ impl Handler {
             consensus_verifier,
             runtime_id,
             version,
+            app,
             logger: get_logger("runtime/attestation"),
         }
     }
@@ -72,17 +76,20 @@ impl Handler {
     }
 
     fn target_info_init(&self, target_info: Vec<u8>) -> Result<Body> {
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
+
         info!(self.logger, "Initializing the runtime target info");
         self.identity.init_target_info(target_info)?;
         Ok(Body::RuntimeCapabilityTEERakInitResponse {})
     }
 
     fn report_init(&self) -> Result<Body> {
-        info!(self.logger, "Initializing the runtime key report");
-        let (rak_pub, rek_pub, report, nonce) = self.identity.init_report();
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
 
-        let report: &[u8] = report.as_ref();
-        let report = report.to_vec();
+        info!(self.logger, "Initializing the runtime key report");
+        let (rak_pub, rek_pub, report, nonce) = self.identity.init_report()?;
 
         Ok(Body::RuntimeCapabilityTEERakReportResponse {
             rak_pub,
@@ -92,21 +99,37 @@ impl Handler {
         })
     }
 
-    async fn set_quote(&self, quote: Quote) -> Result<Body> {
-        if self.identity.quote_policy().is_none() {
-            info!(self.logger, "Configuring quote policy");
+    async fn set_quote_policy(&self) -> Result<()> {
+        info!(self.logger, "Configuring quote policy");
 
+        // Use the correct quote policy for verifying our own identity based on what kind of
+        // application this is. For ROFL, ask the application, for RONL, query consensus.
+        let policy = if self.app.is_rofl() {
+            // ROFL, ask the app for policy.
+            self.app.quote_policy().await?
+        } else {
+            // RONL.
             // TODO: Make async.
             let consensus_verifier = self.consensus_verifier.clone();
             let version = self.version;
             let runtime_id = self.runtime_id;
-            let policy = tokio::task::block_in_place(move || {
+            tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.
-                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, version)
-            })?;
+                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, Some(version))
+            })?
+        };
 
-            self.identity.set_quote_policy(policy)?;
-        }
+        self.identity.set_quote_policy(policy)?;
+
+        Ok(())
+    }
+
+    async fn set_quote(&self, quote: Quote) -> Result<Body> {
+        // Make sure to abort the process on panics during attestation process.
+        let _guard = AbortOnPanic;
+
+        // Ensure a quote policy is configured.
+        self.set_quote_policy().await?;
 
         info!(
             self.logger,

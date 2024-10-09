@@ -11,9 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -22,15 +19,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/aesm"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox/process"
+	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
 )
 
 const (
@@ -39,9 +37,6 @@ const (
 
 	sandboxMountRuntime   = "/runtime"
 	sandboxMountSignature = "/runtime.sig"
-
-	// The service name for the common store to use for SGX-related persistent data.
-	serviceStoreName = "runtime_host_sgx"
 
 	// Runtime RAK initialization timeout.
 	//
@@ -66,8 +61,8 @@ type Config struct {
 
 	// IAS are the Intel Attestation Service endpoint.
 	IAS []ias.Endpoint
-	// PCS is the Intel Provisioning Certification Service client.
-	PCS pcs.Client
+	// PCS is the Intel Provisioning Certification Service quote service.
+	PCS pcs.QuoteService
 	// Consensus is the consensus layer backend.
 	Consensus consensus.Backend
 	// Identity is the node identity.
@@ -92,17 +87,14 @@ type Config struct {
 
 type teeStateImpl interface {
 	// Init initializes the TEE state and returns the QE target info.
-	Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error)
+	Init(ctx context.Context, sp *sgxProvisioner, cfg *host.Config) ([]byte, error)
 
 	// Update updates the TEE state and returns a new attestation.
 	Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error)
 }
 
 type teeState struct {
-	runtimeID    common.Namespace
-	version      version.Version
-	eventEmitter host.RuntimeEventEmitter
-
+	cfg          *host.Config
 	insecureMock bool
 
 	impl teeStateImpl
@@ -121,18 +113,18 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 	// When insecure mock SGX is enabled, use mock implementation.
 	if ts.insecureMock {
 		ts.impl = &teeStateMock{}
-		return ts.impl.Init(ctx, sp, ts.runtimeID, ts.version)
+		return ts.impl.Init(ctx, sp, ts.cfg)
 	}
 
 	// Try ECDSA first. If it fails, try EPID.
 	implECDSA := &teeStateECDSA{}
-	if targetInfo, err = implECDSA.Init(ctx, sp, ts.runtimeID, ts.version); err != nil {
+	if targetInfo, err = implECDSA.Init(ctx, sp, ts.cfg); err != nil {
 		sp.logger.Debug("ECDSA attestation initialization failed, trying EPID",
 			"err", err,
 		)
 
 		implEPID := &teeStateEPID{}
-		if targetInfo, err = implEPID.Init(ctx, sp, ts.runtimeID, ts.version); err != nil {
+		if targetInfo, err = implEPID.Init(ctx, sp, ts.cfg); err != nil {
 			return nil, err
 		}
 		ts.impl = implEPID
@@ -147,7 +139,7 @@ func (ts *teeState) updateTargetInfo(ctx context.Context, sp *sgxProvisioner) ([
 	if ts.impl == nil {
 		return nil, fmt.Errorf("not initialized")
 	}
-	return ts.impl.Init(ctx, sp, ts.runtimeID, ts.version)
+	return ts.impl.Init(ctx, sp, ts.cfg)
 }
 
 func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
@@ -157,7 +149,7 @@ func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protoco
 
 	attestation, err := ts.impl.Update(ctx, sp, conn, report, nonce)
 
-	updateAttestationMetrics(ts.runtimeID.String(), err)
+	sgxCommon.UpdateAttestationMetrics(ts.cfg.Bundle.Manifest.ID, component.TEEKindSGX, err)
 
 	return attestation, err
 }
@@ -169,13 +161,13 @@ type sgxProvisioner struct {
 
 	sandbox   host.Provisioner
 	ias       []ias.Endpoint
-	pcs       pcs.Client
+	pcs       pcs.QuoteService
 	aesm      *aesm.Client
 	consensus consensus.Backend
 	identity  *identity.Identity
+	store     *persistent.CommonStore
 
-	logger       *logging.Logger
-	serviceStore *persistent.ServiceStore
+	logger *logging.Logger
 }
 
 func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Component) ([]byte, []byte, error) {
@@ -242,13 +234,15 @@ func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 	return "", fmt.Errorf("no SGX device was found on this system")
 }
 
-func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
-	if numComps := len(rtCfg.Components); numComps != 1 {
-		return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
+func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
+	comp, err := rtCfg.GetComponent()
+	if err != nil {
+		return process.Config{}, err
 	}
-	comp := rtCfg.Bundle.Manifest.GetComponentByID(rtCfg.Components[0])
-	if comp == nil {
-		return process.Config{}, fmt.Errorf("component '%s' not available", rtCfg.Components[0])
+
+	us, ok := conn.(*sandbox.UnixSocketConnector)
+	if !ok {
+		return process.Config{}, fmt.Errorf("UNIX socket connector is required")
 	}
 
 	// To try to avoid bad things from happening if the signature/enclave
@@ -272,7 +266,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 
 		var cfg process.Config
 		gsc := sandbox.DefaultGetSandboxConfig(s.logger, s.cfg.SandboxBinaryPath)
-		cfg, err = gsc(rtCfg, socketPath, runtimeDir)
+		cfg, err = gsc(rtCfg, conn, runtimeDir)
 		if err != nil {
 			return process.Config{}, err
 		}
@@ -282,9 +276,16 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
 			return process.Config{}, err
 		}
+		if cfg.Env == nil {
+			cfg.Env = make(map[string]string)
+		}
 		cfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
 
 		return cfg, nil
+	}
+
+	if comp.TEEKind() != component.TEEKindSGX {
+		return process.Config{}, fmt.Errorf("component '%s' is not an SGX component", comp.ID())
 	}
 
 	sgxDev, err := s.discoverSGXDevice()
@@ -297,11 +298,12 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		s.logger,
 		"runtime_id", rtCfg.Bundle.Manifest.ID,
 		"runtime_name", rtCfg.Bundle.Manifest.Name,
-		"component", comp.Kind,
+		"component", comp.ID(),
+		"provisioner", s.Name(),
 	)
 
 	args := []string{
-		"--host-socket", socketPath,
+		"--host-socket", us.GetGuestSocketPath(),
 		"--type", "sgxs",
 		"--signature", signaturePath,
 		runtimePath,
@@ -334,7 +336,7 @@ func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostIn
 	// Initialize TEE.
 	var err error
 	var ts *teeState
-	if ts, err = s.initCapabilityTEE(ctx, hp.Runtime, hp.Connection, hp.Version); err != nil {
+	if ts, err = s.initCapabilityTEE(ctx, hp.Config, hp.Connection); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
@@ -342,7 +344,11 @@ func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostIn
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
-	go s.attestationWorker(ts, hp)
+	// Start periodic re-attestation worker.
+	updateCapabilityFunc := func(ctx context.Context, hp *sandbox.HostInitializerParams) (*node.CapabilityTEE, error) {
+		return s.updateCapabilityTEE(ctx, ts, hp.Connection)
+	}
+	go sgxCommon.AttestationWorker(s.cfg.RuntimeAttestInterval, s.logger, hp, updateCapabilityFunc)
 
 	return &host.StartedEvent{
 		Version:       hp.Version,
@@ -350,16 +356,12 @@ func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostIn
 	}, nil
 }
 
-func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime, conn protocol.Connection, version version.Version) (*teeState, error) {
+func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, cfg *host.Config, conn protocol.Connection) (*teeState, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
 	ts := teeState{
-		runtimeID: rt.ID(),
-		version:   version,
-		// We know that the runtime implementation provided by sandbox runtime provisioner
-		// implements the RuntimeEventEmitter interface.
-		eventEmitter: rt.(host.RuntimeEventEmitter),
+		cfg:          cfg,
 		insecureMock: s.cfg.InsecureMock,
 	}
 
@@ -426,91 +428,9 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 	}
 
 	// Endorse TEE capability to support authenticated inter-component EnclaveRPC.
-	s.endorseCapabilityTEE(ctx, capabilityTEE, conn)
+	sgxCommon.EndorseCapabilityTEE(ctx, s.identity, capabilityTEE, conn, s.logger)
 
 	return capabilityTEE, nil
-}
-
-func (s *sgxProvisioner) endorseCapabilityTEE(ctx context.Context, capabilityTEE *node.CapabilityTEE, conn protocol.Connection) {
-	ri, err := conn.GetInfo()
-	if err != nil {
-		s.logger.Error("failed to get host information, not endorsing local component",
-			"err", err,
-		)
-		return
-	}
-	if !ri.Features.EndorsedCapabilityTEE {
-		s.logger.Debug("runtime does not support endorsed TEE capabilities, skipping endorsement")
-		return
-	}
-
-	// Endorse CapabilityTEE by signing it under the proper domain separation context.
-	nodeSignature, err := signature.Sign(
-		s.identity.NodeSigner,
-		node.EndorseCapabilityTEESignatureContext,
-		cbor.Marshal(capabilityTEE),
-	)
-	if err != nil {
-		s.logger.Error("failed to sign endorsement of local component",
-			"err", err,
-		)
-		return
-	}
-
-	_, err = conn.Call(ctx, &protocol.Body{
-		RuntimeCapabilityTEEUpdateEndorsementRequest: &protocol.RuntimeCapabilityTEEUpdateEndorsementRequest{
-			EndorsedCapabilityTEE: node.EndorsedCapabilityTEE{
-				CapabilityTEE:   *capabilityTEE,
-				NodeEndorsement: *nodeSignature,
-			},
-		},
-	})
-	if err != nil {
-		s.logger.Error("failed to update endorsement of local component",
-			"err", err,
-		)
-		return
-	}
-
-	s.logger.Debug("successfully updated component's TEE capability endorsement")
-}
-
-func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitializerParams) {
-	t := time.NewTicker(s.cfg.RuntimeAttestInterval)
-	defer t.Stop()
-
-	logger := s.logger.With("runtime_id", ts.runtimeID)
-
-	for {
-		select {
-		case <-hp.Process.Wait():
-			// Process has terminated.
-			return
-		case <-t.C:
-			// Re-attest based on the configured interval.
-		case <-hp.NotifyUpdateCapabilityTEE:
-			// Re-attest when explicitly requested. Also reset the periodic ticker to make sure we
-			// don't needlessly re-attest too often.
-			t.Reset(s.cfg.RuntimeAttestInterval)
-		}
-
-		// Update CapabilityTEE.
-		logger.Info("regenerating CapabilityTEE")
-
-		capabilityTEE, err := s.updateCapabilityTEE(context.Background(), ts, hp.Connection)
-		if err != nil {
-			logger.Error("failed to regenerate CapabilityTEE",
-				"err", err,
-			)
-			continue
-		}
-
-		// Emit event about the updated CapabilityTEE.
-		ts.eventEmitter.EmitEvent(&host.Event{Updated: &host.UpdatedEvent{
-			Version:       hp.Version,
-			CapabilityTEE: capabilityTEE,
-		}})
-	}
 }
 
 // Implements host.Provisioner.
@@ -535,17 +455,17 @@ func New(cfg Config) (host.Provisioner, error) {
 		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
 	}
 
-	initMetrics()
+	sgxCommon.InitMetrics()
 
 	s := &sgxProvisioner{
-		cfg:          cfg,
-		ias:          cfg.IAS,
-		pcs:          cfg.PCS,
-		aesm:         aesm.NewClient(aesmdSocketPath),
-		consensus:    cfg.Consensus,
-		identity:     cfg.Identity,
-		logger:       logging.GetLogger("runtime/host/sgx"),
-		serviceStore: cfg.CommonStore.GetServiceStore(serviceStoreName),
+		cfg:       cfg,
+		ias:       cfg.IAS,
+		pcs:       cfg.PCS,
+		aesm:      aesm.NewClient(aesmdSocketPath),
+		consensus: cfg.Consensus,
+		identity:  cfg.Identity,
+		store:     cfg.CommonStore,
+		logger:    logging.GetLogger("runtime/host/sgx"),
 	}
 	p, err := sandbox.New(sandbox.Config{
 		GetSandboxConfig:  s.getSandboxConfig,

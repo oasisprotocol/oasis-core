@@ -138,29 +138,46 @@ impl TdReport {
 
     /// Converts this report into an enclave identity.
     pub fn as_enclave_identity(&self) -> EnclaveIdentity {
-        // TODO: Change the EnclaveIdentity structure to allow specifying all the different things.
+        td_enclave_identity(
+            &self.mr_td,
+            &self.rtmr0,
+            &self.rtmr1,
+            &self.rtmr2,
+            &self.rtmr3,
+        )
+    }
+}
 
-        // Compute MRENCLAVE as TupleHash[TD_ENCLAVE_IDENTITY_CONTEXT](MRTD, RTMR0, RTMR1, RTMR2, RTMR3).
-        //
-        // MRTD  -- Measurement of virtual firmware.
-        // RTMR0 -- Measurement of virtual firmware data and configuration.
-        // RTMR1 -- Measurement of OS loader, option ROM, boot parameters.
-        // RTMR2 -- Measurement of OS kernel, initrd, boot parameters.
-        // RTMR3 -- Reserved.
-        //
-        let mut mr_enclave = MrEnclave::default();
-        let mut h = TupleHash::v256(TD_ENCLAVE_IDENTITY_CONTEXT);
-        h.update(&self.mr_td);
-        h.update(&self.rtmr0);
-        h.update(&self.rtmr1);
-        h.update(&self.rtmr2);
-        h.update(&self.rtmr3);
-        h.finalize(&mut mr_enclave.0);
+/// Compute enclave identity from the given measurements.
+pub fn td_enclave_identity(
+    mr_td: &[u8; 48],
+    rtmr0: &[u8; 48],
+    rtmr1: &[u8; 48],
+    rtmr2: &[u8; 48],
+    rtmr3: &[u8; 48],
+) -> EnclaveIdentity {
+    // TODO: Change the EnclaveIdentity structure to allow specifying all the different things.
 
-        EnclaveIdentity {
-            mr_signer: Default::default(), // All-zero MRSIGNER (invalid in SGX).
-            mr_enclave,
-        }
+    // Compute MRENCLAVE as TupleHash[TD_ENCLAVE_IDENTITY_CONTEXT](MRTD, RTMR0, RTMR1, RTMR2, RTMR3).
+    //
+    // MRTD  -- Measurement of virtual firmware.
+    // RTMR0 -- Measurement of virtual firmware data and configuration.
+    // RTMR1 -- Measurement of OS loader, option ROM, boot parameters.
+    // RTMR2 -- Measurement of OS kernel, initrd, boot parameters.
+    // RTMR3 -- Reserved.
+    //
+    let mut mr_enclave = MrEnclave::default();
+    let mut h = TupleHash::v256(TD_ENCLAVE_IDENTITY_CONTEXT);
+    h.update(mr_td);
+    h.update(rtmr0);
+    h.update(rtmr1);
+    h.update(rtmr2);
+    h.update(rtmr3);
+    h.finalize(&mut mr_enclave.0);
+
+    EnclaveIdentity {
+        mr_signer: Default::default(), // All-zero MRSIGNER (invalid in SGX).
+        mr_enclave,
     }
 }
 
