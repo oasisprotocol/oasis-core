@@ -90,8 +90,6 @@ func (lb *lbRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.B
 		}
 		resCh := make(chan *result)
 		for _, rt := range lb.instances {
-			rt := rt // Make sure goroutine below operates on the right instance.
-
 			go func() {
 				rsp, err := rt.Call(ctx, body)
 				resCh <- &result{
@@ -167,9 +165,6 @@ func (lb *lbRuntime) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscript
 func (lb *lbRuntime) Start() {
 	lb.startOnce.Do(func() {
 		for idx, rt := range lb.instances {
-			idx := idx
-			rt := rt // Make sure goroutine below operates on the right instance.
-
 			// Subscribe to runtime events before starting runtime to make sure we don't miss the
 			// started event.
 			evCh, sub := rt.WatchEvents()
@@ -227,8 +222,6 @@ func (lb *lbRuntime) Abort(ctx context.Context, force bool) error {
 	// We don't know which instance to abort, so we abort all instances.
 	errCh := make(chan error)
 	for _, rt := range lb.instances {
-		rt := rt // Make sure goroutine below operates on the right instance.
-
 		go func() {
 			errCh <- rt.Abort(ctx, force)
 		}()

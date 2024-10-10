@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/codes"
@@ -35,7 +34,7 @@ func (auth *PeerPubkeyAuthenticator) AuthFunc(ctx context.Context, _ interface{}
 		return status.Errorf(codes.PermissionDenied, "grpc: unexpected peer authentication credentials")
 	}
 	if nPeerCerts := len(tlsAuth.State.PeerCertificates); nPeerCerts != 1 {
-		return status.Errorf(codes.PermissionDenied, fmt.Sprintf("grpc: unexpected number of peer certificates: %d", nPeerCerts))
+		return status.Errorf(codes.PermissionDenied, "grpc: unexpected number of peer certificates: %d", nPeerCerts)
 	}
 	peerCertRaw := tlsAuth.State.PeerCertificates[0].Raw
 
@@ -46,7 +45,7 @@ func (auth *PeerPubkeyAuthenticator) AuthFunc(ctx context.Context, _ interface{}
 		Keys:       auth.whitelist,
 	})
 	if err != nil {
-		return status.Errorf(codes.PermissionDenied, err.Error())
+		return status.Errorf(codes.PermissionDenied, "%s", err.Error())
 	}
 
 	return nil

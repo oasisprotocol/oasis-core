@@ -115,7 +115,7 @@ func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uin
 		if msg == fmt.Sprintf("master secret generation %d not found", generation) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	var key secrets.SignedPublicKey
@@ -160,7 +160,7 @@ func (c *keyManagerRPCClient) fetchEphemeralPublicKey(ctx context.Context, epoch
 		if msg == fmt.Sprintf("ephemeral secret for epoch %d not found", epoch) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	var key secrets.SignedPublicKey
