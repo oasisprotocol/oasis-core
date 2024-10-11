@@ -28,7 +28,7 @@ require (
 	github.com/goki/go-difflib v1.2.1
 	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
-	github.com/google/btree v1.1.2
+	github.com/google/btree v1.1.3
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-plugin v1.4.6
 	github.com/hpcloud/tail v1.0.0
