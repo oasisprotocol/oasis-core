@@ -27,42 +27,65 @@ impl<G> Dealer<G>
 where
     G: Group + GroupEncoding,
 {
-    /// Creates a new dealer based on the provided parameters.
+    /// Creates a new dealer of secret bivariate shares, which can be used
+    /// to recover a randomly selected shared secret.
     ///
-    /// A dealer for the dealing phase uses a random bivariate polynomial,
-    /// otherwise, it uses a zero-holed bivariate polynomial.
-    pub fn create(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Result<Self> {
-        match dealing_phase {
-            true => Self::random(threshold, rng),
-            false => Self::zero_hole(threshold, rng),
-        }
-    }
-
-    /// Creates a new dealer with a predefined shared secret.
+    /// The dealer uses a random bivariate polynomial `B(x, y)` to generate
+    /// full and reduced bivariate shares, i.e., `B(ID, y)` and `B(x, ID)`,
+    /// where `ID` represents the identity of a participant, respectively.
     ///
-    /// This function is not constant time because it uses rejection sampling.
-    #[cfg(test)]
-    pub fn new(threshold: u8, secret: G::Scalar, rng: &mut impl RngCore) -> Result<Self> {
-        let mut bp = Self::generate_bivariate_polynomial(threshold, rng)?;
-        let updated = bp.set_coefficient(0, 0, secret);
-        debug_assert!(updated);
-        Ok(bp.into())
-    }
-
-    /// Creates a new dealer with a random bivariate polynomial.
+    /// To ensure that the full and reduced bivariate shares form
+    /// a (t, n)-sharing and a (2t, n)-sharing of the secret `B(0, 0)`,
+    /// respectively, the bivariate polynomial is selected such that
+    /// the polynomials `B(x, y)`, `B(x, 0)`, and `B(0, y)` have non-zero
+    /// leading terms. This ensures that more than the threshold number
+    /// of full shares, and more than twice the threshold number of reduced
+    /// shares, are required to reconstruct the secret.
+    ///
+    /// Warning: If multiple dealers are used to generate the shared secret,
+    /// it is essential to verify that the combined bivariate polynomial
+    /// also satisfies the aforementioned non-zero leading term requirements.
     ///
     /// This function is not constant time because it uses rejection sampling.
-    pub fn random(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+    pub fn new(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
         let bp = Self::generate_bivariate_polynomial(threshold, rng)?;
         Ok(bp.into())
     }
 
-    /// Creates a new dealer with a random zero-hole bivariate polynomial.
+    /// Creates a new dealer of secret proactive bivariate shares, which can
+    /// be used to randomize a shared secret.
+    ///
+    /// The dealer uses a random zero-hole bivariate polynomial `B(x, y)`
+    /// to generate full and reduced proactive bivariate shares, i.e.,
+    /// `B(ID, y)` and `B(x, ID)`, where `ID` represents the identity
+    /// of a participant. Since `B(0, 0) = 0`, adding a proactive share
+    /// to an existing share does not change the shared secret.
+    ///
+    /// Warning: If one or more proactive dealers are used to randomize
+    /// the shared secret, it is essential to verify that the combined
+    /// bivariate polynomial still satisfies the non-zero leading term
+    /// requirements.
     ///
     /// This function is not constant time because it uses rejection sampling.
-    pub fn zero_hole(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+    pub fn new_proactive(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
         let mut bp = Self::generate_bivariate_polynomial(threshold, rng)?;
         bp.to_zero_hole();
+        Ok(bp.into())
+    }
+
+    /// Creates a new dealer of secret bivariate shares, which can be used
+    /// to recover a predefined shared secret.
+    ///
+    /// This function is not constant time because it uses rejection sampling.
+    #[cfg(test)]
+    pub fn new_with_secret(
+        threshold: u8,
+        secret: G::Scalar,
+        rng: &mut impl RngCore,
+    ) -> Result<Self> {
+        let mut bp = Self::generate_bivariate_polynomial(threshold, rng)?;
+        let updated = bp.set_coefficient(0, 0, secret);
+        debug_assert!(updated);
         Ok(bp.into())
     }
 
@@ -156,53 +179,7 @@ mod tests {
     type Dealer = super::Dealer<Group>;
 
     #[test]
-    fn test_create() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-
-        let test_cases = vec![
-            // Zero threshold.
-            (0, 0, 0, 1, 1),
-            // Non-zero threshold.
-            (2, 2, 4, 3, 5),
-        ];
-
-        for (threshold, deg_x, deg_y, rows, cols) in test_cases {
-            for dealing_phase in vec![true, false] {
-                let dealer = Dealer::create(threshold, dealing_phase, &mut rng).unwrap();
-                assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
-                assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
-                assert_eq!(dealer.verification_matrix().rows, rows);
-                assert_eq!(dealer.verification_matrix().cols, cols);
-                assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
-            }
-        }
-    }
-
-    #[test]
     fn test_new() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-
-        let test_cases = vec![
-            (0, 0, 0, 1, 1, 0),   // Zero threshold.
-            (2, 2, 4, 3, 5, 100), // Non-zero threshold.
-        ];
-
-        for (threshold, deg_x, deg_y, rows, cols, secret) in test_cases {
-            let secret = PrimeField::from_u64(secret);
-            let dealer = Dealer::new(threshold, secret, &mut rng).unwrap();
-            assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
-            assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
-            assert_eq!(dealer.verification_matrix().rows, rows);
-            assert_eq!(dealer.verification_matrix().cols, cols);
-            assert_eq!(
-                dealer.bivariate_polynomial().coefficient(0, 0),
-                Some(&secret)
-            );
-        }
-    }
-
-    #[test]
-    fn test_random() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
 
         let test_cases = vec![
@@ -211,7 +188,7 @@ mod tests {
         ];
 
         for (threshold, deg_x, deg_y, rows, cols) in test_cases {
-            let dealer = Dealer::random(threshold, &mut rng).unwrap();
+            let dealer = Dealer::new(threshold, &mut rng).unwrap();
             assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
             assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
             assert_eq!(dealer.verification_matrix().rows, rows);
@@ -224,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn test_zero_hole() {
+    fn test_new_proactive() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
 
         let test_cases = vec![
@@ -233,7 +210,7 @@ mod tests {
         ];
 
         for (threshold, deg_x, deg_y, rows, cols) in test_cases {
-            let dealer = Dealer::zero_hole(threshold, &mut rng).unwrap();
+            let dealer = Dealer::new_proactive(threshold, &mut rng).unwrap();
             assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
             assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
             assert_eq!(dealer.verification_matrix().rows, rows);
@@ -246,10 +223,33 @@ mod tests {
     }
 
     #[test]
+    fn test_new_with_secret() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+
+        let test_cases = vec![
+            (0, 0, 0, 1, 1, 0),   // Zero threshold.
+            (2, 2, 4, 3, 5, 100), // Non-zero threshold.
+        ];
+
+        for (threshold, deg_x, deg_y, rows, cols, secret) in test_cases {
+            let secret = PrimeField::from_u64(secret);
+            let dealer = Dealer::new_with_secret(threshold, secret, &mut rng).unwrap();
+            assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
+            assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
+            assert_eq!(dealer.verification_matrix().rows, rows);
+            assert_eq!(dealer.verification_matrix().cols, cols);
+            assert_eq!(
+                dealer.bivariate_polynomial().coefficient(0, 0),
+                Some(&secret)
+            );
+        }
+    }
+
+    #[test]
     fn test_make_share() {
         let threshold = 2;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = Dealer::random(threshold, &mut rng).unwrap();
+        let dealer = Dealer::new(threshold, &mut rng).unwrap();
         let x = PrimeField::from_u64(2);
 
         let test_cases = vec![
