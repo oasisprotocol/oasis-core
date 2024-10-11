@@ -6,6 +6,8 @@ pub enum Error {
     InvalidKind,
     #[error("invalid polynomial")]
     InvalidPolynomial,
+    #[error("insecure bivariate polynomial")]
+    InsecureBivariatePolynomial,
     #[error("invalid switch point")]
     InvalidSwitchPoint,
     #[error("invalid state")]
@@ -22,6 +24,8 @@ pub enum Error {
     PolynomialDegreeMismatch,
     #[error("shareholder encoding failed")]
     ShareholderEncodingFailed,
+    #[error("shareholder proactivization already completed")]
+    ShareholderProactivizationCompleted,
     #[error("shareholder identity mismatch")]
     ShareholderIdentityMismatch,
     #[error("shareholder identity required")]
