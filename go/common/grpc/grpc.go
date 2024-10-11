@@ -701,7 +701,7 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		grpc.WithChainStreamInterceptor(logAdapter.streamClientLogger, clientStreamErrorMapper),
 	}
 	dialOpts = append(dialOpts, opts...)
-	return grpc.Dial(target, dialOpts...)
+	return grpc.NewClient(target, dialOpts...)
 }
 
 // IsSocketAddress checks if the gRPC address is a socket address.

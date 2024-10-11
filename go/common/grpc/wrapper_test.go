@@ -229,8 +229,7 @@ func TestGrpcWrapper(t *testing.T) {
 	require.NoErrorf(err, "Failed to start the gRPC server: %v", err)
 
 	// Connect to the gRPC server without a client certificate.
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", host, port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(&CBORCodec{})),

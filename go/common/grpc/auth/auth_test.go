@@ -90,8 +90,7 @@ func testAuth(t *testing.T, testCase *testCase) {
 	}()
 
 	// Connect to gRPC server.
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", testCase.serverConfig.Name, testCase.serverConfig.Port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(&commonGrpc.CBORCodec{})),
