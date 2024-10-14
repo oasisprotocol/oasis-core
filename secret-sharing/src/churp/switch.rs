@@ -552,10 +552,14 @@ where
             return Err(Error::NotEnoughBivariateShares.into());
         }
 
-        // The values cannot be empty since the constructor verifies that
-        // the number of shareholders is greater than zero.
-        let p = self.p.take().unwrap();
-        let vm = self.vm.take().unwrap();
+        let p = self
+            .p
+            .take()
+            .ok_or(Error::ShareholderProactivizationCompleted)?;
+        let vm = self
+            .vm
+            .take()
+            .ok_or(Error::ShareholderProactivizationCompleted)?;
 
         let shareholder = match &self.shareholder {
             Some(shareholder) => shareholder.proactivize(&p, &vm)?,
@@ -564,6 +568,12 @@ where
                 Shareholder::new(share, vm)
             }
         };
+
+        // Ensure that the combined bivariate polynomial satisfies
+        // the non-zero leading term requirements.
+        shareholder
+            .verifiable_share()
+            .verify(self.threshold, false, self.full_share)?;
 
         Ok(shareholder)
     }
@@ -733,7 +743,6 @@ mod tests {
     #[test]
     fn test_bivariate_shares() {
         let threshold = 2;
-        let zero_hole = true;
 
         let me = prepare_shareholder(1);
         let shareholders = prepare_shareholders(&[1, 2, 3]);
@@ -750,78 +759,84 @@ mod tests {
 
         // Happy path.
         for full_share in vec![false, true] {
-            let mut bs = BivariateShares::<Group>::new(
-                threshold,
-                zero_hole,
-                full_share,
-                me,
-                shareholders.clone(),
-                None,
-            )
-            .unwrap();
+            for zero_hole in vec![false, true] {
+                let mut bs = BivariateShares::<Group>::new(
+                    threshold,
+                    zero_hole,
+                    full_share,
+                    me,
+                    shareholders.clone(),
+                    None,
+                )
+                .unwrap();
 
-            let me = 1;
-            let mut sh = 2;
+                let me = 1;
+                let mut sh = 2;
 
-            // Add invalid share (invalid threshold).
-            let res = add_bivariate_shares(threshold + 1, zero_hole, full_share, me, me, &mut bs);
-            assert!(res.is_err());
-            assert_eq!(
-                res.unwrap_err().to_string(),
-                Error::VerificationMatrixDimensionMismatch.to_string()
-            );
-
-            // Add share.
-            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, me, &mut bs);
-            assert!(res.is_ok());
-            assert!(!res.unwrap());
-
-            // Add another share twice.
-            assert!(bs.needs_bivariate_share(&prepare_shareholder(sh)));
-
-            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
-            assert!(res.is_ok());
-            assert!(!res.unwrap());
-
-            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
-            assert!(res.is_err());
-            assert_eq!(
-                res.unwrap_err().to_string(),
-                Error::DuplicateShareholder.to_string()
-            );
-
-            assert!(!bs.needs_bivariate_share(&prepare_shareholder(sh)));
-            sh += 1;
-
-            // Try to collect the polynomial and verification matrix.
-            let res = bs.proactivize_shareholder();
-            assert!(res.is_err());
-            unsafe {
+                // Add invalid share (invalid threshold).
+                let res =
+                    add_bivariate_shares(threshold + 1, zero_hole, full_share, me, me, &mut bs);
+                assert!(res.is_err());
                 assert_eq!(
-                    res.unwrap_err_unchecked().to_string(),
-                    Error::NotEnoughBivariateShares.to_string()
+                    res.unwrap_err().to_string(),
+                    Error::VerificationMatrixDimensionMismatch.to_string()
                 );
+
+                // Add share.
+                let res = add_bivariate_shares(threshold, zero_hole, full_share, me, me, &mut bs);
+                assert!(res.is_ok());
+                assert!(!res.unwrap());
+
+                // Add another share twice.
+                assert!(bs.needs_bivariate_share(&prepare_shareholder(sh)));
+
+                let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
+                assert!(res.is_ok());
+                assert!(!res.unwrap());
+
+                let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
+                assert!(res.is_err());
+                assert_eq!(
+                    res.unwrap_err().to_string(),
+                    Error::DuplicateShareholder.to_string()
+                );
+
+                assert!(!bs.needs_bivariate_share(&prepare_shareholder(sh)));
+                sh += 1;
+
+                // Try to collect the polynomial and verification matrix.
+                let res = bs.proactivize_shareholder();
+                assert!(res.is_err());
+                unsafe {
+                    assert_eq!(
+                        res.unwrap_err_unchecked().to_string(),
+                        Error::NotEnoughBivariateShares.to_string()
+                    );
+                }
+
+                // Add the last share.
+                let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
+                assert!(res.is_ok());
+                assert!(res.unwrap()); // Enough shares.
+                sh += 1;
+
+                // Unknown shareholder.
+                assert!(!bs.needs_bivariate_share(&prepare_shareholder(sh)));
+
+                let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
+                assert!(res.is_err());
+                assert_eq!(
+                    res.unwrap_err().to_string(),
+                    Error::UnknownShareholder.to_string()
+                );
+
+                // Try to collect the polynomial and verification matrix again.
+                let res = bs.proactivize_shareholder();
+                match zero_hole {
+                    true => assert!(res.is_err()), // The combined polynomial has zero secret (not allowed).
+                    false => assert!(res.is_ok()), // The combined polynomial has non-zero secret.
+                }
             }
-
-            // Add the last share.
-            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
-            assert!(res.is_ok());
-            assert!(res.unwrap()); // Enough shares.
-            sh += 1;
-
-            // Unknown shareholder.
-            assert!(!bs.needs_bivariate_share(&prepare_shareholder(sh)));
-
-            let res = add_bivariate_shares(threshold, zero_hole, full_share, me, sh, &mut bs);
-            assert!(res.is_err());
-            assert_eq!(
-                res.unwrap_err().to_string(),
-                Error::UnknownShareholder.to_string()
-            );
-
-            // Try to collect the polynomial and verification matrix again.
-            let res = bs.proactivize_shareholder();
-            assert!(res.is_ok());
         }
     }
 }

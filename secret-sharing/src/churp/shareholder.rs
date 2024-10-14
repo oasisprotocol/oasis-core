@@ -190,6 +190,30 @@ where
             return Err(Error::VerificationMatrixZeroHoleMismatch.into());
         }
 
+        // Verify that the bivariate polynomial `B(x, y)`, from which
+        // the verification matrix was constructed and the share was derived,
+        // satisfies the non-zero leading term requirements. Specifically,
+        // the polynomials `B(x, y)`, `B(x, 0)`, and `B(0, y)` must have
+        // non-zero leading terms.
+        if threshold > 0 {
+            // Skipping the special case where the bivariate polynomial has only
+            // one coefficient. The verification of this coefficient has already
+            // been done above, when we checked if the verification matrix
+            // is zero-hole.
+            let i = rows - 1;
+            let j = cols - 1;
+
+            if self.vm.element(i, j).unwrap().is_identity().into() {
+                return Err(Error::InsecureBivariatePolynomial.into());
+            }
+            if self.vm.element(i, 0).unwrap().is_identity().into() {
+                return Err(Error::InsecureBivariatePolynomial.into());
+            }
+            if self.vm.element(0, j).unwrap().is_identity().into() {
+                return Err(Error::InsecureBivariatePolynomial.into());
+            }
+        }
+
         Ok(())
     }
 

@@ -98,7 +98,7 @@ mod tests {
             // Prepare scheme.
             let threshold = 2;
             let secret = PrimeField::from_u64(100);
-            let dealer = Dealer::new(threshold, secret, &mut OsRng).unwrap();
+            let dealer = Dealer::new_with_secret(threshold, secret, &mut OsRng).unwrap();
             let player = Player::new(threshold, kind);
             let min_shares = player.min_shares() as u64;
 
@@ -152,7 +152,7 @@ mod tests {
             let secret = PrimeField::from_u64(100);
             let hash = Suite::hash_to_group(key_id, dst).unwrap();
             let key = hash * secret;
-            let dealer = Dealer::new(threshold, secret, &mut OsRng).unwrap();
+            let dealer = Dealer::new_with_secret(threshold, secret, &mut OsRng).unwrap();
             let player = Player::new(threshold, kind);
             let min_shares = player.min_shares() as u64;
 

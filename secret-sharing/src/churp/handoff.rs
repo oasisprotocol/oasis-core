@@ -422,9 +422,19 @@ mod tests {
         n: usize,
         rng: &mut impl RngCore,
     ) -> Vec<Dealer> {
-        (0..n)
-            .map(|_| Dealer::create(threshold, dealing_phase, rng).unwrap())
-            .collect()
+        let mut dealers = Vec::with_capacity(n);
+
+        for _ in 0..n {
+            let dealer = match dealing_phase {
+                true => Dealer::new(threshold, rng),
+                false => Dealer::new_proactive(threshold, rng),
+            }
+            .unwrap();
+
+            dealers.push(dealer);
+        }
+
+        dealers
     }
 
     #[test]

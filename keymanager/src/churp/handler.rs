@@ -854,7 +854,7 @@ impl<S: Suite> Instance<S> {
     /// be removed, its bivariate polynomial overwritten, and permanently
     /// lost.
     ///
-    /// Note that since the host controls the local storage, he can restart
+    /// Warning: Since the host controls the local storage, he can restart
     /// the enclave to create multiple dealers for the same epoch and then
     /// replace the last backup with a bivariate polynomial from a dealer
     /// of his choice. Therefore, it is essential to verify the bivariate
@@ -866,7 +866,10 @@ impl<S: Suite> Instance<S> {
         dealing_phase: bool,
     ) -> Result<Arc<Dealer<S::Group>>> {
         // Create a new dealer.
-        let dealer = Dealer::create(threshold, dealing_phase, &mut OsRng)?;
+        let dealer = match dealing_phase {
+            true => Dealer::new(threshold, &mut OsRng),
+            false => Dealer::new_proactive(threshold, &mut OsRng),
+        }?;
         let dealer = Arc::new(dealer);
 
         // Encrypt and store the polynomial in case of a restart.

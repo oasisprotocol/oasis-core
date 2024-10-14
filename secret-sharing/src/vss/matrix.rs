@@ -50,6 +50,11 @@ where
         (self.rows, self.cols)
     }
 
+    /// Returns the element `m_{i,j}` of the verification matrix.
+    pub fn element(&self, i: usize, j: usize) -> Option<&G> {
+        self.m.get(i).and_then(|bi| bi.get(j))
+    }
+
     /// Returns true if and only if `M_{0,0}` is the identity element
     /// of the group.
     pub fn is_zero_hole(&self) -> bool {
@@ -349,51 +354,75 @@ where
 
 #[cfg(test)]
 mod tests {
-    use group::Group;
+    use group::Group as _;
     use rand::{rngs::StdRng, SeedableRng};
 
-    use crate::vss::VerificationMatrix;
+    use crate::{poly, vss};
 
-    use super::BivariatePolynomial;
+    type PrimeField = p384::Scalar;
+    type Group = p384::ProjectivePoint;
+    type BivariatePolynomial = poly::BivariatePolynomial<PrimeField>;
+    type VerificationMatrix = vss::VerificationMatrix<Group>;
 
-    fn scalar(value: i64) -> p384::Scalar {
+    fn scalar(value: i64) -> PrimeField {
         scalars(&vec![value])[0]
     }
 
-    fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
+    fn scalars(values: &[i64]) -> Vec<PrimeField> {
         values
             .iter()
             .map(|&w| match w.is_negative() {
-                false => p384::Scalar::from_u64(w as u64),
-                true => p384::Scalar::from_u64(-w as u64).neg(),
+                false => PrimeField::from_u64(w as u64),
+                true => PrimeField::from_u64(-w as u64).neg(),
             })
             .collect()
     }
 
     #[test]
-    fn test_new() {
+    fn test_from() {
         // Two non-zero coefficients (fast).
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let mut bp = BivariatePolynomial::<p384::Scalar>::zero(2, 3);
-        assert!(bp.set_coefficient(0, 0, p384::Scalar::ONE));
-        assert!(bp.set_coefficient(2, 2, p384::Scalar::ONE.double()));
+        let mut bp = BivariatePolynomial::zero(2, 3);
+        assert!(bp.set_coefficient(0, 0, PrimeField::ONE));
+        assert!(bp.set_coefficient(1, 2, PrimeField::ONE.double()));
 
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert_eq!(vm.m.len(), 3);
         for (i, mi) in vm.m.iter().enumerate() {
             assert_eq!(mi.len(), 4);
             for (j, mij) in mi.iter().enumerate() {
                 match (i, j) {
-                    (0, 0) => assert_eq!(mij, &p384::ProjectivePoint::GENERATOR),
-                    (2, 2) => assert_eq!(mij, &p384::ProjectivePoint::GENERATOR.double()),
-                    _ => assert_eq!(mij, &p384::ProjectivePoint::IDENTITY),
+                    (0, 0) => assert_eq!(mij, &Group::GENERATOR),
+                    (1, 2) => assert_eq!(mij, &Group::GENERATOR.double()),
+                    _ => assert_eq!(mij, &Group::IDENTITY),
                 }
             }
         }
 
         // Random bivariate polynomial (slow).
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut rng);
-        let _ = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let bp = BivariatePolynomial::random(5, 10, &mut rng);
+        let _ = VerificationMatrix::from(&bp);
+    }
+
+    #[test]
+    fn test_dimensions() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let bp = BivariatePolynomial::random(5, 10, &mut rng);
+
+        let vm = VerificationMatrix::from(&bp);
+        assert_eq!((6, 11), vm.dimensions());
+    }
+
+    #[test]
+    fn test_element() {
+        let c = scalar(42);
+        let e = Group::GENERATOR * c;
+
+        let mut bp = BivariatePolynomial::zero(2, 3);
+        assert!(bp.set_coefficient(1, 2, c));
+
+        let vm = VerificationMatrix::from(&bp);
+        assert_eq!(&e, vm.element(1, 2).unwrap());
     }
 
     #[test]
@@ -402,9 +431,9 @@ mod tests {
         let x2 = scalar(2);
         let x3 = scalar(3);
 
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
         let s = bp.eval_x(&x2).eval(&x3);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert!(vm.verify(&x2, &x3, &s));
         assert!(!vm.verify(&x3, &x2, &s));
     }
@@ -415,8 +444,8 @@ mod tests {
         let x2 = scalar(2);
         let x3 = scalar(3);
 
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
         let p = bp.eval_y(&x2);
 
         let vv = vm.verification_vector_for_x(&x2);
@@ -432,8 +461,8 @@ mod tests {
         let x2 = scalar(2);
         let x3 = scalar(3);
 
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
         let p = bp.eval_x(&x2);
 
         let vv = vm.verification_vector_for_y(&x2);
@@ -449,16 +478,16 @@ mod tests {
         let x2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert!(vm.verify_x(&x2, &p));
         assert!(!vm.verify_y(&x2, &p)); // Invalid degree.
 
         // Symmetric bivariate polynomial.
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
+        let bp = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert!(vm.verify_x(&x2, &p));
         assert!(!vm.verify_y(&x2, &p)); // Valid degree, but verification failed.
     }
@@ -469,16 +498,16 @@ mod tests {
         let y2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert!(!vm.verify_x(&y2, &p)); // Invalid degree.
         assert!(vm.verify_y(&y2, &p));
 
         // Symmetric bivariate polynomial.
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
+        let bp = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
         assert!(!vm.verify_x(&y2, &p)); // Valid degree, but verification failed.
         assert!(vm.verify_y(&y2, &p));
     }
@@ -486,23 +515,23 @@ mod tests {
     #[test]
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
-        let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(&vm.to_bytes())
-            .expect("deserialization should succeed");
+        let bp = BivariatePolynomial::random(2, 3, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
+        let restored =
+            VerificationMatrix::from_bytes(&vm.to_bytes()).expect("deserialization should succeed");
 
         assert_eq!(vm, restored);
     }
 
     #[test]
     fn test_element_byte_size() {
-        let size = VerificationMatrix::<p384::ProjectivePoint>::element_byte_size();
+        let size = VerificationMatrix::element_byte_size();
         assert_eq!(size, 49);
     }
 
     #[test]
     fn test_byte_size() {
-        let size = VerificationMatrix::<p384::ProjectivePoint>::byte_size(2, 3);
+        let size = VerificationMatrix::byte_size(2, 3);
         assert_eq!(size, 2 + 2 * 3 * 49);
     }
 
@@ -512,8 +541,8 @@ mod tests {
         let c2 = vec![scalars(&[1, 2]), scalars(&[3, 4]), scalars(&[5, 6])];
         let bp1 = BivariatePolynomial::with_coefficients(c1);
         let bp2 = BivariatePolynomial::with_coefficients(c2);
-        let vm1 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp1);
-        let vm2 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp2);
+        let vm1 = VerificationMatrix::from(&bp1);
+        let vm2 = VerificationMatrix::from(&bp2);
 
         let c = vec![
             scalars(&[1 + 1, 2 + 2, 3, 4]),
@@ -521,7 +550,7 @@ mod tests {
             scalars(&[5, 6, 0, 0]),
         ];
         let bp = BivariatePolynomial::with_coefficients(c);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::from(&bp);
 
         let sum = &vm1 + &vm2;
         assert_eq!(sum.rows, 3);
