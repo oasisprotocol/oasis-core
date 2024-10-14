@@ -12,6 +12,106 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 24.3 (2024-10-14)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- The pathbadger storage backend is now the default for new nodes
+  ([#5876](https://github.com/oasisprotocol/oasis-core/issues/5876))
+
+  When a node is provisioned into an empty data directory it will default to
+  using the `pathbadger` storage backend.
+
+  For existing nodes, the storage backend is automatically detected based on
+  the data directory. When multiple storage directories exist, the one most
+  recently modified is used.
+
+  In case one does not want this new behavior, it is still possible to set
+  the `storage.backend` to `badger`/`pathbadger` to explicitly configure the
+  desired storage backend and disable autodetection.
+
+### Features
+
+- go/runtime: Support bundle components without ELF binary
+  ([#5838](https://github.com/oasisprotocol/oasis-core/issues/5838))
+
+- Add support for verifying Intel TDX quotes
+  ([#5840](https://github.com/oasisprotocol/oasis-core/issues/5840))
+
+- Add QEMU-based Intel TDX provisioner
+  ([#5861](https://github.com/oasisprotocol/oasis-core/issues/5861))
+
+- runtime/src/enclave_rpc: Support peer feedback for concurrent requests
+  ([#5872](https://github.com/oasisprotocol/oasis-core/issues/5872))
+
+- go/storage: Add automatic storage backend detection
+  ([#5876](https://github.com/oasisprotocol/oasis-core/issues/5876))
+
+  The new default storage backend is "auto" which attempts to detect the
+  storage backend that should be used based on existing data directories.
+  When none exist, "pathbadger" is used. When multiple exist, the most
+  recently modified one is used.
+
+  This should make newly deployed nodes default to pathbadger.
+
+- go/common/grpc: allow non-tls connections to loopback addresses
+  ([#5878](https://github.com/oasisprotocol/oasis-core/issues/5878))
+
+- runtime/src/enclave_rpc/client: Support concurrent sessions
+  ([#5879](https://github.com/oasisprotocol/oasis-core/issues/5879))
+
+- go/runtime/client: Expose state proofs via gRPC
+  ([#5888](https://github.com/oasisprotocol/oasis-core/issues/5888))
+
+### Bug Fixes
+
+- runtime/src/dispatcher: Propagate panics during status/policy update
+  ([#5851](https://github.com/oasisprotocol/oasis-core/issues/5851))
+
+### Internal Changes
+
+- buildkite: Enable debug assertions in runtimes
+  ([#5836](https://github.com/oasisprotocol/oasis-core/issues/5836))
+
+- go: Bump go-libp2p to 0.36.3
+  ([#5844](https://github.com/oasisprotocol/oasis-core/issues/5844))
+
+- keymanager: Add mock trusted signers for debug mock SGX builds
+  ([#5852](https://github.com/oasisprotocol/oasis-core/issues/5852))
+
+- go: Bump github.com/dgraph-io/badger to v4.3.1
+  ([#5856](https://github.com/oasisprotocol/oasis-core/issues/5856))
+
+- keymanager/src/client: Fetch churp key shares concurrently
+  ([#5863](https://github.com/oasisprotocol/oasis-core/issues/5863))
+
+- keymanager: Expose runtime ID and RSK in the key manager client
+  ([#5865](https://github.com/oasisprotocol/oasis-core/issues/5865))
+
+- runtime: Remove obsolete feature rpc_peer_id
+  ([#5867](https://github.com/oasisprotocol/oasis-core/issues/5867))
+
+- go: Bump go-libp2p to 0.36.5
+  ([#5890](https://github.com/oasisprotocol/oasis-core/issues/5890))
+
+- go: Bump CometBFT to 0.37.11-oasis1
+  ([#5891](https://github.com/oasisprotocol/oasis-core/issues/5891))
+
+- secret-sharing/src/churp/switch: Verify combined bivariate polynomial
+  ([#5897](https://github.com/oasisprotocol/oasis-core/issues/5897))
+
+  After all bivariate shares are collected and the switch either
+  creates a new shareholder or proactivates the share of an existing
+  one, the new share should be verified to ensure that the verification
+  matrix of the combined bivariate polynomial satisfies the non-zero
+  leading term requirements.
+
 ## 24.2 (2024-08-20)
 
 | Protocol          | Version   |
