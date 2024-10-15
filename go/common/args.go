@@ -15,10 +15,12 @@ func TrimArgs(osArgs []string) []string {
 		panic("TrimArgs called with an empty argument list")
 	}
 
+	args := []string{osArgs[0]}
+
 	for i, w := range osArgs {
 		if w == argSeparator {
-			return append([]string{osArgs[0]}, osArgs[i+1:]...)
+			return append(args, osArgs[i+1:]...)
 		}
 	}
-	return osArgs[0:1]
+	return args
 }
