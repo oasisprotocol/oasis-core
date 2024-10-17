@@ -15,7 +15,7 @@ use crate::{
     consensus::verifier::{Error, TrustRoot},
     protocol::ProtocolUntrustedLocalStorage,
     storage::KeyValue,
-    Protocol,
+    Protocol, TeeType, BUILD_INFO,
 };
 
 /// Storage key prefix under which the sealed trusted state is stored in
@@ -95,6 +95,12 @@ impl TrustedStateStore {
     /// Panics in case the light store does not have any blocks or if insertion to the underlying
     /// runtime's untrusted local store fails.
     pub fn save(&self, runtime_version: Version, store: &Box<dyn LightStore>) {
+        if BUILD_INFO.tee_type == TeeType::Tdx {
+            // TODO: Currently TDX does not have sealing capabilities, so we just do not persist
+            //       anything as we can't seal secrets until we have CPU-bound key derivation.
+            return;
+        }
+
         let lowest_block = store.lowest(Status::Trusted).unwrap();
         let highest_block = store.highest(Status::Trusted).unwrap();
 
@@ -129,6 +135,15 @@ impl TrustedStateStore {
         runtime_version: Version,
         trust_root: &TrustRoot,
     ) -> Result<TrustedState, Error> {
+        if BUILD_INFO.tee_type == TeeType::Tdx {
+            // TODO: Currently TDX does not have sealing capabilities, so we just do not persist
+            //       anything as we can't seal secrets until we have CPU-bound key derivation.
+            return Ok(TrustedState {
+                trust_root: trust_root.clone(),
+                trusted_blocks: vec![],
+            });
+        }
+
         // Attempt to load the previously sealed trusted state.
         let untrusted_value = self
             .untrusted_local_store
