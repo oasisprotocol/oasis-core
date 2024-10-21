@@ -10,7 +10,7 @@ use crate::{
         namespace::Namespace,
     },
     consensus::{
-        roothash::{Error, RoundResults, RoundRoots},
+        roothash::{Error, RoundResults, RoundRoots, RuntimeState},
         state::StateError,
     },
     key_format,
@@ -29,11 +29,25 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 }
 
+key_format!(RuntimeKeyFmt, 0x20, Hash);
 key_format!(StateRootKeyFmt, 0x25, Hash);
 key_format!(LastRoundResultsKeyFmt, 0x27, Hash);
 key_format!(PastRootsKeyFmt, 0x2a, (Hash, u64));
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+    /// Returns the latest runtime state.
+    pub fn runtime_state(&self, id: Namespace) -> Result<RuntimeState, Error> {
+        match self
+            .mkvs
+            .get(&RuntimeKeyFmt(Hash::digest_bytes(id.as_ref())).encode())
+        {
+            Ok(Some(b)) => cbor::from_slice_non_strict(&b)
+                .map_err(|err| StateError::Unavailable(anyhow!(err)).into()),
+            Ok(None) => Err(Error::InvalidRuntime(id)),
+            Err(err) => Err(StateError::Unavailable(anyhow!(err)).into()),
+        }
+    }
+
     /// Returns the state root for a specific runtime.
     pub fn state_root(&self, id: Namespace) -> Result<Hash, Error> {
         match self
@@ -131,6 +145,35 @@ mod test {
 
         let runtime_id =
             Namespace::from("8000000000000000000000000000000000000000000000000000000000000010");
+
+        // Test fetching runtime state.
+        let runtime_state = state
+            .runtime_state(runtime_id)
+            .expect("runtime state query should work");
+        println!("{:?}", runtime_state);
+        assert_eq!(runtime_state.runtime.id, runtime_id);
+        assert_eq!(runtime_state.suspended, false);
+        assert_eq!(runtime_state.genesis_block.header.round, 1);
+        assert_eq!(
+            runtime_state.genesis_block.header.io_root,
+            Hash::digest_bytes(format!("genesis").as_bytes())
+        );
+        assert_eq!(
+            runtime_state.genesis_block.header.state_root,
+            Hash::digest_bytes(format!("genesis").as_bytes())
+        );
+        assert_eq!(runtime_state.last_block.header.round, 10);
+        assert_eq!(
+            runtime_state.last_block.header.io_root,
+            Hash::digest_bytes(format!("io 10").as_bytes())
+        );
+        assert_eq!(
+            runtime_state.last_block.header.state_root,
+            Hash::digest_bytes(format!("state 10").as_bytes())
+        );
+        assert_eq!(runtime_state.last_block_height, 90);
+        assert_eq!(runtime_state.last_normal_round, 10);
+        assert_eq!(runtime_state.last_normal_height, 90);
 
         // Test fetching past round roots.
         let past_round_roots = state

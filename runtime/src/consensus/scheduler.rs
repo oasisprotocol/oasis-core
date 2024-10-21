@@ -22,6 +22,7 @@ pub enum Role {
 }
 
 /// A node participating in a committee.
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct CommitteeNode {
     /// The node's role in a committee.
     pub role: Role,
@@ -44,6 +45,7 @@ pub enum CommitteeKind {
 }
 
 /// A per-runtime (instance) committee.
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct Committee {
     /// The functionality a committee exists to provide.
     pub kind: CommitteeKind,
