@@ -22,6 +22,8 @@ pub enum Error {
     MergingNotFinished,
     #[error("polynomial degree mismatch")]
     PolynomialDegreeMismatch,
+    #[error("polynomial generation failed")]
+    PolynomialGenerationFailed,
     #[error("shareholder encoding failed")]
     ShareholderEncodingFailed,
     #[error("shareholder proactivization already completed")]
