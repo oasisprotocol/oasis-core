@@ -138,7 +138,7 @@ where
         // should execute once with an extremely high probability,
         // so there is no need to optimize it by randomly selecting
         // only the problematic coefficients.
-        loop {
+        for _ in 0..5 {
             let bp = BivariatePolynomial::<G::Scalar>::random(deg_x, deg_y, rng);
 
             let i = deg_x as usize;
@@ -154,6 +154,8 @@ where
 
             return Ok(bp);
         }
+
+        Err(Error::PolynomialGenerationFailed.into())
     }
 }
 
