@@ -23,7 +23,6 @@ use crate::{
         time::insecure_posix_time,
     },
     enclave_rpc::{session::Builder, types},
-    future::block_on,
     protocol::Protocol,
 };
 
@@ -620,19 +619,6 @@ impl RpcClient {
 
         #[cfg(not(test))]
         OsRng.next_u32()
-    }
-}
-
-impl Drop for RpcClient {
-    fn drop(&mut self) {
-        // Close all sessions after the client is dropped.
-        block_on(async {
-            let sessions = {
-                let mut sessions = self.sessions.lock().await;
-                sessions.drain()
-            };
-            self.close_all(sessions).await;
-        });
     }
 }
 
