@@ -13,8 +13,8 @@ slog = "2.7.0"
 slog-json = "2.6.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = { version = "1.0.128", features = ["raw_value"] }
+serde = { version = "1.0.213", features = ["derive"] }
+serde_json = { version = "1.0.132", features = ["raw_value"] }
 lazy_static = "1.3.0"
 crossbeam = "0.8.4"
 byteorder = "1.4.3"
@@ -32,7 +32,7 @@ base64 = "0.22.1"
 rustc-hex = "2.0.1"
 rand = "0.8.5"
 futures = "0.3.31"
-tokio = { version = "1.40", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.41", features = ["rt", "rt-multi-thread", "sync", "time"] }
 tokio-retry = "0.3.0"
 tendermint = "0.39.1"
 tendermint-proto = "0.39.1"
@@ -64,12 +64,12 @@ async-trait = "0.1.83"
 cfg-if = "1.0"
 
 # TDX dependencies.
-libc = { version = "0.2.158", optional = true }
+libc = { version = "0.2.161", optional = true }
 nix = { version = "0.29.0", features = ["mount", "signal"], optional = true }
 vsock = { version = "0.5.1", optional = true }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
-version = "1.40.0"
+version = "1.41.0"
 features = ["full"]
 
 [dev-dependencies]
