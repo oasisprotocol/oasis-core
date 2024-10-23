@@ -258,7 +258,7 @@ func newTopicHandler(p *p2p, topicID string, handler api.Handler) (*topicHandler
 	}
 
 	h := &topicHandler{
-		ctx:          p.ctx, // TODO: Should this support individual cancelation?
+		ctx:          p.ctx, // TODO: Should this support individual cancellation?
 		p2p:          p,
 		topic:        topic,
 		host:         p.host,
