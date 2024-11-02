@@ -14,6 +14,7 @@ use super::multiplier::Multiplier;
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
 pub fn lagrange<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
+    debug_assert!(xs.len() == ys.len());
     let ls = basis_polynomials(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }

@@ -13,6 +13,7 @@ use crate::poly::Polynomial;
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
 pub fn lagrange_naive<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
+    debug_assert!(xs.len() == ys.len());
     let ls = basis_polynomials_naive(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
