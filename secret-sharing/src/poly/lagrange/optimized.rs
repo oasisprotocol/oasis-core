@@ -13,31 +13,43 @@ use super::multiplier::Multiplier;
 /// L(x) = \sum_{i=0}^n y_i * L_i(x)
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
+///     
+/// # Panics
+///
+/// Panics if the x-coordinates are not unique.
 pub fn lagrange<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
     debug_assert!(xs.len() == ys.len());
     let ls = basis_polynomials(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
 
-/// Returns Lagrange basis polynomials for the given set of x values.
+/// Returns Lagrange basis polynomials for the given set of x-coordinates.
 ///
 /// The i-th Lagrange basis polynomial is defined as:
 /// ```text
-///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+/// L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
+///
+/// # Panics
+///
+/// Panics if the x-coordinates are not unique.
 fn basis_polynomials<F: PrimeField>(xs: &[F]) -> Vec<Polynomial<F>> {
     let m = multiplier_for_basis_polynomials(xs);
     (0..xs.len()).map(|i| basis_polynomial(xs, i, &m)).collect()
 }
 
-/// Returns i-th Lagrange basis polynomial for the given set of x values.
+/// Returns i-th Lagrange basis polynomial for the given set of x-coordinates.
 ///
 /// The i-th Lagrange basis polynomial is defined as:
 /// ```text
-///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+/// L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
+///
+/// # Panics
+///
+/// Panics if the x-coordinates are not unique.
 fn basis_polynomial<F: PrimeField>(
     xs: &[F],
     i: usize,
@@ -59,23 +71,31 @@ fn basis_polynomial<F: PrimeField>(
     nom
 }
 
-/// Returns Lagrange coefficients for the given set of x values.
+/// Returns Lagrange coefficients for the given set of x-coordinates.
 ///
 /// The i-th Lagrange coefficient is defined as:
 /// ```text
-///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
+///
+/// # Panics
+///
+/// Panics if the x-coordinates are not unique.
 pub fn coefficients<F: PrimeField>(xs: &[F]) -> Vec<F> {
     let m = multiplier_for_coefficients(xs);
     (0..xs.len()).map(|i| coefficient(xs, i, &m)).collect()
 }
 
-/// Returns i-th Lagrange coefficient for the given set of x values.
+/// Returns i-th Lagrange coefficient for the given set of x-coordinates.
 ///
 /// The i-th Lagrange coefficient is defined as:
 /// ```text
-///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
+///
+/// # Panics
+///
+/// Panics if the x-coordinates are not unique.
 fn coefficient<F: PrimeField>(xs: &[F], i: usize, multiplier: &Multiplier<F>) -> F {
     let mut nom = multiplier.get_product(i).unwrap_or(F::ONE);
     let mut denom = F::ONE;
