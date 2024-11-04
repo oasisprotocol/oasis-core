@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use group::Group;
+use zeroize::Zeroize;
 
 use crate::{
     poly::lagrange::lagrange,
@@ -11,7 +12,11 @@ use crate::{
 use super::{Error, SecretShare, Shareholder, VerifiableSecretShare};
 
 /// Dimension switch state.
-enum DimensionSwitchState<G: Group> {
+enum DimensionSwitchState<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Represents the state where the dimension switch is waiting for
     /// the verification matrix from the previous switch, which is needed
     /// to verify switch points. Once the matrix is received, the state
@@ -42,7 +47,11 @@ enum DimensionSwitchState<G: Group> {
 }
 
 /// A dimension switch based on a share resharing technique.
-pub struct DimensionSwitch<G: Group> {
+pub struct DimensionSwitch<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
 
@@ -67,6 +76,7 @@ pub struct DimensionSwitch<G: Group> {
 impl<G> DimensionSwitch<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new share reduction dimension switch.
     ///
@@ -311,6 +321,7 @@ pub struct SwitchPoints<G: Group> {
 impl<G> SwitchPoints<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new accumulator for switch points.
     fn new(
@@ -417,7 +428,11 @@ where
 }
 
 /// An accumulator for bivariate shares.
-struct BivariateShares<G: Group> {
+struct BivariateShares<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
 
@@ -447,6 +462,7 @@ struct BivariateShares<G: Group> {
 impl<G> BivariateShares<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new accumulator for bivariate shares.
     fn new(

@@ -3,6 +3,7 @@
 use anyhow::Result;
 use group::{ff::Field, Group};
 use rand_core::RngCore;
+use zeroize::Zeroize;
 
 use crate::{poly::BivariatePolynomial, vss::VerificationMatrix};
 
@@ -26,6 +27,7 @@ pub struct Dealer<G: Group> {
 impl<G> Dealer<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new dealer of secret bivariate shares, which can be used
     /// to recover a randomly selected shared secret.

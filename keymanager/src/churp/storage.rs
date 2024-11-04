@@ -14,6 +14,7 @@ use oasis_core_runtime::{
     consensus::beacon::EpochTime,
     storage::KeyValue,
 };
+use zeroize::Zeroize;
 
 use super::{EncodedVerifiableSecretShare, Error};
 
@@ -74,11 +75,15 @@ impl Storage {
 
     /// Loads and decrypts a secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_secret_share<G: Group + GroupEncoding>(
+    pub fn load_secret_share<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<VerifiableSecretShare<G>>> {
+    ) -> Result<Option<VerifiableSecretShare<G>>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -91,12 +96,16 @@ impl Storage {
 
     /// Encrypts and stores the provided secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_secret_share<G: Group + GroupEncoding>(
+    pub fn store_secret_share<G>(
         &self,
         share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -106,11 +115,15 @@ impl Storage {
 
     /// Loads and decrypts the next secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_next_secret_share<G: Group + GroupEncoding>(
+    pub fn load_next_secret_share<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<VerifiableSecretShare<G>>> {
+    ) -> Result<Option<VerifiableSecretShare<G>>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -123,12 +136,16 @@ impl Storage {
 
     /// Encrypts and stores the provided next secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_next_secret_share<G: Group + GroupEncoding>(
+    pub fn store_next_secret_share<G>(
         &self,
         share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -172,11 +189,15 @@ impl Storage {
 
     /// Encrypts and authenticates the given polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn encrypt_secret_share<G: Group + GroupEncoding>(
+    fn encrypt_secret_share<G>(
         verifiable_share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Vec<u8> {
+    ) -> Vec<u8>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let share: EncodedVerifiableSecretShare = verifiable_share.into();
         let nonce: Nonce = Nonce::generate();
         let plaintext = cbor::to_vec(share);
@@ -189,11 +210,15 @@ impl Storage {
 
     /// Decrypts and authenticates encrypted polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn decrypt_secret_share<G: Group + GroupEncoding>(
+    fn decrypt_secret_share<G>(
         ciphertext: &mut Vec<u8>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<VerifiableSecretShare<G>> {
+    ) -> Result<VerifiableSecretShare<G>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, SECRET_SHARE_SEAL_CONTEXT);

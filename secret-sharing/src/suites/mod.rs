@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use group::{ff::PrimeField, Group, GroupEncoding};
+use zeroize::Zeroize;
 
 pub mod p384;
 
@@ -30,7 +31,7 @@ pub trait Suite:
     FieldDigest<Output = Self::PrimeField> + GroupDigest<Output = Self::Group>
 {
     /// The type representing an element modulo the order of the group.
-    type PrimeField: PrimeField;
+    type PrimeField: PrimeField + Zeroize;
 
     /// The type representing an element of a cryptographic group.
     type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
@@ -40,6 +41,7 @@ impl<S> Suite for S
 where
     S: FieldDigest + GroupDigest,
     <S as GroupDigest>::Output: Group<Scalar = <S as FieldDigest>::Output> + GroupEncoding,
+    <S as FieldDigest>::Output: Zeroize,
 {
     type PrimeField = <S as FieldDigest>::Output;
     type Group = <S as GroupDigest>::Output;

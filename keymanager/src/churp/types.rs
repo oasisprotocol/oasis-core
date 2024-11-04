@@ -170,6 +170,7 @@ pub struct EncodedVerifiableSecretShare {
 impl<G> From<&VerifiableSecretShare<G>> for EncodedVerifiableSecretShare
 where
     G: Group + GroupEncoding,
+    G::Scalar: Zeroize,
 {
     fn from(verifiable_share: &VerifiableSecretShare<G>) -> Self {
         Self {
@@ -182,6 +183,7 @@ where
 impl<G> TryFrom<EncodedVerifiableSecretShare> for VerifiableSecretShare<G>
 where
     G: Group + GroupEncoding,
+    G::Scalar: Zeroize,
 {
     type Error = Error;
 
@@ -206,7 +208,7 @@ pub struct EncodedSecretShare {
 
 impl<F> From<&SecretShare<F>> for EncodedSecretShare
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn from(share: &SecretShare<F>) -> Self {
         Self {
@@ -218,7 +220,7 @@ where
 
 impl<F> TryFrom<EncodedSecretShare> for SecretShare<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     type Error = Error;
 

@@ -2,6 +2,7 @@ use std::iter::zip;
 
 use anyhow::{bail, Result};
 use group::ff::PrimeField;
+use zeroize::Zeroize;
 
 use crate::{kdc::KeyRecoverer, poly::lagrange};
 
@@ -20,7 +21,7 @@ impl Player {
     }
 
     /// Recovers the secret from the provided shares.
-    pub fn recover_secret<F: PrimeField>(&self, shares: &[SecretShare<F>]) -> Result<F> {
+    pub fn recover_secret<F: PrimeField + Zeroize>(&self, shares: &[SecretShare<F>]) -> Result<F> {
         if shares.len() < self.min_shares() {
             bail!("not enough shares");
         }
@@ -48,7 +49,7 @@ impl Player {
     }
 
     /// Returns true if shares are from distinct shareholders.
-    fn distinct_shares<F: PrimeField>(shares: &[SecretShare<F>]) -> bool {
+    fn distinct_shares<F: PrimeField + Zeroize>(shares: &[SecretShare<F>]) -> bool {
         // For a small number of shareholders, a brute-force approach should
         // suffice, and it doesn't require the prime field to be hashable.
         for i in 0..shares.len() {

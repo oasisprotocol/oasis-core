@@ -7,6 +7,7 @@ use group::{
     ff::{Field, PrimeField},
     Group,
 };
+use zeroize::Zeroize;
 
 use crate::{
     kdc::PointShareholder, poly::Polynomial, suites::FieldDigest, vss::VerificationMatrix,
@@ -28,7 +29,11 @@ pub fn encode_shareholder<H: FieldDigest>(id: &[u8], dst: &[u8]) -> Result<H::Ou
 /// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Shareholder<G: Group> {
+pub struct Shareholder<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Verifiable secret (full or reduced) share of the shared secret.
     verifiable_share: VerifiableSecretShare<G>,
 }
@@ -36,6 +41,7 @@ pub struct Shareholder<G: Group> {
 impl<G> Shareholder<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Returns the verifiable secret share.
     pub fn verifiable_share(&self) -> &VerifiableSecretShare<G> {
@@ -77,6 +83,7 @@ where
 impl<G> From<VerifiableSecretShare<G>> for Shareholder<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     fn from(verifiable_share: VerifiableSecretShare<G>) -> Shareholder<G> {
         Shareholder { verifiable_share }
@@ -86,6 +93,7 @@ where
 impl<G> PointShareholder<G::Scalar> for Shareholder<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     fn coordinate_x(&self) -> &G::Scalar {
         self.verifiable_share.share.coordinate_x()
@@ -97,7 +105,10 @@ where
 }
 
 /// Secret share of the shared secret.
-pub struct SecretShare<F: PrimeField> {
+pub struct SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
     /// The encoded identity of the shareholder.
     ///
     /// The identity is the x-coordinate of a point on the secret-sharing
@@ -113,7 +124,7 @@ pub struct SecretShare<F: PrimeField> {
 
 impl<F> SecretShare<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     /// Creates a new secret share.
     pub fn new(x: F, p: Polynomial<F>) -> Self {
@@ -142,7 +153,7 @@ where
 
 impl<F> AddAssign for SecretShare<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     #[inline]
     fn add_assign(&mut self, rhs: SecretShare<F>) {
@@ -152,7 +163,7 @@ where
 
 impl<F> AddAssign<&SecretShare<F>> for SecretShare<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn add_assign(&mut self, rhs: &SecretShare<F>) {
         debug_assert!(self.x == rhs.x);
@@ -160,8 +171,21 @@ where
     }
 }
 
+impl<F> Drop for SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn drop(&mut self) {
+        self.p.zeroize();
+    }
+}
+
 /// Verifiable secret share of the shared secret.
-pub struct VerifiableSecretShare<G: Group> {
+pub struct VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Secret (full or reduced) share of the shared secret.
     pub(crate) share: SecretShare<G::Scalar>,
 
@@ -174,6 +198,7 @@ pub struct VerifiableSecretShare<G: Group> {
 impl<G> VerifiableSecretShare<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new verifiable secret share.
     pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
@@ -270,6 +295,7 @@ where
 impl<G> AddAssign for VerifiableSecretShare<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     #[inline]
     fn add_assign(&mut self, rhs: VerifiableSecretShare<G>) {
@@ -280,6 +306,7 @@ where
 impl<G> AddAssign<&VerifiableSecretShare<G>> for VerifiableSecretShare<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     fn add_assign(&mut self, rhs: &VerifiableSecretShare<G>) {
         self.share += &rhs.share;
