@@ -23,10 +23,7 @@ use super::VerificationVector;
 ///     B(x,y) = \sum_{i=0}^{deg_x} \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationMatrix<G>
-where
-    G: Group + GroupEncoding,
-{
+pub struct VerificationMatrix<G: Group> {
     /// The number of rows in the verification matrix, determined by
     /// the degree of the bivariate polynomial in the `x` variable from
     /// which the matrix was constructed.
@@ -42,7 +39,7 @@ where
 
 impl<G> VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Returns the dimensions (number of rows and columns) of the verification
     /// matrix.
@@ -202,7 +199,12 @@ where
 
         verified.into()
     }
+}
 
+impl<G> VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
     /// Returns the byte representation of the verification matrix.
     pub fn to_bytes(&self) -> Vec<u8> {
         let cap = Self::byte_size(self.rows, self.cols);
@@ -275,7 +277,7 @@ where
 
 impl<G> From<&BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Constructs a new verification matrix from the given bivariate
     /// polynomial.
@@ -297,7 +299,7 @@ where
 
 impl<G> From<BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Constructs a new verification matrix from the given bivariate
     /// polynomial.
@@ -308,7 +310,7 @@ where
 
 impl<G> Add for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     type Output = Self;
 
@@ -319,7 +321,7 @@ where
 
 impl<G> Add for &VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     type Output = VerificationMatrix<G>;
 

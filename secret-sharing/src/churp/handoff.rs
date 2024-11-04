@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use group::{Group, GroupEncoding};
+use group::Group;
 
 use crate::vss::VerificationMatrix;
 
@@ -82,7 +82,7 @@ impl HandoffKind {
 /// shares among committee members, or proactivizes an existing secret by
 /// randomizing the shares while transferring the secret from an old committee
 /// to a new, possibly intersecting one.
-pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
+pub trait Handoff<G: Group>: Send + Sync {
     /// Checks if the handoff needs the verification matrix from the previous
     /// handoff.
     fn needs_verification_matrix(&self) -> Result<bool> {
@@ -157,14 +157,14 @@ pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
 
 /// A handoff where the committee collaboratively generates a random secret
 /// and secret shares.
-pub struct DealingPhase<G: Group + GroupEncoding> {
+pub struct DealingPhase<G: Group> {
     /// The share distribution phase of the handoff.
     share_distribution: DimensionSwitch<G>,
 }
 
 impl<G> DealingPhase<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new handoff where the given shareholders will generate
     /// a random secret and receive corresponding secret shares.
@@ -190,7 +190,7 @@ where
 
 impl<G> Handoff<G> for DealingPhase<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
         self.share_distribution.needs_bivariate_share(x)
@@ -213,14 +213,14 @@ where
 /// A handoff where the committee remains the same. During this handoff,
 /// committee members randomize their secret shares without altering
 /// the shared secret.
-pub struct CommitteeUnchanged<G: Group + GroupEncoding> {
+pub struct CommitteeUnchanged<G: Group> {
     /// The share distribution phase of the handoff.
     share_distribution: DimensionSwitch<G>,
 }
 
 impl<G> CommitteeUnchanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new handoff where the secret shares of the given shareholders
     /// will be randomized.
@@ -241,7 +241,7 @@ where
 
 impl<G> Handoff<G> for CommitteeUnchanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     fn needs_shareholder(&self) -> Result<bool> {
         Ok(self.share_distribution.is_waiting_for_shareholder())
@@ -271,7 +271,7 @@ where
 
 /// A handoff where the committee changes. During this handoff, committee
 /// members transfer the shared secret to the new committee.
-pub struct CommitteeChanged<G: Group + GroupEncoding> {
+pub struct CommitteeChanged<G: Group> {
     /// The share reduction phase of the handoff.
     share_reduction: DimensionSwitch<G>,
 
@@ -281,7 +281,7 @@ pub struct CommitteeChanged<G: Group + GroupEncoding> {
 
 impl<G> CommitteeChanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new handoff where the shared secret will be transferred
     /// to a new committee composed of the given shareholders.
@@ -305,7 +305,7 @@ where
 
 impl<G> Handoff<G> for CommitteeChanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     fn needs_verification_matrix(&self) -> Result<bool> {
         Ok(self.share_reduction.is_waiting_for_verification_matrix())

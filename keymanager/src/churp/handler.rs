@@ -105,7 +105,7 @@ const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 const ALLOWED_BLOCKS_BEHIND: u64 = 5;
 
 /// Represents information about a dealer.
-struct DealerInfo<G: Group + GroupEncoding> {
+struct DealerInfo<G: Group> {
     /// The epoch during which this dealer is active.
     epoch: EpochTime,
     /// The dealer associated with this information.
@@ -113,7 +113,7 @@ struct DealerInfo<G: Group + GroupEncoding> {
 }
 
 /// Represents information about a handoff.
-struct HandoffInfo<G: Group + GroupEncoding> {
+struct HandoffInfo<G: Group> {
     /// The handoff epoch.
     epoch: EpochTime,
     /// The handoff associated with this information.

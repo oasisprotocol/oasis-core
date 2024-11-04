@@ -1,7 +1,7 @@
 //! CHURP dealer.
 
 use anyhow::Result;
-use group::{ff::Field, Group, GroupEncoding};
+use group::{ff::Field, Group};
 use rand_core::RngCore;
 
 use crate::{poly::BivariatePolynomial, vss::VerificationMatrix};
@@ -15,7 +15,7 @@ use super::{Error, HandoffKind, SecretShare};
 /// Shares must always be distributed over a secure channel and verified
 /// against the matrix. Recovering the secret bivariate polynomial requires
 /// obtaining more than a threshold number of shares from distinct participants.
-pub struct Dealer<G: Group + GroupEncoding> {
+pub struct Dealer<G: Group> {
     /// Secret bivariate polynomial.
     bp: BivariatePolynomial<G::Scalar>,
 
@@ -25,7 +25,7 @@ pub struct Dealer<G: Group + GroupEncoding> {
 
 impl<G> Dealer<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new dealer of secret bivariate shares, which can be used
     /// to recover a randomly selected shared secret.
@@ -161,7 +161,7 @@ where
 
 impl<G> From<BivariatePolynomial<G::Scalar>> for Dealer<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new dealer from the given bivariate polynomial.
     fn from(bp: BivariatePolynomial<G::Scalar>) -> Self {

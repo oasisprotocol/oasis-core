@@ -3,7 +3,7 @@
 use anyhow::Result;
 use group::{
     ff::{Field, PrimeField},
-    Group, GroupEncoding,
+    Group,
 };
 
 use crate::{
@@ -26,14 +26,14 @@ pub fn encode_shareholder<H: FieldDigest>(id: &[u8], dst: &[u8]) -> Result<H::Ou
 /// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Shareholder<G: Group + GroupEncoding> {
+pub struct Shareholder<G: Group> {
     /// Verifiable secret (full or reduced) share of the shared secret.
     verifiable_share: VerifiableSecretShare<G>,
 }
 
 impl<G> Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new shareholder.
     pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
@@ -78,7 +78,7 @@ where
 
 impl<G> From<VerifiableSecretShare<G>> for Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     fn from(verifiable_share: VerifiableSecretShare<G>) -> Shareholder<G> {
         Shareholder { verifiable_share }
@@ -87,7 +87,7 @@ where
 
 impl<G> PointShareholder<G::Scalar> for Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     fn coordinate_x(&self) -> &G::Scalar {
         self.verifiable_share.share.coordinate_x()
@@ -143,7 +143,7 @@ where
 }
 
 /// Verifiable secret share of the shared secret.
-pub struct VerifiableSecretShare<G: Group + GroupEncoding> {
+pub struct VerifiableSecretShare<G: Group> {
     /// Secret (full or reduced) share of the shared secret.
     pub(crate) share: SecretShare<G::Scalar>,
 
@@ -155,7 +155,7 @@ pub struct VerifiableSecretShare<G: Group + GroupEncoding> {
 
 impl<G> VerifiableSecretShare<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Creates a new verifiable secret share.
     pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
