@@ -238,7 +238,7 @@ where
 
 impl<F> AddAssign for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     #[inline]
     fn add_assign(&mut self, rhs: Polynomial<F>) {
@@ -248,9 +248,16 @@ where
 
 impl<F> AddAssign<&Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn add_assign(&mut self, rhs: &Polynomial<F>) {
+        if self.a.capacity() < rhs.a.len() {
+            let mut a = Vec::with_capacity(rhs.a.len());
+            a.extend_from_slice(&self.a);
+            self.a.zeroize();
+            self.a = a;
+        }
+
         let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
@@ -321,7 +328,7 @@ where
 
 impl<F> SubAssign for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     #[inline]
     fn sub_assign(&mut self, rhs: Polynomial<F>) {
@@ -331,9 +338,16 @@ where
 
 impl<F> SubAssign<&Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sub_assign(&mut self, rhs: &Polynomial<F>) {
+        if self.a.capacity() < rhs.a.len() {
+            let mut a = Vec::with_capacity(rhs.a.len());
+            a.extend_from_slice(&self.a);
+            self.a.zeroize();
+            self.a = a;
+        }
+
         let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
@@ -510,7 +524,7 @@ where
 
 impl<F> Sum for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sum<I: Iterator<Item = Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
@@ -521,7 +535,7 @@ where
 
 impl<'a, F> Sum<&'a Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sum<I: Iterator<Item = &'a Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
