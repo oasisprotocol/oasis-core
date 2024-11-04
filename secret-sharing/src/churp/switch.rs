@@ -509,17 +509,17 @@ where
         }
         verifiable_share.verify(self.threshold, self.zero_hole, self.full_share)?;
 
-        let p = match self.p.take() {
-            Some(p) => p + verifiable_share.share.p,
-            None => verifiable_share.share.p,
-        };
-        self.p = Some(p);
+        if let Some(ref mut p) = self.p {
+            *p += &verifiable_share.share.p;
+        } else {
+            self.p = Some(verifiable_share.share.p)
+        }
 
-        let vm = match self.vm.take() {
-            Some(vm) => vm + verifiable_share.vm,
-            None => verifiable_share.vm,
-        };
-        self.vm = Some(vm);
+        if let Some(ref mut vm) = self.vm {
+            *vm += &verifiable_share.vm;
+        } else {
+            self.vm = Some(verifiable_share.vm);
+        }
 
         let index = self
             .pending_shareholders
