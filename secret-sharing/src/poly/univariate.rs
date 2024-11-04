@@ -416,7 +416,7 @@ where
     F: PrimeField,
 {
     fn mul_assign(&mut self, rhs: &Polynomial<F>) {
-        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 2);
+        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 1);
         for i in 0..self.a.len() {
             for j in 0..rhs.a.len() {
                 let aij = self.a[i] * rhs.a[j];
