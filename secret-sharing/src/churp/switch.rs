@@ -4,7 +4,7 @@ use anyhow::Result;
 use group::Group;
 
 use crate::{
-    poly::{lagrange::lagrange, Polynomial},
+    poly::lagrange::lagrange,
     vss::{VerificationMatrix, VerificationVector},
 };
 
@@ -408,8 +408,9 @@ where
 
         let x = self.me.take().ok_or(Error::ShareholderIdentityRequired)?;
         let vm = self.vm.take().ok_or(Error::VerificationMatrixRequired)?;
-        let share = SecretShare::new(x, p);
-        let shareholder = Shareholder::new(share, vm);
+        let share: SecretShare<<G as Group>::Scalar> = SecretShare::new(x, p);
+        let verifiable_share = VerifiableSecretShare::new(share, vm);
+        let shareholder = verifiable_share.into();
 
         Ok(shareholder)
     }
@@ -439,11 +440,8 @@ struct BivariateShares<G: Group> {
     /// The shareholder to be proactivized with bivariate shares.
     shareholder: Option<Arc<Shareholder<G>>>,
 
-    /// The sum of the received bivariate shares.
-    p: Option<Polynomial<G::Scalar>>,
-
-    /// The sum of the verification matrices of the received bivariate shares.
-    vm: Option<VerificationMatrix<G>>,
+    /// The sum of the received verifiable bivariate shares.
+    verifiable_share: Option<VerifiableSecretShare<G>>,
 }
 
 impl<G> BivariateShares<G>
@@ -473,8 +471,7 @@ where
             shareholders,
             pending_shareholders,
             shareholder,
-            p: None,
-            vm: None,
+            verifiable_share: None,
         })
     }
 
@@ -509,16 +506,10 @@ where
         }
         verifiable_share.verify(self.threshold, self.zero_hole, self.full_share)?;
 
-        if let Some(ref mut p) = self.p {
-            *p += &verifiable_share.share.p;
+        if let Some(ref mut vs) = self.verifiable_share {
+            *vs += &verifiable_share;
         } else {
-            self.p = Some(verifiable_share.share.p)
-        }
-
-        if let Some(ref mut vm) = self.vm {
-            *vm += &verifiable_share.vm;
-        } else {
-            self.vm = Some(verifiable_share.vm);
+            self.verifiable_share = Some(verifiable_share);
         }
 
         let index = self
@@ -540,21 +531,14 @@ where
             return Err(Error::NotEnoughBivariateShares.into());
         }
 
-        let p = self
-            .p
-            .take()
-            .ok_or(Error::ShareholderProactivizationCompleted)?;
-        let vm = self
-            .vm
+        let vs = self
+            .verifiable_share
             .take()
             .ok_or(Error::ShareholderProactivizationCompleted)?;
 
         let shareholder = match &self.shareholder {
-            Some(shareholder) => shareholder.proactivize(&p, &vm)?,
-            None => {
-                let share = SecretShare::new(self.me, p);
-                Shareholder::new(share, vm)
-            }
+            Some(shareholder) => shareholder.proactivize(&vs.share.p, &vs.vm)?,
+            None => vs.into(),
         };
 
         // Ensure that the combined bivariate polynomial satisfies

@@ -1,5 +1,7 @@
 //! CHURP shareholder.
 
+use std::ops::AddAssign;
+
 use anyhow::Result;
 use group::{
     ff::{Field, PrimeField},
@@ -35,11 +37,6 @@ impl<G> Shareholder<G>
 where
     G: Group,
 {
-    /// Creates a new shareholder.
-    pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
-        VerifiableSecretShare::new(share, vm).into()
-    }
-
     /// Returns the verifiable secret share.
     pub fn verifiable_share(&self) -> &VerifiableSecretShare<G> {
         &self.verifiable_share
@@ -70,7 +67,8 @@ where
         let p = p + &self.verifiable_share.share.p;
         let vm = vm + &self.verifiable_share.vm;
         let share = SecretShare::new(x, p);
-        let shareholder = Shareholder::new(share, vm);
+        let verifiable_share = VerifiableSecretShare::new(share, vm);
+        let shareholder = verifiable_share.into();
 
         Ok(shareholder)
     }
@@ -139,6 +137,26 @@ where
         self.p
             .coefficient(0)
             .expect("polynomial has at least one term")
+    }
+}
+
+impl<F> AddAssign for SecretShare<F>
+where
+    F: PrimeField,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: SecretShare<F>) {
+        *self += &rhs
+    }
+}
+
+impl<F> AddAssign<&SecretShare<F>> for SecretShare<F>
+where
+    F: PrimeField,
+{
+    fn add_assign(&mut self, rhs: &SecretShare<F>) {
+        debug_assert!(self.x == rhs.x);
+        self.p += &rhs.p;
     }
 }
 
@@ -246,5 +264,25 @@ where
         let rows: usize = threshold as usize + 1;
         let cols = threshold as usize * 2 + 1;
         (rows, cols)
+    }
+}
+
+impl<G> AddAssign for VerifiableSecretShare<G>
+where
+    G: Group,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: VerifiableSecretShare<G>) {
+        *self += &rhs
+    }
+}
+
+impl<G> AddAssign<&VerifiableSecretShare<G>> for VerifiableSecretShare<G>
+where
+    G: Group,
+{
+    fn add_assign(&mut self, rhs: &VerifiableSecretShare<G>) {
+        self.share += &rhs.share;
+        self.vm += &rhs.vm;
     }
 }

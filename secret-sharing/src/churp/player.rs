@@ -73,7 +73,7 @@ mod tests {
     use rand_core::OsRng;
 
     use crate::{
-        churp::{self, HandoffKind, Shareholder},
+        churp::{self, HandoffKind, Shareholder, VerifiableSecretShare},
         kdc::{KeyRecoverer, KeySharer},
         suites::{self, p384, GroupDigest},
     };
@@ -161,9 +161,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -180,9 +180,9 @@ mod tests {
                 .collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -197,9 +197,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -213,9 +213,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
