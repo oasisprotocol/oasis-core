@@ -4,9 +4,9 @@ use anyhow::Result;
 use group::Group;
 use zeroize::Zeroize;
 
-use crate::{poly::Point, vss::VerificationMatrix};
+use crate::vss::VerificationMatrix;
 
-use super::{DimensionSwitch, Error, Shareholder, VerifiableSecretShare};
+use super::{DimensionSwitch, Error, Shareholder, SwitchPoint, VerifiableSecretShare};
 
 /// Handoff kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,7 +116,7 @@ where
     }
 
     /// Adds the given switch point to share reduction.
-    fn add_share_reduction_switch_point(&self, _point: Point<G::Scalar>) -> Result<bool> {
+    fn add_share_reduction_switch_point(&self, _point: SwitchPoint<G::Scalar>) -> Result<bool> {
         Err(Error::InvalidKind.into())
     }
 
@@ -127,7 +127,10 @@ where
     }
 
     /// Adds the given switch point to full share distribution.
-    fn add_full_share_distribution_switch_point(&self, _point: Point<G::Scalar>) -> Result<bool> {
+    fn add_full_share_distribution_switch_point(
+        &self,
+        _point: SwitchPoint<G::Scalar>,
+    ) -> Result<bool> {
         Err(Error::InvalidKind.into())
     }
 
@@ -338,7 +341,7 @@ where
         self.share_reduction.needs_switch_point(x)
     }
 
-    fn add_share_reduction_switch_point(&self, point: Point<G::Scalar>) -> Result<bool> {
+    fn add_share_reduction_switch_point(&self, point: SwitchPoint<G::Scalar>) -> Result<bool> {
         self.share_reduction.add_switch_point(point)
     }
 
@@ -346,7 +349,10 @@ where
         self.share_distribution.needs_switch_point(x)
     }
 
-    fn add_full_share_distribution_switch_point(&self, point: Point<G::Scalar>) -> Result<bool> {
+    fn add_full_share_distribution_switch_point(
+        &self,
+        point: SwitchPoint<G::Scalar>,
+    ) -> Result<bool> {
         self.share_distribution.add_switch_point(point)
     }
 
@@ -394,8 +400,7 @@ mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use crate::{
-        churp::{self, Handoff, HandoffKind, VerifiableSecretShare},
-        poly::Point,
+        churp::{self, Handoff, HandoffKind, SwitchPoint, VerifiableSecretShare},
         suites::{self, p384},
     };
 
@@ -575,7 +580,7 @@ mod tests {
 
                 assert!(handoff.needs_share_reduction_switch_point(&bob).unwrap());
                 let bij = shareholder.switch_point(alice);
-                let point = Point::new(bob.clone(), bij);
+                let point = SwitchPoint::new(bob.clone(), bij);
                 let done = handoff.add_share_reduction_switch_point(point).unwrap();
 
                 if j + 1 < num_points {
@@ -635,7 +640,7 @@ mod tests {
                     .needs_full_share_distribution_switch_point(&bob)
                     .unwrap());
                 let bij = shareholder.switch_point(&alice);
-                let point = Point::new(bob.clone(), bij);
+                let point = SwitchPoint::new(bob.clone(), bij);
                 let done = handoff
                     .add_full_share_distribution_switch_point(point)
                     .unwrap();

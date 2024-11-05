@@ -35,10 +35,10 @@ use oasis_core_runtime::{
 use secret_sharing::{
     churp::{
         encode_shareholder, CommitteeChanged, CommitteeUnchanged, Dealer, DealingPhase, Handoff,
-        HandoffKind, Shareholder, VerifiableSecretShare,
+        HandoffKind, Shareholder, SwitchPoint, VerifiableSecretShare,
     },
     kdc::KeySharer,
-    poly::{scalar_from_bytes, scalar_to_bytes, Point},
+    poly::{scalar_from_bytes, scalar_to_bytes},
     suites::{p384, Suite},
     vss::VerificationMatrix,
 };
@@ -609,7 +609,7 @@ impl<S: Suite> Instance<S> {
         if node_id == self.node_id {
             let shareholder = self.get_shareholder(status.handoff)?;
             let y = shareholder.switch_point(&x);
-            let point = Point::new(x, y);
+            let point = SwitchPoint::new(x, y);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
@@ -646,7 +646,7 @@ impl<S: Suite> Instance<S> {
             vec![node_id],
         ))?;
         let y = scalar_from_bytes(&y).ok_or(Error::PointDecodingFailed)?;
-        let point = Point::new(x, y);
+        let point = SwitchPoint::new(x, y);
 
         handoff.add_share_reduction_switch_point(point)
     }
@@ -669,7 +669,7 @@ impl<S: Suite> Instance<S> {
         if node_id == self.node_id {
             let shareholder = handoff.get_reduced_shareholder()?;
             let y = shareholder.switch_point(&x);
-            let point = Point::new(x, y);
+            let point = SwitchPoint::new(x, y);
 
             return handoff.add_full_share_distribution_switch_point(point);
         }
@@ -682,7 +682,7 @@ impl<S: Suite> Instance<S> {
             vec![node_id],
         ))?;
         let y = scalar_from_bytes(&bytes).ok_or(Error::PointDecodingFailed)?;
-        let point = Point::new(x, y);
+        let point = SwitchPoint::new(x, y);
 
         handoff.add_full_share_distribution_switch_point(point)
     }

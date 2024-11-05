@@ -16,7 +16,7 @@ use super::multiplier::Multiplier;
 /// # Panics
 ///
 /// Panics if the x-coordinates are not unique.
-pub fn lagrange<F>(points: &[Point<F>]) -> Polynomial<F>
+pub fn lagrange<F>(points: &[&Point<F>]) -> Polynomial<F>
 where
     F: PrimeField + Zeroize,
 {
@@ -187,6 +187,7 @@ mod tests {
         let n = 10;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let points = random_points(n, &mut rng);
+        let points: Vec<_> = points.iter().collect();
 
         // Test polynomials of different degrees.
         for size in 1..=n {
@@ -254,6 +255,7 @@ mod tests {
     fn bench_lagrange(b: &mut Bencher, n: usize) {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let points = random_points(n, &mut rng);
+        let points: Vec<_> = points.iter().collect();
 
         b.iter(|| {
             let _p = lagrange(&points);

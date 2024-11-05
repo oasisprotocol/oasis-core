@@ -1,7 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
-use group::Group;
+use group::{ff::PrimeField, Group};
 use zeroize::Zeroize;
 
 use crate::{
@@ -10,6 +13,50 @@ use crate::{
 };
 
 use super::{Error, SecretShare, Shareholder, VerifiableSecretShare};
+
+/// A simple wrapper around point that is zeroized when dropped.
+pub struct SwitchPoint<F>(Point<F>)
+where
+    F: PrimeField + Zeroize;
+
+impl<F> SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    /// Creates a new switch point.
+    pub fn new(x: F, y: F) -> Self {
+        Self(Point::new(x, y))
+    }
+}
+
+impl<F> Deref for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    type Target = Point<F>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F> Zeroize for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<F> Drop for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
 
 /// Dimension switch state.
 enum DimensionSwitchState<G>
@@ -177,7 +224,7 @@ where
     ///
     /// Returns true if enough points have been received and the switch
     /// transitioned to the next state.
-    pub(crate) fn add_switch_point(&self, point: Point<G::Scalar>) -> Result<bool> {
+    pub(crate) fn add_switch_point(&self, point: SwitchPoint<G::Scalar>) -> Result<bool> {
         let mut state = self.state.lock().unwrap();
         let sp = match &mut *state {
             DimensionSwitchState::Accumulating(sp) => sp,
@@ -317,7 +364,7 @@ where
     vv: VerificationVector<G>,
 
     /// A list of received switch points.
-    points: Vec<Point<G::Scalar>>,
+    points: Vec<SwitchPoint<G::Scalar>>,
 }
 
 impl<G> SwitchPoints<G>
@@ -383,7 +430,7 @@ where
     ///
     /// Returns true if enough points have been received; otherwise,
     /// it returns false.
-    fn add_point(&mut self, point: Point<G::Scalar>) -> Result<()> {
+    fn add_point(&mut self, point: SwitchPoint<G::Scalar>) -> Result<()> {
         if self.points.len() >= self.n {
             return Err(Error::TooManySwitchPoints.into());
         }
@@ -413,8 +460,8 @@ where
             return Err(Error::NotEnoughSwitchPoints.into());
         }
 
-        let points = &self.points[0..self.n];
-        let p = lagrange(points);
+        let points: Vec<_> = self.points[0..self.n].iter().map(|p| &p.0).collect();
+        let p = lagrange(&points);
         let x = self.me.take().ok_or(Error::ShareholderIdentityRequired)?;
         let vm = self.vm.take().ok_or(Error::VerificationMatrixRequired)?;
         let share: SecretShare<<G as Group>::Scalar> = SecretShare::new(x, p);
@@ -582,12 +629,12 @@ mod tests {
 
     use crate::{
         churp::{SecretShare, VerifiableSecretShare},
-        poly::{self, Point},
+        poly::{self},
         suites::{self, p384},
         vss,
     };
 
-    use super::{BivariateShares, Error, SwitchPoints};
+    use super::{BivariateShares, Error, SwitchPoint, SwitchPoints};
 
     type Suite = p384::Sha3_384;
     type Group = <Suite as suites::Suite>::Group;
@@ -616,7 +663,7 @@ mod tests {
             false => bp.eval(&x, &y),
             true => bp.eval(&y, &x),
         };
-        let point = Point::new(x, bij);
+        let point = SwitchPoint::new(x, bij);
         sp.add_point(point)?;
         Ok(!sp.needs_points())
     }
