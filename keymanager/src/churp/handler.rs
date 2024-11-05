@@ -644,13 +644,15 @@ impl<S: Suite> Instance<S> {
             handoff.set_verification_matrix(vm)?;
         }
 
-        let y = block_on(client.churp_share_reduction_point(
+        let mut bytes = block_on(client.churp_share_reduction_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let y = scalar_from_bytes(&y).ok_or(Error::PointDecodingFailed)?;
+        let maybe_y = scalar_from_bytes(&bytes);
+        bytes.zeroize();
+        let y = maybe_y.ok_or(Error::PointDecodingFailed)?;
         let point = SwitchPoint::new(x, y);
 
         handoff.add_share_reduction_switch_point(point)
@@ -680,13 +682,15 @@ impl<S: Suite> Instance<S> {
         }
 
         // Fetch from the remote node.
-        let bytes = block_on(client.churp_share_distribution_point(
+        let mut bytes = block_on(client.churp_share_distribution_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let y = scalar_from_bytes(&bytes).ok_or(Error::PointDecodingFailed)?;
+        let maybe_y = scalar_from_bytes(&bytes);
+        bytes.zeroize();
+        let y = maybe_y.ok_or(Error::PointDecodingFailed)?;
         let point = SwitchPoint::new(x, y);
 
         handoff.add_full_share_distribution_switch_point(point)
@@ -737,7 +741,7 @@ impl<S: Suite> Instance<S> {
             return Err(Error::InvalidVerificationMatrixChecksum.into());
         }
 
-        let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
+        let verifiable_share: VerifiableSecretShare<S::Group> = (&share).try_into()?;
 
         handoff.add_bivariate_share(&x, verifiable_share)
     }
@@ -787,7 +791,7 @@ impl<S: Suite> Instance<S> {
                     .load_next_secret_share(self.churp_id, epoch)
                     .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
-                // // Back up the secret share, if it is valid.
+                // Back up the secret share, if it is valid.
                 if let Some(share) = share.as_ref() {
                     self.storage
                         .store_secret_share(share, self.churp_id, epoch)?;
@@ -1246,8 +1250,9 @@ impl<S: Suite> Handler for Instance<S> {
 
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let shareholder = self.get_shareholder(status.handoff)?;
-        let y = shareholder.switch_point(&x);
+        let mut y = shareholder.switch_point(&x);
         let bytes = scalar_to_bytes(&y);
+        y.zeroize();
 
         Ok(bytes)
     }
@@ -1278,8 +1283,9 @@ impl<S: Suite> Handler for Instance<S> {
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let handoff = self.get_handoff(status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
+        let mut y = shareholder.switch_point(&x);
+        let point = scalar_to_bytes(&y);
+        y.zeroize();
 
         Ok(point)
     }

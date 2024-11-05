@@ -167,6 +167,12 @@ pub struct EncodedVerifiableSecretShare {
     pub verification_matrix: Vec<u8>,
 }
 
+impl Zeroize for EncodedVerifiableSecretShare {
+    fn zeroize(&mut self) {
+        self.share.zeroize();
+    }
+}
+
 impl<G> From<&VerifiableSecretShare<G>> for EncodedVerifiableSecretShare
 where
     G: Group + GroupEncoding,
@@ -180,15 +186,15 @@ where
     }
 }
 
-impl<G> TryFrom<EncodedVerifiableSecretShare> for VerifiableSecretShare<G>
+impl<G> TryFrom<&EncodedVerifiableSecretShare> for VerifiableSecretShare<G>
 where
     G: Group + GroupEncoding,
     G::Scalar: Zeroize,
 {
     type Error = Error;
 
-    fn try_from(encoded: EncodedVerifiableSecretShare) -> Result<Self, Self::Error> {
-        let share = encoded.share.try_into()?;
+    fn try_from(encoded: &EncodedVerifiableSecretShare) -> Result<Self, Self::Error> {
+        let share = (&encoded.share).try_into()?;
         let vm = VerificationMatrix::from_bytes(&encoded.verification_matrix)
             .ok_or(Error::VerificationMatrixDecodingFailed)?;
         let verifiable_share = VerifiableSecretShare::new(share, vm);
@@ -206,6 +212,12 @@ pub struct EncodedSecretShare {
     pub polynomial: Vec<u8>,
 }
 
+impl Zeroize for EncodedSecretShare {
+    fn zeroize(&mut self) {
+        self.polynomial.zeroize();
+    }
+}
+
 impl<F> From<&SecretShare<F>> for EncodedSecretShare
 where
     F: PrimeField + Zeroize,
@@ -218,13 +230,13 @@ where
     }
 }
 
-impl<F> TryFrom<EncodedSecretShare> for SecretShare<F>
+impl<F> TryFrom<&EncodedSecretShare> for SecretShare<F>
 where
     F: PrimeField + Zeroize,
 {
     type Error = Error;
 
-    fn try_from(encoded: EncodedSecretShare) -> Result<Self, Self::Error> {
+    fn try_from(encoded: &EncodedSecretShare) -> Result<Self, Self::Error> {
         let x = scalar_from_bytes(&encoded.x).ok_or(Error::IdentityDecodingFailed)?;
         let p =
             Polynomial::from_bytes(&encoded.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
