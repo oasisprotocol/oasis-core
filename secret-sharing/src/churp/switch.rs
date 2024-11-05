@@ -460,19 +460,20 @@ where
             return Err(Error::NotEnoughSwitchPoints.into());
         }
 
-        let points: Vec<_> = self.points[0..self.n].iter().map(|p| &p.0).collect();
-        let p = lagrange(&points);
         let x = self.me.take().ok_or(Error::ShareholderIdentityRequired)?;
         let vm = self.vm.take().ok_or(Error::VerificationMatrixRequired)?;
-        let share: SecretShare<<G as Group>::Scalar> = SecretShare::new(x, p);
+        let points: Vec<_> = self.points[0..self.n].iter().map(|p| &p.0).collect();
+        let p = lagrange(&points);
+        let share = SecretShare::new(x, p);
         let verifiable_share = VerifiableSecretShare::new(share, vm);
-        let shareholder: Shareholder<G> = verifiable_share.into();
 
-        if shareholder.verifiable_share().polynomial().size() != self.n {
+        // Intentionally verifying the size of the polynomial at the end
+        // to ensure that it is zeroized in case of an error.
+        if verifiable_share.polynomial().size() != self.n {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
 
-        Ok(shareholder)
+        Ok(verifiable_share.into())
     }
 }
 

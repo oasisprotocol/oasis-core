@@ -74,9 +74,8 @@ where
         let vm = vm + &self.verifiable_share.vm;
         let share = SecretShare::new(x, p);
         let verifiable_share = VerifiableSecretShare::new(share, vm);
-        let shareholder = verifiable_share.into();
 
-        Ok(shareholder)
+        Ok(verifiable_share.into())
     }
 }
 
