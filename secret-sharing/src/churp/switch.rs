@@ -184,27 +184,28 @@ where
             _ => return Err(Error::InvalidState.into()),
         };
 
-        let done = sp.add_point(x, bij)?;
-        if done {
-            let shareholder = sp.reconstruct_shareholder()?;
-            let shareholder = Arc::new(shareholder);
-
-            if self.shareholders.is_empty() {
-                *state = DimensionSwitchState::Serving(shareholder);
-            } else {
-                let bs = BivariateShares::new(
-                    self.threshold,
-                    self.zero_hole,
-                    self.full_share,
-                    self.me,
-                    self.shareholders.clone(),
-                    Some(shareholder),
-                )?;
-                *state = DimensionSwitchState::Merging(bs);
-            }
+        if !sp.add_point(x, bij)? {
+            return Ok(false);
         }
 
-        Ok(done)
+        let shareholder = sp.reconstruct_shareholder()?;
+        let shareholder = Arc::new(shareholder);
+
+        if self.shareholders.is_empty() {
+            *state = DimensionSwitchState::Serving(shareholder);
+        } else {
+            let bs = BivariateShares::new(
+                self.threshold,
+                self.zero_hole,
+                self.full_share,
+                self.me,
+                self.shareholders.clone(),
+                Some(shareholder),
+            )?;
+            *state = DimensionSwitchState::Merging(bs);
+        }
+
+        Ok(true)
     }
 
     /// Checks if the switch is waiting for a shareholder.
