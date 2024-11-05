@@ -1,5 +1,3 @@
-use std::iter::zip;
-
 use anyhow::{bail, Result};
 use group::ff::PrimeField;
 use zeroize::Zeroize;
@@ -29,9 +27,14 @@ impl Player {
             bail!("not distinct shares");
         }
 
-        let (xs, ys): (Vec<F>, Vec<&F>) = shares.iter().map(|s| (s.x(), s.y())).unzip();
+        let xs = shares.iter().map(|s| *s.x()).collect::<Vec<_>>();
         let cs = lagrange::coefficients(&xs);
-        let secret = zip(cs, ys).map(|(c, y)| c * y).sum();
+        let mut secret = F::ZERO;
+        for (mut ci, share) in cs.into_iter().zip(shares) {
+            ci *= share.y();
+            secret += &ci;
+            ci.zeroize();
+        }
 
         Ok(secret)
     }
