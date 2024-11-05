@@ -38,7 +38,7 @@ use secret_sharing::{
         HandoffKind, Shareholder, VerifiableSecretShare,
     },
     kdc::KeySharer,
-    poly::{scalar_from_bytes, scalar_to_bytes},
+    poly::{scalar_from_bytes, scalar_to_bytes, Point},
     suites::{p384, Suite},
     vss::VerificationMatrix,
 };
@@ -608,7 +608,8 @@ impl<S: Suite> Instance<S> {
         // Fetch from the host node.
         if node_id == self.node_id {
             let shareholder = self.get_shareholder(status.handoff)?;
-            let point = shareholder.switch_point(&x);
+            let y = shareholder.switch_point(&x);
+            let point = Point::new(x, y);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
@@ -616,7 +617,7 @@ impl<S: Suite> Instance<S> {
                 handoff.set_verification_matrix(vm)?;
             }
 
-            return handoff.add_share_reduction_switch_point(x, point);
+            return handoff.add_share_reduction_switch_point(point);
         }
 
         // Fetch from the remote node.
@@ -638,15 +639,16 @@ impl<S: Suite> Instance<S> {
             handoff.set_verification_matrix(vm)?;
         }
 
-        let point = block_on(client.churp_share_reduction_point(
+        let y = block_on(client.churp_share_reduction_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+        let y = scalar_from_bytes(&y).ok_or(Error::PointDecodingFailed)?;
+        let point = Point::new(x, y);
 
-        handoff.add_share_reduction_switch_point(x, point)
+        handoff.add_share_reduction_switch_point(point)
     }
 
     /// Tries to fetch switch point for share reduction from the given node.
@@ -666,21 +668,23 @@ impl<S: Suite> Instance<S> {
         // Fetch from the host node.
         if node_id == self.node_id {
             let shareholder = handoff.get_reduced_shareholder()?;
-            let point = shareholder.switch_point(&x);
+            let y = shareholder.switch_point(&x);
+            let point = Point::new(x, y);
 
-            return handoff.add_full_share_distribution_switch_point(x, point);
+            return handoff.add_full_share_distribution_switch_point(point);
         }
 
         // Fetch from the remote node.
-        let point = block_on(client.churp_share_distribution_point(
+        let bytes = block_on(client.churp_share_distribution_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+        let y = scalar_from_bytes(&bytes).ok_or(Error::PointDecodingFailed)?;
+        let point = Point::new(x, y);
 
-        handoff.add_full_share_distribution_switch_point(x, point)
+        handoff.add_full_share_distribution_switch_point(point)
     }
 
     /// Tries to fetch proactive bivariate share from the given node.
@@ -1237,10 +1241,10 @@ impl<S: Suite> Handler for Instance<S> {
 
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let shareholder = self.get_shareholder(status.handoff)?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
+        let y = shareholder.switch_point(&x);
+        let bytes = scalar_to_bytes(&y);
 
-        Ok(point)
+        Ok(bytes)
     }
 
     fn share_distribution_switch_point(

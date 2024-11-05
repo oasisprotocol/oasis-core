@@ -3,7 +3,7 @@
 use group::ff::PrimeField;
 use zeroize::Zeroize;
 
-use crate::poly::Polynomial;
+use crate::poly::{Point, Polynomial};
 
 /// Returns the Lagrange interpolation polynomial for the given set of points.
 ///
@@ -16,16 +16,15 @@ use crate::poly::Polynomial;
 /// # Panics
 ///
 /// Panics if the x-coordinates are not unique.
-pub fn lagrange_naive<F>(xs: &[F], ys: &[F]) -> Polynomial<F>
+pub fn lagrange_naive<F>(points: &[Point<F>]) -> Polynomial<F>
 where
     F: PrimeField + Zeroize,
 {
-    debug_assert!(xs.len() == ys.len());
-
-    let ls = basis_polynomials_naive(xs);
+    let xs: Vec<_> = points.iter().map(|p| p.x).collect();
+    let ls = basis_polynomials_naive(&xs);
     let mut l = Polynomial::default();
-    for (mut li, yi) in ls.into_iter().zip(ys) {
-        li *= yi;
+    for (mut li, point) in ls.into_iter().zip(points) {
+        li *= &point.y;
         l += &li;
         li.zeroize();
     }
@@ -123,10 +122,10 @@ mod tests {
 
     use self::test::Bencher;
 
-    use std::iter::zip;
-
     use group::ff::Field;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
+
+    use crate::poly::Point;
 
     use super::{
         basis_polynomial_naive, basis_polynomials_naive, coefficient_naive, coefficients_naive,
@@ -153,22 +152,31 @@ mod tests {
         (0..n).map(|_| PrimeField::random(&mut rng)).collect()
     }
 
+    fn random_points(n: usize, mut rng: &mut impl RngCore) -> Vec<Point<PrimeField>> {
+        let mut points = Vec::with_capacity(n);
+        for _ in 0..n {
+            let x = PrimeField::random(&mut rng);
+            let y = PrimeField::random(&mut rng);
+            let point = Point::new(x, y);
+            points.push(point);
+        }
+        points
+    }
+
     #[test]
     fn test_lagrange_naive() {
-        // Prepare points (x, 2**x + 1).
+        // Prepare random points.
         let n = 10;
-        let xs: Vec<_> = (1..=n as i64).collect();
-        let ys: Vec<_> = (1..=n as u32).map(|x| 1 + 2_i64.pow(x)).collect();
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let points = random_points(n, &mut rng);
 
         // Test polynomials of different degrees.
         for size in 1..=n {
-            let xs = scalars(&xs[..size]);
-            let ys = scalars(&ys[..size]);
-            let p = lagrange_naive(&xs, &ys);
+            let p = lagrange_naive(&points[..size]);
 
             // Verify zeros.
-            for (x, y) in zip(xs, ys) {
-                assert_eq!(p.eval(&x), y);
+            for point in &points[..size] {
+                assert_eq!(p.eval(&point.x), point.y);
             }
 
             // Verify degree.
@@ -223,11 +231,10 @@ mod tests {
 
     fn bench_lagrange_naive(b: &mut Bencher, n: usize) {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let xs = random_scalars(n, &mut rng);
-        let ys = random_scalars(n, &mut rng);
+        let points = random_points(n, &mut rng);
 
         b.iter(|| {
-            let _p = lagrange_naive(&xs, &ys);
+            let _p = lagrange_naive(&points);
         });
     }
 
