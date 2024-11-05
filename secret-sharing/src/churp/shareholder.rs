@@ -1,6 +1,6 @@
 //! CHURP shareholder.
 
-use std::ops::AddAssign;
+use std::ops::{AddAssign, Deref};
 
 use anyhow::Result;
 use group::{
@@ -50,7 +50,7 @@ where
 
     /// Computes switch point for the given shareholder.
     pub fn switch_point(&self, x: &G::Scalar) -> G::Scalar {
-        self.verifiable_share.share.p.eval(x)
+        self.verifiable_share.p.eval(x)
     }
 
     /// Creates a new shareholder with a proactivized secret polynomial.
@@ -59,7 +59,7 @@ where
         p: &Polynomial<G::Scalar>,
         vm: &VerificationMatrix<G>,
     ) -> Result<Shareholder<G>> {
-        if p.size() != self.verifiable_share.share.p.size() {
+        if p.size() != self.verifiable_share.p.size() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
         if !vm.is_zero_hole() {
@@ -69,8 +69,8 @@ where
             return Err(Error::VerificationMatrixDimensionMismatch.into());
         }
 
-        let x = self.verifiable_share.share.x;
-        let p = p + &self.verifiable_share.share.p;
+        let x = self.verifiable_share.x;
+        let p = p + &self.verifiable_share.p;
         let vm = vm + &self.verifiable_share.vm;
         let share = SecretShare::new(x, p);
         let verifiable_share = VerifiableSecretShare::new(share, vm);
@@ -96,11 +96,11 @@ where
     G::Scalar: Zeroize,
 {
     fn coordinate_x(&self) -> &G::Scalar {
-        self.verifiable_share.share.coordinate_x()
+        self.verifiable_share.x()
     }
 
     fn coordinate_y(&self) -> &G::Scalar {
-        self.verifiable_share.share.coordinate_y()
+        self.verifiable_share.y()
     }
 }
 
@@ -138,13 +138,13 @@ where
 
     /// Returns the x-coordinate of a point on the secret-sharing
     /// univariate polynomial B(x,0) or B(0,y).
-    pub fn coordinate_x(&self) -> &F {
+    pub fn x(&self) -> &F {
         &self.x
     }
 
     /// Returns the y-coordinate of a point on the secret-sharing
     /// univariate polynomial B(x,0) or B(0,y).
-    pub fn coordinate_y(&self) -> &F {
+    pub fn y(&self) -> &F {
         self.p
             .coefficient(0)
             .expect("polynomial has at least one term")
@@ -268,14 +268,14 @@ where
             if self.share.p.size() != cols {
                 return Err(Error::PolynomialDegreeMismatch.into());
             }
-            if !self.vm.verify_x(&self.share.x, &self.share.p) {
+            if !self.vm.verify_x(&self.x, &self.p) {
                 return Err(Error::InvalidPolynomial.into());
             }
         } else {
-            if self.share.p.size() != rows {
+            if self.p.size() != rows {
                 return Err(Error::PolynomialDegreeMismatch.into());
             }
-            if !self.vm.verify_y(&self.share.x, &self.share.p) {
+            if !self.vm.verify_y(&self.x, &self.p) {
                 return Err(Error::InvalidPolynomial.into());
             }
         }
@@ -289,6 +289,18 @@ where
         let rows: usize = threshold as usize + 1;
         let cols = threshold as usize * 2 + 1;
         (rows, cols)
+    }
+}
+
+impl<G> Deref for VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
+    type Target = SecretShare<G::Scalar>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.share
     }
 }
 

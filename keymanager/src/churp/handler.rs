@@ -817,7 +817,7 @@ impl<S: Suite> Instance<S> {
 
         // Verify that the host hasn't changed.
         let me = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
-        if share.secret_share().coordinate_x() != &me {
+        if share.x() != &me {
             return Err(Error::InvalidHost.into());
         }
 

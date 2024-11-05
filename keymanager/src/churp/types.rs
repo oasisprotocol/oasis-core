@@ -212,7 +212,7 @@ where
 {
     fn from(share: &SecretShare<F>) -> Self {
         Self {
-            x: scalar_to_bytes(share.coordinate_x()),
+            x: scalar_to_bytes(share.x()),
             polynomial: share.polynomial().to_bytes(),
         }
     }

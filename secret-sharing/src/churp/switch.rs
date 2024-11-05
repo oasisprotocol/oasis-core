@@ -468,13 +468,7 @@ where
         let verifiable_share = VerifiableSecretShare::new(share, vm);
         let shareholder: Shareholder<G> = verifiable_share.into();
 
-        if shareholder
-            .verifiable_share()
-            .secret_share()
-            .polynomial()
-            .size()
-            != self.n
-        {
+        if shareholder.verifiable_share().polynomial().size() != self.n {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
 
@@ -511,7 +505,7 @@ where
     shareholder: Option<Arc<Shareholder<G>>>,
 
     /// The sum of the received verifiable bivariate shares.
-    verifiable_share: Option<VerifiableSecretShare<G>>,
+    combined_share: Option<VerifiableSecretShare<G>>,
 }
 
 impl<G> BivariateShares<G>
@@ -542,7 +536,7 @@ where
             shareholders,
             pending_shareholders,
             shareholder,
-            verifiable_share: None,
+            combined_share: None,
         })
     }
 
@@ -572,15 +566,15 @@ where
             return Err(Error::DuplicateShareholder.into());
         }
 
-        if verifiable_share.share.x != self.me {
+        if verifiable_share.x() != &self.me {
             return Err(Error::ShareholderIdentityMismatch.into());
         }
         verifiable_share.verify(self.threshold, self.zero_hole, self.full_share)?;
 
-        if let Some(ref mut vs) = self.verifiable_share {
-            *vs += &verifiable_share;
+        if let Some(ref mut cs) = self.combined_share {
+            *cs += &verifiable_share;
         } else {
-            self.verifiable_share = Some(verifiable_share);
+            self.combined_share = Some(verifiable_share);
         }
 
         let index = self
@@ -602,14 +596,16 @@ where
             return Err(Error::NotEnoughBivariateShares.into());
         }
 
-        let vs = self
-            .verifiable_share
+        let verifiable_share = self
+            .combined_share
             .take()
             .ok_or(Error::ShareholderProactivizationCompleted)?;
 
         let shareholder = match &self.shareholder {
-            Some(shareholder) => shareholder.proactivize(&vs.share.p, &vs.vm)?,
-            None => vs.into(),
+            Some(shareholder) => {
+                shareholder.proactivize(&verifiable_share.p, &verifiable_share.vm)?
+            }
+            None => verifiable_share.into(),
         };
 
         // Ensure that the combined bivariate polynomial satisfies

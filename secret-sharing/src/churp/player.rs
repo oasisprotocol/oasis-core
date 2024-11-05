@@ -29,10 +29,7 @@ impl Player {
             bail!("not distinct shares");
         }
 
-        let (xs, ys): (Vec<F>, Vec<&F>) = shares
-            .iter()
-            .map(|s| (s.coordinate_x(), s.coordinate_y()))
-            .unzip();
+        let (xs, ys): (Vec<F>, Vec<&F>) = shares.iter().map(|s| (s.x(), s.y())).unzip();
         let cs = lagrange::coefficients(&xs);
         let secret = zip(cs, ys).map(|(c, y)| c * y).sum();
 
@@ -54,7 +51,7 @@ impl Player {
         // suffice, and it doesn't require the prime field to be hashable.
         for i in 0..shares.len() {
             for j in (i + 1)..shares.len() {
-                if shares[i].coordinate_x() == shares[j].coordinate_x() {
+                if shares[i].x() == shares[j].x() {
                     return false;
                 }
             }

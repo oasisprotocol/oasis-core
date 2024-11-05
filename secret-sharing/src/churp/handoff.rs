@@ -576,7 +576,7 @@ mod tests {
             // Share reduction.
             let num_points = threshold as usize + 1;
             for (j, shareholder) in shareholders.iter().take(num_points).enumerate() {
-                let bob = shareholder.verifiable_share().share.x;
+                let bob = shareholder.verifiable_share().x;
 
                 assert!(handoff.needs_share_reduction_switch_point(&bob).unwrap());
                 let bij = shareholder.switch_point(alice);
@@ -634,7 +634,7 @@ mod tests {
             // Share distribution.
             let num_points = 2 * threshold as usize + 1;
             for (j, shareholder) in shareholders.iter().take(num_points).enumerate() {
-                let bob = shareholder.verifiable_share().share.x;
+                let bob = shareholder.verifiable_share().x;
 
                 assert!(handoff
                     .needs_full_share_distribution_switch_point(&bob)
