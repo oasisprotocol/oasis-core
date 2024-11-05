@@ -42,6 +42,7 @@ use secret_sharing::{
     suites::{p384, Suite},
     vss::VerificationMatrix,
 };
+use zeroize::Zeroize;
 
 use crate::{
     beacon::State as BeaconState,
@@ -105,7 +106,11 @@ const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 const ALLOWED_BLOCKS_BEHIND: u64 = 5;
 
 /// Represents information about a dealer.
-struct DealerInfo<G: Group> {
+struct DealerInfo<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The epoch during which this dealer is active.
     epoch: EpochTime,
     /// The dealer associated with this information.

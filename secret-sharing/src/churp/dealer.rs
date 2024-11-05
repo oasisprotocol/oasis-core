@@ -16,7 +16,11 @@ use super::{Error, HandoffKind, SecretShare};
 /// Shares must always be distributed over a secure channel and verified
 /// against the matrix. Recovering the secret bivariate polynomial requires
 /// obtaining more than a threshold number of shares from distinct participants.
-pub struct Dealer<G: Group> {
+pub struct Dealer<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Secret bivariate polynomial.
     bp: BivariatePolynomial<G::Scalar>,
 
@@ -164,11 +168,22 @@ where
 impl<G> From<BivariatePolynomial<G::Scalar>> for Dealer<G>
 where
     G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new dealer from the given bivariate polynomial.
     fn from(bp: BivariatePolynomial<G::Scalar>) -> Self {
         let vm = VerificationMatrix::from(&bp);
         Self { bp, vm }
+    }
+}
+
+impl<G> Drop for Dealer<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
+    fn drop(&mut self) {
+        self.bp.zeroize();
     }
 }
 
