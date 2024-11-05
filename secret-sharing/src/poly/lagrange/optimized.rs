@@ -1,6 +1,5 @@
-use std::iter::zip;
-
 use group::ff::PrimeField;
+use zeroize::Zeroize;
 
 use crate::poly::Polynomial;
 
@@ -17,10 +16,21 @@ use super::multiplier::Multiplier;
 /// # Panics
 ///
 /// Panics if the x-coordinates are not unique.
-pub fn lagrange<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
+pub fn lagrange<F>(xs: &[F], ys: &[F]) -> Polynomial<F>
+where
+    F: PrimeField + Zeroize,
+{
     debug_assert!(xs.len() == ys.len());
+
     let ls = basis_polynomials(xs);
-    zip(ls, ys).map(|(li, &yi)| li * yi).sum()
+    let mut l = Polynomial::default();
+    for (mut li, yi) in ls.into_iter().zip(ys) {
+        li *= yi;
+        l += &li;
+        li.zeroize();
+    }
+
+    l
 }
 
 /// Returns Lagrange basis polynomials for the given set of x-coordinates.
