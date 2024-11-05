@@ -18,6 +18,16 @@ where
     pub fn new(x: F, y: F) -> Self {
         Self { x, y }
     }
+
+    /// Returns the x-coordinate of the point.
+    pub fn x(&self) -> &F {
+        &self.x
+    }
+
+    /// Returns the y-coordinate of the point.
+    pub fn y(&self) -> &F {
+        &self.y
+    }
 }
 
 impl<F> Zeroize for Point<F>
