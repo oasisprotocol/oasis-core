@@ -1,9 +1,8 @@
 //! Key derivation center.
 
-use std::iter::zip;
-
 use anyhow::{bail, Result};
 use group::{ff::PrimeField, Group};
+use zeroize::Zeroize;
 
 use crate::{
     poly::{lagrange, EncryptedPoint},
@@ -57,7 +56,10 @@ pub trait KeyRecoverer {
     fn min_shares(&self) -> usize;
 
     /// Recovers the secret key from the provided key shares.
-    fn recover_key<G: Group>(&self, shares: &[EncryptedPoint<G>]) -> Result<G> {
+    fn recover_key<G>(&self, shares: &[EncryptedPoint<G>]) -> Result<G>
+    where
+        G: Group + Zeroize,
+    {
         if shares.len() < self.min_shares() {
             bail!("not enough shares");
         }
@@ -65,9 +67,16 @@ pub trait KeyRecoverer {
             bail!("not distinct shares");
         }
 
-        let (xs, zs): (Vec<_>, Vec<_>) = shares.iter().map(|p| (p.x, p.z)).unzip();
+        let xs = shares.iter().map(|s| *s.x()).collect::<Vec<_>>();
         let cs = lagrange::coefficients(&xs);
-        let key = zip(cs, zs).map(|(c, z)| z * c).sum();
+        let mut key = G::identity();
+
+        for (ci, share) in cs.into_iter().zip(shares) {
+            let mut zi = *share.z();
+            zi *= ci;
+            key += &zi;
+            zi.zeroize();
+        }
 
         Ok(key)
     }

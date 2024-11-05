@@ -34,13 +34,14 @@ pub trait Suite:
     type PrimeField: PrimeField + Zeroize;
 
     /// The type representing an element of a cryptographic group.
-    type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
+    type Group: Group<Scalar = Self::PrimeField> + GroupEncoding + Zeroize;
 }
 
 impl<S> Suite for S
 where
     S: FieldDigest + GroupDigest,
     <S as GroupDigest>::Output: Group<Scalar = <S as FieldDigest>::Output> + GroupEncoding,
+    <S as GroupDigest>::Output: Zeroize,
     <S as FieldDigest>::Output: Zeroize,
 {
     type PrimeField = <S as FieldDigest>::Output;
