@@ -47,7 +47,7 @@ import (
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
+	workerRegistration "github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
@@ -86,7 +86,7 @@ type Node struct {
 	ClientWorker       *workerClient.Worker
 	SentryWorker       *workerSentry.Worker
 	P2P                p2pAPI.Service
-	RegistrationWorker *registration.Worker
+	RegistrationWorker *workerRegistration.Worker
 	KeymanagerWorker   *workerKeymanager.Worker
 	BeaconWorker       *workerBeacon.Worker
 	readyCh            chan struct{}
@@ -257,7 +257,7 @@ func (n *Node) initRuntimeWorkers() error {
 	workerCommonCfg := n.CommonWorker.GetConfig()
 
 	// Initialize the registration worker.
-	n.RegistrationWorker, err = registration.New(
+	n.RegistrationWorker, err = workerRegistration.New(
 		n.Consensus.Beacon(),
 		n.Consensus.Registry(),
 		n.Identity,
@@ -269,7 +269,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.RuntimeRegistry,
 	)
 	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
-		registration.DebugForceAllowUnroutableAddresses()
+		workerRegistration.DebugForceAllowUnroutableAddresses()
 	}
 	if err != nil {
 		n.logger.Error("failed to initialize worker registration",
