@@ -219,8 +219,33 @@ func (bnd *Bundle) MrSigner(id component.ID) (*sgx.MrSigner, error) {
 	return &mrSigner, nil
 }
 
-// EnclaveIdentity returns the SGX enclave identity of the given component.
+// EnclaveIdentity returns the enclave identity of the given component.
+//
+// Deprecated: Use EnclaveIdentities instead.
 func (bnd *Bundle) EnclaveIdentity(id component.ID) (*sgx.EnclaveIdentity, error) {
+	ids, err := bnd.EnclaveIdentities(id)
+	if err != nil {
+		return nil, err
+	}
+	return &ids[0], nil
+}
+
+// EnclaveIdentities returns the enclave identities of the given component.
+func (bnd *Bundle) EnclaveIdentities(id component.ID) ([]sgx.EnclaveIdentity, error) {
+	// If the component has a build-time known expected identity, use it.
+	comp := bnd.Manifest.GetComponentByID(id)
+	if comp == nil {
+		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
+	}
+	if len(comp.Identities) > 0 {
+		ids := make([]sgx.EnclaveIdentity, 0, len(comp.Identities))
+		for _, id := range comp.Identities {
+			ids = append(ids, id.Enclave)
+		}
+		return ids, nil
+	}
+
+	// When not available, recompute at runtime (only supported for SGX).
 	mrEnclave, err := bnd.MrEnclave(id)
 	if err != nil {
 		return nil, err
@@ -231,9 +256,11 @@ func (bnd *Bundle) EnclaveIdentity(id component.ID) (*sgx.EnclaveIdentity, error
 		return nil, err
 	}
 
-	return &sgx.EnclaveIdentity{
-		MrEnclave: *mrEnclave,
-		MrSigner:  *mrSigner,
+	return []sgx.EnclaveIdentity{
+		{
+			MrEnclave: *mrEnclave,
+			MrSigner:  *mrSigner,
+		},
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
@@ -214,6 +215,15 @@ func (r *TDXResources) Validate() error {
 	return nil
 }
 
+// Identity is the cryptographic identity of a component.
+type Identity struct {
+	// Hypervisor is the optional hypervisor this identity is for.
+	Hypervisor string `json:"hypervisor,omitempty"`
+
+	// Enclave is the enclave identity.
+	Enclave sgx.EnclaveIdentity `json:"enclave"`
+}
+
 // Component is a runtime component.
 type Component struct {
 	// Kind is the component kind.
@@ -231,6 +241,13 @@ type Component struct {
 
 	// TDX is the TDX specific manifest metadata if any.
 	TDX *TDXMetadata `json:"tdx,omitempty"`
+
+	// Identities are the (optional) expected enclave identities. When not provided, it must be
+	// computed at runtime. In the future, this field will become required.
+	//
+	// Multiple identities may be provided because they can differ across different deployment
+	// systems (e.g. hypervisors).
+	Identities []Identity `json:"identity,omitempty"`
 
 	// Disabled specifies whether the component is disabled by default and needs to be explicitly
 	// enabled via node configuration to be used.

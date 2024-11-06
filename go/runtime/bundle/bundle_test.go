@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
@@ -39,6 +40,15 @@ func TestBundle(t *testing.T) {
 				Executable: "runtime.bin",
 				SGX: &SGXMetadata{
 					Executable: "runtime.sgx",
+				},
+				Identities: []Identity{
+					{
+						Hypervisor: "test",
+						Enclave: sgx.EnclaveIdentity{
+							MrSigner:  sgx.MrSigner{0x01},
+							MrEnclave: sgx.MrEnclave{0x02},
+						},
+					},
 				},
 			},
 		},
@@ -77,6 +87,13 @@ func TestBundle(t *testing.T) {
 		delete(bundle2.Data, manifestName)
 
 		ensureBundlesEqual(t, bundle, bundle2, "opened bundle mismatch")
+
+		// Test enclave identity is correct.
+		eids, err := bundle2.EnclaveIdentities(component.ID_RONL)
+		require.NoError(t, err, "EnclaveIdentities")
+		require.Len(t, eids, 1)
+		require.Equal(t, "0100000000000000000000000000000000000000000000000000000000000000", eids[0].MrSigner.String())
+		require.Equal(t, "0200000000000000000000000000000000000000000000000000000000000000", eids[0].MrEnclave.String())
 	})
 
 	t.Run("ResetManifest", func(t *testing.T) {
