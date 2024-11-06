@@ -312,14 +312,8 @@ func newConfig( //nolint: gocyclo
 
 			// Get any local runtime configuration.
 			var localConfig map[string]interface{}
-			if config.GlobalConfig.Runtime.RuntimeConfig != nil {
-				if lcRaw, ok := config.GlobalConfig.Runtime.RuntimeConfig[id.String()]; ok {
-					if lc, ok := lcRaw.(map[string]interface{}); ok {
-						localConfig = lc
-					} else {
-						return nil, fmt.Errorf("malformed runtime configuration for runtime %s", id.String())
-					}
-				}
+			if lc, ok := config.GlobalConfig.Runtime.RuntimeConfig[id.String()]; ok {
+				localConfig = lc
 			}
 
 			rtBnd := &runtimeHost.RuntimeBundle{
@@ -432,7 +426,7 @@ func newConfig( //nolint: gocyclo
 	}
 
 	cfg.History.PruneInterval = config.GlobalConfig.Runtime.Prune.Interval
-	const minPruneInterval = 1 * time.Second
+	const minPruneInterval = time.Second
 	if cfg.History.PruneInterval < minPruneInterval {
 		cfg.History.PruneInterval = minPruneInterval
 	}

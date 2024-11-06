@@ -296,7 +296,7 @@ func (n *Node) Start() error {
 
 		if hosted.localConfig != nil {
 			if n.Config.Runtime.RuntimeConfig == nil {
-				n.Config.Runtime.RuntimeConfig = make(map[string]interface{})
+				n.Config.Runtime.RuntimeConfig = make(map[string]map[string]interface{})
 			}
 			n.Config.Runtime.RuntimeConfig[hosted.runtime.ID().String()] = hosted.localConfig
 		}
