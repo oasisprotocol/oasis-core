@@ -57,8 +57,8 @@ type RuntimeConfig struct {
 	// It may be nil if no runtimes are configured.
 	Provisioner runtimeHost.Provisioner
 
-	// Pruner is the runtime history pruner factory to use.
-	Pruner history.PrunerFactory
+	// History is the runtime history factory to use.
+	History history.Factory
 }
 
 // RuntimeIDs returns a list of configured runtime IDs.
@@ -407,19 +407,37 @@ func newRuntimeConfig( //nolint: gocyclo
 		}
 	}
 
+	history, err := createHistoryFactory()
+	if err != nil {
+		return nil, err
+	}
+	cfg.History = history
+
+	return &cfg, nil
+}
+
+func createHistoryFactory() (history.Factory, error) {
+	var pruneFactory history.PrunerFactory
 	strategy := config.GlobalConfig.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
-		cfg.Pruner = history.NewNonePrunerFactory()
+		pruneFactory = history.NewNonePrunerFactory()
 	case history.PrunerStrategyKeepLast:
 		numKept := config.GlobalConfig.Runtime.Prune.NumKept
 		pruneInterval := max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
-		cfg.Pruner = history.NewKeepLastPrunerFactory(numKept, pruneInterval)
+		pruneFactory = history.NewKeepLastPrunerFactory(numKept, pruneInterval)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
 
-	return &cfg, nil
+	// Archive node won't commit any new blocks, so disable waiting for storage
+	// sync commits.
+	mode := config.GlobalConfig.Mode
+	hasLocalStorage := mode.HasLocalStorage() && !mode.IsArchive()
+
+	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
+
+	return historyFactory, nil
 }
 
 func init() {

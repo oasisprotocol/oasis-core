@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -407,6 +406,8 @@ type runtimeRegistry struct {
 	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
+
+	historyFactory history.Factory
 }
 
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
@@ -520,9 +521,7 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	rt.managed = true
 
 	// Create runtime history keeper.
-	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
-	haveLocalStorageWorker := config.GlobalConfig.Mode.HasLocalStorage() && config.GlobalConfig.Mode != config.ModeArchive
-	history, err := history.New(id, rt.dataDir, r.cfg.Pruner, haveLocalStorageWorker)
+	history, err := r.historyFactory(id, rt.dataDir)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
@@ -596,17 +595,23 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
+	historyFactory, err := createHistoryFactory()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg, err := newRuntimeConfig(dataDir, commonStore, identity, consensus, ias)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &runtimeRegistry{
-		logger:    logging.GetLogger("runtime/registry"),
-		dataDir:   dataDir,
-		cfg:       cfg,
-		consensus: consensus,
-		runtimes:  make(map[common.Namespace]*runtime),
+		logger:         logging.GetLogger("runtime/registry"),
+		dataDir:        dataDir,
+		cfg:            cfg,
+		consensus:      consensus,
+		runtimes:       make(map[common.Namespace]*runtime),
+		historyFactory: historyFactory,
 	}
 
 	for _, id := range cfg.RuntimeIDs() {
