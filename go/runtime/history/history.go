@@ -40,7 +40,7 @@ type Config struct {
 // NewDefaultConfig returns the default runtime history keeper config.
 func NewDefaultConfig() *Config {
 	return &Config{
-		Pruner:        NewNonePruner(),
+		Pruner:        NewNonePrunerFactory(),
 		PruneInterval: 10 * time.Second,
 	}
 }
@@ -113,7 +113,7 @@ func (h *nopHistory) GetRoundResults(context.Context, uint64) (*roothash.RoundRe
 }
 
 func (h *nopHistory) Pruner() Pruner {
-	pruner, _ := NewNonePruner()(nil)
+	pruner, _ := NewNonePrunerFactory()(h.runtimeID, nil)
 	return pruner
 }
 
@@ -392,9 +392,9 @@ func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStora
 		cfg = NewDefaultConfig()
 	}
 	if cfg.Pruner == nil {
-		cfg.Pruner = NewNonePruner()
+		cfg.Pruner = NewNonePrunerFactory()
 	}
-	pruner, err := cfg.Pruner(db)
+	pruner, err := cfg.Pruner(runtimeID, db)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +403,7 @@ func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStora
 
 	h := &runtimeHistory{
 		runtimeID:              runtimeID,
-		logger:                 logging.GetLogger("roothash/history").With("runtime_id", runtimeID),
+		logger:                 logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
 		ctx:                    ctx,
 		cancelCtx:              cancelCtx,
 		db:                     db,

@@ -410,10 +410,10 @@ func newRuntimeConfig( //nolint: gocyclo
 	strategy := config.GlobalConfig.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
-		cfg.History.Pruner = history.NewNonePruner()
+		cfg.History.Pruner = history.NewNonePrunerFactory()
 	case history.PrunerStrategyKeepLast:
 		numKept := config.GlobalConfig.Runtime.Prune.NumKept
-		cfg.History.Pruner = history.NewKeepLastPruner(numKept)
+		cfg.History.Pruner = history.NewKeepLastPrunerFactory(numKept)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}

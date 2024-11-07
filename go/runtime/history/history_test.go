@@ -306,7 +306,7 @@ func TestHistoryPrune(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune test ns"), 0)
 
 	history, err := New(dataDir, runtimeID, &Config{
-		Pruner:        NewKeepLastPruner(10),
+		Pruner:        NewKeepLastPrunerFactory(10),
 		PruneInterval: 100 * time.Millisecond,
 	}, true)
 	require.NoError(err, "New")
@@ -415,7 +415,7 @@ func TestHistoryPruneError(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune error test ns"), 0)
 
 	history, err := New(dataDir, runtimeID, &Config{
-		Pruner:        NewKeepLastPruner(10),
+		Pruner:        NewKeepLastPrunerFactory(10),
 		PruneInterval: 100 * time.Millisecond,
 	}, true)
 	require.NoError(err, "New")

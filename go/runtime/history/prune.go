@@ -6,6 +6,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
@@ -20,7 +21,7 @@ const (
 )
 
 // PrunerFactory is the runtime history pruner factory interface.
-type PrunerFactory func(db *DB) (Pruner, error)
+type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
 // PruneHandler is a handler that is called when rounds are pruned
 // from history.
@@ -72,9 +73,15 @@ func (p *nonePruner) Prune(uint64) error {
 }
 
 // NewNonePruner creates a new pruner that never prunes anything.
-func NewNonePruner() PrunerFactory {
-	return func(_ *DB) (Pruner, error) {
-		return &nonePruner{}, nil
+func NewNonePruner() Pruner {
+	return &nonePruner{}
+}
+
+// NewNonePrunerFactory creates a new pruner factory for pruners that never
+// prune anything.
+func NewNonePrunerFactory() PrunerFactory {
+	return func(_ common.Namespace, _ *DB) (Pruner, error) {
+		return NewNonePruner(), nil
 	}
 }
 
@@ -159,13 +166,19 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 
 // NewKeepLastPruner creates a pruner that keeps the last configured
 // number of rounds.
-func NewKeepLastPruner(numKept uint64) PrunerFactory {
-	return func(db *DB) (Pruner, error) {
-		return &keepLastPruner{
-			prunerBase: newPrunerBase(),
-			logger:     logging.GetLogger("history/prune/keep_last"),
-			db:         db,
-			numKept:    numKept,
-		}, nil
+func NewKeepLastPruner(runtimeID common.Namespace, numKept uint64, db *DB) (Pruner, error) {
+	return &keepLastPruner{
+		prunerBase: newPrunerBase(),
+		logger:     logging.GetLogger("runtime/prune/keep_last").With("runtime_id", runtimeID),
+		db:         db,
+		numKept:    numKept,
+	}, nil
+}
+
+// NewKeepLastPrunerFactory creates a new pruner factory for pruners that keep
+// the last configured number of rounds.
+func NewKeepLastPrunerFactory(numKept uint64) PrunerFactory {
+	return func(runtimeID common.Namespace, db *DB) (Pruner, error) {
+		return NewKeepLastPruner(runtimeID, numKept, db)
 	}
 }
