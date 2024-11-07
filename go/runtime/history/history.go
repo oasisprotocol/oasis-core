@@ -28,6 +28,9 @@ var (
 	_ History = (*runtimeHistory)(nil)
 )
 
+// Factory is the runtime history factory interface.
+type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
+
 // History is the runtime history interface.
 type History interface {
 	roothash.BlockHistory
@@ -365,7 +368,7 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(dataDir string, runtimeID common.Namespace, prunerFactory PrunerFactory, haveLocalStorageWorker bool) (History, error) {
+func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, haveLocalStorageWorker bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
@@ -391,7 +394,15 @@ func New(dataDir string, runtimeID common.Namespace, prunerFactory PrunerFactory
 		stopCh:                 make(chan struct{}),
 		quitCh:                 make(chan struct{}),
 	}
+
 	go h.pruneWorker()
 
 	return h, nil
+}
+
+// NewFactory creates a new runtime history keeper factory.
+func NewFactory(prunerFactory PrunerFactory, haveLocalStorageWorker bool) Factory {
+	return func(runtimeID common.Namespace, dataDir string) (History, error) {
+		return New(runtimeID, dataDir, prunerFactory, haveLocalStorageWorker)
+	}
 }

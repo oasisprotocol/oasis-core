@@ -30,7 +30,7 @@ func TestHistory(t *testing.T) {
 	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"), 0)
 
 	prunerFactory := NewNonePrunerFactory()
-	history, err := New(dataDir, runtimeID, prunerFactory, true)
+	history, err := New(runtimeID, dataDir, prunerFactory, true)
 	require.NoError(err, "New")
 
 	require.Equal(runtimeID, history.RuntimeID())
@@ -142,10 +142,10 @@ func TestHistory(t *testing.T) {
 
 	// Try to manually load the block index database with incorrect runtime ID.
 	// Use path from the first runtime.
-	_, err = New(dataDir, runtimeID2, prunerFactory, true)
+	_, err = New(runtimeID2, dataDir, prunerFactory, true)
 	require.Error(err, "New should return an error on runtime mismatch")
 
-	history, err = New(dataDir, runtimeID, prunerFactory, true)
+	history, err = New(runtimeID, dataDir, prunerFactory, true)
 	require.NoError(err, "New")
 
 	require.Equal(runtimeID, history.RuntimeID())
@@ -212,7 +212,7 @@ func TestWatchBlocks(t *testing.T) {
 
 	// Test history with local storage.
 	prunerFactory := NewNonePrunerFactory()
-	history, err := New(dataDir, runtimeID, prunerFactory, true)
+	history, err := New(runtimeID, dataDir, prunerFactory, true)
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
@@ -248,7 +248,7 @@ func TestWatchBlocks(t *testing.T) {
 	dataDir2, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir2)
-	history, err = New(dataDir2, runtimeID, prunerFactory, false)
+	history, err = New(runtimeID, dataDir2, prunerFactory, false)
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
@@ -308,7 +308,7 @@ func TestHistoryPrune(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune test ns"), 0)
 
 	pruneFactory := NewKeepLastPrunerFactory(10, 100*time.Millisecond)
-	history, err := New(dataDir, runtimeID, pruneFactory, true)
+	history, err := New(runtimeID, dataDir, pruneFactory, true)
 	require.NoError(err, "New")
 	defer history.Close()
 
@@ -415,7 +415,7 @@ func TestHistoryPruneError(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune error test ns"), 0)
 
 	pruneFactory := NewKeepLastPrunerFactory(10, 100*time.Millisecond)
-	history, err := New(dataDir, runtimeID, pruneFactory, true)
+	history, err := New(runtimeID, dataDir, pruneFactory, true)
 	require.NoError(err, "New")
 	defer history.Close()
 
