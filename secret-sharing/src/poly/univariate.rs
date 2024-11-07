@@ -7,6 +7,7 @@ use std::{
 use group::ff::PrimeField;
 use rand_core::RngCore;
 use subtle::{Choice, CtOption};
+use zeroize::Zeroize;
 
 use crate::poly::powers;
 
@@ -23,7 +24,7 @@ use crate::poly::powers;
 /// degree are consistently represented by vectors of the same size, resulting
 /// in encodings of equal length.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Polynomial<F> {
+pub struct Polynomial<F: PrimeField> {
     pub(crate) a: Vec<F>,
 }
 
@@ -237,7 +238,7 @@ where
 
 impl<F> AddAssign for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     #[inline]
     fn add_assign(&mut self, rhs: Polynomial<F>) {
@@ -247,9 +248,16 @@ where
 
 impl<F> AddAssign<&Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn add_assign(&mut self, rhs: &Polynomial<F>) {
+        if self.a.capacity() < rhs.a.len() {
+            let mut a = Vec::with_capacity(rhs.a.len());
+            a.extend_from_slice(&self.a);
+            self.a.zeroize();
+            self.a = a;
+        }
+
         let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
@@ -320,7 +328,7 @@ where
 
 impl<F> SubAssign for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     #[inline]
     fn sub_assign(&mut self, rhs: Polynomial<F>) {
@@ -330,9 +338,16 @@ where
 
 impl<F> SubAssign<&Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sub_assign(&mut self, rhs: &Polynomial<F>) {
+        if self.a.capacity() < rhs.a.len() {
+            let mut a = Vec::with_capacity(rhs.a.len());
+            a.extend_from_slice(&self.a);
+            self.a.zeroize();
+            self.a = a;
+        }
+
         let min_len = min(self.a.len(), rhs.a.len());
 
         for i in 0..min_len {
@@ -416,7 +431,7 @@ where
     F: PrimeField,
 {
     fn mul_assign(&mut self, rhs: &Polynomial<F>) {
-        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 2);
+        let mut a = Vec::with_capacity(self.a.len() + rhs.a.len() - 1);
         for i in 0..self.a.len() {
             for j in 0..rhs.a.len() {
                 let aij = self.a[i] * rhs.a[j];
@@ -509,7 +524,7 @@ where
 
 impl<F> Sum for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sum<I: Iterator<Item = Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
@@ -520,12 +535,23 @@ where
 
 impl<'a, F> Sum<&'a Polynomial<F>> for Polynomial<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     fn sum<I: Iterator<Item = &'a Polynomial<F>>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum
+    }
+}
+
+impl<F> Zeroize for Polynomial<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        for ai in self.a.iter_mut() {
+            ai.zeroize();
+        }
     }
 }
 

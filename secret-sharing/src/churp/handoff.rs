@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use group::{Group, GroupEncoding};
+use group::Group;
+use zeroize::Zeroize;
 
 use crate::vss::VerificationMatrix;
 
-use super::{DimensionSwitch, Error, Shareholder, VerifiableSecretShare};
+use super::{DimensionSwitch, Error, Shareholder, SwitchPoint, VerifiableSecretShare};
 
 /// Handoff kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,7 +83,11 @@ impl HandoffKind {
 /// shares among committee members, or proactivizes an existing secret by
 /// randomizing the shares while transferring the secret from an old committee
 /// to a new, possibly intersecting one.
-pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
+pub trait Handoff<G>: Send + Sync
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Checks if the handoff needs the verification matrix from the previous
     /// handoff.
     fn needs_verification_matrix(&self) -> Result<bool> {
@@ -111,7 +116,7 @@ pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
     }
 
     /// Adds the given switch point to share reduction.
-    fn add_share_reduction_switch_point(&self, _x: G::Scalar, _bij: G::Scalar) -> Result<bool> {
+    fn add_share_reduction_switch_point(&self, _point: SwitchPoint<G::Scalar>) -> Result<bool> {
         Err(Error::InvalidKind.into())
     }
 
@@ -124,8 +129,7 @@ pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
     /// Adds the given switch point to full share distribution.
     fn add_full_share_distribution_switch_point(
         &self,
-        _x: G::Scalar,
-        _bij: G::Scalar,
+        _point: SwitchPoint<G::Scalar>,
     ) -> Result<bool> {
         Err(Error::InvalidKind.into())
     }
@@ -157,14 +161,19 @@ pub trait Handoff<G: Group + GroupEncoding>: Send + Sync {
 
 /// A handoff where the committee collaboratively generates a random secret
 /// and secret shares.
-pub struct DealingPhase<G: Group + GroupEncoding> {
+pub struct DealingPhase<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The share distribution phase of the handoff.
     share_distribution: DimensionSwitch<G>,
 }
 
 impl<G> DealingPhase<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new handoff where the given shareholders will generate
     /// a random secret and receive corresponding secret shares.
@@ -190,7 +199,8 @@ where
 
 impl<G> Handoff<G> for DealingPhase<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
         self.share_distribution.needs_bivariate_share(x)
@@ -213,14 +223,19 @@ where
 /// A handoff where the committee remains the same. During this handoff,
 /// committee members randomize their secret shares without altering
 /// the shared secret.
-pub struct CommitteeUnchanged<G: Group + GroupEncoding> {
+pub struct CommitteeUnchanged<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The share distribution phase of the handoff.
     share_distribution: DimensionSwitch<G>,
 }
 
 impl<G> CommitteeUnchanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new handoff where the secret shares of the given shareholders
     /// will be randomized.
@@ -241,7 +256,8 @@ where
 
 impl<G> Handoff<G> for CommitteeUnchanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     fn needs_shareholder(&self) -> Result<bool> {
         Ok(self.share_distribution.is_waiting_for_shareholder())
@@ -271,7 +287,11 @@ where
 
 /// A handoff where the committee changes. During this handoff, committee
 /// members transfer the shared secret to the new committee.
-pub struct CommitteeChanged<G: Group + GroupEncoding> {
+pub struct CommitteeChanged<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The share reduction phase of the handoff.
     share_reduction: DimensionSwitch<G>,
 
@@ -281,7 +301,8 @@ pub struct CommitteeChanged<G: Group + GroupEncoding> {
 
 impl<G> CommitteeChanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new handoff where the shared secret will be transferred
     /// to a new committee composed of the given shareholders.
@@ -305,7 +326,8 @@ where
 
 impl<G> Handoff<G> for CommitteeChanged<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     fn needs_verification_matrix(&self) -> Result<bool> {
         Ok(self.share_reduction.is_waiting_for_verification_matrix())
@@ -319,8 +341,8 @@ where
         self.share_reduction.needs_switch_point(x)
     }
 
-    fn add_share_reduction_switch_point(&self, x: G::Scalar, bij: G::Scalar) -> Result<bool> {
-        self.share_reduction.add_switch_point(x, bij)
+    fn add_share_reduction_switch_point(&self, point: SwitchPoint<G::Scalar>) -> Result<bool> {
+        self.share_reduction.add_switch_point(point)
     }
 
     fn needs_full_share_distribution_switch_point(&self, x: &G::Scalar) -> Result<bool> {
@@ -329,10 +351,9 @@ where
 
     fn add_full_share_distribution_switch_point(
         &self,
-        x: G::Scalar,
-        bij: G::Scalar,
+        point: SwitchPoint<G::Scalar>,
     ) -> Result<bool> {
-        self.share_distribution.add_switch_point(x, bij)
+        self.share_distribution.add_switch_point(point)
     }
 
     fn needs_bivariate_share(&self, x: &G::Scalar) -> Result<bool> {
@@ -379,7 +400,7 @@ mod tests {
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use crate::{
-        churp::{self, Handoff, HandoffKind, VerifiableSecretShare},
+        churp::{self, Handoff, HandoffKind, SwitchPoint, VerifiableSecretShare},
         suites::{self, p384},
     };
 
@@ -555,13 +576,12 @@ mod tests {
             // Share reduction.
             let num_points = threshold as usize + 1;
             for (j, shareholder) in shareholders.iter().take(num_points).enumerate() {
-                let bob = shareholder.verifiable_share().share.x;
+                let bob = shareholder.verifiable_share().x;
 
                 assert!(handoff.needs_share_reduction_switch_point(&bob).unwrap());
                 let bij = shareholder.switch_point(alice);
-                let done = handoff
-                    .add_share_reduction_switch_point(bob.clone(), bij)
-                    .unwrap();
+                let point = SwitchPoint::new(bob.clone(), bij);
+                let done = handoff.add_share_reduction_switch_point(point).unwrap();
 
                 if j + 1 < num_points {
                     // Accumulation still in progress.
@@ -614,14 +634,15 @@ mod tests {
             // Share distribution.
             let num_points = 2 * threshold as usize + 1;
             for (j, shareholder) in shareholders.iter().take(num_points).enumerate() {
-                let bob = shareholder.verifiable_share().share.x;
+                let bob = shareholder.verifiable_share().x;
 
                 assert!(handoff
                     .needs_full_share_distribution_switch_point(&bob)
                     .unwrap());
                 let bij = shareholder.switch_point(&alice);
+                let point = SwitchPoint::new(bob.clone(), bij);
                 let done = handoff
-                    .add_full_share_distribution_switch_point(bob.clone(), bij)
+                    .add_full_share_distribution_switch_point(point)
                     .unwrap();
 
                 if j + 1 < num_points {

@@ -1,4 +1,5 @@
 use group::{ff::PrimeField, Group};
+use zeroize::Zeroize;
 
 /// A point (x,y) on a univariate polynomial f(x), where y = f(x).
 #[derive(Clone)]
@@ -16,6 +17,26 @@ where
     /// Creates a new point.
     pub fn new(x: F, y: F) -> Self {
         Self { x, y }
+    }
+
+    /// Returns the x-coordinate of the point.
+    pub fn x(&self) -> &F {
+        &self.x
+    }
+
+    /// Returns the y-coordinate of the point.
+    pub fn y(&self) -> &F {
+        &self.y
+    }
+}
+
+impl<F> Zeroize for Point<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        self.x.zeroize();
+        self.y.zeroize();
     }
 }
 
@@ -46,5 +67,16 @@ impl<G: Group> EncryptedPoint<G> {
     /// Returns the y-coordinate of the point in encrypted form.
     pub fn z(&self) -> &G {
         &self.z
+    }
+}
+
+impl<G> Zeroize for EncryptedPoint<G>
+where
+    G: Group + Zeroize,
+    G::Scalar: Zeroize,
+{
+    fn zeroize(&mut self) {
+        self.x.zeroize();
+        self.z.zeroize();
     }
 }

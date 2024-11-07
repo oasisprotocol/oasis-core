@@ -5,7 +5,7 @@ use crate::poly::{Point, Polynomial};
 
 /// A holder of the secret-sharing polynomial responsible for generating
 /// secret shares.
-pub struct Dealer<F> {
+pub struct Dealer<F: PrimeField> {
     /// The secret-sharing polynomial where the coefficient of the constant
     /// term represents the shared secret.
     poly: Polynomial<F>,

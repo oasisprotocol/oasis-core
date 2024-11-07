@@ -1,10 +1,13 @@
 //! CHURP shareholder.
 
+use std::ops::{AddAssign, Deref};
+
 use anyhow::Result;
 use group::{
     ff::{Field, PrimeField},
-    Group, GroupEncoding,
+    Group,
 };
+use zeroize::Zeroize;
 
 use crate::{
     kdc::PointShareholder, poly::Polynomial, suites::FieldDigest, vss::VerificationMatrix,
@@ -26,20 +29,20 @@ pub fn encode_shareholder<H: FieldDigest>(id: &[u8], dst: &[u8]) -> Result<H::Ou
 /// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Shareholder<G: Group + GroupEncoding> {
+pub struct Shareholder<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Verifiable secret (full or reduced) share of the shared secret.
     verifiable_share: VerifiableSecretShare<G>,
 }
 
 impl<G> Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
-    /// Creates a new shareholder.
-    pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
-        VerifiableSecretShare::new(share, vm).into()
-    }
-
     /// Returns the verifiable secret share.
     pub fn verifiable_share(&self) -> &VerifiableSecretShare<G> {
         &self.verifiable_share
@@ -47,7 +50,7 @@ where
 
     /// Computes switch point for the given shareholder.
     pub fn switch_point(&self, x: &G::Scalar) -> G::Scalar {
-        self.verifiable_share.share.p.eval(x)
+        self.verifiable_share.p.eval(x)
     }
 
     /// Creates a new shareholder with a proactivized secret polynomial.
@@ -56,7 +59,7 @@ where
         p: &Polynomial<G::Scalar>,
         vm: &VerificationMatrix<G>,
     ) -> Result<Shareholder<G>> {
-        if p.size() != self.verifiable_share.share.p.size() {
+        if p.size() != self.verifiable_share.p.size() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
         if !vm.is_zero_hole() {
@@ -66,19 +69,20 @@ where
             return Err(Error::VerificationMatrixDimensionMismatch.into());
         }
 
-        let x = self.verifiable_share.share.x;
-        let p = p + &self.verifiable_share.share.p;
+        let x = self.verifiable_share.x;
+        let p = p + &self.verifiable_share.p;
         let vm = vm + &self.verifiable_share.vm;
         let share = SecretShare::new(x, p);
-        let shareholder = Shareholder::new(share, vm);
+        let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-        Ok(shareholder)
+        Ok(verifiable_share.into())
     }
 }
 
 impl<G> From<VerifiableSecretShare<G>> for Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     fn from(verifiable_share: VerifiableSecretShare<G>) -> Shareholder<G> {
         Shareholder { verifiable_share }
@@ -87,19 +91,23 @@ where
 
 impl<G> PointShareholder<G::Scalar> for Shareholder<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     fn coordinate_x(&self) -> &G::Scalar {
-        self.verifiable_share.share.coordinate_x()
+        self.verifiable_share.x()
     }
 
     fn coordinate_y(&self) -> &G::Scalar {
-        self.verifiable_share.share.coordinate_y()
+        self.verifiable_share.y()
     }
 }
 
 /// Secret share of the shared secret.
-pub struct SecretShare<F: PrimeField> {
+pub struct SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
     /// The encoded identity of the shareholder.
     ///
     /// The identity is the x-coordinate of a point on the secret-sharing
@@ -115,7 +123,7 @@ pub struct SecretShare<F: PrimeField> {
 
 impl<F> SecretShare<F>
 where
-    F: PrimeField,
+    F: PrimeField + Zeroize,
 {
     /// Creates a new secret share.
     pub fn new(x: F, p: Polynomial<F>) -> Self {
@@ -129,21 +137,54 @@ where
 
     /// Returns the x-coordinate of a point on the secret-sharing
     /// univariate polynomial B(x,0) or B(0,y).
-    pub fn coordinate_x(&self) -> &F {
+    pub fn x(&self) -> &F {
         &self.x
     }
 
     /// Returns the y-coordinate of a point on the secret-sharing
     /// univariate polynomial B(x,0) or B(0,y).
-    pub fn coordinate_y(&self) -> &F {
+    pub fn y(&self) -> &F {
         self.p
             .coefficient(0)
             .expect("polynomial has at least one term")
     }
 }
 
+impl<F> AddAssign for SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: SecretShare<F>) {
+        *self += &rhs
+    }
+}
+
+impl<F> AddAssign<&SecretShare<F>> for SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn add_assign(&mut self, rhs: &SecretShare<F>) {
+        debug_assert!(self.x == rhs.x);
+        self.p += &rhs.p;
+    }
+}
+
+impl<F> Drop for SecretShare<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn drop(&mut self) {
+        self.p.zeroize();
+    }
+}
+
 /// Verifiable secret share of the shared secret.
-pub struct VerifiableSecretShare<G: Group + GroupEncoding> {
+pub struct VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// Secret (full or reduced) share of the shared secret.
     pub(crate) share: SecretShare<G::Scalar>,
 
@@ -155,7 +196,8 @@ pub struct VerifiableSecretShare<G: Group + GroupEncoding> {
 
 impl<G> VerifiableSecretShare<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new verifiable secret share.
     pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
@@ -225,14 +267,14 @@ where
             if self.share.p.size() != cols {
                 return Err(Error::PolynomialDegreeMismatch.into());
             }
-            if !self.vm.verify_x(&self.share.x, &self.share.p) {
+            if !self.vm.verify_x(&self.x, &self.p) {
                 return Err(Error::InvalidPolynomial.into());
             }
         } else {
-            if self.share.p.size() != rows {
+            if self.p.size() != rows {
                 return Err(Error::PolynomialDegreeMismatch.into());
             }
-            if !self.vm.verify_y(&self.share.x, &self.share.p) {
+            if !self.vm.verify_y(&self.x, &self.p) {
                 return Err(Error::InvalidPolynomial.into());
             }
         }
@@ -246,5 +288,39 @@ where
         let rows: usize = threshold as usize + 1;
         let cols = threshold as usize * 2 + 1;
         (rows, cols)
+    }
+}
+
+impl<G> Deref for VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
+    type Target = SecretShare<G::Scalar>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.share
+    }
+}
+
+impl<G> AddAssign for VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: VerifiableSecretShare<G>) {
+        *self += &rhs
+    }
+}
+
+impl<G> AddAssign<&VerifiableSecretShare<G>> for VerifiableSecretShare<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
+    fn add_assign(&mut self, rhs: &VerifiableSecretShare<G>) {
+        self.share += &rhs.share;
+        self.vm += &rhs.vm;
     }
 }

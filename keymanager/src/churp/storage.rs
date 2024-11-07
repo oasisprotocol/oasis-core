@@ -8,12 +8,16 @@ use sgx_isa::Keypolicy;
 
 use oasis_core_runtime::{
     common::{
-        crypto::mrae::nonce::{Nonce, NONCE_SIZE},
+        crypto::mrae::{
+            deoxysii::TAG_SIZE,
+            nonce::{Nonce, NONCE_SIZE},
+        },
         sgx::seal::new_deoxysii,
     },
     consensus::beacon::EpochTime,
     storage::KeyValue,
 };
+use zeroize::Zeroize;
 
 use super::{EncodedVerifiableSecretShare, Error};
 
@@ -74,11 +78,15 @@ impl Storage {
 
     /// Loads and decrypts a secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_secret_share<G: Group + GroupEncoding>(
+    pub fn load_secret_share<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<VerifiableSecretShare<G>>> {
+    ) -> Result<Option<VerifiableSecretShare<G>>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -91,12 +99,16 @@ impl Storage {
 
     /// Encrypts and stores the provided secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_secret_share<G: Group + GroupEncoding>(
+    pub fn store_secret_share<G>(
         &self,
         share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -106,11 +118,15 @@ impl Storage {
 
     /// Loads and decrypts the next secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_next_secret_share<G: Group + GroupEncoding>(
+    pub fn load_next_secret_share<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<VerifiableSecretShare<G>>> {
+    ) -> Result<Option<VerifiableSecretShare<G>>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -123,12 +139,16 @@ impl Storage {
 
     /// Encrypts and stores the provided next secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_next_secret_share<G: Group + GroupEncoding>(
+    pub fn store_next_secret_share<G>(
         &self,
         share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -138,17 +158,33 @@ impl Storage {
 
     /// Encrypts and authenticates the given bivariate polynomial
     /// using the provided ID and handoff epoch as additional data.
+    #[allow(clippy::uninit_vec)]
     fn encrypt_bivariate_polynomial<F: PrimeField>(
         polynomial: &BivariatePolynomial<F>,
         churp_id: u8,
         epoch: EpochTime,
     ) -> Vec<u8> {
+        // Prepare data for encryption.
         let nonce = Nonce::generate();
-        let plaintext = polynomial.to_bytes();
+        let mut plaintext = polynomial.to_bytes();
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
+
+        // Encrypt data using `seal_into` so that we can zeroize the plaintext.
+        // The unsafe ciphertext buffer initialization was taken from the `seal`
+        // method to speed up encryption.
+        let mut ciphertext = Vec::with_capacity(plaintext.len() + TAG_SIZE + NONCE_SIZE);
+        unsafe { ciphertext.set_len(plaintext.len() + TAG_SIZE) }
+
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, BIVARIATE_POLYNOMIAL_SEAL_CONTEXT);
-        let mut ciphertext = d2.seal(&nonce, plaintext, additional_data);
+        d2.seal_into(&nonce, &plaintext, &additional_data, &mut ciphertext)
+            .unwrap();
+
+        // Zeroize sensitive data.
+        plaintext.zeroize();
+
+        // Append nonce to the ciphertext.
         ciphertext.extend_from_slice(&nonce.to_vec());
+
         ciphertext
     }
 
@@ -159,53 +195,100 @@ impl Storage {
         churp_id: u8,
         epoch: EpochTime,
     ) -> Result<BivariatePolynomial<F>> {
+        // Prepare data for decryption.
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
+
+        // Decrypt data.
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, BIVARIATE_POLYNOMIAL_SEAL_CONTEXT);
-        let plaintext = d2
+        let mut plaintext = d2
             .open(nonce, ciphertext, additional_data)
             .map_err(|_| Error::InvalidBivariatePolynomial)?;
 
-        BivariatePolynomial::from_bytes(&plaintext)
-            .ok_or(Error::BivariatePolynomialDecodingFailed.into())
+        // Decode bivariate polynomial.
+        let maybe_bp = BivariatePolynomial::from_bytes(&plaintext);
+
+        // Zeroize sensitive data on failure.
+        plaintext.zeroize();
+
+        maybe_bp.ok_or(Error::BivariatePolynomialDecodingFailed.into())
     }
 
     /// Encrypts and authenticates the given polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn encrypt_secret_share<G: Group + GroupEncoding>(
+    #[allow(clippy::uninit_vec)]
+    fn encrypt_secret_share<G>(
         verifiable_share: &VerifiableSecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Vec<u8> {
+    ) -> Vec<u8>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
+        // Prepare data for encryption.
         let share: EncodedVerifiableSecretShare = verifiable_share.into();
         let nonce: Nonce = Nonce::generate();
-        let plaintext = cbor::to_vec(share);
+        let mut plaintext = cbor::to_vec(share);
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
+
+        // Encrypt data using `seal_into` so that we can zeroize the plaintext.
+        // The unsafe ciphertext buffer initialization was taken from the `seal`
+        // method to speed up encryption.
+        let mut ciphertext = Vec::with_capacity(plaintext.len() + TAG_SIZE + NONCE_SIZE);
+        unsafe { ciphertext.set_len(plaintext.len() + TAG_SIZE) }
+
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, SECRET_SHARE_SEAL_CONTEXT);
-        let mut ciphertext = d2.seal(&nonce, plaintext, additional_data);
+        d2.seal_into(&nonce, &plaintext, &additional_data, &mut ciphertext)
+            .unwrap();
+
+        // Zeroize sensitive data.
+        plaintext.zeroize();
+
+        // Append nonce to the ciphertext.
         ciphertext.extend_from_slice(&nonce.to_vec());
+
         ciphertext
     }
 
     /// Decrypts and authenticates encrypted polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn decrypt_secret_share<G: Group + GroupEncoding>(
+    fn decrypt_secret_share<G>(
         ciphertext: &mut Vec<u8>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<VerifiableSecretShare<G>> {
+    ) -> Result<VerifiableSecretShare<G>>
+    where
+        G: Group + GroupEncoding,
+        G::Scalar: Zeroize,
+    {
+        // Prepare data for decryption.
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
+
+        // Decrypt data.
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, SECRET_SHARE_SEAL_CONTEXT);
-        let plaintext = d2
+        let mut plaintext = d2
             .open(nonce, ciphertext, additional_data)
             .map_err(|_| Error::InvalidSecretShare)?;
 
-        let encoded: EncodedVerifiableSecretShare =
-            cbor::from_slice(&plaintext).map_err(|_| Error::InvalidSecretShare)?;
-        let verifiable_share = encoded.try_into()?;
+        // Decode encoded share.
+        let maybe_encoded_share: Result<EncodedVerifiableSecretShare> =
+            cbor::from_slice(&plaintext).map_err(|_| Error::InvalidSecretShare.into());
 
-        Ok(verifiable_share)
+        // Zeroize sensitive data on failure.
+        plaintext.zeroize();
+
+        // Decode verifiable share.
+        let mut encoded_share = maybe_encoded_share?;
+        let maybe_verifiable_share = (&encoded_share)
+            .try_into()
+            .map_err(|_| Error::InvalidSecretShare.into());
+
+        // Zeroize sensitive data on failure.
+        encoded_share.zeroize();
+
+        maybe_verifiable_share
     }
 
     /// Creates storage key for the bivariate polynomial.

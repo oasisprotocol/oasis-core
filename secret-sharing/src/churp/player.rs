@@ -1,7 +1,6 @@
-use std::iter::zip;
-
 use anyhow::{bail, Result};
 use group::ff::PrimeField;
+use zeroize::Zeroize;
 
 use crate::{kdc::KeyRecoverer, poly::lagrange};
 
@@ -20,7 +19,7 @@ impl Player {
     }
 
     /// Recovers the secret from the provided shares.
-    pub fn recover_secret<F: PrimeField>(&self, shares: &[SecretShare<F>]) -> Result<F> {
+    pub fn recover_secret<F: PrimeField + Zeroize>(&self, shares: &[SecretShare<F>]) -> Result<F> {
         if shares.len() < self.min_shares() {
             bail!("not enough shares");
         }
@@ -28,12 +27,14 @@ impl Player {
             bail!("not distinct shares");
         }
 
-        let (xs, ys): (Vec<F>, Vec<&F>) = shares
-            .iter()
-            .map(|s| (s.coordinate_x(), s.coordinate_y()))
-            .unzip();
+        let xs = shares.iter().map(|s| *s.x()).collect::<Vec<_>>();
         let cs = lagrange::coefficients(&xs);
-        let secret = zip(cs, ys).map(|(c, y)| c * y).sum();
+        let mut secret = F::ZERO;
+        for (mut ci, share) in cs.into_iter().zip(shares) {
+            ci *= share.y();
+            secret += &ci;
+            ci.zeroize();
+        }
 
         Ok(secret)
     }
@@ -48,12 +49,12 @@ impl Player {
     }
 
     /// Returns true if shares are from distinct shareholders.
-    fn distinct_shares<F: PrimeField>(shares: &[SecretShare<F>]) -> bool {
+    fn distinct_shares<F: PrimeField + Zeroize>(shares: &[SecretShare<F>]) -> bool {
         // For a small number of shareholders, a brute-force approach should
         // suffice, and it doesn't require the prime field to be hashable.
         for i in 0..shares.len() {
             for j in (i + 1)..shares.len() {
-                if shares[i].coordinate_x() == shares[j].coordinate_x() {
+                if shares[i].x() == shares[j].x() {
                     return false;
                 }
             }
@@ -73,7 +74,7 @@ mod tests {
     use rand_core::OsRng;
 
     use crate::{
-        churp::{self, HandoffKind, Shareholder},
+        churp::{self, HandoffKind, Shareholder, VerifiableSecretShare},
         kdc::{KeyRecoverer, KeySharer},
         suites::{self, p384, GroupDigest},
     };
@@ -161,9 +162,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -180,9 +181,9 @@ mod tests {
                 .collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -197,9 +198,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()
@@ -213,9 +214,9 @@ mod tests {
             let xs = (1..=n).map(PrimeField::from_u64).collect();
             let shares = dealer.make_shares(xs, kind);
             let vm = dealer.verification_matrix();
-            let shareholders: Vec<_> = shares
+            let shareholders: Vec<Shareholder<_>> = shares
                 .into_iter()
-                .map(|share| Shareholder::new(share, vm.clone()))
+                .map(|share| VerifiableSecretShare::new(share, vm.clone()).into())
                 .collect();
             let key_shares: Vec<_> = shareholders
                 .iter()

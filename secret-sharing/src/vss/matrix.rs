@@ -1,4 +1,7 @@
-use std::{cmp::max, ops::Add};
+use std::{
+    cmp::max,
+    ops::{Add, AddAssign},
+};
 
 use group::{Group, GroupEncoding};
 use subtle::Choice;
@@ -23,10 +26,7 @@ use super::VerificationVector;
 ///     B(x,y) = \sum_{i=0}^{deg_x} \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationMatrix<G>
-where
-    G: Group + GroupEncoding,
-{
+pub struct VerificationMatrix<G: Group> {
     /// The number of rows in the verification matrix, determined by
     /// the degree of the bivariate polynomial in the `x` variable from
     /// which the matrix was constructed.
@@ -42,7 +42,7 @@ where
 
 impl<G> VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Returns the dimensions (number of rows and columns) of the verification
     /// matrix.
@@ -202,7 +202,12 @@ where
 
         verified.into()
     }
+}
 
+impl<G> VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
     /// Returns the byte representation of the verification matrix.
     pub fn to_bytes(&self) -> Vec<u8> {
         let cap = Self::byte_size(self.rows, self.cols);
@@ -275,7 +280,7 @@ where
 
 impl<G> From<&BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Constructs a new verification matrix from the given bivariate
     /// polynomial.
@@ -297,7 +302,7 @@ where
 
 impl<G> From<BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     /// Constructs a new verification matrix from the given bivariate
     /// polynomial.
@@ -308,18 +313,43 @@ where
 
 impl<G> Add for VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
-    type Output = Self;
+    type Output = VerificationMatrix<G>;
 
-    fn add(self, other: Self) -> Self {
-        &self + &other
+    #[inline]
+    fn add(self, rhs: Self) -> VerificationMatrix<G> {
+        &self + &rhs
+    }
+}
+
+impl<G> Add<&VerificationMatrix<G>> for VerificationMatrix<G>
+where
+    G: Group,
+{
+    type Output = VerificationMatrix<G>;
+
+    #[inline]
+    fn add(self, rhs: &VerificationMatrix<G>) -> VerificationMatrix<G> {
+        &self + rhs
+    }
+}
+
+impl<G> Add<VerificationMatrix<G>> for &VerificationMatrix<G>
+where
+    G: Group,
+{
+    type Output = VerificationMatrix<G>;
+
+    #[inline]
+    fn add(self, rhs: VerificationMatrix<G>) -> VerificationMatrix<G> {
+        self + &rhs
     }
 }
 
 impl<G> Add for &VerificationMatrix<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
 {
     type Output = VerificationMatrix<G>;
 
@@ -349,6 +379,34 @@ where
         }
 
         VerificationMatrix { rows, cols, m }
+    }
+}
+
+impl<G> AddAssign for VerificationMatrix<G>
+where
+    G: Group,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: VerificationMatrix<G>) {
+        *self += &rhs
+    }
+}
+
+impl<G> AddAssign<&VerificationMatrix<G>> for VerificationMatrix<G>
+where
+    G: Group,
+{
+    fn add_assign(&mut self, rhs: &VerificationMatrix<G>) {
+        if self.rows < rhs.rows || self.cols < rhs.cols {
+            *self = &*self + rhs;
+            return;
+        }
+
+        for i in 0..rhs.rows {
+            for j in 0..rhs.cols {
+                self.m[i][j] += rhs.m[i][j];
+            }
+        }
     }
 }
 
@@ -536,30 +594,67 @@ mod tests {
     }
 
     #[test]
-    fn test_add() {
-        let c1 = vec![scalars(&[1, 2, 3, 4]), scalars(&[5, 6, 7, 8])];
-        let c2 = vec![scalars(&[1, 2]), scalars(&[3, 4]), scalars(&[5, 6])];
-        let bp1 = BivariatePolynomial::with_coefficients(c1);
-        let bp2 = BivariatePolynomial::with_coefficients(c2);
-        let vm1 = VerificationMatrix::from(&bp1);
-        let vm2 = VerificationMatrix::from(&bp2);
-
-        let c = vec![
-            scalars(&[1 + 1, 2 + 2, 3, 4]),
-            scalars(&[5 + 3, 6 + 4, 7, 8]),
-            scalars(&[5, 6, 0, 0]),
+    pub fn test_add() {
+        let test_cases = vec![
+            // Same size.
+            (
+                vec![scalars(&[0, 1, 2]), scalars(&[3, 4, 5])],
+                vec![scalars(&[1, 3, 5]), scalars(&[0, 2, 4])],
+                vec![scalars(&[1, 4, 7]), scalars(&[3, 6, 9])],
+            ),
+            // LHS smaller.
+            (
+                vec![scalars(&[0, 1]), scalars(&[3, 4])],
+                vec![scalars(&[1, 3, 5]), scalars(&[0, 2, 4])],
+                vec![scalars(&[1, 4, 5]), scalars(&[3, 6, 4])],
+            ),
+            // RHS smaller.
+            (
+                vec![scalars(&[0, 1, 2]), scalars(&[3, 4, 5])],
+                vec![scalars(&[1, 3]), scalars(&[0, 2])],
+                vec![scalars(&[1, 4, 2]), scalars(&[3, 6, 5])],
+            ),
+            // Mixed size.
+            (
+                vec![scalars(&[1, 2, 3, 4]), scalars(&[5, 6, 7, 8])],
+                vec![scalars(&[1, 2]), scalars(&[3, 4]), scalars(&[5, 6])],
+                vec![
+                    scalars(&[2, 4, 3, 4]),
+                    scalars(&[8, 10, 7, 8]),
+                    scalars(&[5, 6, 0, 0]),
+                ],
+            ),
         ];
-        let bp = BivariatePolynomial::with_coefficients(c);
-        let vm = VerificationMatrix::from(&bp);
 
-        let sum = &vm1 + &vm2;
-        assert_eq!(sum.rows, 3);
-        assert_eq!(sum.cols, 4);
-        assert_eq!(sum, vm);
+        for (c1, c2, c3) in test_cases {
+            let bp1 = BivariatePolynomial::with_coefficients(c1);
+            let bp2 = BivariatePolynomial::with_coefficients(c2);
+            let bp3 = BivariatePolynomial::with_coefficients(c3);
+            let vm1 = VerificationMatrix::from(&bp1);
+            let vm2 = VerificationMatrix::from(&bp2);
+            let vm3 = VerificationMatrix::from(&bp3);
 
-        let sum = vm1 + vm2;
-        assert_eq!(sum.rows, 3);
-        assert_eq!(sum.cols, 4);
-        assert_eq!(sum, vm);
+            // Test add.
+            let sum = vm1.clone() + vm2.clone();
+            assert_eq!(sum, vm3);
+
+            let sum = vm1.clone() + &vm2.clone();
+            assert_eq!(sum, vm3);
+
+            let sum = &vm1.clone() + vm2.clone();
+            assert_eq!(sum, vm3);
+
+            let sum = &vm1.clone() + &vm2.clone();
+            assert_eq!(sum, vm3);
+
+            // Test add assign.
+            let mut sum = vm1.clone();
+            sum += vm2.clone();
+            assert_eq!(sum, vm3);
+
+            let mut sum = vm1.clone();
+            sum += &vm2.clone();
+            assert_eq!(sum, vm3);
+        }
     }
 }

@@ -35,13 +35,14 @@ use oasis_core_runtime::{
 use secret_sharing::{
     churp::{
         encode_shareholder, CommitteeChanged, CommitteeUnchanged, Dealer, DealingPhase, Handoff,
-        HandoffKind, Shareholder, VerifiableSecretShare,
+        HandoffKind, Shareholder, SwitchPoint, VerifiableSecretShare,
     },
     kdc::KeySharer,
     poly::{scalar_from_bytes, scalar_to_bytes},
     suites::{p384, Suite},
     vss::VerificationMatrix,
 };
+use zeroize::Zeroize;
 
 use crate::{
     beacon::State as BeaconState,
@@ -105,7 +106,11 @@ const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 const ALLOWED_BLOCKS_BEHIND: u64 = 5;
 
 /// Represents information about a dealer.
-struct DealerInfo<G: Group + GroupEncoding> {
+struct DealerInfo<G>
+where
+    G: Group,
+    G::Scalar: Zeroize,
+{
     /// The epoch during which this dealer is active.
     epoch: EpochTime,
     /// The dealer associated with this information.
@@ -113,7 +118,7 @@ struct DealerInfo<G: Group + GroupEncoding> {
 }
 
 /// Represents information about a handoff.
-struct HandoffInfo<G: Group + GroupEncoding> {
+struct HandoffInfo<G: Group> {
     /// The handoff epoch.
     epoch: EpochTime,
     /// The handoff associated with this information.
@@ -608,7 +613,8 @@ impl<S: Suite> Instance<S> {
         // Fetch from the host node.
         if node_id == self.node_id {
             let shareholder = self.get_shareholder(status.handoff)?;
-            let point = shareholder.switch_point(&x);
+            let y = shareholder.switch_point(&x);
+            let point = SwitchPoint::new(x, y);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
@@ -616,7 +622,7 @@ impl<S: Suite> Instance<S> {
                 handoff.set_verification_matrix(vm)?;
             }
 
-            return handoff.add_share_reduction_switch_point(x, point);
+            return handoff.add_share_reduction_switch_point(point);
         }
 
         // Fetch from the remote node.
@@ -638,15 +644,18 @@ impl<S: Suite> Instance<S> {
             handoff.set_verification_matrix(vm)?;
         }
 
-        let point = block_on(client.churp_share_reduction_point(
+        let mut bytes = block_on(client.churp_share_reduction_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+        let maybe_y = scalar_from_bytes(&bytes);
+        bytes.zeroize();
+        let y = maybe_y.ok_or(Error::PointDecodingFailed)?;
+        let point = SwitchPoint::new(x, y);
 
-        handoff.add_share_reduction_switch_point(x, point)
+        handoff.add_share_reduction_switch_point(point)
     }
 
     /// Tries to fetch switch point for share reduction from the given node.
@@ -666,21 +675,25 @@ impl<S: Suite> Instance<S> {
         // Fetch from the host node.
         if node_id == self.node_id {
             let shareholder = handoff.get_reduced_shareholder()?;
-            let point = shareholder.switch_point(&x);
+            let y = shareholder.switch_point(&x);
+            let point = SwitchPoint::new(x, y);
 
-            return handoff.add_full_share_distribution_switch_point(x, point);
+            return handoff.add_full_share_distribution_switch_point(point);
         }
 
         // Fetch from the remote node.
-        let point = block_on(client.churp_share_distribution_point(
+        let mut bytes = block_on(client.churp_share_distribution_point(
             self.churp_id,
             status.next_handoff,
             self.node_id,
             vec![node_id],
         ))?;
-        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+        let maybe_y = scalar_from_bytes(&bytes);
+        bytes.zeroize();
+        let y = maybe_y.ok_or(Error::PointDecodingFailed)?;
+        let point = SwitchPoint::new(x, y);
 
-        handoff.add_full_share_distribution_switch_point(x, point)
+        handoff.add_full_share_distribution_switch_point(point)
     }
 
     /// Tries to fetch proactive bivariate share from the given node.
@@ -728,7 +741,7 @@ impl<S: Suite> Instance<S> {
             return Err(Error::InvalidVerificationMatrixChecksum.into());
         }
 
-        let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
+        let verifiable_share: VerifiableSecretShare<S::Group> = (&share).try_into()?;
 
         handoff.add_bivariate_share(&x, verifiable_share)
     }
@@ -778,7 +791,7 @@ impl<S: Suite> Instance<S> {
                     .load_next_secret_share(self.churp_id, epoch)
                     .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
-                // // Back up the secret share, if it is valid.
+                // Back up the secret share, if it is valid.
                 if let Some(share) = share.as_ref() {
                     self.storage
                         .store_secret_share(share, self.churp_id, epoch)?;
@@ -813,7 +826,7 @@ impl<S: Suite> Instance<S> {
 
         // Verify that the host hasn't changed.
         let me = encode_shareholder::<S>(&self.node_id.0, &self.shareholder_dst)?;
-        if share.secret_share().coordinate_x() != &me {
+        if share.x() != &me {
             return Err(Error::InvalidHost.into());
         }
 
@@ -1237,10 +1250,11 @@ impl<S: Suite> Handler for Instance<S> {
 
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let shareholder = self.get_shareholder(status.handoff)?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
+        let mut y = shareholder.switch_point(&x);
+        let bytes = scalar_to_bytes(&y);
+        y.zeroize();
 
-        Ok(point)
+        Ok(bytes)
     }
 
     fn share_distribution_switch_point(
@@ -1269,8 +1283,9 @@ impl<S: Suite> Handler for Instance<S> {
         let x = encode_shareholder::<S>(&node_id.0, &self.shareholder_dst)?;
         let handoff = self.get_handoff(status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
-        let point = shareholder.switch_point(&x);
-        let point = scalar_to_bytes(&point);
+        let mut y = shareholder.switch_point(&x);
+        let point = scalar_to_bytes(&y);
+        y.zeroize();
 
         Ok(point)
     }

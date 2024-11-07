@@ -2630,6 +2630,7 @@ dependencies = [
  "sha3",
  "subtle",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]

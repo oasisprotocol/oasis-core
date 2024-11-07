@@ -1,19 +1,68 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
-use group::{Group, GroupEncoding};
+use group::{ff::PrimeField, Group};
+use zeroize::Zeroize;
 
 use crate::{
-    poly::{lagrange::lagrange, Polynomial},
+    poly::{lagrange::lagrange, Point},
     vss::{VerificationMatrix, VerificationVector},
 };
 
 use super::{Error, SecretShare, Shareholder, VerifiableSecretShare};
 
+/// A simple wrapper around point that is zeroized when dropped.
+pub struct SwitchPoint<F>(Point<F>)
+where
+    F: PrimeField + Zeroize;
+
+impl<F> SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    /// Creates a new switch point.
+    pub fn new(x: F, y: F) -> Self {
+        Self(Point::new(x, y))
+    }
+}
+
+impl<F> Deref for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    type Target = Point<F>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F> Zeroize for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<F> Drop for SwitchPoint<F>
+where
+    F: PrimeField + Zeroize,
+{
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 /// Dimension switch state.
 enum DimensionSwitchState<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Represents the state where the dimension switch is waiting for
     /// the verification matrix from the previous switch, which is needed
@@ -47,7 +96,8 @@ where
 /// A dimension switch based on a share resharing technique.
 pub struct DimensionSwitch<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
@@ -72,7 +122,8 @@ where
 
 impl<G> DimensionSwitch<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new share reduction dimension switch.
     ///
@@ -173,34 +224,37 @@ where
     ///
     /// Returns true if enough points have been received and the switch
     /// transitioned to the next state.
-    pub(crate) fn add_switch_point(&self, x: G::Scalar, bij: G::Scalar) -> Result<bool> {
+    pub(crate) fn add_switch_point(&self, point: SwitchPoint<G::Scalar>) -> Result<bool> {
         let mut state = self.state.lock().unwrap();
         let sp = match &mut *state {
             DimensionSwitchState::Accumulating(sp) => sp,
             _ => return Err(Error::InvalidState.into()),
         };
 
-        let done = sp.add_point(x, bij)?;
-        if done {
-            let shareholder = sp.reconstruct_shareholder()?;
-            let shareholder = Arc::new(shareholder);
+        sp.add_point(point)?;
 
-            if self.shareholders.is_empty() {
-                *state = DimensionSwitchState::Serving(shareholder);
-            } else {
-                let bs = BivariateShares::new(
-                    self.threshold,
-                    self.zero_hole,
-                    self.full_share,
-                    self.me,
-                    self.shareholders.clone(),
-                    Some(shareholder),
-                )?;
-                *state = DimensionSwitchState::Merging(bs);
-            }
+        if sp.needs_points() {
+            return Ok(false);
         }
 
-        Ok(done)
+        let shareholder = sp.reconstruct_shareholder()?;
+        let shareholder = Arc::new(shareholder);
+
+        if self.shareholders.is_empty() {
+            *state = DimensionSwitchState::Serving(shareholder);
+        } else {
+            let bs = BivariateShares::new(
+                self.threshold,
+                self.zero_hole,
+                self.full_share,
+                self.me,
+                self.shareholders.clone(),
+                Some(shareholder),
+            )?;
+            *state = DimensionSwitchState::Merging(bs);
+        }
+
+        Ok(true)
     }
 
     /// Checks if the switch is waiting for a shareholder.
@@ -281,10 +335,10 @@ where
 }
 
 /// An accumulator for switch points.
-#[derive(Debug)]
 pub struct SwitchPoints<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// The minimum number of distinct points required to reconstruct
     /// the polynomial.
@@ -309,17 +363,14 @@ where
     /// distribution phase.
     vv: VerificationVector<G>,
 
-    /// A list of encoded shareholders' identities whose points have been
-    /// received.
-    xs: Vec<G::Scalar>,
-
     /// A list of received switch points.
-    bijs: Vec<G::Scalar>,
+    points: Vec<SwitchPoint<G::Scalar>>,
 }
 
 impl<G> SwitchPoints<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new accumulator for switch points.
     fn new(
@@ -349,36 +400,41 @@ where
         let vm = Some(vm);
 
         // We need at least n points to reconstruct the polynomial share.
-        let xs = Vec::with_capacity(n);
-        let bijs = Vec::with_capacity(n);
+        let points = Vec::with_capacity(n);
 
         Ok(Self {
             n,
             me,
             vm,
             vv,
-            xs,
-            bijs,
+            points,
         })
+    }
+
+    /// Checks if a switch point has already been received from the given shareholder.
+    fn has_point(&self, x: &G::Scalar) -> bool {
+        self.points.iter().any(|p| &p.x == x)
     }
 
     /// Checks if a switch point is required from the given shareholder.
     fn needs_point(&self, x: &G::Scalar) -> bool {
-        if self.xs.len() >= self.n {
-            return false;
-        }
-        !self.xs.contains(x)
+        self.needs_points() && !self.has_point(x)
+    }
+
+    /// Checks if additional switch points are needed.
+    fn needs_points(&self) -> bool {
+        self.points.len() < self.n
     }
 
     /// Verifies and adds the given switch point.
     ///
     /// Returns true if enough points have been received; otherwise,
     /// it returns false.
-    fn add_point(&mut self, x: G::Scalar, bij: G::Scalar) -> Result<bool> {
-        if self.xs.len() >= self.n {
+    fn add_point(&mut self, point: SwitchPoint<G::Scalar>) -> Result<()> {
+        if self.points.len() >= self.n {
             return Err(Error::TooManySwitchPoints.into());
         }
-        if self.xs.contains(&x) {
+        if self.has_point(&point.x) {
             return Err(Error::DuplicateShareholder.into());
         }
 
@@ -386,16 +442,13 @@ where
         // If the point is valid, it doesn't matter if it came from a stranger.
         // However, since verification is costly, one could check if the point
         // came from a legitimate shareholder.
-        if !self.vv.verify(&x, &bij) {
+        if !self.vv.verify(&point.x, &point.y) {
             return Err(Error::InvalidSwitchPoint.into());
         }
 
-        self.xs.push(x);
-        self.bijs.push(bij);
+        self.points.push(point);
 
-        let done = self.xs.len() >= self.n;
-
-        Ok(done)
+        Ok(())
     }
 
     /// Reconstructs the shareholder from the received switch points.
@@ -403,31 +456,32 @@ where
     /// The shareholder can be reconstructed only once, which avoids copying
     /// the verification matrix.
     fn reconstruct_shareholder(&mut self) -> Result<Shareholder<G>> {
-        if self.xs.len() < self.n {
+        if self.points.len() < self.n {
             return Err(Error::NotEnoughSwitchPoints.into());
-        }
-
-        let xs = &self.xs[0..self.n];
-        let ys = &self.bijs[0..self.n];
-        let p = lagrange(xs, ys);
-
-        if p.size() != self.n {
-            return Err(Error::PolynomialDegreeMismatch.into());
         }
 
         let x = self.me.take().ok_or(Error::ShareholderIdentityRequired)?;
         let vm = self.vm.take().ok_or(Error::VerificationMatrixRequired)?;
+        let points: Vec<_> = self.points[0..self.n].iter().map(|p| &p.0).collect();
+        let p = lagrange(&points);
         let share = SecretShare::new(x, p);
-        let shareholder = Shareholder::new(share, vm);
+        let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-        Ok(shareholder)
+        // Intentionally verifying the size of the polynomial at the end
+        // to ensure that it is zeroized in case of an error.
+        if verifiable_share.polynomial().size() != self.n {
+            return Err(Error::PolynomialDegreeMismatch.into());
+        }
+
+        Ok(verifiable_share.into())
     }
 }
 
 /// An accumulator for bivariate shares.
 struct BivariateShares<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
@@ -451,16 +505,14 @@ where
     /// The shareholder to be proactivized with bivariate shares.
     shareholder: Option<Arc<Shareholder<G>>>,
 
-    /// The sum of the received bivariate shares.
-    p: Option<Polynomial<G::Scalar>>,
-
-    /// The sum of the verification matrices of the received bivariate shares.
-    vm: Option<VerificationMatrix<G>>,
+    /// The sum of the received verifiable bivariate shares.
+    combined_share: Option<VerifiableSecretShare<G>>,
 }
 
 impl<G> BivariateShares<G>
 where
-    G: Group + GroupEncoding,
+    G: Group,
+    G::Scalar: Zeroize,
 {
     /// Creates a new accumulator for bivariate shares.
     fn new(
@@ -485,8 +537,7 @@ where
             shareholders,
             pending_shareholders,
             shareholder,
-            p: None,
-            vm: None,
+            combined_share: None,
         })
     }
 
@@ -516,22 +567,16 @@ where
             return Err(Error::DuplicateShareholder.into());
         }
 
-        if verifiable_share.share.x != self.me {
+        if verifiable_share.x() != &self.me {
             return Err(Error::ShareholderIdentityMismatch.into());
         }
         verifiable_share.verify(self.threshold, self.zero_hole, self.full_share)?;
 
-        let p = match self.p.take() {
-            Some(p) => p + verifiable_share.share.p,
-            None => verifiable_share.share.p,
-        };
-        self.p = Some(p);
-
-        let vm = match self.vm.take() {
-            Some(vm) => vm + verifiable_share.vm,
-            None => verifiable_share.vm,
-        };
-        self.vm = Some(vm);
+        if let Some(ref mut cs) = self.combined_share {
+            *cs += &verifiable_share;
+        } else {
+            self.combined_share = Some(verifiable_share);
+        }
 
         let index = self
             .pending_shareholders
@@ -552,21 +597,16 @@ where
             return Err(Error::NotEnoughBivariateShares.into());
         }
 
-        let p = self
-            .p
-            .take()
-            .ok_or(Error::ShareholderProactivizationCompleted)?;
-        let vm = self
-            .vm
+        let verifiable_share = self
+            .combined_share
             .take()
             .ok_or(Error::ShareholderProactivizationCompleted)?;
 
         let shareholder = match &self.shareholder {
-            Some(shareholder) => shareholder.proactivize(&p, &vm)?,
-            None => {
-                let share = SecretShare::new(self.me, p);
-                Shareholder::new(share, vm)
+            Some(shareholder) => {
+                shareholder.proactivize(&verifiable_share.p, &verifiable_share.vm)?
             }
+            None => verifiable_share.into(),
         };
 
         // Ensure that the combined bivariate polynomial satisfies
@@ -586,12 +626,12 @@ mod tests {
 
     use crate::{
         churp::{SecretShare, VerifiableSecretShare},
-        poly,
+        poly::{self},
         suites::{self, p384},
         vss,
     };
 
-    use super::{BivariateShares, Error, SwitchPoints};
+    use super::{BivariateShares, Error, SwitchPoint, SwitchPoints};
 
     type Suite = p384::Sha3_384;
     type Group = <Suite as suites::Suite>::Group;
@@ -620,8 +660,9 @@ mod tests {
             false => bp.eval(&x, &y),
             true => bp.eval(&y, &x),
         };
-        let res = sp.add_point(x, bij);
-        res
+        let point = SwitchPoint::new(x, bij);
+        sp.add_point(point)?;
+        Ok(!sp.needs_points())
     }
 
     #[test]
