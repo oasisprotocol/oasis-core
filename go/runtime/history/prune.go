@@ -96,9 +96,6 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 		return nil
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	lastPrunedRound := latestRound - p.numKept
 
 	return p.db.db.Update(func(tx *badger.Txn) error {
@@ -145,6 +142,9 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+
 		for _, ph := range p.handlers {
 			if err := ph.Prune(pruned); err != nil {
 				p.logger.Error("prune handler failed, aborting prune",
