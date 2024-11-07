@@ -3,7 +3,9 @@ package registry
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,34 +46,28 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // RuntimeConfig is the node runtime configuration.
 type RuntimeConfig struct {
-	// Host contains configuration for the runtime host. It may be nil if no runtimes are to be
-	// hosted by the current node.
-	Host *RuntimeHostConfig
+	// Runtimes contains per-runtime provisioning configuration.
+	//
+	// Some fields may be omitted as they are provided when the runtime
+	// is provisioned.
+	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
+
+	// Provisioner is the runtime provisioner to use.
+	//
+	// It may be nil if no runtimes are configured.
+	Provisioner runtimeHost.Provisioner
 
 	// History configures the runtime history keeper.
 	History history.Config
 }
 
-// Runtimes returns a list of configured runtimes.
-func (cfg *RuntimeConfig) Runtimes() (runtimes []common.Namespace) {
-	if cfg.Host == nil || config.GlobalConfig.Mode == config.ModeKeyManager {
-		return
+// RuntimeIDs returns a list of configured runtime IDs.
+func (cfg *RuntimeConfig) RuntimeIDs() []common.Namespace {
+	if config.GlobalConfig.Mode == config.ModeKeyManager {
+		return nil
 	}
 
-	for id := range cfg.Host.Runtimes {
-		runtimes = append(runtimes, id)
-	}
-	return
-}
-
-// RuntimeHostConfig is configuration for a node that hosts runtimes.
-type RuntimeHostConfig struct {
-	// Provisioner is the runtime provisioner to use.
-	Provisioner runtimeHost.Provisioner
-
-	// Runtimes contains per-runtime provisioning configuration. Some fields may be omitted as they
-	// are provided when the runtime is provisioned.
-	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
+	return slices.Collect(maps.Keys(cfg.Runtimes))
 }
 
 func newConfig( //nolint: gocyclo
@@ -162,8 +158,6 @@ func newConfig( //nolint: gocyclo
 		isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
 			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
-
-		var rh RuntimeHostConfig
 
 		// Configure host environment information.
 		cs, err := consensus.GetStatus(context.Background())
@@ -297,16 +291,16 @@ func newConfig( //nolint: gocyclo
 		}
 
 		// Create a composite provisioner to provision the individual components.
-		rh.Provisioner = hostComposite.NewProvisioner(provisioners)
+		cfg.Provisioner = hostComposite.NewProvisioner(provisioners)
 
 		// Configure runtimes.
-		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
+		cfg.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
 		for _, bnd := range regularBundles {
 			id := bnd.Manifest.ID
-			if rh.Runtimes[id] == nil {
-				rh.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
+			if cfg.Runtimes[id] == nil {
+				cfg.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
 			}
-			if _, ok := rh.Runtimes[id][bnd.Manifest.Version]; ok {
+			if _, ok := cfg.Runtimes[id][bnd.Manifest.Version]; ok {
 				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
 			}
 
@@ -368,7 +362,7 @@ func newConfig( //nolint: gocyclo
 				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
-			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
+			cfg.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
 				Bundle:      rtBnd,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,
@@ -402,16 +396,14 @@ func newConfig( //nolint: gocyclo
 						component.ID_RONL,
 					},
 				}
-				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{
+				cfg.Runtimes[id] = map[version.Version]*runtimeHost.Config{
 					{}: runtimeHostCfg,
 				}
 			}
 		}
-		if len(rh.Runtimes) == 0 {
+		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("no runtimes configured")
 		}
-
-		cfg.Host = &rh
 	}
 
 	strategy := config.GlobalConfig.Runtime.Prune.Strategy

@@ -579,9 +579,9 @@ func newRuntime(
 	go rt.watchUpdates(watchCtx)
 
 	// Configure runtime host if needed.
-	if cfg.Host != nil {
-		rt.hostProvisioner = cfg.Host.Provisioner
-		rt.hostConfig = cfg.Host.Runtimes[id]
+	if cfg.Provisioner != nil {
+		rt.hostProvisioner = cfg.Provisioner
+		rt.hostConfig = cfg.Runtimes[id]
 	}
 
 	return rt, nil
@@ -609,7 +609,7 @@ func New(
 		runtimes:  make(map[common.Namespace]*runtime),
 	}
 
-	for _, id := range cfg.Runtimes() {
+	for _, id := range cfg.RuntimeIDs() {
 		r.logger.Info("adding supported runtime",
 			"id", id,
 		)
