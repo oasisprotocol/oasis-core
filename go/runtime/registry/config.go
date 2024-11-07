@@ -418,11 +418,7 @@ func newRuntimeConfig( //nolint: gocyclo
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
 
-	cfg.History.PruneInterval = config.GlobalConfig.Runtime.Prune.Interval
-	const minPruneInterval = time.Second
-	if cfg.History.PruneInterval < minPruneInterval {
-		cfg.History.PruneInterval = minPruneInterval
-	}
+	cfg.History.PruneInterval = max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
 
 	return &cfg, nil
 }

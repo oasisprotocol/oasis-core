@@ -526,11 +526,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		return err
 	}
 	pruneCfg.NumKept = config.GlobalConfig.Consensus.Prune.NumKept
-	pruneCfg.PruneInterval = config.GlobalConfig.Consensus.Prune.Interval
-	const minPruneInterval = 1 * time.Second
-	if pruneCfg.PruneInterval < minPruneInterval {
-		pruneCfg.PruneInterval = minPruneInterval
-	}
+	pruneCfg.PruneInterval = max(config.GlobalConfig.Consensus.Prune.Interval, time.Second)
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
