@@ -57,8 +57,8 @@ type RuntimeConfig struct {
 	// It may be nil if no runtimes are configured.
 	Provisioner runtimeHost.Provisioner
 
-	// History configures the runtime history keeper.
-	History history.Config
+	// Pruner is the runtime history pruner factory to use.
+	Pruner history.PrunerFactory
 }
 
 // RuntimeIDs returns a list of configured runtime IDs.
@@ -410,15 +410,14 @@ func newRuntimeConfig( //nolint: gocyclo
 	strategy := config.GlobalConfig.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
-		cfg.History.Pruner = history.NewNonePrunerFactory()
+		cfg.Pruner = history.NewNonePrunerFactory()
 	case history.PrunerStrategyKeepLast:
 		numKept := config.GlobalConfig.Runtime.Prune.NumKept
-		cfg.History.Pruner = history.NewKeepLastPrunerFactory(numKept)
+		pruneInterval := max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
+		cfg.Pruner = history.NewKeepLastPrunerFactory(numKept, pruneInterval)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
-
-	cfg.History.PruneInterval = max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
 
 	return &cfg, nil
 }

@@ -522,7 +522,7 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	// Create runtime history keeper.
 	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
 	haveLocalStorageWorker := config.GlobalConfig.Mode.HasLocalStorage() && config.GlobalConfig.Mode != config.ModeArchive
-	history, err := history.New(rt.dataDir, id, &r.cfg.History, haveLocalStorageWorker)
+	history, err := history.New(rt.dataDir, id, r.cfg.Pruner, haveLocalStorageWorker)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}

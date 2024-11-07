@@ -28,23 +28,6 @@ var (
 	_ History = (*runtimeHistory)(nil)
 )
 
-// Config is runtime history keeper configuration.
-type Config struct {
-	// Pruner configures the pruner to use.
-	Pruner PrunerFactory
-
-	// PruneInterval configures the pruning interval.
-	PruneInterval time.Duration
-}
-
-// NewDefaultConfig returns the default runtime history keeper config.
-func NewDefaultConfig() *Config {
-	return &Config{
-		Pruner:        NewNonePrunerFactory(),
-		PruneInterval: 10 * time.Second,
-	}
-}
-
 // History is the runtime history interface.
 type History interface {
 	roothash.BlockHistory
@@ -142,11 +125,10 @@ type runtimeHistory struct {
 
 	haveLocalStorageWorker bool
 
-	pruner        Pruner
-	pruneInterval time.Duration
-	pruneCh       *channels.RingChannel
-	stopCh        chan struct{}
-	quitCh        chan struct{}
+	pruner  Pruner
+	pruneCh *channels.RingChannel
+	stopCh  chan struct{}
+	quitCh  chan struct{}
 }
 
 func (h *runtimeHistory) RuntimeID() common.Namespace {
@@ -350,7 +332,8 @@ func (h *runtimeHistory) Close() {
 func (h *runtimeHistory) pruneWorker() {
 	defer close(h.quitCh)
 
-	ticker := time.NewTicker(h.pruneInterval)
+	interval := h.pruner.PruneInterval()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -382,19 +365,13 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStorageWorker bool) (History, error) {
+func New(dataDir string, runtimeID common.Namespace, prunerFactory PrunerFactory, haveLocalStorageWorker bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
 	}
 
-	if cfg == nil {
-		cfg = NewDefaultConfig()
-	}
-	if cfg.Pruner == nil {
-		cfg.Pruner = NewNonePrunerFactory()
-	}
-	pruner, err := cfg.Pruner(runtimeID, db)
+	pruner, err := prunerFactory(runtimeID, db)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +387,6 @@ func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStora
 		haveLocalStorageWorker: haveLocalStorageWorker,
 		blocksNotifier:         pubsub.NewBroker(true),
 		pruner:                 pruner,
-		pruneInterval:          cfg.PruneInterval,
 		pruneCh:                channels.NewRingChannel(1),
 		stopCh:                 make(chan struct{}),
 		quitCh:                 make(chan struct{}),
