@@ -70,7 +70,8 @@ func (cfg *RuntimeConfig) RuntimeIDs() []common.Namespace {
 	return slices.Collect(maps.Keys(cfg.Runtimes))
 }
 
-func newConfig( //nolint: gocyclo
+// newRuntimeConfig creates a new node runtime configuration.
+func newRuntimeConfig( //nolint: gocyclo
 	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,

@@ -596,7 +596,7 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
-	cfg, err := newConfig(dataDir, commonStore, identity, consensus, ias)
+	cfg, err := newRuntimeConfig(dataDir, commonStore, identity, consensus, ias)
 	if err != nil {
 		return nil, err
 	}
