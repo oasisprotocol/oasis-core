@@ -30,15 +30,6 @@ type rhost struct {
 
 // NewHost creates a new composite runtime host.
 func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
-	// Collect available components.
-	availableComps := cfg.Bundle.Manifest.GetAvailableComponents()
-
-	// Collect components that we want.
-	wantedComponents := make(map[component.ID]struct{})
-	for _, id := range cfg.Components {
-		wantedComponents[id] = struct{}{}
-	}
-
 	h := &rhost{
 		id:      cfg.Bundle.Manifest.ID,
 		version: cfg.Bundle.Manifest.Version,
@@ -47,11 +38,14 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 		logger:  logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
 	}
 
-	// Iterate over all components and provision the individual runtimes.
-	for id, c := range availableComps {
-		_, wanted := wantedComponents[id]
-		if !wanted {
-			continue // Skip any components that we don't want.
+	// Collect available components.
+	availableComps := cfg.Bundle.Manifest.GetAvailableComponents()
+
+	// Iterate over all wanted components and provision the individual runtimes.
+	for _, id := range cfg.Components {
+		c, ok := availableComps[id]
+		if !ok {
+			continue // Skip any components that we want but don't have.
 		}
 
 		compCfg := cfg
