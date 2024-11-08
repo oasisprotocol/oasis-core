@@ -74,10 +74,13 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 		return nil, fmt.Errorf("cometbft/db/badger: failed to open database: %w", err)
 	}
 
+	gc := cmnBadger.NewGCWorker(logger, db)
+	gc.Start()
+
 	impl := &badgerDBImpl{
 		logger: logger,
 		db:     db,
-		gc:     cmnBadger.NewGCWorker(logger, db),
+		gc:     gc,
 	}
 
 	return impl, nil
@@ -211,7 +214,7 @@ func (d *badgerDBImpl) ReverseIterator(start, end []byte) (dbm.Iterator, error) 
 func (d *badgerDBImpl) Close() error {
 	err := os.ErrClosed
 	d.closeOnce.Do(func() {
-		d.gc.Close()
+		d.gc.Stop()
 
 		if err = d.db.Close(); err != nil {
 			d.logger.Error("Close failed",

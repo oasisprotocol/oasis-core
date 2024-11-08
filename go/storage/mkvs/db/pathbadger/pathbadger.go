@@ -56,6 +56,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	}
 
 	db.gc = cmnBadger.NewGCWorker(db.logger, db.db)
+	db.gc.Start()
 
 	return db, nil
 }
@@ -740,7 +741,7 @@ func (d *badgerNodeDB) Sync() error {
 func (d *badgerNodeDB) Close() {
 	d.closeOnce.Do(func() {
 		if d.gc != nil {
-			d.gc.Close()
+			d.gc.Stop()
 		}
 
 		if err := d.db.Close(); err != nil {

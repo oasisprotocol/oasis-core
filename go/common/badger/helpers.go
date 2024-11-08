@@ -2,14 +2,15 @@
 package badger
 
 import (
+	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 )
 
 const (
@@ -50,22 +51,20 @@ type GCWorker struct {
 
 	db *badger.DB
 
-	closeOnce sync.Once
-	closeCh   chan struct{}
-	closedCh  chan struct{}
+	startOne cmSync.One
 }
 
-// Close halts the GC worker.
-func (gc *GCWorker) Close() {
-	gc.closeOnce.Do(func() {
-		close(gc.closeCh)
-		<-gc.closedCh
-	})
+// Start starts the GC worker.
+func (gc *GCWorker) Start() {
+	gc.startOne.TryStart(gc.run)
 }
 
-func (gc *GCWorker) worker() {
-	defer close(gc.closedCh)
+// Stop halts the GC worker.
+func (gc *GCWorker) Stop() {
+	gc.startOne.TryStop()
+}
 
+func (gc *GCWorker) run(ctx context.Context) {
 	ticker := time.NewTicker(gcInterval)
 	defer ticker.Stop()
 
@@ -79,7 +78,7 @@ func (gc *GCWorker) worker() {
 
 	for {
 		select {
-		case <-gc.closeCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
@@ -99,14 +98,9 @@ func (gc *GCWorker) worker() {
 // NewGCWorker creates a new BadgerDB value log GC worker for the provided
 // db, logging to the specified logger.
 func NewGCWorker(logger *logging.Logger, db *badger.DB) *GCWorker {
-	gc := &GCWorker{
+	return &GCWorker{
 		logger:   logger,
 		db:       db,
-		closeCh:  make(chan struct{}),
-		closedCh: make(chan struct{}),
+		startOne: cmSync.NewOne(),
 	}
-
-	go gc.worker()
-
-	return gc
 }

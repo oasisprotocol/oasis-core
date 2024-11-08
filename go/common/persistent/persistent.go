@@ -35,7 +35,7 @@ type CommonStore struct {
 
 // Close closes the database handle.
 func (cs *CommonStore) Close() {
-	cs.gc.Close()
+	cs.gc.Stop()
 	cs.db.Close()
 }
 
@@ -61,9 +61,12 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 		return nil, fmt.Errorf("failed to open persistence database: %w", err)
 	}
 
+	gc := cmnBadger.NewGCWorker(logger, db)
+	gc.Start()
+
 	cs := &CommonStore{
 		db: db,
-		gc: cmnBadger.NewGCWorker(logger, db),
+		gc: gc,
 	}
 
 	return cs, nil
