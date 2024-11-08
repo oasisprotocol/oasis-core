@@ -433,7 +433,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 }
 
 func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
-	return newRuntime(ctx, r.dataDir, runtimeID, r.cfg, r.consensus, r.logger)
+	return r.newRuntime(ctx, runtimeID)
 }
 
 func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error {
@@ -497,7 +497,7 @@ func (r *runtimeRegistry) FinishInitialization() error {
 	return nil
 }
 
-func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace) (rerr error) {
+func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, runtimeID common.Namespace) (rerr error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -505,11 +505,11 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return fmt.Errorf("runtime/registry: too many registered runtimes")
 	}
 
-	if _, ok := r.runtimes[id]; ok {
-		return fmt.Errorf("runtime/registry: runtime already registered: %s", id)
+	if _, ok := r.runtimes[runtimeID]; ok {
+		return fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(ctx, r.dataDir, id, r.cfg, r.consensus, r.logger)
+	rt, err := r.newRuntime(ctx, runtimeID)
 	if err != nil {
 		return err
 	}
@@ -521,66 +521,59 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	rt.managed = true
 
 	// Create runtime history keeper.
-	history, err := r.historyFactory(id, rt.dataDir)
+	history, err := r.historyFactory(runtimeID, rt.dataDir)
 	if err != nil {
-		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
+		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 	}
 
 	// Create runtime-specific storage backend.
 	var ns common.Namespace
-	copy(ns[:], id[:])
+	copy(ns[:], runtimeID[:])
 
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
-		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
+		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
 	}
 
 	rt.history = history
-	r.runtimes[id] = rt
+	r.runtimes[runtimeID] = rt
 
 	return nil
 }
 
-func newRuntime(
-	ctx context.Context,
-	dataDir string,
-	id common.Namespace,
-	cfg *RuntimeConfig,
-	consensus consensus.Backend,
-	logger *logging.Logger,
-) (*runtime, error) {
+func (r *runtimeRegistry) newRuntime(ctx context.Context, runtimeID common.Namespace) (*runtime, error) {
 	// Ensure runtime state directory exists.
-	rtDataDir, err := EnsureRuntimeStateDir(dataDir, id)
+	rtDataDir, err := EnsureRuntimeStateDir(r.dataDir, runtimeID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create runtime-specific local storage backend.
-	localStorage, err := localstorage.New(rtDataDir, LocalStorageFile, id)
+	localStorage, err := localstorage.New(rtDataDir, LocalStorageFile, runtimeID)
 	if err != nil {
-		return nil, fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
+		return nil, fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", runtimeID, err)
 	}
 
 	watchCtx, cancel := context.WithCancel(ctx)
 
 	rt := &runtime{
-		id:                         id,
+		id:                         runtimeID,
 		dataDir:                    rtDataDir,
-		consensus:                  consensus,
+		consensus:                  r.consensus,
 		localStorage:               localStorage,
 		cancelCtx:                  cancel,
 		registryDescriptorCh:       make(chan struct{}),
 		registryDescriptorNotifier: pubsub.NewBroker(true),
 		activeDescriptorCh:         make(chan struct{}),
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
-		logger:                     logger.With("runtime_id", id),
+		logger:                     r.logger.With("runtime_id", runtimeID),
 	}
 	go rt.watchUpdates(watchCtx)
 
 	// Configure runtime host if needed.
-	if cfg.Provisioner != nil {
-		rt.hostProvisioner = cfg.Provisioner
-		rt.hostConfig = cfg.Runtimes[id]
+	if r.cfg.Provisioner != nil {
+		rt.hostProvisioner = r.cfg.Provisioner
+		rt.hostConfig = r.cfg.Runtimes[runtimeID]
 	}
 
 	return rt, nil
