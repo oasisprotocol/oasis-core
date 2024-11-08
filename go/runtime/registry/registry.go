@@ -526,10 +526,6 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, runtimeID com
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 	}
 
-	// Create runtime-specific storage backend.
-	var ns common.Namespace
-	copy(ns[:], runtimeID[:])
-
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
