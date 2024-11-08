@@ -120,7 +120,7 @@ func newRuntimeConfig( //nolint: gocyclo
 			if bnd, err = bundle.Open(path); err != nil {
 				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
 			}
-			if err = bnd.WriteExploded(dataDir); err != nil {
+			if _, err = bnd.WriteExploded(dataDir); err != nil {
 				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
 			}
 			// Release resources as the bundle has been exploded anyway.

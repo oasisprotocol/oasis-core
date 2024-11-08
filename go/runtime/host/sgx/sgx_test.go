@@ -51,7 +51,7 @@ func TestProvisionerSGX(t *testing.T) {
 	require.NoError(err, "bundle.Open")
 
 	tmpDir := t.TempDir()
-	err = bnd.WriteExploded(tmpDir)
+	_, err = bnd.WriteExploded(tmpDir)
 	require.NoError(err, "bnd.WriteExploded")
 
 	cfg := host.Config{
