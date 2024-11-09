@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -52,10 +51,6 @@ type Registry interface {
 	// NewUnmanagedRuntime creates a new runtime that is not managed by this
 	// registry.
 	NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error)
-
-	// AddRoles adds available node roles to the runtime. Specify nil as the runtimeID
-	// to set the role for all runtimes.
-	AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error
 
 	// RegisterClient registers a runtime client service. If the service has already been registered
 	// this method returns an error.
@@ -96,12 +91,6 @@ type Runtime interface {
 	// RegisterStorage sets the given local storage backend for the runtime.
 	RegisterStorage(storage storageAPI.Backend)
 
-	// AddRoles adds available node roles to the runtime.
-	AddRoles(roles node.RolesMask)
-
-	// HasRoles checks if the node has all of the roles specified for this runtime.
-	HasRoles(roles node.RolesMask) bool
-
 	// History returns the history for this runtime.
 	History() history.History
 
@@ -129,7 +118,6 @@ type runtime struct { // nolint: maligned
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
-	roles                node.RolesMask
 	managed              bool
 
 	consensus    consensus.Backend
@@ -210,20 +198,6 @@ func (r *runtime) RegisterStorage(storage storageAPI.Backend) {
 		panic("runtime storage backend already assigned")
 	}
 	r.storage = storage
-}
-
-func (r *runtime) AddRoles(roles node.RolesMask) {
-	r.Lock()
-	defer r.Unlock()
-
-	r.roles |= roles
-}
-
-func (r *runtime) HasRoles(roles node.RolesMask) bool {
-	r.Lock()
-	defer r.Unlock()
-
-	return r.roles&roles == roles
 }
 
 func (r *runtime) History() history.History {
@@ -434,25 +408,6 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 
 func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
 	return r.newRuntime(ctx, runtimeID)
-}
-
-func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error {
-	r.RLock()
-	defer r.RUnlock()
-
-	if runtimeID != nil {
-		rt, ok := r.runtimes[*runtimeID]
-		if !ok {
-			return fmt.Errorf("runtime/registry: runtime %s is not supported", *runtimeID)
-		}
-		rt.AddRoles(roles)
-		return nil
-	}
-
-	for _, rt := range r.runtimes {
-		rt.AddRoles(roles)
-	}
-	return nil
 }
 
 func (r *runtimeRegistry) RegisterClient(rc runtimeClient.RuntimeClient) error {
