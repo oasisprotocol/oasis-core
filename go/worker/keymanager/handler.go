@@ -1,7 +1,6 @@
 package keymanager
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -20,8 +19,8 @@ func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
 }
 
 // NewRuntimeHostNotifier implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
-	return runtimeRegistry.NewRuntimeHostNotifier(ctx, w.runtime, host, w.commonWorker.Consensus)
+func (w *Worker) NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier {
+	return runtimeRegistry.NewRuntimeHostNotifier(w.runtime, host, w.commonWorker.Consensus)
 }
 
 type workerEnvironment struct {

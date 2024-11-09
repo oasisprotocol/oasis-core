@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
+	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -27,13 +28,8 @@ var _ protocol.Notifier = (*runtimeHostNotifier)(nil)
 // runtimeHostNotifier is a runtime host notifier suitable for compute runtimes. It handles things
 // like key manager policy updates.
 type runtimeHostNotifier struct {
-	sync.Mutex
+	startOne cmSync.One
 
-	ctx context.Context
-
-	stopCh chan struct{}
-
-	started   bool
 	runtime   Runtime
 	host      host.RichRuntime
 	consensus consensus.Backend
@@ -42,98 +38,89 @@ type runtimeHostNotifier struct {
 }
 
 // NewRuntimeHostNotifier returns a protocol notifier that handles key manager policy updates.
-func NewRuntimeHostNotifier(
-	ctx context.Context,
-	runtime Runtime,
-	hostRt host.Runtime,
-	consensus consensus.Backend,
-) protocol.Notifier {
+func NewRuntimeHostNotifier(runtime Runtime, hostRt host.Runtime, consensus consensus.Backend) protocol.Notifier {
+	logger := logging.GetLogger("runtime/registry/notifier").With("runtime_id", runtime.ID())
+
 	return &runtimeHostNotifier{
-		ctx:       ctx,
-		stopCh:    make(chan struct{}),
+		startOne:  cmSync.NewOne(),
 		runtime:   runtime,
 		host:      host.NewRichRuntime(hostRt),
 		consensus: consensus,
-		logger:    logging.GetLogger("runtime/registry/host"),
+		logger:    logger,
 	}
 }
 
 // Implements protocol.Notifier.
 func (n *runtimeHostNotifier) Start() {
-	n.Lock()
-	defer n.Unlock()
-
-	if n.started {
-		return
-	}
-	n.started = true
-
-	go n.watchPolicyUpdates()
-	go n.watchConsensusLightBlocks()
+	n.startOne.TryStart(n.run)
 }
 
 // Implements protocol.Notifier.
 func (n *runtimeHostNotifier) Stop() {
-	close(n.stopCh)
+	n.startOne.TryStop()
 }
 
-func (n *runtimeHostNotifier) watchPolicyUpdates() {
-	// Subscribe to runtime descriptor updates.
-	dscCh, dscSub, err := n.runtime.WatchRegistryDescriptor()
-	if err != nil {
-		n.logger.Error("failed to subscribe to registry descriptor updates",
-			"err", err,
-		)
-		return
-	}
-	defer dscSub.Close()
+func (n *runtimeHostNotifier) run(ctx context.Context) {
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
-	var (
-		kmRtID *common.Namespace
-		done   bool
-	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n.watchPolicyUpdates(ctx)
+	}()
 
-	for !done {
-		done = func() bool {
-			// Start watching key manager policy updates.
-			var wg sync.WaitGroup
-			defer wg.Wait()
+	n.watchConsensusLightBlocks(ctx)
+}
 
-			ctx, cancel := context.WithCancel(n.ctx)
-			defer cancel()
+func (n *runtimeHostNotifier) watchPolicyUpdates(ctx context.Context) {
+	// Retrieve the key manager runtime ID from the consensus layer.
+	keyManager := func() *common.Namespace {
+		// Subscribe to runtime descriptor updates.
+		dscCh, dscSub, err := n.runtime.WatchRegistryDescriptor()
+		if err != nil {
+			n.logger.Error("failed to subscribe to registry descriptor updates",
+				"err", err,
+			)
+			return nil
+		}
+		defer dscSub.Close()
 
-			wg.Add(1)
-			go func(kmRtID *common.Namespace) {
-				defer wg.Done()
-				n.watchKmPolicyUpdates(ctx, kmRtID)
-			}(kmRtID)
+		// Obtain the current runtime descriptor.
+		rtDsc, err := n.runtime.RegistryDescriptor(ctx)
+		if err != nil {
+			n.logger.Error("failed to get registry descriptor",
+				"err", err,
+			)
+			return nil
+		}
 
-			// Restart the updater if the runtime changes the key manager. This should happen
-			// at most once as runtimes are not allowed to change the manager once set.
-			for {
-				select {
-				case <-n.ctx.Done():
-					n.logger.Debug("context canceled")
-					return true
-				case <-n.stopCh:
-					n.logger.Debug("termination requested")
-					return true
-				case rtDsc := <-dscCh:
-					n.logger.Debug("got registry descriptor update")
+		// Only proceed with key manager policy updates for compute runtimes.
+		if rtDsc.Kind != registry.KindCompute {
+			n.logger.Debug("skipping watching policy updates for non-compute runtime")
+			return nil
+		}
 
-					if rtDsc.Kind != registry.KindCompute {
-						return true
-					}
-
-					if kmRtID.Equal(rtDsc.KeyManager) {
-						break
-					}
-
-					kmRtID = rtDsc.KeyManager
-					return false
-				}
+		// Wait for the runtime to choose the key manager.
+		for {
+			if rtDsc.KeyManager != nil {
+				return rtDsc.KeyManager
 			}
-		}()
+
+			select {
+			case <-ctx.Done():
+				n.logger.Debug("context canceled")
+				return nil
+			case rtDsc = <-dscCh:
+				n.logger.Debug("got registry descriptor update",
+					"key_manager", rtDsc.KeyManager,
+				)
+			}
+		}
+	}()
+
+	if keyManager != nil {
+		n.watchKmPolicyUpdates(ctx, keyManager)
 	}
 }
 
@@ -308,8 +295,8 @@ func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(ctx context.Context, p
 	return nil
 }
 
-func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
-	rawCh, sub, err := n.consensus.WatchBlocks(n.ctx)
+func (n *runtimeHostNotifier) watchConsensusLightBlocks(ctx context.Context) {
+	rawCh, sub, err := n.consensus.WatchBlocks(ctx)
 	if err != nil {
 		n.logger.Error("failed to subscribe to consensus block updates",
 			"err", err,
@@ -347,11 +334,8 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 	)
 	for {
 		select {
-		case <-n.ctx.Done():
+		case <-ctx.Done():
 			n.logger.Debug("context canceled")
-			return
-		case <-n.stopCh:
-			n.logger.Debug("termination requested")
 			return
 		case dsc := <-dscCh:
 			// We only care about TEE-enabled runtimes.
@@ -360,7 +344,7 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 			}
 
 			var epoch beacon.EpochTime
-			epoch, err = n.consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+			epoch, err = n.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
 			if err != nil {
 				n.logger.Error("failed to query current epoch",
 					"err", err,
@@ -385,7 +369,7 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 
 			// Apply defaults.
 			var params *registry.ConsensusParameters
-			params, err = n.consensus.Registry().ConsensusParameters(n.ctx, consensus.HeightLatest)
+			params, err = n.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
 			if err != nil {
 				n.logger.Error("failed to query registry parameters",
 					"err", err,
@@ -413,7 +397,7 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 			height := uint64(blk.Height)
 
 			// Notify the runtime that a new consensus layer block is available.
-			ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
+			ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
 			err = n.host.ConsensusSync(ctx, height)
 			cancel()
 			if err != nil {

@@ -680,7 +680,7 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Provision the hosted runtime.
-	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
+	hrt, hrtNotifier, err := n.ProvisionHostedRuntime()
 	if err != nil {
 		n.logger.Error("failed to provision hosted runtime",
 			"err", err,

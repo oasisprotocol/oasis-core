@@ -1,7 +1,6 @@
 package committee
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -19,8 +18,8 @@ func (n *Node) GetRuntime() runtimeRegistry.Runtime {
 }
 
 // NewRuntimeHostNotifier implements RuntimeHostHandlerFactory.
-func (n *Node) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
-	return runtimeRegistry.NewRuntimeHostNotifier(ctx, n.Runtime, host, n.Consensus)
+func (n *Node) NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier {
+	return runtimeRegistry.NewRuntimeHostNotifier(n.Runtime, host, n.Consensus)
 }
 
 type nodeEnvironment struct {

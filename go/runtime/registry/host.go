@@ -49,7 +49,7 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 //
 // This method may return before the runtime is fully provisioned. The returned runtime will not be
 // started automatically, you must call Start explicitly.
-func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.RichRuntime, protocol.Notifier, error) {
+func (n *RuntimeHostNode) ProvisionHostedRuntime() (host.RichRuntime, protocol.Notifier, error) {
 	runtime := n.factory.GetRuntime()
 	cfgs := runtime.HostConfig()
 	provisioner := runtime.HostProvisioner()
@@ -77,7 +77,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		return nil, nil, fmt.Errorf("failed to provision aggregate runtime: %w", err)
 	}
 
-	notifier := n.factory.NewRuntimeHostNotifier(ctx, agg)
+	notifier := n.factory.NewRuntimeHostNotifier(agg)
 	rr := host.NewRichRuntime(agg)
 
 	n.Lock()

@@ -52,7 +52,7 @@ type RuntimeHostHandlerFactory interface {
 	NewRuntimeHostHandler() host.RuntimeHandler
 
 	// NewRuntimeHostNotifier creates a new runtime host notifier.
-	NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier
+	NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the

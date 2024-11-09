@@ -386,7 +386,7 @@ func (w *Worker) worker() {
 	// Provision the hosted runtime.
 	w.logger.Info("provisioning key manager runtime")
 
-	hrt, hrtNotifier, err := w.ProvisionHostedRuntime(w.ctx)
+	hrt, hrtNotifier, err := w.ProvisionHostedRuntime()
 	if err != nil {
 		w.logger.Error("failed to provision key manager runtime",
 			"err", err,
