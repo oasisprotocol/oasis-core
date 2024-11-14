@@ -120,7 +120,7 @@ func TestBundle(t *testing.T) {
 	})
 }
 
-func TestDeatchedBundle(t *testing.T) {
+func TestDetachedBundle(t *testing.T) {
 	execFile := os.Args[0]
 	execBuf, err := os.ReadFile(execFile)
 	if err != nil {
