@@ -3,9 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -44,42 +42,8 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-// RuntimeConfig is the node runtime configuration.
-type RuntimeConfig struct {
-	// Runtimes contains per-runtime provisioning configuration.
-	//
-	// Some fields may be omitted as they are provided when the runtime
-	// is provisioned.
-	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
-
-	// Provisioner is the runtime provisioner to use.
-	//
-	// It may be nil if no runtimes are configured.
-	Provisioner runtimeHost.Provisioner
-
-	// History is the runtime history factory to use.
-	History history.Factory
-}
-
-// RuntimeIDs returns a list of configured runtime IDs.
-func (cfg *RuntimeConfig) RuntimeIDs() []common.Namespace {
-	if config.GlobalConfig.Mode == config.ModeKeyManager {
-		return nil
-	}
-
-	return slices.Collect(maps.Keys(cfg.Runtimes))
-}
-
 // newRuntimeConfig creates a new node runtime configuration.
-func newRuntimeConfig( //nolint: gocyclo
-	dataDir string,
-	commonStore *persistent.CommonStore,
-	identity *identity.Identity,
-	consensus consensus.Backend,
-	ias []ias.Endpoint,
-) (*RuntimeConfig, error) {
-	var cfg RuntimeConfig
-
+func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]*runtimeHost.Config, error) { //nolint: gocyclo
 	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0
 
 	// Validate configured runtimes based on the runtime mode.
@@ -99,6 +63,8 @@ func newRuntimeConfig( //nolint: gocyclo
 	}
 
 	// Check if any runtimes are configured to be hosted.
+	runtimes := make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
+
 	if haveSetRuntimes || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
 		// By default start with the environment specified in configuration.
 		runtimeEnv := config.GlobalConfig.Runtime.Environment
@@ -156,152 +122,13 @@ func newRuntimeConfig( //nolint: gocyclo
 			}
 		}
 
-		isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
-		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
-			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
-
-		// Configure host environment information.
-		cs, err := consensus.GetStatus(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
-		}
-		chainCtx, err := consensus.GetChainContext(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get chain context: %w", err)
-		}
-		hostInfo := &hostProtocol.HostInfo{
-			ConsensusBackend:         cs.Backend,
-			ConsensusProtocolVersion: cs.Version,
-			ConsensusChainContext:    chainCtx,
-		}
-
-		// Create the PCS client and quote service.
-		pc, err := pcs.NewHTTPClient(&pcs.HTTPClientConfig{
-			// TODO: Support configuring the API key.
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
-		}
-		qs := pcs.NewCachingQuoteService(pc, commonStore)
-
-		// Register provisioners based on the configured provisioner.
-		var insecureNoSandbox bool
-		sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
-		attestInterval := config.GlobalConfig.Runtime.AttestInterval
-		provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
-		switch p := config.GlobalConfig.Runtime.Provisioner; p {
-		case rtConfig.RuntimeProvisionerMock:
-			// Mock provisioner, only supported when the runtime requires no TEE hardware.
-			if !cmdFlags.DebugDontBlameOasis() {
-				return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
-			}
-
-			provisioners[component.TEEKindNone] = hostMock.New()
-		case rtConfig.RuntimeProvisionerUnconfined:
-			// Unconfined provisioner, can be used with no TEE or with Intel SGX.
-			if !cmdFlags.DebugDontBlameOasis() {
-				return nil, fmt.Errorf("unconfined provisioner requires use of unsafe debug flags")
-			}
-
-			insecureNoSandbox = true
-
-			fallthrough
-		case rtConfig.RuntimeProvisionerSandboxed:
-			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
-			if !insecureNoSandbox {
-				if _, err = os.Stat(sandboxBinary); err != nil {
-					return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
-				}
-			}
-
-			// Configure the non-TEE provisioner.
-			provisioners[component.TEEKindNone], err = hostSandbox.New(hostSandbox.Config{
-				HostInfo:          hostInfo,
-				InsecureNoSandbox: insecureNoSandbox,
-				SandboxBinaryPath: sandboxBinary,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
-			}
-
-			// Configure the Intel SGX provisioner.
-			switch sgxLoader := config.GlobalConfig.Runtime.SGXLoader; {
-			case forceNoSGX:
-				// Remap SGX to non-SGX when forced to do so.
-				provisioners[component.TEEKindSGX], err = hostSandbox.New(hostSandbox.Config{
-					HostInfo:          hostInfo,
-					InsecureNoSandbox: insecureNoSandbox,
-					SandboxBinaryPath: sandboxBinary,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
-				}
-			case sgxLoader == "" && runtimeEnv == rtConfig.RuntimeEnvironmentSGX:
-				// SGX environment is forced, but we don't have the needed loader.
-				return nil, fmt.Errorf("SGX runtime environment requires setting the SGX loader")
-			case sgxLoader == "" && runtimeEnv != rtConfig.RuntimeEnvironmentSGXMock:
-				// SGX may be needed, but we don't have a loader configured.
-				break
-			default:
-				// Configure mock SGX if configured and we are in a debug mode.
-				insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
-				if insecureMock && !cmdFlags.DebugDontBlameOasis() {
-					return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
-				}
-
-				provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
-					HostInfo:              hostInfo,
-					CommonStore:           commonStore,
-					LoaderPath:            sgxLoader,
-					IAS:                   ias,
-					PCS:                   qs,
-					Consensus:             consensus,
-					Identity:              identity,
-					SandboxBinaryPath:     sandboxBinary,
-					InsecureNoSandbox:     insecureNoSandbox,
-					InsecureMock:          insecureMock,
-					RuntimeAttestInterval: attestInterval,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
-		}
-
-		// Configure TDX provisioner.
-		// TODO: Allow provisioner selection in the future, currently we only have QEMU.
-		provisioners[component.TEEKindTDX], err = hostTdx.NewQemu(hostTdx.QemuConfig{
-			HostInfo:              hostInfo,
-			CommonStore:           commonStore,
-			PCS:                   qs,
-			Consensus:             consensus,
-			Identity:              identity,
-			RuntimeAttestInterval: attestInterval,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TDX runtime provisioner: %w", err)
-		}
-
-		// Configure optional load balancing.
-		for tee, rp := range provisioners {
-			provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
-				NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
-			})
-		}
-
-		// Create a composite provisioner to provision the individual components.
-		cfg.Provisioner = hostComposite.NewProvisioner(provisioners)
-
 		// Configure runtimes.
-		cfg.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
 		for _, bnd := range regularBundles {
 			id := bnd.Manifest.ID
-			if cfg.Runtimes[id] == nil {
-				cfg.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
+			if runtimes[id] == nil {
+				runtimes[id] = make(map[version.Version]*runtimeHost.Config)
 			}
-			if _, ok := cfg.Runtimes[id][bnd.Manifest.Version]; ok {
+			if _, ok := runtimes[id][bnd.Manifest.Version]; ok {
 				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
 			}
 
@@ -363,12 +190,13 @@ func newRuntimeConfig( //nolint: gocyclo
 				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
-			cfg.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
+			runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
 				Bundle:      rtBnd,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,
 			}
 		}
+
 		if cmdFlags.DebugDontBlameOasis() {
 			// This is to allow the mock provisioner to function, as it does
 			// not use an actual runtime, thus is missing a bundle.  This is
@@ -397,23 +225,181 @@ func newRuntimeConfig( //nolint: gocyclo
 						component.ID_RONL,
 					},
 				}
-				cfg.Runtimes[id] = map[version.Version]*runtimeHost.Config{
+				runtimes[id] = map[version.Version]*runtimeHost.Config{
 					{}: runtimeHostCfg,
 				}
 			}
 		}
-		if len(cfg.Runtimes) == 0 {
+
+		if len(runtimes) == 0 {
 			return nil, fmt.Errorf("no runtimes configured")
 		}
 	}
 
-	history, err := createHistoryFactory()
-	if err != nil {
-		return nil, err
-	}
-	cfg.History = history
+	return runtimes, nil
+}
 
-	return &cfg, nil
+func createHostInfo(consensus consensus.Backend) (*hostProtocol.HostInfo, error) {
+	cs, err := consensus.GetStatus(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
+	}
+
+	chainCtx, err := consensus.GetChainContext(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain context: %w", err)
+	}
+
+	return &hostProtocol.HostInfo{
+		ConsensusBackend:         cs.Backend,
+		ConsensusProtocolVersion: cs.Version,
+		ConsensusChainContext:    chainCtx,
+	}, nil
+}
+
+func createProvisioner(
+	commonStore *persistent.CommonStore,
+	identity *identity.Identity,
+	consensus consensus.Backend,
+	hostInfo *hostProtocol.HostInfo,
+	ias []ias.Endpoint,
+	qs pcs.QuoteService,
+) (runtimeHost.Provisioner, error) {
+	var err error
+
+	// By default start with the environment specified in configuration.
+	runtimeEnv := config.GlobalConfig.Runtime.Environment
+
+	// TODO: isEnvSGX should also be true if runtimeEnv is auto and at least
+	// one component requires SGX.
+	isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
+	forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
+		(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
+
+	// Register provisioners based on the configured provisioner.
+	var insecureNoSandbox bool
+	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
+	attestInterval := config.GlobalConfig.Runtime.AttestInterval
+	provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
+	switch p := config.GlobalConfig.Runtime.Provisioner; p {
+	case rtConfig.RuntimeProvisionerMock:
+		// Mock provisioner, only supported when the runtime requires no TEE hardware.
+		if !cmdFlags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
+		}
+
+		provisioners[component.TEEKindNone] = hostMock.New()
+	case rtConfig.RuntimeProvisionerUnconfined:
+		// Unconfined provisioner, can be used with no TEE or with Intel SGX.
+		if !cmdFlags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("unconfined provisioner requires use of unsafe debug flags")
+		}
+
+		insecureNoSandbox = true
+
+		fallthrough
+	case rtConfig.RuntimeProvisionerSandboxed:
+		// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
+		if !insecureNoSandbox {
+			if _, err = os.Stat(sandboxBinary); err != nil {
+				return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
+			}
+		}
+
+		// Configure the non-TEE provisioner.
+		provisioners[component.TEEKindNone], err = hostSandbox.New(hostSandbox.Config{
+			HostInfo:          hostInfo,
+			InsecureNoSandbox: insecureNoSandbox,
+			SandboxBinaryPath: sandboxBinary,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
+		}
+
+		// Configure the Intel SGX provisioner.
+		switch sgxLoader := config.GlobalConfig.Runtime.SGXLoader; {
+		case forceNoSGX:
+			// Remap SGX to non-SGX when forced to do so.
+			provisioners[component.TEEKindSGX], err = hostSandbox.New(hostSandbox.Config{
+				HostInfo:          hostInfo,
+				InsecureNoSandbox: insecureNoSandbox,
+				SandboxBinaryPath: sandboxBinary,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
+			}
+		case sgxLoader == "" && runtimeEnv == rtConfig.RuntimeEnvironmentSGX:
+			// SGX environment is forced, but we don't have the needed loader.
+			return nil, fmt.Errorf("SGX runtime environment requires setting the SGX loader")
+		case sgxLoader == "" && runtimeEnv != rtConfig.RuntimeEnvironmentSGXMock:
+			// SGX may be needed, but we don't have a loader configured.
+			break
+		default:
+			// Configure mock SGX if configured and we are in a debug mode.
+			insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
+			if insecureMock && !cmdFlags.DebugDontBlameOasis() {
+				return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
+			}
+
+			provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
+				HostInfo:              hostInfo,
+				CommonStore:           commonStore,
+				LoaderPath:            sgxLoader,
+				IAS:                   ias,
+				PCS:                   qs,
+				Consensus:             consensus,
+				Identity:              identity,
+				SandboxBinaryPath:     sandboxBinary,
+				InsecureNoSandbox:     insecureNoSandbox,
+				InsecureMock:          insecureMock,
+				RuntimeAttestInterval: attestInterval,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
+	}
+
+	// Configure TDX provisioner.
+	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
+	provisioners[component.TEEKindTDX], err = hostTdx.NewQemu(hostTdx.QemuConfig{
+		HostInfo:              hostInfo,
+		CommonStore:           commonStore,
+		PCS:                   qs,
+		Consensus:             consensus,
+		Identity:              identity,
+		RuntimeAttestInterval: attestInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TDX runtime provisioner: %w", err)
+	}
+
+	// Configure optional load balancing.
+	for tee, rp := range provisioners {
+		provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
+			NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
+		})
+	}
+
+	// Create a composite provisioner to provision the individual components.
+	provisioner := hostComposite.NewProvisioner(provisioners)
+
+	return provisioner, nil
+}
+
+func createCachingQuoteService(commonStore *persistent.CommonStore) (pcs.QuoteService, error) {
+	pc, err := pcs.NewHTTPClient(&pcs.HTTPClientConfig{
+		// TODO: Support configuring the API key.
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
+	}
+
+	qs := pcs.NewCachingQuoteService(pc, commonStore)
+
+	return qs, nil
 }
 
 func createHistoryFactory() (history.Factory, error) {

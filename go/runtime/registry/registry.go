@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -437,13 +438,14 @@ type runtimeRegistry struct {
 	logger *logging.Logger
 
 	dataDir string
-	cfg     *RuntimeConfig
 
 	consensus consensus.Backend
 	client    runtimeClient.RuntimeClient
 
-	runtimes map[common.Namespace]*runtime
+	runtimes    map[common.Namespace]*runtime
+	runtimesCfg map[common.Namespace]map[version.Version]*runtimeHost.Config
 
+	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
 }
 
@@ -491,7 +493,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 		return nil, fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.cfg.Provisioner, r.cfg.Runtimes[runtimeID])
+	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.runtimesCfg[runtimeID])
 	if err != nil {
 		return nil, err
 	}
@@ -577,12 +579,31 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
+	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := newRuntimeConfig(dataDir, commonStore, identity, consensus, ias)
+	// Configure host environment information.
+	hostInfo, err := createHostInfo(consensus)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the PCS client and quote service.
+	qs, err := createCachingQuoteService(commonStore)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create runtime provisioner.
+	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, ias, qs)
+	if err != nil {
+		return nil, err
+	}
+
+	runtimesCfg, err := newRuntimeConfig(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -590,13 +611,18 @@ func New(
 	r := &runtimeRegistry{
 		logger:         logging.GetLogger("runtime/registry"),
 		dataDir:        dataDir,
-		cfg:            cfg,
 		consensus:      consensus,
 		runtimes:       make(map[common.Namespace]*runtime),
+		runtimesCfg:    runtimesCfg,
+		provisioner:    provisioner,
 		historyFactory: historyFactory,
 	}
 
-	for _, runtimeID := range cfg.RuntimeIDs() {
+	if config.GlobalConfig.Mode == config.ModeKeyManager {
+		return r, nil
+	}
+
+	for runtimeID := range runtimesCfg {
 		if _, err := r.NewRuntime(ctx, runtimeID, true); err != nil {
 			r.logger.Error("failed to add runtime",
 				"err", err,
