@@ -1,9 +1,7 @@
 package registry
 
 import (
-	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -36,9 +34,6 @@ type RuntimeHostNode struct {
 	handler  host.RuntimeHandler
 
 	provisioner host.Provisioner
-
-	runtimeNotify     chan struct{}
-	runtimeNotifyOnce sync.Once
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
@@ -52,13 +47,12 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 	provisioner := runtime.HostProvisioner()
 
 	return &RuntimeHostNode{
-		agg:           agg,
-		rr:            rr,
-		runtime:       runtime,
-		notifier:      notifier,
-		handler:       handler,
-		provisioner:   provisioner,
-		runtimeNotify: make(chan struct{}),
+		agg:         agg,
+		rr:          rr,
+		runtime:     runtime,
+		notifier:    notifier,
+		handler:     handler,
+		provisioner: provisioner,
 	}, nil
 }
 
@@ -81,10 +75,6 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeVersion(version version.Version)
 		return fmt.Errorf("failed to add runtime version to aggregate %s: %w", version, err)
 	}
 
-	n.runtimeNotifyOnce.Do(func() {
-		close(n.runtimeNotify)
-	})
-
 	return nil
 }
 
@@ -96,17 +86,6 @@ func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 // GetRuntimeHostNotifier returns the runtime host notifier.
 func (n *RuntimeHostNode) GetRuntimeHostNotifier() protocol.Notifier {
 	return n.notifier
-}
-
-// WaitHostedRuntime waits for the hosted runtime to be provisioned.
-func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-n.runtimeNotify:
-	}
-
-	return nil
 }
 
 // GetHostedRuntimeActiveVersion returns the version of the active runtime.
