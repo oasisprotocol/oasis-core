@@ -65,7 +65,7 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
 	}
 
-	w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, w.runtimeID)
+	w.runtime, err = commonWorker.RuntimeRegistry.NewRuntime(ctx, w.runtimeID, false)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
 	}
