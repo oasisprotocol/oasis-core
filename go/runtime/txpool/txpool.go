@@ -136,8 +136,11 @@ type TransactionPool interface {
 
 // RuntimeHostProvisioner is a runtime host provisioner.
 type RuntimeHostProvisioner interface {
-	// WaitHostedRuntime waits for the hosted runtime to be provisioned and returns it.
-	WaitHostedRuntime(ctx context.Context) (host.RichRuntime, error)
+	// GetHostedRuntime returns the hosted runtime.
+	GetHostedRuntime() host.RichRuntime
+
+	// WaitHostedRuntime waits for the hosted runtime to be provisioned.
+	WaitHostedRuntime(ctx context.Context) error
 }
 
 // TransactionPublisher is an interface representing a mechanism for publishing transactions.
@@ -664,19 +667,19 @@ func (t *txPool) checkWorker() {
 		cancel()
 	}()
 
+	// Wait for initialization.
+	if err := t.ensureInitialized(); err != nil {
+		return
+	}
+
 	// Wait for the hosted runtime to be available.
-	rr, err := t.host.WaitHostedRuntime(ctx)
-	if err != nil {
+	if err := t.host.WaitHostedRuntime(ctx); err != nil {
 		t.logger.Error("failed waiting for hosted runtime to become available",
 			"err", err,
 		)
 		return
 	}
-
-	// Wait for initialization.
-	if err = t.ensureInitialized(); err != nil {
-		return
-	}
+	rr := t.host.GetHostedRuntime()
 
 	for {
 		select {

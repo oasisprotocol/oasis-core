@@ -100,8 +100,9 @@ type Runtime interface {
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
 
-	// HostConfig returns the runtime host configuration when available. Otherwise returns nil.
-	HostConfig() map[version.Version]*runtimeHost.Config
+	// HostConfig returns the runtime host configuration for the given version
+	// when available. Otherwise returns nil.
+	HostConfig(version version.Version) *runtimeHost.Config
 
 	// HostProvisioner returns the runtime host provisioner when available. Otherwise returns nil.
 	HostProvisioner() runtimeHost.Provisioner
@@ -218,8 +219,8 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
 }
 
-func (r *runtime) HostConfig() map[version.Version]*runtimeHost.Config {
-	return r.hostConfig
+func (r *runtime) HostConfig(version version.Version) *runtimeHost.Config {
+	return r.hostConfig[version]
 }
 
 func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
