@@ -443,7 +443,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		}
 	}
 
-	_ = n.SetHostedRuntimeVersion(activeVersion, nextVersion)
+	n.SetHostedRuntimeVersion(activeVersion, nextVersion)
 
 	if _, err := n.GetHostedRuntimeActiveVersion(); err != nil {
 		n.logger.Error("failed to activate runtime version(s)",
@@ -681,13 +681,18 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Provision the hosted runtime.
-	hrt, hrtNotifier, err := n.ProvisionHostedRuntime()
-	if err != nil {
-		n.logger.Error("failed to provision hosted runtime",
-			"err", err,
-		)
-		return
+	for _, version := range n.GetRuntime().HostVersions() {
+		if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
+			n.logger.Error("failed to provision hosted runtime",
+				"err", err,
+				"version", version,
+			)
+			return
+		}
 	}
+
+	hrt := n.GetHostedRuntime()
+	hrtNotifier := n.GetRuntimeHostNotifier()
 
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()

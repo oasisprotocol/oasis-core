@@ -394,13 +394,18 @@ func (w *Worker) worker() {
 	// Provision the hosted runtime.
 	w.logger.Info("provisioning key manager runtime")
 
-	hrt, hrtNotifier, err := w.ProvisionHostedRuntime()
-	if err != nil {
-		w.logger.Error("failed to provision key manager runtime",
-			"err", err,
-		)
-		return
+	for _, version := range w.GetRuntime().HostVersions() {
+		if err := w.ProvisionHostedRuntimeVersion(version); err != nil {
+			w.logger.Error("failed to provision key manager runtime",
+				"err", err,
+				"version", version,
+			)
+			return
+		}
 	}
+
+	hrt := w.GetHostedRuntime()
+	hrtNotifier := w.GetRuntimeHostNotifier()
 
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
@@ -414,7 +419,7 @@ func (w *Worker) worker() {
 	// Key managers always need to use the enclave version given to them in the bundle
 	// as they need to make sure that replication is possible during upgrades.
 	activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
-	_ = w.SetHostedRuntimeVersion(&activeVersion, nil)
+	w.SetHostedRuntimeVersion(&activeVersion, nil)
 
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
 		w.logger.Error("failed to activate key manager runtime version",
