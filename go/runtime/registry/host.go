@@ -57,31 +57,29 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime() (host.RichRuntime, protocol.N
 		return nil, nil, fmt.Errorf("runtime provisioner is not available")
 	}
 
-	// Provision the handler that implements the host RHP methods.
-	msgHandler := n.factory.NewRuntimeHostHandler()
+	agg := multi.New(runtime.ID())
+	rr := host.NewRichRuntime(agg)
 
-	rts := make(map[version.Version]host.Runtime)
+	notifier := n.factory.NewRuntimeHostNotifier(agg)
+	handler := n.factory.NewRuntimeHostHandler()
+
 	for version, cfg := range cfgs {
 		rtCfg := *cfg
-		rtCfg.MessageHandler = msgHandler
+		rtCfg.MessageHandler = handler
 
 		// Provision the runtime.
-		var err error
-		if rts[version], err = composite.NewHost(rtCfg, provisioner); err != nil {
+		rt, err := composite.NewHost(rtCfg, provisioner)
+		if err != nil {
 			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
+		}
+
+		if err := agg.AddVersion(rt, version); err != nil {
+			return nil, nil, fmt.Errorf("failed to add runtime version to aggregate %s: %w", version, err)
 		}
 	}
 
-	agg, err := multi.New(runtime.ID(), rts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to provision aggregate runtime: %w", err)
-	}
-
-	notifier := n.factory.NewRuntimeHostNotifier(agg)
-	rr := host.NewRichRuntime(agg)
-
 	n.Lock()
-	n.agg = agg.(*multi.Aggregate)
+	n.agg = agg
 	n.runtime = rr
 	n.notifier = notifier
 	n.Unlock()

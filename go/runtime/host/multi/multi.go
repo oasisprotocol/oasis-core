@@ -43,6 +43,22 @@ type aggregatedHost struct {
 	version version.Version
 }
 
+// New returns a new aggregated runtime.
+func newAggregateHost(rt host.Runtime, version version.Version) *aggregatedHost {
+	ch, sub := rt.WatchEvents()
+
+	return &aggregatedHost{
+		host:             rt,
+		version:          version,
+		ch:               ch,
+		sub:              sub,
+		stopCh:           make(chan struct{}),
+		stoppedCh:        make(chan struct{}),
+		stopDiscardCh:    make(chan struct{}),
+		stoppedDiscardCh: make(chan *host.Event),
+	}
+}
+
 func (ah *aggregatedHost) startDiscard() {
 	go func() {
 		var startedEv *host.Event
@@ -116,6 +132,20 @@ type Aggregate struct {
 	notifier *pubsub.Broker
 
 	logger *logging.Logger
+}
+
+// New returns a new aggregated runtime.
+func New(id common.Namespace) *Aggregate {
+	logger := logging.GetLogger("runtime/host/multi").With("runtime_id", id)
+
+	return &Aggregate{
+		id:       id,
+		hosts:    make(map[version.Version]*aggregatedHost),
+		active:   nil,
+		next:     nil,
+		notifier: pubsub.NewBroker(false),
+		logger:   logger,
+	}
 }
 
 // ID implements host.Runtime.
@@ -311,6 +341,27 @@ func (agg *Aggregate) GetVersion(version version.Version) (host.Runtime, error) 
 	return host.host, nil
 }
 
+// AddVersion adds a new runtime version to the aggregate.
+//
+// The provided runtime must be newly provisioned, meaning Start() has not been
+// called yet.
+func (agg *Aggregate) AddVersion(rt host.Runtime, version version.Version) error {
+	agg.l.Lock()
+	defer agg.l.Unlock()
+
+	if id := rt.ID(); id != agg.id {
+		return fmt.Errorf("runtime/host/multi: runtime mismatch: got '%s', expected '%s'", id, agg.id)
+	}
+
+	if _, ok := agg.hosts[version]; ok {
+		return fmt.Errorf("runtime/host/multi: duplicate runtime version: %v", version)
+	}
+
+	agg.hosts[version] = newAggregateHost(rt, version)
+
+	return nil
+}
+
 // SetVersion sets the active and next runtime versions.  This routine will:
 //   - Do nothing if the active version is already the requested version.
 //   - Unconditionally tear down the currently active version (via Stop()).
@@ -501,50 +552,4 @@ func (agg *Aggregate) stopNextLocked() {
 
 	// Notify subscribers that configuration has changed.
 	agg.notifier.Broadcast(&host.Event{ConfigUpdated: &host.ConfigUpdatedEvent{}})
-}
-
-// New returns a new aggregated runtime.  The runtimes provided must be
-// freshly provisioned (ie: Start() must not have been called).
-func New(
-	id common.Namespace,
-	rts map[version.Version]host.Runtime,
-) (host.Runtime, error) {
-	if len(rts) == 0 {
-		return nil, fmt.Errorf("runtime/host/multi: no sub-runtimes")
-	}
-
-	agg := &Aggregate{
-		id:       id,
-		logger:   logging.GetLogger("runtime/host/multi").With("runtime_id", id),
-		hosts:    make(map[version.Version]*aggregatedHost),
-		notifier: pubsub.NewBroker(false),
-	}
-
-	for version, rt := range rts {
-		if rt.ID() != id {
-			return nil, fmt.Errorf("runtime/host/multi: sub-runtime mismatch: got '%s', expected '%s'",
-				rt.ID().String(),
-				id.String(),
-			)
-		}
-		if agg.hosts[version] != nil {
-			return nil, fmt.Errorf("runtime/host/multi: duplicate sub-runtime version: %v", version)
-		}
-
-		ch, sub := rt.WatchEvents()
-
-		ah := &aggregatedHost{
-			host:             rts[version],
-			ch:               ch,
-			sub:              sub,
-			stopCh:           make(chan struct{}),
-			stoppedCh:        make(chan struct{}),
-			stopDiscardCh:    make(chan struct{}),
-			stoppedDiscardCh: make(chan *host.Event),
-			version:          version,
-		}
-		agg.hosts[version] = ah
-	}
-
-	return agg, nil
 }
