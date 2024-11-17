@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -13,7 +14,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -149,8 +149,8 @@ func (e *EpochSnapshot) Node(_ context.Context, id signature.PublicKey) (*node.N
 type Group struct {
 	sync.RWMutex
 
-	identity *identity.Identity
-	runtime  runtimeRegistry.Runtime
+	runtimeID common.Namespace
+	identity  *identity.Identity
 
 	consensus consensus.Backend
 
@@ -207,7 +207,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Request committees from scheduler.
 	committees, err := g.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
-		RuntimeID: g.runtime.ID(),
+		RuntimeID: g.runtimeID,
 		Height:    height,
 	})
 	if err != nil {
@@ -268,7 +268,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch current runtime descriptor.
-	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtime.ID(), Height: height})
+	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
 		return err
 	}
@@ -321,8 +321,8 @@ func (g *Group) Start() error {
 // NewGroup creates a new group.
 func NewGroup(
 	ctx context.Context,
+	runtimeID common.Namespace,
 	identity *identity.Identity,
-	runtime runtimeRegistry.Runtime,
 	consensus consensus.Backend,
 ) (*Group, error) {
 	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
@@ -331,10 +331,10 @@ func NewGroup(
 	}
 
 	return &Group{
+		runtimeID: runtimeID,
 		identity:  identity,
-		runtime:   runtime,
 		consensus: consensus,
 		nodes:     nw,
-		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtime.ID()),
+		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
 	}, nil
 }

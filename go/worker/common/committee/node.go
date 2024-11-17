@@ -843,7 +843,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, identity, runtime, consensus)
+	group, err := NewGroup(ctx, runtime.ID(), identity, consensus)
 	if err != nil {
 		cancel()
 		return nil, err
