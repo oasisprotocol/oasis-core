@@ -887,7 +887,7 @@ func NewNode(
 	n.RuntimeHostNode = rhn
 
 	// Prepare transaction pool.
-	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, n, runtime.History(), n)
+	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})

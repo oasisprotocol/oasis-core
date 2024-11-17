@@ -134,15 +134,6 @@ type TransactionPool interface {
 	GetTxs() []*TxQueueMeta
 }
 
-// RuntimeHostProvisioner is a runtime host provisioner.
-type RuntimeHostProvisioner interface {
-	// GetHostedRuntime returns the hosted runtime.
-	GetHostedRuntime() host.RichRuntime
-
-	// WaitHostedRuntime waits for the hosted runtime to be provisioned.
-	WaitHostedRuntime(ctx context.Context) error
-}
-
 // TransactionPublisher is an interface representing a mechanism for publishing transactions.
 type TransactionPublisher interface {
 	// PublishTx publishes a transaction to remote peers.
@@ -163,7 +154,7 @@ type txPool struct {
 
 	runtimeID   common.Namespace
 	cfg         config.Config
-	host        RuntimeHostProvisioner
+	runtime     host.RichRuntime
 	txPublisher TransactionPublisher
 	history     history.History
 
@@ -457,13 +448,16 @@ func (t *txPool) getCurrentBlockInfo() (*runtime.BlockInfo, time.Time, error) {
 
 // checkTxBatch requests the runtime to check the validity of a transaction batch.
 // Transactions that pass the check are queued for scheduling.
-func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
+func (t *txPool) checkTxBatch(ctx context.Context) error {
+	// Ensure the runtime is available.
+	if _, err := t.runtime.GetActiveVersion(); err != nil {
+		return fmt.Errorf("runtime is not available")
+	}
+
+	// Get the current block info.
 	bi, lastBlockProcessed, err := t.getCurrentBlockInfo()
 	if err != nil {
-		t.logger.Warn("failed to get current block info, unable to check transactions",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to get current block info: %w", err)
 	}
 
 	// Ensure block round is synced to storage.
@@ -479,13 +473,13 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			"err", err,
 		)
 		t.checkTxCh.In() <- struct{}{}
-		return
+		return nil
 	}
 
 	// Pop the next batch from the queue, check it, and notify submitters.
 	batch := t.checkTxQueue.pop()
 	if len(batch) == 0 {
-		return
+		return nil
 	}
 
 	results, err := func() ([]protocol.CheckTxResult, error) {
@@ -497,7 +491,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		for _, pct := range batch {
 			rawTxBatch = append(rawTxBatch, pct.Raw())
 		}
-		return rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
+		return t.runtime.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
 	}()
 	switch {
 	case err == nil:
@@ -509,7 +503,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
 		defer cancel()
 
-		if err = rr.Abort(abortCtx, false); err != nil {
+		if err = t.runtime.Abort(abortCtx, false); err != nil {
 			t.logger.Error("failed to abort the runtime",
 				"err", err,
 			)
@@ -517,19 +511,10 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 		fallthrough
 	default:
-		t.logger.Warn("transaction batch check failed",
-			"err", err,
-		)
-
 		// Return transaction batch back to the check queue.
 		t.checkTxQueue.retryBatch(batch)
 
-		// Make sure that the batch check is retried later.
-		go func() {
-			time.Sleep(checkTxRetryDelay)
-			t.checkTxCh.In() <- struct{}{}
-		}()
-		return
+		return err
 	}
 
 	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.PendingCheckSize()))
@@ -586,7 +571,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	}
 
 	if len(goodPcts) == 0 {
-		return
+		return nil
 	}
 
 	t.logger.Debug("checked new transactions",
@@ -645,6 +630,8 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
 	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
+
+	return nil
 }
 
 func (t *txPool) ensureInitialized() error {
@@ -672,25 +659,34 @@ func (t *txPool) checkWorker() {
 		return
 	}
 
-	// Wait for the hosted runtime to be available.
-	if err := t.host.WaitHostedRuntime(ctx); err != nil {
-		t.logger.Error("failed waiting for hosted runtime to become available",
-			"err", err,
-		)
-		return
-	}
-	rr := t.host.GetHostedRuntime()
+	// Create a timer for retrying if the active version of the runtime
+	// is not available.
+	retryTimer := time.NewTimer(0)
+	defer retryTimer.Stop()
+
+	retryTimer.Stop()
 
 	for {
 		select {
 		case <-t.stopCh:
 			return
 		case <-t.checkTxCh.Out():
-			t.logger.Debug("checking queued transactions")
-
-			// Check if there are any transactions to check and run the checks.
-			t.checkTxBatch(ctx, rr)
+		case <-retryTimer.C:
 		}
+
+		// Check if there are any transactions to check and run the checks.
+		t.logger.Debug("checking queued transactions")
+
+		if err := t.checkTxBatch(ctx); err != nil {
+			t.logger.Warn("transaction batch check failed",
+				"err", err,
+			)
+
+			retryTimer.Reset(checkTxRetryDelay)
+			continue
+		}
+
+		retryTimer.Stop()
 	}
 }
 
@@ -882,7 +878,7 @@ func (t *txPool) recheck() {
 func New(
 	runtimeID common.Namespace,
 	cfg config.Config,
-	host RuntimeHostProvisioner,
+	runtime host.RichRuntime,
 	history history.History,
 	txPublisher TransactionPublisher,
 ) TransactionPool {
@@ -905,7 +901,7 @@ func New(
 		initCh:               make(chan struct{}),
 		runtimeID:            runtimeID,
 		cfg:                  cfg,
-		host:                 host,
+		runtime:              runtime,
 		history:              history,
 		txPublisher:          txPublisher,
 		seenCache:            seenCache,
