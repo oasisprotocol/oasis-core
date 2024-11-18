@@ -443,7 +443,9 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		}
 	}
 
-	if err := n.SetHostedRuntimeVersion(activeVersion, nextVersion); err != nil {
+	_ = n.SetHostedRuntimeVersion(activeVersion, nextVersion)
+
+	if _, err := n.GetHostedRuntimeActiveVersion(); err != nil {
 		n.logger.Error("failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,

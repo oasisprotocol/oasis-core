@@ -167,5 +167,7 @@ func (n *RuntimeHostNode) SetHostedRuntimeVersion(active *version.Version, next 
 		return fmt.Errorf("runtime not available")
 	}
 
-	return agg.SetVersion(active, next)
+	n.agg.SetVersion(active, next)
+
+	return nil
 }
