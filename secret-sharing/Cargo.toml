@@ -16,7 +16,7 @@ rand = { version = "0.8" }
 rand_core = { version = "0.6" }
 sha3 = { version = "0.10" }
 subtle = { version = "2.6", default-features = false }
-thiserror = { version = "1.0" }
+thiserror = { version = "2.0" }
 zeroize = { version = "1.7" }
 
 [[bin]]
