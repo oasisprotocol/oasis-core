@@ -425,11 +425,10 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 
 	// Update the runtime version based on the currently active deployment.
 	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
-	// NOTE: If there is no active deployment this will activate the all-zero version which may
-	//       result in the runtime stopping.
-	var activeVersion version.Version
+	var activeVersion *version.Version
 	if activeDeploy != nil {
-		activeVersion = activeDeploy.Version
+		activeVersion = new(version.Version)
+		*activeVersion = activeDeploy.Version
 	}
 
 	// For compute nodes, determine if there is a next version and activate it early.

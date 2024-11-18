@@ -368,7 +368,7 @@ func (agg *Aggregate) AddVersion(rt host.Runtime, version version.Version) error
 //   - Start the newly active version if it exists.
 //   - Do nothing if the next version is already the requested version.
 //   - Start the next version if it exists.
-func (agg *Aggregate) SetVersion(active version.Version, next *version.Version) error {
+func (agg *Aggregate) SetVersion(active *version.Version, next *version.Version) error {
 	agg.l.Lock()
 	defer agg.l.Unlock()
 
@@ -383,12 +383,19 @@ func (agg *Aggregate) SetVersion(active version.Version, next *version.Version) 
 	return agg.setNextVersionLocked(next)
 }
 
-func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {
+func (agg *Aggregate) setActiveVersionLocked(maybeVersion *version.Version) error {
 	// Contract: agg.l already locked for write.
 
-	next := agg.hosts[version]
+	// If there is no active version, stop the runtime.
+	if maybeVersion == nil {
+		agg.stopActiveLocked()
+		return nil
+	}
+	version := *maybeVersion
 
 	// Ensure that we know about the new version.
+	next := agg.hosts[version]
+
 	if next == nil {
 		agg.logger.Error("SetVersion: unknown version",
 			"version", version,
@@ -482,9 +489,9 @@ func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error 
 	}
 	version := *maybeVersion
 
+	// Ensure that we know about the next version.
 	next := agg.hosts[version]
 
-	// Ensure that we know about the next version.
 	if next == nil {
 		agg.logger.Warn("unsupported next version",
 			"version", version,

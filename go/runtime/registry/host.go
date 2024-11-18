@@ -158,7 +158,7 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEEForVersion(version versio
 }
 
 // SetHostedRuntimeVersion sets the currently active and next versions for the hosted runtime.
-func (n *RuntimeHostNode) SetHostedRuntimeVersion(active version.Version, next *version.Version) error {
+func (n *RuntimeHostNode) SetHostedRuntimeVersion(active *version.Version, next *version.Version) error {
 	n.Lock()
 	agg := n.agg
 	n.Unlock()
