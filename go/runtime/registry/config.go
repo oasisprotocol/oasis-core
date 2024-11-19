@@ -139,30 +139,43 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 				localConfig = lc
 			}
 
-			rtBnd := &runtimeHost.RuntimeBundle{
-				Bundle:               bnd,
-				ExplodedDataDir:      dataDir,
-				ExplodedDetachedDirs: make(map[component.ID]string),
+			// Gather all components.
+			components := make(map[component.ID]*bundle.ExplodedComponent)
+
+			// Add bundle components.
+			explodedDir := bnd.ExplodedPath(dataDir, "")
+
+			for _, comp := range bnd.Manifest.Components {
+				components[comp.ID()] = &bundle.ExplodedComponent{
+					Component:       comp,
+					Detached:        false,
+					ExplodedDataDir: explodedDir,
+				}
 			}
 
 			// Merge in detached components.
 			for _, detachedBnd := range detachedBundles[id] {
+				explodedDir := detachedBnd.ExplodedPath(dataDir, "")
+
 				for _, detachedComp := range detachedBnd.Manifest.Components {
 					// Skip components that already exist in the bundle itself.
-					if bnd.Manifest.GetComponentByID(detachedComp.ID()) != nil {
+					if _, ok := components[detachedComp.ID()]; ok {
 						continue
 					}
 
-					bnd.Manifest.Components = append(bnd.Manifest.Components, detachedComp)
-					rtBnd.ExplodedDetachedDirs[detachedComp.ID()] = detachedBnd.ExplodedPath(dataDir, "")
+					components[detachedComp.ID()] = &bundle.ExplodedComponent{
+						Component:       detachedComp,
+						Detached:        true,
+						ExplodedDataDir: explodedDir,
+					}
 				}
 			}
 
 			// Determine what kind of components we want.
-			wantedComponents := []component.ID{
-				component.ID_RONL,
+			wantedComponents := []*bundle.ExplodedComponent{
+				components[component.ID_RONL],
 			}
-			for _, comp := range bnd.Manifest.Components {
+			for _, comp := range components {
 				if comp.ID().IsRONL() {
 					continue // Always enabled above.
 				}
@@ -174,7 +187,7 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 					enabled = false
 				}
 				// Detached components are explicit and they should be enabled by default.
-				if _, ok := rtBnd.ExplodedDetachedDirs[comp.ID()]; ok {
+				if comp.Detached {
 					enabled = true
 				}
 
@@ -188,11 +201,12 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 					continue
 				}
 
-				wantedComponents = append(wantedComponents, comp.ID())
+				wantedComponents = append(wantedComponents, comp)
 			}
 
 			runtimes[id][version] = &runtimeHost.Config{
-				Bundle:      rtBnd,
+				Name:        bnd.Manifest.Name,
+				ID:          bnd.Manifest.ID,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,
 			}
@@ -209,21 +223,15 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 				}
 
 				runtimeHostCfg := &runtimeHost.Config{
-					Bundle: &runtimeHost.RuntimeBundle{
-						Bundle: &bundle.Bundle{
-							Manifest: &bundle.Manifest{
-								ID: id,
-								Components: []*bundle.Component{
-									{
-										Kind:       component.RONL,
-										Executable: "mock",
-									},
-								},
+					ID: id,
+					Components: []*bundle.ExplodedComponent{
+						{
+							Component: &bundle.Component{
+								Kind:       component.RONL,
+								Executable: "mock",
 							},
+							Detached: false,
 						},
-					},
-					Components: []component.ID{
-						component.ID_RONL,
 					},
 				}
 				runtimes[id] = map[version.Version]*runtimeHost.Config{

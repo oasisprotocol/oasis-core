@@ -262,7 +262,7 @@ func (lb *lbProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	if len(cfg.Components) != 1 {
 		return nil, fmt.Errorf("host/loadbalance: must specify a single component")
 	}
-	if cfg.Components[0] != component.ID_RONL {
+	if cfg.Components[0].ID() != component.ID_RONL {
 		return lb.inner.NewRuntime(cfg)
 	}
 
@@ -278,11 +278,11 @@ func (lb *lbProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	}
 
 	return &lbRuntime{
-		id:               cfg.Bundle.Manifest.ID,
+		id:               cfg.ID,
 		instances:        instances,
 		healthyInstances: make(map[int]struct{}),
 		stopCh:           make(chan struct{}),
-		logger:           logging.GetLogger("runtime/host/loadbalance").With("runtime_id", cfg.Bundle.Manifest.ID),
+		logger:           logging.GetLogger("runtime/host/loadbalance").With("runtime_id", cfg.ID),
 	}, nil
 }
 

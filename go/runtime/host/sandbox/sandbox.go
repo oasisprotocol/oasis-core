@@ -81,17 +81,15 @@ type provisioner struct {
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	id := cfg.Bundle.Manifest.ID
-
 	r := &sandboxedRuntime{
 		cfg:                         p.cfg,
 		rtCfg:                       cfg,
-		id:                          id,
+		id:                          cfg.ID,
 		stopCh:                      make(chan struct{}),
 		ctrlCh:                      make(chan interface{}, ctrlChannelBufferSize),
 		notifier:                    pubsub.NewBroker(false),
 		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
-		logger:                      p.cfg.Logger.With("runtime_id", id),
+		logger:                      p.cfg.Logger.With("runtime_id", cfg.ID),
 	}
 
 	err := cfg.MessageHandler.AttachRuntime(r)
@@ -377,11 +375,11 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
-	if id := r.rtCfg.Components[0]; id.IsRONL() {
+	if comp := r.rtCfg.Components[0]; comp.ID().IsRONL() {
 		// Make sure the version matches what is configured in the bundle. This check is skipped for
 		// non-RONL components to support detached bundles.
-		if comp := r.rtCfg.Bundle.Manifest.GetComponentByID(id); comp.Version != *rtVersion {
-			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, comp.Version)
+		if bndVersion := comp.Version; *rtVersion != bndVersion {
+			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
 		}
 	}
 
@@ -605,21 +603,21 @@ func (r *sandboxedRuntime) manager() {
 // DefaultGetSandboxConfig is the default function for generating sandbox configuration.
 func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
 	return func(hostCfg host.Config, _ Connector, _ string) (process.Config, error) {
-		comp, err := hostCfg.GetComponent()
+		comp, err := hostCfg.GetExplodedComponent()
 		if err != nil {
 			return process.Config{}, err
 		}
 
 		logWrapper := host.NewRuntimeLogWrapper(
 			logger,
-			"runtime_id", hostCfg.Bundle.Manifest.ID,
-			"runtime_name", hostCfg.Bundle.Manifest.Name,
+			"runtime_id", hostCfg.ID,
+			"runtime_name", hostCfg.Name,
 			"component", comp.ID(),
 			"provisioner", "sandbox",
 		)
 
 		return process.Config{
-			Path:              hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
+			Path:              comp.ExplodedPath(comp.Executable),
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
 			Stderr:            logWrapper,

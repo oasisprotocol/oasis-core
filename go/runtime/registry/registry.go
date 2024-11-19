@@ -564,7 +564,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 
 // addRuntimeVersion adds the given version configuration to the given runtime.
 func (r *runtimeRegistry) addRuntimeVersion(version version.Version, cfg *runtimeHost.Config) error {
-	rt, err := r.getRuntime(cfg.Bundle.Manifest.ID)
+	rt, err := r.getRuntime(cfg.ID)
 	if err != nil {
 		return err
 	}

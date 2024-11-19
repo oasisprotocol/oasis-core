@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -20,7 +21,7 @@ type Manifest struct {
 	// Name is the optional human readable runtime name.
 	Name string `json:"name,omitempty"`
 
-	// ID is the runtime ID.
+	// ID is the runtime identifier.
 	ID common.Namespace `json:"id"`
 
 	// Version is the runtime version.
@@ -224,6 +225,24 @@ type Identity struct {
 
 	// Enclave is the enclave identity.
 	Enclave sgx.EnclaveIdentity `json:"enclave"`
+}
+
+// ExplodedComponent is an exploded runtime component ready for execution.
+type ExplodedComponent struct {
+	*Component
+
+	// Detached returns true iff the bundle containing the component does not
+	// include a RONL component.
+	Detached bool
+
+	// ExplodedDataDir is the path to the data directory where the bundle
+	// containing the component has been extracted.
+	ExplodedDataDir string
+}
+
+// ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
+func (c *ExplodedComponent) ExplodedPath(fn string) string {
+	return filepath.Join(c.ExplodedDataDir, fn)
 }
 
 // Component is a runtime component.
