@@ -58,6 +58,10 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 
 // ProvisionHostedRuntimeVersion provisions the configured runtime version.
 func (n *RuntimeHostNode) ProvisionHostedRuntimeVersion(version version.Version) error {
+	if n.agg.HasVersion(version) {
+		return nil
+	}
+
 	cfg := n.runtime.HostConfig(version)
 	if cfg == nil {
 		return fmt.Errorf("runtime version %s not found", version)
