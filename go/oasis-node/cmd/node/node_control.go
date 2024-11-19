@@ -199,6 +199,10 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
 
 	for _, rt := range n.RuntimeRegistry.Runtimes() {
+		if !rt.IsManaged() {
+			continue
+		}
+
 		var status control.RuntimeStatus
 
 		// Fetch runtime registry descriptor. Do not wait too long for the descriptor to become
