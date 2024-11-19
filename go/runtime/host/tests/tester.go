@@ -157,6 +157,8 @@ func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require.NoError(err, "Call")
 	require.NotNil(rsp.Empty, "runtime response to RuntimePingRequest should return an Empty body")
 
+	// FIXME: Remove or replace this call, as the mockMessageHandler cannot
+	//        handle HostFetchConsensusBlockRequest.
 	req, err := mockRuntimeKeyManagerStatusUpdateRequest()
 	require.NoError(err, "mockKeyManagerStatusRequest")
 
@@ -196,6 +198,7 @@ func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 	}
 
 	// Trigger a force abort (should restart the runtime).
+	// FIXME: Runtimes do not support abort requests anymore.
 	err = r.Abort(context.Background(), true)
 	require.NoError(err, "Abort(force=true)")
 

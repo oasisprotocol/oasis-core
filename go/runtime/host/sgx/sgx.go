@@ -149,7 +149,7 @@ func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protoco
 
 	attestation, err := ts.impl.Update(ctx, sp, conn, report, nonce)
 
-	sgxCommon.UpdateAttestationMetrics(ts.cfg.Bundle.Manifest.ID, component.TEEKindSGX, err)
+	sgxCommon.UpdateAttestationMetrics(ts.cfg.ID, component.TEEKindSGX, err)
 
 	return attestation, err
 }
@@ -170,11 +170,11 @@ type sgxProvisioner struct {
 	logger *logging.Logger
 }
 
-func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Component) ([]byte, []byte, error) {
+func (s *sgxProvisioner) loadEnclaveBinaries(comp *bundle.ExplodedComponent) ([]byte, []byte, error) {
 	if comp.SGX == nil || comp.SGX.Executable == "" {
 		return nil, nil, fmt.Errorf("SGX executable not available in bundle")
 	}
-	sgxExecutablePath := rtCfg.Bundle.ExplodedPath(comp.ID(), comp.SGX.Executable)
+	sgxExecutablePath := comp.ExplodedPath(comp.SGX.Executable)
 
 	var (
 		sig, sgxs   []byte
@@ -190,7 +190,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Com
 	}
 
 	if comp.SGX.Signature != "" {
-		sgxSignaturePath := rtCfg.Bundle.ExplodedPath(comp.ID(), comp.SGX.Signature)
+		sgxSignaturePath := comp.ExplodedPath(comp.SGX.Signature)
 		sig, err = os.ReadFile(sgxSignaturePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)
@@ -235,7 +235,7 @@ func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 }
 
 func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
-	comp, err := rtCfg.GetComponent()
+	comp, err := rtCfg.GetExplodedComponent()
 	if err != nil {
 		return process.Config{}, err
 	}
@@ -255,7 +255,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		signaturePath = filepath.Join(runtimeDir, signaturePath)
 	}
 
-	sgxs, sig, err := s.loadEnclaveBinaries(rtCfg, comp)
+	sgxs, sig, err := s.loadEnclaveBinaries(comp)
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
@@ -296,8 +296,8 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 
 	logWrapper := host.NewRuntimeLogWrapper(
 		s.logger,
-		"runtime_id", rtCfg.Bundle.Manifest.ID,
-		"runtime_name", rtCfg.Bundle.Manifest.Name,
+		"runtime_id", rtCfg.ID,
+		"runtime_name", rtCfg.Name,
 		"component", comp.ID(),
 		"provisioner", s.Name(),
 	)

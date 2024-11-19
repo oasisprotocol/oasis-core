@@ -117,7 +117,7 @@ func (ep *teeStateEPID) update(
 	}
 
 	evidence := ias.Evidence{
-		RuntimeID:                  ep.cfg.Bundle.Manifest.ID,
+		RuntimeID:                  ep.cfg.ID,
 		Quote:                      quote,
 		Nonce:                      nonce,
 		EarlyTCBUpdate:             true,

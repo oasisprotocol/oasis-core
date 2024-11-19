@@ -21,7 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 )
 
-// GetQuotePolicy fetches the quote policy for the given manifest/component. In case the policy is
+// GetQuotePolicy fetches the quote policy for the given component. In case the policy is
 // not available, return the fallback policy.
 func GetQuotePolicy(
 	ctx context.Context,
@@ -29,7 +29,7 @@ func GetQuotePolicy(
 	cb consensus.Backend,
 	fallbackPolicy *sgxQuote.Policy,
 ) (*sgxQuote.Policy, error) {
-	comp, err := rtCfg.GetComponent()
+	comp, err := rtCfg.GetExplodedComponent()
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func GetQuotePolicy(
 		// Load RONL policy from the consensus layer.
 		rt, err := cb.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
 			Height:           consensus.HeightLatest,
-			ID:               rtCfg.Bundle.Manifest.ID,
+			ID:               rtCfg.ID,
 			IncludeSuspended: true,
 		})
 		if err != nil {
