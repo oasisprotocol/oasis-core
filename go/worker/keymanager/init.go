@@ -69,9 +69,6 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to get runtime: %w", err)
 	}
-	if numVers := len(w.runtime.HostVersions()); numVers != 1 {
-		return nil, fmt.Errorf("worker/keymanager: expected a single runtime version (got %d)", numVers)
-	}
 
 	// Prepare the runtime host node helpers.
 	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
