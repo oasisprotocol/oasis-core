@@ -680,7 +680,12 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Provision the hosted runtime.
+	// Start watching runtime versions so that we can provision new versions
+	// once they are discovered.
+	versionCh, versionSub := n.GetRuntime().WatchHostVersions()
+	defer versionSub.Close()
+
+	// Provision all known versions.
 	for _, version := range n.GetRuntime().HostVersions() {
 		if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
 			n.logger.Error("failed to provision hosted runtime",
@@ -691,6 +696,13 @@ func (n *Node) worker() {
 		}
 	}
 
+	// Perform initial hosted runtime version update to ensure we have something even in cases where
+	// initial block processing fails for any reason.
+	n.CrossNode.Lock()
+	n.updateHostedRuntimeVersionLocked()
+	n.CrossNode.Unlock()
+
+	// Start the runtime and its notifier.
 	hrt := n.GetHostedRuntime()
 	hrtNotifier := n.GetRuntimeHostNotifier()
 
@@ -703,12 +715,7 @@ func (n *Node) worker() {
 	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
-	// Perform initial hosted runtime version update to ensure we have something even in cases where
-	// initial block processing fails for any reason.
-	n.CrossNode.Lock()
-	n.updateHostedRuntimeVersionLocked()
-	n.CrossNode.Unlock()
-
+	// Enter the main processing loop.
 	initialized := false
 	for {
 		select {
@@ -752,6 +759,14 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleRuntimeHostEventLocked(ev)
 			}()
+		case version := <-versionCh:
+			// Received a new runtime version.
+			if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
+				n.logger.Error("failed to provision hosted runtime",
+					"err", err,
+					"version", version,
+				)
+			}
 		}
 	}
 }
