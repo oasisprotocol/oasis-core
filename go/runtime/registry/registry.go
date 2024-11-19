@@ -44,10 +44,10 @@ var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
-	// GetRuntime returns the per-runtime interface if the runtime is managed.
+	// GetRuntime returns the per-runtime interface.
 	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
-	// Runtimes returns a list of all managed runtimes.
+	// Runtimes returns a list of all runtimes.
 	Runtimes() []Runtime
 
 	// NewRuntime creates a new runtime that may or may not be managed
@@ -75,6 +75,9 @@ type Runtime interface {
 
 	// DataDir returns the runtime-specific data directory.
 	DataDir() string
+
+	// IsManaged returns true iff the runtime is managed by the registry.
+	IsManaged() bool
 
 	// RegistryDescriptor waits for the runtime to be registered and
 	// then returns its registry descriptor.
@@ -111,6 +114,10 @@ type Runtime interface {
 
 	// HostVersions returns a list of supported runtime versions.
 	HostVersions() []version.Version
+
+	// WatchHostVersions returns a channel that produces a stream of versions
+	// as they are added to the runtime.
+	WatchHostVersions() (<-chan version.Version, *pubsub.Subscription)
 }
 
 type runtime struct { // nolint: maligned
@@ -134,6 +141,7 @@ type runtime struct { // nolint: maligned
 	registryDescriptorNotifier *pubsub.Broker
 	activeDescriptorCh         chan struct{}
 	activeDescriptorNotifier   *pubsub.Broker
+	versionNotifier            *pubsub.Broker
 
 	hostProvisioner runtimeHost.Provisioner
 	hostConfig      map[version.Version]*runtimeHost.Config
@@ -147,7 +155,6 @@ func newRuntime(
 	dataDir string,
 	consensus consensus.Backend,
 	provisioner runtimeHost.Provisioner,
-	cfg map[version.Version]*runtimeHost.Config,
 ) (*runtime, error) {
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
 
@@ -174,8 +181,9 @@ func newRuntime(
 		registryDescriptorNotifier: pubsub.NewBroker(true),
 		activeDescriptorCh:         make(chan struct{}),
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
+		versionNotifier:            pubsub.NewBroker(false),
 		hostProvisioner:            provisioner,
-		hostConfig:                 cfg,
+		hostConfig:                 make(map[version.Version]*runtimeHost.Config),
 		logger:                     logger,
 	}, nil
 }
@@ -188,6 +196,11 @@ func (r *runtime) ID() common.Namespace {
 // DataDir implements Runtime.
 func (r *runtime) DataDir() string {
 	return r.dataDir
+}
+
+// IsManaged implements Runtime.
+func (r *runtime) IsManaged() bool {
+	return r.managed
 }
 
 // RegistryDescriptor implements Runtime.
@@ -287,6 +300,30 @@ func (r *runtime) HostVersions() []version.Version {
 		versions = append(versions, v)
 	}
 	return versions
+}
+
+// HostVersions implements Runtime.
+func (r *runtime) WatchHostVersions() (<-chan version.Version, *pubsub.Subscription) {
+	sub := r.versionNotifier.Subscribe()
+	ch := make(chan version.Version)
+	sub.Unwrap(ch)
+
+	return ch, sub
+}
+
+// addVersion adds the given version configuration to the runtime.
+func (r *runtime) addVersion(version version.Version, cfg *runtimeHost.Config) error {
+	r.Lock()
+	defer r.Unlock()
+
+	if _, ok := r.hostConfig[version]; ok {
+		return fmt.Errorf("runtime/registry: duplicate runtime version %s", version)
+	}
+
+	r.hostConfig[version] = cfg
+	r.versionNotifier.Broadcast(version)
+
+	return nil
 }
 
 // start starts the runtime worker.
@@ -442,8 +479,7 @@ type runtimeRegistry struct {
 	consensus consensus.Backend
 	client    runtimeClient.RuntimeClient
 
-	runtimes    map[common.Namespace]*runtime
-	runtimesCfg map[common.Namespace]map[version.Version]*runtimeHost.Config
+	runtimes map[common.Namespace]*runtime
 
 	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
@@ -451,11 +487,15 @@ type runtimeRegistry struct {
 
 // GetRuntime implements Registry.
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
+	return r.getRuntime(runtimeID)
+}
+
+func (r *runtimeRegistry) getRuntime(runtimeID common.Namespace) (*runtime, error) {
 	r.RLock()
 	defer r.RUnlock()
 
 	rt, ok := r.runtimes[runtimeID]
-	if !ok || !rt.managed {
+	if !ok {
 		return nil, fmt.Errorf("runtime/registry: runtime %s not found", runtimeID)
 	}
 	return rt, nil
@@ -468,9 +508,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 
 	rts := make([]Runtime, 0, len(r.runtimes))
 	for _, rt := range r.runtimes {
-		if rt.managed {
-			rts = append(rts, rt)
-		}
+		rts = append(rts, rt)
 	}
 	return rts
 }
@@ -493,7 +531,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 		return nil, fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.runtimesCfg[runtimeID])
+	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner)
 	if err != nil {
 		return nil, err
 	}
@@ -522,6 +560,16 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 	)
 
 	return rt, nil
+}
+
+// addRuntimeVersion adds the given version configuration to the given runtime.
+func (r *runtimeRegistry) addRuntimeVersion(version version.Version, cfg *runtimeHost.Config) error {
+	rt, err := r.getRuntime(cfg.Bundle.Manifest.ID)
+	if err != nil {
+		return err
+	}
+
+	return rt.addVersion(version, cfg)
 }
 
 // RegisterClient implements Registry.
@@ -613,22 +661,27 @@ func New(
 		dataDir:        dataDir,
 		consensus:      consensus,
 		runtimes:       make(map[common.Namespace]*runtime),
-		runtimesCfg:    runtimesCfg,
 		provisioner:    provisioner,
 		historyFactory: historyFactory,
 	}
 
-	if config.GlobalConfig.Mode == config.ModeKeyManager {
-		return r, nil
-	}
+	managed := config.GlobalConfig.Mode != config.ModeKeyManager
 
 	for runtimeID := range runtimesCfg {
-		if _, err := r.NewRuntime(ctx, runtimeID, true); err != nil {
+		if _, err := r.NewRuntime(ctx, runtimeID, managed); err != nil {
 			r.logger.Error("failed to add runtime",
 				"err", err,
 				"id", runtimeID,
 			)
 			return nil, fmt.Errorf("failed to add runtime %s: %w", runtimeID, err)
+		}
+	}
+
+	for _, cfgs := range runtimesCfg {
+		for version, cfg := range cfgs {
+			if err := r.addRuntimeVersion(version, cfg); err != nil {
+				return nil, err
+			}
 		}
 	}
 

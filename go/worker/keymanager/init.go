@@ -65,9 +65,9 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
 	}
 
-	w.runtime, err = commonWorker.RuntimeRegistry.NewRuntime(ctx, w.runtimeID, false)
+	w.runtime, err = commonWorker.RuntimeRegistry.GetRuntime(w.runtimeID)
 	if err != nil {
-		return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
+		return nil, fmt.Errorf("worker/keymanager: failed to get runtime: %w", err)
 	}
 	if numVers := len(w.runtime.HostVersions()); numVers != 1 {
 		return nil, fmt.Errorf("worker/keymanager: expected a single runtime version (got %d)", numVers)
