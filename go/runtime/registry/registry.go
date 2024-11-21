@@ -68,6 +68,9 @@ type Registry interface {
 
 	// FinishInitialization finalizes setup for all runtimes.
 	FinishInitialization() error
+
+	// GetBundleRegistry returns the bundle registry.
+	GetBundleRegistry() bundle.Registry
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -624,6 +627,11 @@ func (r *runtimeRegistry) FinishInitialization() error {
 		}
 	}
 	return nil
+}
+
+// GetBundleRegistry implements Registry.
+func (r *runtimeRegistry) GetBundleRegistry() bundle.Registry {
+	return r.bundleRegistry
 }
 
 // Name implements BackgroundService.

@@ -11,11 +11,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	block "github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
@@ -84,6 +86,9 @@ type Status struct {
 
 	// Runtimes is the status overview for each runtime supported by the node.
 	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes,omitempty"`
+
+	// Bundles is the status overview of known runtime bundles.
+	Bundles []BundleStatus `json:"bundles,omitempty"`
 
 	// Registration is the node's registration status.
 	Registration *RegistrationStatus `json:"registration,omitempty"`
@@ -186,6 +191,37 @@ type RuntimeStatus struct {
 
 	// Provisioner is the name of the runtime provisioner.
 	Provisioner string `json:"provisioner,omitempty"`
+}
+
+// BundleStatus is the per-runtime bundle status overview.
+type BundleStatus struct {
+	// Name is the optional human readable runtime name.
+	Name string `json:"name,omitempty"`
+
+	// ID is the runtime identifier.
+	ID common.Namespace `json:"id"`
+
+	// Components contains statuses of the runtime components.
+	Components []ComponentStatus `json:"components,omitempty"`
+}
+
+// ComponentStatus is the component status overview.
+type ComponentStatus struct {
+	// Kind is the component kind.
+	Kind component.Kind `json:"kind"`
+
+	// Name is the name of the component.
+	Name string `json:"name,omitempty"`
+
+	// Version is the component version.
+	Version version.Version `json:"version,omitempty"`
+
+	// Detached specifies whether the component was in a detached bundled.
+	Detached bool `json:"detached,omitempty"`
+
+	// Disabled specifies whether the component is disabled by default
+	// and needs to be explicitly enabled via node configuration to be used.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // SeedStatus is the status of the seed node.
