@@ -124,6 +124,24 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 	return nil
 }
 
+// GetVersion returns the runtime version.
+func (m *Manifest) GetVersion() version.Version {
+	// We also support legacy manifests which define version at the top-level.
+	for _, comp := range m.Components {
+		if !comp.ID().IsRONL() {
+			continue
+		}
+
+		if comp.Version.ToU64() > m.Version.ToU64() {
+			return comp.Version
+		}
+
+		break
+	}
+
+	return m.Version
+}
+
 // SGXMetadata is the SGX specific manifest metadata.
 type SGXMetadata struct {
 	// Executable is the name of the SGX enclave executable file.
