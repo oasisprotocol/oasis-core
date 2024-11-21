@@ -174,6 +174,12 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 		}
 		// Retry if not yet activated.
 		if cs.ActiveVersion.ToU64() < v.ToU64() {
+			sc.Logger.Warn("active version mismatch, waiting",
+				"node", node.Name,
+				"version", v,
+				"active_version", cs.ActiveVersion,
+			)
+
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -181,6 +187,11 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 			return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
 		}
 		if cs.Status != commonWorker.StatusStateReady {
+			sc.Logger.Warn("common worker not ready, waiting",
+				"node", node.Name,
+				"status", cs.Status,
+			)
+
 			time.Sleep(1 * time.Second)
 			continue
 		}
