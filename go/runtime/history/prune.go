@@ -50,29 +50,7 @@ type Pruner interface {
 	RegisterHandler(handler PruneHandler)
 }
 
-type prunerBase struct {
-	sync.RWMutex
-
-	handlers []PruneHandler
-}
-
-// RegisterHandler implements Pruner.
-func (p *prunerBase) RegisterHandler(handler PruneHandler) {
-	p.Lock()
-	defer p.Unlock()
-
-	p.handlers = append(p.handlers, handler)
-}
-
-func newPrunerBase() prunerBase {
-	return prunerBase{}
-}
-
 type nonePruner struct{}
-
-// RegisterHandler implements Pruner.
-func (p *nonePruner) RegisterHandler(PruneHandler) {
-}
 
 // Prune implements Pruner.
 func (p *nonePruner) Prune(uint64) error {
@@ -82,6 +60,10 @@ func (p *nonePruner) Prune(uint64) error {
 // PruneInterval implements Pruner.
 func (p *nonePruner) PruneInterval() time.Duration {
 	return time.Hour
+}
+
+// RegisterHandler implements Pruner.
+func (p *nonePruner) RegisterHandler(PruneHandler) {
 }
 
 // NewNonePruner creates a new pruner that never prunes anything.
@@ -98,13 +80,14 @@ func NewNonePrunerFactory() PrunerFactory {
 }
 
 type keepLastPruner struct {
-	prunerBase
-
 	logger *logging.Logger
 	db     *DB
 
 	numKept       uint64
 	pruneInterval time.Duration
+
+	mu       sync.RWMutex
+	handlers []PruneHandler
 }
 
 // Prune implements Pruner.
@@ -113,8 +96,8 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 		return nil
 	}
 
-	p.prunerBase.RLock()
-	defer p.prunerBase.RUnlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	lastPrunedRound := latestRound - p.numKept
 
@@ -162,7 +145,7 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
-		for _, ph := range p.prunerBase.handlers {
+		for _, ph := range p.handlers {
 			if err := ph.Prune(pruned); err != nil {
 				p.logger.Error("prune handler failed, aborting prune",
 					"err", err,
@@ -183,15 +166,22 @@ func (p *keepLastPruner) PruneInterval() time.Duration {
 	return p.pruneInterval
 }
 
+func (p *keepLastPruner) RegisterHandler(handler PruneHandler) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.handlers = append(p.handlers, handler)
+}
+
 // NewKeepLastPruner creates a pruner that keeps the last configured
 // number of rounds.
 func NewKeepLastPruner(runtimeID common.Namespace, numKept uint64, pruneInterval time.Duration, db *DB) (Pruner, error) {
 	return &keepLastPruner{
-		prunerBase:    newPrunerBase(),
 		logger:        logging.GetLogger("runtime/prune/keep_last").With("runtime_id", runtimeID),
 		db:            db,
 		numKept:       numKept,
 		pruneInterval: pruneInterval,
+		handlers:      make([]PruneHandler, 0),
 	}, nil
 }
 
