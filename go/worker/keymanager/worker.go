@@ -412,6 +412,10 @@ func (w *Worker) worker() {
 			return false
 		}
 
+		w.logger.Info("runtime version discovered",
+			"version", version,
+		)
+
 		return true
 	}(); !ok {
 		return

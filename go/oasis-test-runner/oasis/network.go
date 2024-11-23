@@ -69,8 +69,9 @@ type Network struct { // nolint: maligned
 
 	iasProxy *iasProxy
 
-	cfg          *NetworkCfg
-	nextNodePort uint16
+	cfg      *NetworkCfg
+	nextPort uint16
+	ports    map[string]uint16
 
 	logWatchers []*log.Watcher
 
@@ -296,7 +297,7 @@ func (net *Network) GetNamedNode(defaultName string, cfg *NodeCfg) (*Node, error
 			Name:           name,
 			net:            net,
 			dir:            nodeDir,
-			assignedPorts:  map[string]uint16{},
+			ports:          map[string]uint16{},
 			hostedRuntimes: map[common.Namespace]*hostedRuntime{},
 		}
 
@@ -986,6 +987,16 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signat
 	return nodeIdentity.NodeSigner.Public(), nodeIdentity.P2PSigner.Public(), sentryCert, nil
 }
 
+func (net *Network) getProvisionedPort(portName string) uint16 {
+	port, ok := net.ports[portName]
+	if !ok {
+		port = net.nextPort
+		net.nextPort++
+		net.ports[portName] = port
+	}
+	return port
+}
+
 // New creates a new test Oasis network.
 func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	baseDir, err := env.NewSubDir("network")
@@ -1034,12 +1045,13 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	}
 
 	net := &Network{
-		logger:       logging.GetLogger("oasis/" + env.Name()),
-		env:          env,
-		baseDir:      baseDir,
-		cfg:          &cfgCopy,
-		nextNodePort: baseNodePort,
-		errCh:        make(chan error, maxNodes),
+		logger:   logging.GetLogger("oasis/" + env.Name()),
+		env:      env,
+		baseDir:  baseDir,
+		cfg:      &cfgCopy,
+		nextPort: basePort,
+		ports:    make(map[string]uint16),
+		errCh:    make(chan error, maxNodes),
 	}
 
 	// Pre-provision node objects if they were listed in the top-level network fixture.
