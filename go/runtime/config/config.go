@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
 )
@@ -71,21 +72,29 @@ const (
 
 // Config is the runtime registry configuration structure.
 type Config struct {
+	// Runtimes is the list of runtimes to configure.
+	Runtimes []RuntimeConfig `yaml:"runtimes,omitempty"`
+
+	// Paths to runtime bundles.
+	Paths []string `yaml:"paths,omitempty"`
+
 	// Runtime provisioner to use (mock, unconfined, sandboxed).
 	Provisioner RuntimeProvisioner `yaml:"provisioner"`
-	// Paths to runtime bundles.
-	Paths []string `yaml:"paths"`
+
 	// Path to the sandbox binary (bubblewrap).
-	SandboxBinary string `yaml:"sandbox_binary"`
+	SandboxBinary string `yaml:"sandbox_binary,omitempty"`
+
 	// Path to SGXS runtime loader binary (for SGX runtimes).
-	SGXLoader string `yaml:"sgx_loader"`
+	SGXLoader string `yaml:"sgx_loader,omitempty"`
+
 	// The runtime environment (sgx, elf, auto).
-	Environment RuntimeEnvironment `yaml:"environment"`
+	Environment RuntimeEnvironment `yaml:"environment,omitempty"`
 
 	// History pruner configuration.
 	Prune PruneConfig `yaml:"prune,omitempty"`
 
 	// RuntimeConfig maps runtime IDs to their respective local configurations.
+	// NOTE: This may go away in the future, use `RuntimeConfig.Config` instead.
 	RuntimeConfig map[string]map[string]interface{} `yaml:"config,omitempty"`
 
 	// Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port
@@ -106,18 +115,54 @@ type Config struct {
 	// LoadBalancer is the load balancer configuration.
 	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
 
-	// Components is the list of components to configure.
-	Components []ComponentConfig `yaml:"components,omitempty"`
+	// Repositories is the list of URLs used to fetch runtime bundles.
+	Repositories []string `yaml:"repositories,omitempty"`
 }
 
-// GetComponent returns configuration for the given component if it exists.
-func (c *Config) GetComponent(id component.ID) (ComponentConfig, bool) {
-	for _, comp := range c.Components {
-		if comp.ID == id {
-			return comp, true
+// GetComponent returns the configuration for the given component
+// of the specified runtime, if it exists.
+func (c *Config) GetComponent(runtimeID common.Namespace, compID component.ID) (ComponentConfig, bool) {
+	for _, rt := range c.Runtimes {
+		if rt.ID != runtimeID {
+			continue
+		}
+		for _, comp := range rt.Components {
+			if comp.ID == compID {
+				return comp, true
+			}
 		}
 	}
+
 	return ComponentConfig{}, false
+}
+
+// GetLocalConfig returns the local configuration for the given runtime,
+// if it exists.
+func (c *Config) GetLocalConfig(runtimeID common.Namespace) map[string]interface{} {
+	for _, rt := range c.Runtimes {
+		if rt.ID == runtimeID {
+			return rt.Config
+		}
+	}
+
+	// Support legacy configuration where the runtime configuration is defined
+	// at the top level.
+	return c.RuntimeConfig[runtimeID.String()]
+}
+
+// RuntimeConfig is the runtime configuration.
+type RuntimeConfig struct {
+	// ID is the runtime identifier.
+	ID common.Namespace `yaml:"id"`
+
+	// Components is the list of components to configure.
+	Components []ComponentConfig `yaml:"components,omitempty"`
+
+	// Config contains runtime local configuration.
+	Config map[string]interface{} `yaml:"config,omitempty"`
+
+	// Repositories is the list of URLs used to fetch runtime bundles.
+	Repositories []string `yaml:"repositories,omitempty"`
 }
 
 // ComponentConfig is the component configuration.
@@ -207,8 +252,9 @@ func (c *Config) Validate() error {
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		Provisioner:   RuntimeProvisionerSandboxed,
+		Runtimes:      make([]RuntimeConfig, 0),
 		Paths:         []string{},
+		Provisioner:   RuntimeProvisionerSandboxed,
 		SandboxBinary: "/usr/bin/bwrap",
 		SGXLoader:     "",
 		Environment:   RuntimeEnvironmentAuto,
@@ -217,7 +263,6 @@ func DefaultConfig() Config {
 			Interval: 2 * time.Minute,
 			NumKept:  600,
 		},
-		RuntimeConfig:   nil,
 		SentryAddresses: []string{},
 		TxPool: tpConfig.Config{
 			MaxPoolSize:          50_000,

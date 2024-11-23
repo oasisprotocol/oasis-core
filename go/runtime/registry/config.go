@@ -3,18 +3,18 @@ package registry
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -33,219 +33,55 @@ import (
 	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
 )
 
-const (
-	// CfgDebugMockIDs configures mock runtime IDs for the purpose
-	// of testing.
-	CfgDebugMockIDs = "runtime.debug.mock_ids"
-)
+func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
+	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
+}
 
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+func getConfiguredRuntimeIDs(registry bundle.Registry) ([]common.Namespace, error) {
+	// Check if any runtimes are configured to be hosted.
+	runtimes := make(map[common.Namespace]struct{})
+	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {
+		runtimes[cfg.ID] = struct{}{}
+	}
 
-// newRuntimeConfig creates a new node runtime configuration.
-func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]*runtimeHost.Config, error) { //nolint: gocyclo
-	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0
+	// Support legacy configurations where runtimes are specified within
+	// configured bundles.
+	for _, manifest := range registry.GetManifests() {
+		runtimes[manifest.ID] = struct{}{}
+	}
+
+	if cmdFlags.DebugDontBlameOasis() && viper.IsSet(bundle.CfgDebugMockIDs) {
+		// Allow the mock provisioner to function, as it does not use an actual
+		// runtime. This is only used for the basic node tests.
+		for _, str := range viper.GetStringSlice(bundle.CfgDebugMockIDs) {
+			var runtimeID common.Namespace
+			if err := runtimeID.UnmarshalText([]byte(str)); err != nil {
+				return nil, fmt.Errorf("failed to deserialize runtime ID: %w", err)
+			}
+			runtimes[runtimeID] = struct{}{}
+		}
+
+		// Skip validation
+		return slices.Collect(maps.Keys(runtimes)), nil
+	}
 
 	// Validate configured runtimes based on the runtime mode.
 	switch config.GlobalConfig.Mode {
 	case config.ModeValidator, config.ModeSeed:
 		// No runtimes should be configured.
-		if haveSetRuntimes && !cmdFlags.DebugDontBlameOasis() {
+		if len(runtimes) > 0 && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("no runtimes should be configured when in validator or seed modes")
 		}
 	case config.ModeCompute, config.ModeKeyManager, config.ModeStatelessClient:
 		// At least one runtime should be configured.
-		if !haveSetRuntimes && !cmdFlags.DebugDontBlameOasis() {
+		if len(runtimes) == 0 && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, or client-stateless modes")
 		}
 	default:
 		// In any other mode, runtimes can be optionally configured.
 	}
 
-	// Check if any runtimes are configured to be hosted.
-	runtimes := make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
-
-	if haveSetRuntimes || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
-		// By default start with the environment specified in configuration.
-		runtimeEnv := config.GlobalConfig.Runtime.Environment
-
-		// Preprocess runtimes to separate detached from non-detached.
-		type nameKey struct {
-			runtime common.Namespace
-			comp    component.ID
-		}
-
-		var (
-			regularBundles []*bundle.Bundle
-			err            error
-		)
-		detachedBundles := make(map[common.Namespace][]*bundle.Bundle)
-		existingNames := make(map[nameKey]struct{})
-		for _, path := range config.GlobalConfig.Runtime.Paths {
-			var bnd *bundle.Bundle
-			if bnd, err = bundle.Open(path); err != nil {
-				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
-			}
-			if _, err = bnd.WriteExploded(dataDir); err != nil {
-				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
-			}
-			// Release resources as the bundle has been exploded anyway.
-			bnd.Data = nil
-
-			switch bnd.Manifest.IsDetached() {
-			case false:
-				// A regular non-detached bundle that has the RONL component.
-				regularBundles = append(regularBundles, bnd)
-			case true:
-				// A detached bundle without the RONL component that needs to be attached.
-				detachedBundles[bnd.Manifest.ID] = append(detachedBundles[bnd.Manifest.ID], bnd)
-
-				// Ensure there are no name conflicts among the components.
-				for compID := range bnd.Manifest.GetAvailableComponents() {
-					nk := nameKey{bnd.Manifest.ID, compID}
-					if _, ok := existingNames[nk]; ok {
-						return nil, fmt.Errorf("duplicate component '%s' for runtime '%s'", compID, bnd.Manifest.ID)
-					}
-					existingNames[nk] = struct{}{}
-				}
-			}
-
-			// If the runtime environment is set to automatic selection and a bundle has a component
-			// that requires the use of a TEE, force a TEE environment to simplify configuration.
-			if runtimeEnv == rtConfig.RuntimeEnvironmentAuto {
-				for _, comp := range bnd.Manifest.GetAvailableComponents() {
-					if comp.IsTEERequired() {
-						runtimeEnv = rtConfig.RuntimeEnvironmentSGX
-						break
-					}
-				}
-			}
-		}
-
-		// Configure runtimes.
-		for _, bnd := range regularBundles {
-			id := bnd.Manifest.ID
-			if runtimes[id] == nil {
-				runtimes[id] = make(map[version.Version]*runtimeHost.Config)
-			}
-			version := bnd.Manifest.GetComponentByID(component.ID_RONL).Version
-			if _, ok := runtimes[id][version]; ok {
-				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
-			}
-
-			// Get any local runtime configuration.
-			var localConfig map[string]interface{}
-			if lc, ok := config.GlobalConfig.Runtime.RuntimeConfig[id.String()]; ok {
-				localConfig = lc
-			}
-
-			// Gather all components.
-			components := make(map[component.ID]*bundle.ExplodedComponent)
-
-			// Add bundle components.
-			explodedDir := bnd.ExplodedPath(dataDir, "")
-
-			for _, comp := range bnd.Manifest.Components {
-				components[comp.ID()] = &bundle.ExplodedComponent{
-					Component:       comp,
-					Detached:        false,
-					ExplodedDataDir: explodedDir,
-				}
-			}
-
-			// Merge in detached components.
-			for _, detachedBnd := range detachedBundles[id] {
-				explodedDir := detachedBnd.ExplodedPath(dataDir, "")
-
-				for _, detachedComp := range detachedBnd.Manifest.Components {
-					// Skip components that already exist in the bundle itself.
-					if _, ok := components[detachedComp.ID()]; ok {
-						continue
-					}
-
-					components[detachedComp.ID()] = &bundle.ExplodedComponent{
-						Component:       detachedComp,
-						Detached:        true,
-						ExplodedDataDir: explodedDir,
-					}
-				}
-			}
-
-			// Determine what kind of components we want.
-			wantedComponents := []*bundle.ExplodedComponent{
-				components[component.ID_RONL],
-			}
-			for _, comp := range components {
-				if comp.ID().IsRONL() {
-					continue // Always enabled above.
-				}
-
-				// By default honor the status of the component itself.
-				enabled := !comp.Disabled
-				// On non-compute nodes, assume all components are disabled by default.
-				if config.GlobalConfig.Mode != config.ModeCompute {
-					enabled = false
-				}
-				// Detached components are explicit and they should be enabled by default.
-				if comp.Detached {
-					enabled = true
-				}
-
-				// Check for any overrides in the node configuration.
-				compCfg, ok := config.GlobalConfig.Runtime.GetComponent(comp.ID())
-				if ok {
-					enabled = !compCfg.Disabled
-				}
-
-				if !enabled {
-					continue
-				}
-
-				wantedComponents = append(wantedComponents, comp)
-			}
-
-			runtimes[id][version] = &runtimeHost.Config{
-				Name:        bnd.Manifest.Name,
-				ID:          bnd.Manifest.ID,
-				Components:  wantedComponents,
-				LocalConfig: localConfig,
-			}
-		}
-
-		if cmdFlags.DebugDontBlameOasis() {
-			// This is to allow the mock provisioner to function, as it does
-			// not use an actual runtime, thus is missing a bundle.  This is
-			// only used for the basic node tests.
-			for _, idStr := range viper.GetStringSlice(CfgDebugMockIDs) {
-				var id common.Namespace
-				if err = id.UnmarshalText([]byte(idStr)); err != nil {
-					return nil, fmt.Errorf("failed to deserialize runtime ID: %w", err)
-				}
-
-				runtimeHostCfg := &runtimeHost.Config{
-					ID: id,
-					Components: []*bundle.ExplodedComponent{
-						{
-							Component: &bundle.Component{
-								Kind:       component.RONL,
-								Executable: "mock",
-							},
-							Detached: false,
-						},
-					},
-				}
-				runtimes[id] = map[version.Version]*runtimeHost.Config{
-					{}: runtimeHostCfg,
-				}
-			}
-		}
-
-		if len(runtimes) == 0 {
-			return nil, fmt.Errorf("no runtimes configured")
-		}
-	}
-
-	return runtimes, nil
+	return slices.Collect(maps.Keys(runtimes)), nil
 }
 
 func createHostInfo(consensus consensus.Backend) (*hostProtocol.HostInfo, error) {
@@ -271,6 +107,7 @@ func createProvisioner(
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	hostInfo *hostProtocol.HostInfo,
+	bundleRegistry bundle.Registry,
 	ias []ias.Endpoint,
 	qs pcs.QuoteService,
 ) (runtimeHost.Provisioner, error) {
@@ -279,8 +116,23 @@ func createProvisioner(
 	// By default start with the environment specified in configuration.
 	runtimeEnv := config.GlobalConfig.Runtime.Environment
 
-	// TODO: isEnvSGX should also be true if runtimeEnv is auto and at least
-	// one component requires SGX.
+	// If the runtime environment is set to automatic selection and at least
+	// one bundle has a component that requires the use of a TEE, force a TEE
+	// environment to simplify configuration.
+	func() {
+		if runtimeEnv != rtConfig.RuntimeEnvironmentAuto {
+			return
+		}
+		for _, manifest := range bundleRegistry.GetManifests() {
+			for _, comp := range manifest.GetAvailableComponents() {
+				if comp.IsTEERequired() {
+					runtimeEnv = rtConfig.RuntimeEnvironmentSGX
+					return
+				}
+			}
+		}
+	}()
+
 	isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 	forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
 		(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
@@ -433,11 +285,4 @@ func createHistoryFactory() (history.Factory, error) {
 	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
 
 	return historyFactory, nil
-}
-
-func init() {
-	Flags.StringSlice(CfgDebugMockIDs, nil, "Mock runtime IDs (format: <path>,<path>,...)")
-	_ = Flags.MarkHidden(CfgDebugMockIDs)
-
-	_ = viper.BindPFlags(Flags)
 }

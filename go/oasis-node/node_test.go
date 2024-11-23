@@ -35,10 +35,10 @@ import (
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	roothashTests "github.com/oasisprotocol/oasis-core/go/roothash/tests"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	clientTests "github.com/oasisprotocol/oasis-core/go/runtime/client/tests"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	schedulerTests "github.com/oasisprotocol/oasis-core/go/scheduler/tests"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -164,7 +164,7 @@ func newTestNode(t *testing.T) *testNode {
 
 	config.GlobalConfig.Common.DataDir = dataDir
 	config.GlobalConfig.Common.Log.File = filepath.Join(dataDir, "test-node.log")
-	viper.Set(runtimeRegistry.CfgDebugMockIDs, []string{
+	viper.Set(bundle.CfgDebugMockIDs, []string{
 		testRuntimeID.String(),
 	})
 	for _, kv := range testNodeStaticConfig {

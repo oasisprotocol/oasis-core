@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
@@ -284,8 +285,8 @@ func doRenameNs(_ *cobra.Command, args []string) error {
 
 // Register registers the client sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
-	storageMigrateCmd.Flags().AddFlagSet(registry.Flags)
-	storageCheckCmd.Flags().AddFlagSet(registry.Flags)
+	storageMigrateCmd.Flags().AddFlagSet(bundle.Flags)
+	storageCheckCmd.Flags().AddFlagSet(bundle.Flags)
 	storageCmd.AddCommand(storageMigrateCmd)
 	storageCmd.AddCommand(storageCheckCmd)
 	storageCmd.AddCommand(storageRenameNsCmd)

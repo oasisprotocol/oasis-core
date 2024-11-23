@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -22,8 +23,10 @@ import (
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -44,6 +47,8 @@ var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
+	service.BackgroundService
+
 	// GetRuntime returns the per-runtime interface.
 	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
@@ -60,9 +65,6 @@ type Registry interface {
 
 	// Client returns the runtime client service if available.
 	Client() (runtimeClient.RuntimeClient, error)
-
-	// Cleanup performs post-termination cleanup.
-	Cleanup()
 
 	// FinishInitialization finalizes setup for all runtimes.
 	FinishInitialization() error
@@ -141,10 +143,11 @@ type runtime struct { // nolint: maligned
 	registryDescriptorNotifier *pubsub.Broker
 	activeDescriptorCh         chan struct{}
 	activeDescriptorNotifier   *pubsub.Broker
-	versionNotifier            *pubsub.Broker
 
 	hostProvisioner runtimeHost.Provisioner
-	hostConfig      map[version.Version]*runtimeHost.Config
+
+	bundleRegistry  bundle.Registry
+	bundleDiscovery *bundle.Discovery
 
 	logger *logging.Logger
 }
@@ -155,6 +158,8 @@ func newRuntime(
 	dataDir string,
 	consensus consensus.Backend,
 	provisioner runtimeHost.Provisioner,
+	bundleRegistry bundle.Registry,
+	bundleDiscovery *bundle.Discovery,
 ) (*runtime, error) {
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
 
@@ -181,9 +186,9 @@ func newRuntime(
 		registryDescriptorNotifier: pubsub.NewBroker(true),
 		activeDescriptorCh:         make(chan struct{}),
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
-		versionNotifier:            pubsub.NewBroker(false),
 		hostProvisioner:            provisioner,
-		hostConfig:                 make(map[version.Version]*runtimeHost.Config),
+		bundleRegistry:             bundleRegistry,
+		bundleDiscovery:            bundleDiscovery,
 		logger:                     logger,
 	}, nil
 }
@@ -285,7 +290,26 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 
 // HostConfig implements Runtime.
 func (r *runtime) HostConfig(version version.Version) *runtimeHost.Config {
-	return r.hostConfig[version]
+	name, err := r.bundleRegistry.GetName(r.id, version)
+	if err != nil {
+		return nil
+	}
+
+	components, err := r.bundleRegistry.GetComponents(r.id, version)
+	if err != nil {
+		return nil
+	}
+
+	localConfig := getLocalConfig(r.id)
+
+	return &host.Config{
+		Name:           name,
+		ID:             r.id,
+		Components:     components,
+		Extra:          nil,
+		MessageHandler: nil,
+		LocalConfig:    localConfig,
+	}
 }
 
 // HostProvisioner implements Runtime.
@@ -295,35 +319,12 @@ func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
 
 // HostVersions implements Runtime.
 func (r *runtime) HostVersions() []version.Version {
-	var versions []version.Version
-	for v := range r.hostConfig {
-		versions = append(versions, v)
-	}
-	return versions
+	return r.bundleRegistry.GetVersions(r.id)
 }
 
 // HostVersions implements Runtime.
 func (r *runtime) WatchHostVersions() (<-chan version.Version, *pubsub.Subscription) {
-	sub := r.versionNotifier.Subscribe()
-	ch := make(chan version.Version)
-	sub.Unwrap(ch)
-
-	return ch, sub
-}
-
-// addVersion adds the given version configuration to the runtime.
-func (r *runtime) addVersion(version version.Version, cfg *runtimeHost.Config) error {
-	r.Lock()
-	defer r.Unlock()
-
-	if _, ok := r.hostConfig[version]; ok {
-		return fmt.Errorf("runtime/registry: duplicate runtime version %s", version)
-	}
-
-	r.hostConfig[version] = cfg
-	r.versionNotifier.Broadcast(version)
-
-	return nil
+	return r.bundleRegistry.WatchVersions(r.id)
 }
 
 // start starts the runtime worker.
@@ -417,6 +418,32 @@ func (r *runtime) run(ctx context.Context) {
 					activeInitialized = true
 				}
 			}
+
+			// Download bundles for the active and future versions.
+			now, err := r.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
+			if err != nil {
+				r.logger.Error("failed to get current epoch",
+					"err", err,
+				)
+				continue
+			}
+
+			var manifestHashes []hash.Hash
+			for i := len(rt.Deployments) - 1; i >= 0; i-- {
+				// Some deployments may lack a bundle manifest checksum,
+				// as it is optional.
+				if h := rt.Deployments[i].BundleChecksum; len(h) == hash.Size {
+					manifestHashes = append(manifestHashes, hash.Hash(h))
+				}
+
+				// Stop at the active deployment since versions follow
+				// chronological order.
+				if rt.Deployments[i].ValidFrom <= now {
+					break
+				}
+			}
+
+			r.bundleDiscovery.Queue(r.id, manifestHashes)
 		}
 	}
 }
@@ -472,6 +499,8 @@ func (r *runtime) finishInitialization() error {
 type runtimeRegistry struct {
 	sync.RWMutex
 
+	quitCh chan struct{}
+
 	logger *logging.Logger
 
 	dataDir string
@@ -483,14 +512,13 @@ type runtimeRegistry struct {
 
 	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
+
+	bundleRegistry  bundle.Registry
+	bundleDiscovery *bundle.Discovery
 }
 
 // GetRuntime implements Registry.
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
-	return r.getRuntime(runtimeID)
-}
-
-func (r *runtimeRegistry) getRuntime(runtimeID common.Namespace) (*runtime, error) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -531,7 +559,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 		return nil, fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner)
+	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.bundleRegistry, r.bundleDiscovery)
 	if err != nil {
 		return nil, err
 	}
@@ -562,16 +590,6 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 	return rt, nil
 }
 
-// addRuntimeVersion adds the given version configuration to the given runtime.
-func (r *runtimeRegistry) addRuntimeVersion(version version.Version, cfg *runtimeHost.Config) error {
-	rt, err := r.getRuntime(cfg.ID)
-	if err != nil {
-		return err
-	}
-
-	return rt.addVersion(version, cfg)
-}
-
 // RegisterClient implements Registry.
 func (r *runtimeRegistry) RegisterClient(rc runtimeClient.RuntimeClient) error {
 	r.Lock()
@@ -595,16 +613,6 @@ func (r *runtimeRegistry) Client() (runtimeClient.RuntimeClient, error) {
 	return r.client, nil
 }
 
-// Cleanup implements Registry.
-func (r *runtimeRegistry) Cleanup() {
-	r.Lock()
-	defer r.Unlock()
-
-	for _, rt := range r.runtimes {
-		rt.stop()
-	}
-}
-
 // FinishInitialization implements Registry.
 func (r *runtimeRegistry) FinishInitialization() error {
 	r.RLock()
@@ -618,6 +626,61 @@ func (r *runtimeRegistry) FinishInitialization() error {
 	return nil
 }
 
+// Name implements BackgroundService.
+func (r *runtimeRegistry) Name() string {
+	return "runtime registry"
+}
+
+// Start implements BackgroundService.
+func (r *runtimeRegistry) Start() error {
+	r.bundleDiscovery.Start()
+	return nil
+}
+
+// Stop implements BackgroundService.
+func (r *runtimeRegistry) Stop() {
+	r.bundleDiscovery.Stop()
+	close(r.quitCh)
+}
+
+// Quit implements BackgroundService.
+func (r *runtimeRegistry) Quit() <-chan struct{} {
+	return r.quitCh
+}
+
+// Cleanup implements BackgroundService.
+func (r *runtimeRegistry) Cleanup() {
+	r.Lock()
+	defer r.Unlock()
+
+	for _, rt := range r.runtimes {
+		rt.stop()
+	}
+}
+
+// Init initializes the runtime registry by adding runtimes from the global
+// runtime configuration to the registry.
+func (r *runtimeRegistry) Init(ctx context.Context) error {
+	runtimeIDs, err := getConfiguredRuntimeIDs(r.bundleRegistry)
+	if err != nil {
+		return err
+	}
+
+	managed := config.GlobalConfig.Mode != config.ModeKeyManager
+
+	for _, runtimeID := range runtimeIDs {
+		if _, err := r.NewRuntime(ctx, runtimeID, managed); err != nil {
+			r.logger.Error("failed to add runtime",
+				"err", err,
+				"id", runtimeID,
+			)
+			return fmt.Errorf("failed to add runtime %s: %w", runtimeID, err)
+		}
+	}
+
+	return nil
+}
+
 // New creates a new runtime registry.
 func New(
 	ctx context.Context,
@@ -627,6 +690,22 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
+	// Create bundle registry.
+	bundleRegistry := bundle.NewRegistry(dataDir)
+
+	// Fill the registry with local bundles.
+	//
+	// This enables the provisioner to determine which runtime environment
+	// to use when the configuration is set to 'auto'.
+	//
+	// FIXME: Handle cases where the configuration is set to 'auto' but
+	//        no bundles are configured. After addressing this, move the
+	//        initialization to the bottom for better organization.
+	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry)
+	if err := bundleDiscovery.Init(); err != nil {
+		return nil, err
+	}
+
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
 	if err != nil {
@@ -646,43 +725,27 @@ func New(
 	}
 
 	// Create runtime provisioner.
-	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, ias, qs)
+	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, bundleRegistry, ias, qs)
 	if err != nil {
 		return nil, err
 	}
 
-	runtimesCfg, err := newRuntimeConfig(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
+	// Create runtime registry.
 	r := &runtimeRegistry{
-		logger:         logging.GetLogger("runtime/registry"),
-		dataDir:        dataDir,
-		consensus:      consensus,
-		runtimes:       make(map[common.Namespace]*runtime),
-		provisioner:    provisioner,
-		historyFactory: historyFactory,
+		logger:          logging.GetLogger("runtime/registry"),
+		quitCh:          make(chan struct{}),
+		dataDir:         dataDir,
+		consensus:       consensus,
+		runtimes:        make(map[common.Namespace]*runtime),
+		provisioner:     provisioner,
+		historyFactory:  historyFactory,
+		bundleRegistry:  bundleRegistry,
+		bundleDiscovery: bundleDiscovery,
 	}
 
-	managed := config.GlobalConfig.Mode != config.ModeKeyManager
-
-	for runtimeID := range runtimesCfg {
-		if _, err := r.NewRuntime(ctx, runtimeID, managed); err != nil {
-			r.logger.Error("failed to add runtime",
-				"err", err,
-				"id", runtimeID,
-			)
-			return nil, fmt.Errorf("failed to add runtime %s: %w", runtimeID, err)
-		}
-	}
-
-	for _, cfgs := range runtimesCfg {
-		for version, cfg := range cfgs {
-			if err := r.addRuntimeVersion(version, cfg); err != nil {
-				return nil, err
-			}
-		}
+	// Initialize the runtime registry.
+	if err = r.Init(ctx); err != nil {
+		return nil, err
 	}
 
 	return r, nil

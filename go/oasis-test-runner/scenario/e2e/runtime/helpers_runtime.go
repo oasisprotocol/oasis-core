@@ -137,13 +137,13 @@ func (sc *Scenario) BuildAllRuntimes(childEnv *env.Env, trustRoot *e2e.TrustRoot
 
 // EnsureActiveVersionForComputeWorker ensures that the specified compute worker
 // has the correct active version of the given runtime.
-func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, node *oasis.Compute, rt *oasis.Runtime, v version.Version) error {
+func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, node *oasis.Compute, runtimeID common.Namespace, v version.Version) error {
 	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
 	defer cancel()
 
 	sc.Logger.Info("ensuring that the compute worker has the correct active version",
 		"node", node.Name,
-		"runtime_id", rt.ID(),
+		"runtime_id", runtimeID,
 		"version", v,
 	)
 
@@ -159,14 +159,14 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 			return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
 		}
 
-		provisioner := status.Runtimes[rt.ID()].Provisioner
+		provisioner := status.Runtimes[runtimeID].Provisioner
 		if provisioner == "none" {
-			return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
+			return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, runtimeID, provisioner)
 		}
 
-		cs := status.Runtimes[rt.ID()].Committee
+		cs := status.Runtimes[runtimeID].Committee
 		if cs == nil {
-			return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, rt.ID())
+			return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, runtimeID)
 		}
 
 		if cs.ActiveVersion == nil {
@@ -203,14 +203,14 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 
 // EnsureActiveVersionForComputeWorkers ensures that all compute workers
 // have the correct active version of the given runtime.
-func (sc *Scenario) EnsureActiveVersionForComputeWorkers(ctx context.Context, rt *oasis.Runtime, v version.Version) error {
+func (sc *Scenario) EnsureActiveVersionForComputeWorkers(ctx context.Context, runtimeID common.Namespace, v version.Version) error {
 	sc.Logger.Info("ensuring that all compute workers have the correct active version",
-		"runtime_id", rt.ID(),
+		"runtime_id", runtimeID,
 		"version", v,
 	)
 
 	for _, node := range sc.Net.ComputeWorkers() {
-		if err := sc.EnsureActiveVersionForComputeWorker(ctx, node, rt, v); err != nil {
+		if err := sc.EnsureActiveVersionForComputeWorker(ctx, node, runtimeID, v); err != nil {
 			return err
 		}
 	}
@@ -219,13 +219,13 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorkers(ctx context.Context, rt
 
 // EnsureActiveVersionForKeyManager ensures that the specified key manager
 // has the correct active version of the given runtime.
-func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *oasis.Keymanager, id common.Namespace, v version.Version) error {
+func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *oasis.Keymanager, runtimeID common.Namespace, v version.Version) error {
 	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
 	defer cancel()
 
 	sc.Logger.Info("ensuring that the key manager has the correct active version",
 		"node", node.Name,
-		"runtime_id", id,
+		"runtime_id", runtimeID,
 		"version", v,
 	)
 
@@ -246,8 +246,8 @@ func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *
 		}
 
 		ws := status.Keymanager
-		if !id.Equal(ws.RuntimeID) {
-			return fmt.Errorf("%s: unsupported runtime (expected: %s got: %s)", node.Name, ws.RuntimeID, id)
+		if !runtimeID.Equal(ws.RuntimeID) {
+			return fmt.Errorf("%s: unsupported runtime (expected: %s got: %s)", node.Name, ws.RuntimeID, runtimeID)
 		}
 
 		if ws.ActiveVersion == nil {
@@ -269,14 +269,14 @@ func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *
 
 // EnsureActiveVersionForKeyManagers ensures that all key managers
 // have the correct active version of the given runtime.
-func (sc *Scenario) EnsureActiveVersionForKeyManagers(ctx context.Context, id common.Namespace, v version.Version) error {
+func (sc *Scenario) EnsureActiveVersionForKeyManagers(ctx context.Context, runtimeID common.Namespace, v version.Version) error {
 	sc.Logger.Info("ensuring that all key managers have the correct active version",
-		"runtime_id", id,
+		"runtime_id", runtimeID,
 		"version", v,
 	)
 
 	for _, node := range sc.Net.Keymanagers() {
-		if err := sc.EnsureActiveVersionForKeyManager(ctx, node, id, v); err != nil {
+		if err := sc.EnsureActiveVersionForKeyManager(ctx, node, runtimeID, v); err != nil {
 			return err
 		}
 	}
@@ -362,7 +362,7 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 }
 
 // UpgradeComputeRuntimeFixture select the first compute runtime and prepares it for the upgrade.
-func (sc *Scenario) UpgradeComputeRuntimeFixture(f *oasis.NetworkFixture) (int, error) {
+func (sc *Scenario) UpgradeComputeRuntimeFixture(f *oasis.NetworkFixture, excludeBundle bool) (int, error) {
 	// Select the first compute runtime for upgrade.
 	idx := -1
 	for i := range f.Runtimes {
@@ -386,13 +386,14 @@ func (sc *Scenario) UpgradeComputeRuntimeFixture(f *oasis.NetworkFixture) (int, 
 	// they will be retained.
 	f.Runtimes[idx].ExcludeFromGenesis = true
 	f.Runtimes[idx].Deployments = append(f.Runtimes[idx].Deployments, oasis.DeploymentCfg{
-		Version: version.Version{Major: 0, Minor: 1, Patch: 0},
 		Components: []oasis.ComponentCfg{
 			{
 				Kind:     component.RONL,
+				Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
 				Binaries: newRuntimeBinaries,
 			},
 		},
+		ExcludeBundle: excludeBundle,
 	})
 
 	return idx, nil
@@ -403,7 +404,7 @@ func (sc *Scenario) UpgradeComputeRuntime(ctx context.Context, childEnv *env.Env
 	newRt := sc.Net.Runtimes()[idx]
 
 	// Make sure the old version is active on all compute nodes.
-	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.0.0")); err != nil {
+	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt.ID(), version.MustFromString("0.0.0")); err != nil {
 		return err
 	}
 
@@ -413,11 +414,11 @@ func (sc *Scenario) UpgradeComputeRuntime(ctx context.Context, childEnv *env.Env
 	}
 
 	// Make sure the new version is active.
-	return sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0"))
+	return sc.EnsureActiveVersionForComputeWorkers(ctx, newRt.ID(), version.MustFromString("0.1.0"))
 }
 
 // UpgradeKeyManagerFixture select the first key manager runtime and prepares it for the upgrade.
-func (sc *Scenario) UpgradeKeyManagerFixture(f *oasis.NetworkFixture) (int, error) {
+func (sc *Scenario) UpgradeKeyManagerFixture(f *oasis.NetworkFixture, excludeBundle bool) (int, error) {
 	// Select the first key manager for upgrade.
 	idx := -1
 	for i := range f.Runtimes {
@@ -438,13 +439,14 @@ func (sc *Scenario) UpgradeKeyManagerFixture(f *oasis.NetworkFixture) (int, erro
 	newRt.ExcludeFromGenesis = true
 	newRt.Deployments = []oasis.DeploymentCfg{
 		{
-			Version: version.Version{Major: 0, Minor: 1, Patch: 0},
 			Components: []oasis.ComponentCfg{
 				{
 					Kind:     component.RONL,
+					Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
 					Binaries: newRuntimeBinaries,
 				},
 			},
+			ExcludeBundle: excludeBundle,
 		},
 	}
 	f.Runtimes = append(f.Runtimes, newRt)

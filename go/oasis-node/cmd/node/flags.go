@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
@@ -38,7 +38,7 @@ func init() {
 	for _, v := range []*flag.FlagSet{
 		cmdGrpc.ServerLocalFlags,
 		cmdSigner.Flags,
-		runtimeRegistry.Flags,
+		bundle.Flags,
 		workerStorage.Flags,
 		crash.InitFlags(),
 	} {
