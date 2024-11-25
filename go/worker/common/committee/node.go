@@ -425,11 +425,10 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 
 	// Update the runtime version based on the currently active deployment.
 	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
-	// NOTE: If there is no active deployment this will activate the all-zero version which may
-	//       result in the runtime stopping.
-	var activeVersion version.Version
+	var activeVersion *version.Version
 	if activeDeploy != nil {
-		activeVersion = activeDeploy.Version
+		activeVersion = new(version.Version)
+		*activeVersion = activeDeploy.Version
 	}
 
 	// For compute nodes, determine if there is a next version and activate it early.
@@ -444,7 +443,9 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		}
 	}
 
-	if err := n.SetHostedRuntimeVersion(activeVersion, nextVersion); err != nil {
+	_ = n.SetHostedRuntimeVersion(activeVersion, nextVersion)
+
+	if _, err := n.GetHostedRuntimeActiveVersion(); err != nil {
 		n.logger.Error("failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,
@@ -680,7 +681,7 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Provision the hosted runtime.
-	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
+	hrt, hrtNotifier, err := n.ProvisionHostedRuntime()
 	if err != nil {
 		n.logger.Error("failed to provision hosted runtime",
 			"err", err,
