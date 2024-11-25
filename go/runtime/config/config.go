@@ -85,8 +85,8 @@ type Config struct {
 	// History pruner configuration.
 	Prune PruneConfig `yaml:"prune,omitempty"`
 
-	// Runtime ID -> local config.
-	RuntimeConfig map[string]interface{} `yaml:"config,omitempty"`
+	// RuntimeConfig maps runtime IDs to their respective local configurations.
+	RuntimeConfig map[string]map[string]interface{} `yaml:"config,omitempty"`
 
 	// Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port
 	// (where the PubKey@ part represents base64 encoded node TLS public key).

@@ -410,11 +410,11 @@ func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
 	return filepath.Join(subDir, fn)
 }
 
-// WriteExploded writes the extracted runtime bundle to the appropriate
-// location under the specified data directory.
-func (bnd *Bundle) WriteExploded(dataDir string) error {
+// WriteExploded extracts the runtime bundle, writes it to the appropriate
+// data directory, and returns the path to the written location.
+func (bnd *Bundle) WriteExploded(dataDir string) (string, error) {
 	if err := bnd.Validate(); err != nil {
-		return fmt.Errorf("runtime/bundle: refusing to explode malformed bundle: %w", err)
+		return "", fmt.Errorf("runtime/bundle: refusing to explode malformed bundle: %w", err)
 	}
 
 	subDir := bnd.ExplodedPath(dataDir, "")
@@ -432,22 +432,22 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 			fn = bnd.ExplodedPath(dataDir, fn)
 			h, rdErr := HashAllData(NewFileData(fn))
 			if rdErr != nil {
-				return fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
+				return "", fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
 			}
 
 			he, rdErr := HashAllData(expected)
 			if rdErr != nil {
-				return fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
+				return "", fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
 			}
 
 			if !h.Equal(&he) {
-				return fmt.Errorf("runtime/bundle: corrupt asset: '%s'", fn)
+				return "", fmt.Errorf("runtime/bundle: corrupt asset: '%s'", fn)
 			}
 		}
 	default:
 		// Extract the bundle to disk.
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("runtime/bundle: failed to stat asset directory '%s': %w", subDir, err)
+			return "", fmt.Errorf("runtime/bundle: failed to stat asset directory '%s': %w", subDir, err)
 		}
 
 		for _, v := range []string{
@@ -455,7 +455,7 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 			bnd.ExplodedPath(dataDir, manifestPath),
 		} {
 			if err = os.MkdirAll(v, 0o700); err != nil {
-				return fmt.Errorf("runtime/bundle: failed to create asset sub-dir '%s': %w", v, err)
+				return "", fmt.Errorf("runtime/bundle: failed to create asset sub-dir '%s': %w", v, err)
 			}
 		}
 		for fn, data := range bnd.Data {
@@ -481,20 +481,20 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 				return nil
 			}()
 			if err != nil {
-				return err
+				return "", err
 			}
 		}
 
 		for id, comp := range bnd.Manifest.GetAvailableComponents() {
 			if comp.Executable != "" {
 				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.Executable), 0o700); err != nil {
-					return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
+					return "", fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
 				}
 			}
 		}
 	}
 
-	return nil
+	return subDir, nil
 }
 
 // Close closes the bundle, releasing resources.

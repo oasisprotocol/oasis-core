@@ -158,11 +158,12 @@ func (r *peerRegistry) watch(ctx context.Context) {
 	for {
 		select {
 		case nodes := <-nodeListCh:
-			r.handleNodes(nodes.Nodes, true)
+			r.clearNodes()
+			r.handleNodes(nodes.Nodes)
 
 		case nodeEv := <-nodeCh:
 			if nodeEv.IsRegistration {
-				r.handleNodes([]*node.Node{nodeEv.Node}, false)
+				r.handleNodes([]*node.Node{nodeEv.Node})
 			}
 
 		case <-ctx.Done():
@@ -171,8 +172,19 @@ func (r *peerRegistry) watch(ctx context.Context) {
 	}
 }
 
+// clearNodes clears the protocols and topics supported by the observed nodes.
+func (r *peerRegistry) clearNodes() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Clear current state.
+	r.peers = make(map[core.PeerID]peer.AddrInfo)
+	r.protocolPeers = make(map[core.ProtocolID]map[core.PeerID]struct{})
+	r.topicPeers = make(map[string]map[core.PeerID]struct{})
+}
+
 // handleNodes updates protocols and topics supported by the given nodes and resets them if needed.
-func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
+func (r *peerRegistry) handleNodes(nodes []*node.Node) {
 	defer r.initOnce.Do(func() {
 		close(r.initCh)
 	})
@@ -201,13 +213,6 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	// Remove previous state.
-	if reset {
-		r.peers = make(map[core.PeerID]peer.AddrInfo)
-		r.protocolPeers = make(map[core.ProtocolID]map[core.PeerID]struct{})
-		r.topicPeers = make(map[string]map[core.PeerID]struct{})
-	}
 
 	// Add/update new peers.
 	for p, data := range peers {

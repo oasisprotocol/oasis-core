@@ -67,10 +67,13 @@ func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 		return nil, fmt.Errorf("runtime/history: failed to open database: %w", err)
 	}
 
+	gc := cmnBadger.NewGCWorker(logger, db)
+	gc.Start()
+
 	d := &DB{
 		logger: logger,
 		db:     db,
-		gc:     cmnBadger.NewGCWorker(logger, db),
+		gc:     gc,
 	}
 
 	// Ensure metadata is valid.
@@ -277,6 +280,6 @@ func (d *DB) getRoundResults(round uint64) (*roothash.RoundResults, error) {
 }
 
 func (d *DB) close() {
-	d.gc.Close()
+	d.gc.Stop()
 	d.db.Close()
 }

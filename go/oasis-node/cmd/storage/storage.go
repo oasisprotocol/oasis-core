@@ -164,7 +164,8 @@ func doMigrate(_ *cobra.Command, args []string) error {
 		err := func() error {
 			runtimeDir := registry.GetRuntimeStateDir(dataDir, rt)
 
-			history, err := history.New(runtimeDir, rt, nil, false)
+			prunerFactory := history.NewNonePrunerFactory()
+			history, err := history.New(rt, runtimeDir, prunerFactory, false)
 			if err != nil {
 				return fmt.Errorf("error creating history provider: %w", err)
 			}

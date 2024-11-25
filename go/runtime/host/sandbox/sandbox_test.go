@@ -28,7 +28,7 @@ func TestProvisionerSandbox(t *testing.T) {
 	require.NoError(t, err, "bundle.Open")
 
 	tmpDir := t.TempDir()
-	err = bnd.WriteExploded(tmpDir)
+	_, err = bnd.WriteExploded(tmpDir)
 	require.NoError(t, err, "bnd.WriteExploded")
 
 	cfg := host.Config{

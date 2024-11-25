@@ -3,9 +3,11 @@ package history
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
@@ -20,7 +22,7 @@ const (
 )
 
 // PrunerFactory is the runtime history pruner factory interface.
-type PrunerFactory func(db *DB) (Pruner, error)
+type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
 // PruneHandler is a handler that is called when rounds are pruned
 // from history.
@@ -41,59 +43,58 @@ type Pruner interface {
 	// Prune purges unneeded history, given the latest round.
 	Prune(latestRound uint64) error
 
+	// PruneInterval specifies how often pruning should occur.
+	PruneInterval() time.Duration
+
 	// RegisterHandler registers a prune handler.
 	RegisterHandler(handler PruneHandler)
 }
 
-type prunerBase struct {
-	sync.RWMutex
-
-	handlers []PruneHandler
-}
-
-func (p *prunerBase) RegisterHandler(handler PruneHandler) {
-	p.Lock()
-	defer p.Unlock()
-
-	p.handlers = append(p.handlers, handler)
-}
-
-func newPrunerBase() prunerBase {
-	return prunerBase{}
-}
-
 type nonePruner struct{}
 
-func (p *nonePruner) RegisterHandler(PruneHandler) {
-}
-
+// Prune implements Pruner.
 func (p *nonePruner) Prune(uint64) error {
 	return nil
 }
 
+// PruneInterval implements Pruner.
+func (p *nonePruner) PruneInterval() time.Duration {
+	return time.Hour
+}
+
+// RegisterHandler implements Pruner.
+func (p *nonePruner) RegisterHandler(PruneHandler) {
+}
+
 // NewNonePruner creates a new pruner that never prunes anything.
-func NewNonePruner() PrunerFactory {
-	return func(_ *DB) (Pruner, error) {
-		return &nonePruner{}, nil
+func NewNonePruner() Pruner {
+	return &nonePruner{}
+}
+
+// NewNonePrunerFactory creates a new pruner factory for pruners that never
+// prune anything.
+func NewNonePrunerFactory() PrunerFactory {
+	return func(_ common.Namespace, _ *DB) (Pruner, error) {
+		return NewNonePruner(), nil
 	}
 }
 
 type keepLastPruner struct {
-	prunerBase
-
 	logger *logging.Logger
 	db     *DB
 
-	numKept uint64
+	numKept       uint64
+	pruneInterval time.Duration
+
+	mu       sync.RWMutex
+	handlers []PruneHandler
 }
 
+// Prune implements Pruner.
 func (p *keepLastPruner) Prune(latestRound uint64) error {
 	if latestRound < p.numKept {
 		return nil
 	}
-
-	p.prunerBase.RLock()
-	defer p.prunerBase.RUnlock()
 
 	lastPrunedRound := latestRound - p.numKept
 
@@ -141,7 +142,10 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
-		for _, ph := range p.prunerBase.handlers {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+
+		for _, ph := range p.handlers {
 			if err := ph.Prune(pruned); err != nil {
 				p.logger.Error("prune handler failed, aborting prune",
 					"err", err,
@@ -157,15 +161,34 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 	})
 }
 
+// PruneInterval implements Pruner.
+func (p *keepLastPruner) PruneInterval() time.Duration {
+	return p.pruneInterval
+}
+
+func (p *keepLastPruner) RegisterHandler(handler PruneHandler) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.handlers = append(p.handlers, handler)
+}
+
 // NewKeepLastPruner creates a pruner that keeps the last configured
 // number of rounds.
-func NewKeepLastPruner(numKept uint64) PrunerFactory {
-	return func(db *DB) (Pruner, error) {
-		return &keepLastPruner{
-			prunerBase: newPrunerBase(),
-			logger:     logging.GetLogger("history/prune/keep_last"),
-			db:         db,
-			numKept:    numKept,
-		}, nil
+func NewKeepLastPruner(runtimeID common.Namespace, numKept uint64, pruneInterval time.Duration, db *DB) (Pruner, error) {
+	return &keepLastPruner{
+		logger:        logging.GetLogger("runtime/prune/keep_last").With("runtime_id", runtimeID),
+		db:            db,
+		numKept:       numKept,
+		pruneInterval: pruneInterval,
+		handlers:      make([]PruneHandler, 0),
+	}, nil
+}
+
+// NewKeepLastPrunerFactory creates a new pruner factory for pruners that keep
+// the last configured number of rounds.
+func NewKeepLastPrunerFactory(numKept uint64, pruneInterval time.Duration) PrunerFactory {
+	return func(runtimeID common.Namespace, db *DB) (Pruner, error) {
+		return NewKeepLastPruner(runtimeID, numKept, pruneInterval, db)
 	}
 }

@@ -181,69 +181,6 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 	return nil
 }
 
-func newWorker(
-	ctx context.Context,
-	cancelCtx context.CancelFunc,
-	hostNode control.NodeController,
-	dataDir string,
-	chainContext string,
-	identity *identity.Identity,
-	consensus consensus.Backend,
-	lightClient consensus.LightClient,
-	p2p p2p.Service,
-	keyManager keymanagerApi.Backend,
-	rtRegistry runtimeRegistry.Registry,
-	cfg Config,
-) (*Worker, error) {
-	var enabled bool
-	switch config.GlobalConfig.Mode {
-	case config.ModeValidator, config.ModeSeed:
-		enabled = false
-	case config.ModeArchive:
-		if len(rtRegistry.Runtimes()) > 0 {
-			enabled = true
-		} else {
-			enabled = false
-		}
-	default:
-		// When configured in runtime mode, enable the common worker.
-		enabled = true
-	}
-
-	w := &Worker{
-		enabled:         enabled,
-		cfg:             cfg,
-		HostNode:        hostNode,
-		DataDir:         dataDir,
-		ChainContext:    chainContext,
-		Identity:        identity,
-		Consensus:       consensus,
-		LightClient:     lightClient,
-		P2P:             p2p,
-		KeyManager:      keyManager,
-		RuntimeRegistry: rtRegistry,
-		runtimes:        make(map[common.Namespace]*committee.Node),
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/common"),
-	}
-
-	if !enabled {
-		return w, nil
-	}
-
-	for _, rt := range rtRegistry.Runtimes() {
-		// Register all configured runtimes.
-		if err := w.registerRuntime(rt); err != nil {
-			return nil, err
-		}
-	}
-
-	return w, nil
-}
-
 // New creates a new worker.
 func New(
 	hostNode control.NodeController,
@@ -256,6 +193,17 @@ func New(
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
 ) (*Worker, error) {
+	var enabled bool
+	switch config.GlobalConfig.Mode {
+	case config.ModeValidator, config.ModeSeed:
+		enabled = false
+	case config.ModeArchive:
+		enabled = len(runtimeRegistry.Runtimes()) > 0
+	default:
+		// When configured in runtime mode, enable the common worker.
+		enabled = true
+	}
+
 	cfg, err := NewConfig()
 	if err != nil {
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
@@ -263,18 +211,36 @@ func New(
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	return newWorker(
-		ctx,
-		cancelCtx,
-		hostNode,
-		dataDir,
-		chainContext,
-		identity,
-		consensus,
-		lightClient,
-		p2p,
-		keyManager,
-		runtimeRegistry,
-		*cfg,
-	)
+	w := &Worker{
+		enabled:         enabled,
+		cfg:             *cfg,
+		HostNode:        hostNode,
+		DataDir:         dataDir,
+		ChainContext:    chainContext,
+		Identity:        identity,
+		Consensus:       consensus,
+		LightClient:     lightClient,
+		P2P:             p2p,
+		KeyManager:      keyManager,
+		RuntimeRegistry: runtimeRegistry,
+		runtimes:        make(map[common.Namespace]*committee.Node),
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		quitCh:          make(chan struct{}),
+		initCh:          make(chan struct{}),
+		logger:          logging.GetLogger("worker/common"),
+	}
+
+	if !enabled {
+		return w, nil
+	}
+
+	// Register all configured runtimes.
+	for _, rt := range runtimeRegistry.Runtimes() {
+		if err := w.registerRuntime(rt); err != nil {
+			return nil, err
+		}
+	}
+
+	return w, nil
 }

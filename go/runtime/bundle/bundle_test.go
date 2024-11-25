@@ -110,17 +110,17 @@ func TestBundle(t *testing.T) {
 	})
 
 	t.Run("Explode", func(t *testing.T) {
-		err := bundle.WriteExploded(tmpDir)
+		_, err := bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded")
 
 		// Abuse the fact that we do an integrity check if the bundle
 		// is already exploded.
-		err = bundle.WriteExploded(tmpDir)
+		_, err = bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded(again)")
 	})
 }
 
-func TestDeatchedBundle(t *testing.T) {
+func TestDetachedBundle(t *testing.T) {
 	execFile := os.Args[0]
 	execBuf, err := os.ReadFile(execFile)
 	if err != nil {
@@ -189,12 +189,12 @@ func TestDeatchedBundle(t *testing.T) {
 	})
 
 	t.Run("Explode", func(t *testing.T) {
-		err := bundle.WriteExploded(tmpDir)
+		_, err := bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded")
 
 		// Abuse the fact that we do an integrity check if the bundle
 		// is already exploded.
-		err = bundle.WriteExploded(tmpDir)
+		_, err = bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded(again)")
 	})
 }

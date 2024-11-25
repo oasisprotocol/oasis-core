@@ -3,7 +3,9 @@ package registry
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,37 +46,32 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // RuntimeConfig is the node runtime configuration.
 type RuntimeConfig struct {
-	// Host contains configuration for the runtime host. It may be nil if no runtimes are to be
-	// hosted by the current node.
-	Host *RuntimeHostConfig
+	// Runtimes contains per-runtime provisioning configuration.
+	//
+	// Some fields may be omitted as they are provided when the runtime
+	// is provisioned.
+	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 
-	// History configures the runtime history keeper.
-	History history.Config
-}
-
-// Runtimes returns a list of configured runtimes.
-func (cfg *RuntimeConfig) Runtimes() (runtimes []common.Namespace) {
-	if cfg.Host == nil || config.GlobalConfig.Mode == config.ModeKeyManager {
-		return
-	}
-
-	for id := range cfg.Host.Runtimes {
-		runtimes = append(runtimes, id)
-	}
-	return
-}
-
-// RuntimeHostConfig is configuration for a node that hosts runtimes.
-type RuntimeHostConfig struct {
 	// Provisioner is the runtime provisioner to use.
+	//
+	// It may be nil if no runtimes are configured.
 	Provisioner runtimeHost.Provisioner
 
-	// Runtimes contains per-runtime provisioning configuration. Some fields may be omitted as they
-	// are provided when the runtime is provisioned.
-	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
+	// History is the runtime history factory to use.
+	History history.Factory
 }
 
-func newConfig( //nolint: gocyclo
+// RuntimeIDs returns a list of configured runtime IDs.
+func (cfg *RuntimeConfig) RuntimeIDs() []common.Namespace {
+	if config.GlobalConfig.Mode == config.ModeKeyManager {
+		return nil
+	}
+
+	return slices.Collect(maps.Keys(cfg.Runtimes))
+}
+
+// newRuntimeConfig creates a new node runtime configuration.
+func newRuntimeConfig( //nolint: gocyclo
 	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
@@ -123,7 +120,7 @@ func newConfig( //nolint: gocyclo
 			if bnd, err = bundle.Open(path); err != nil {
 				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
 			}
-			if err = bnd.WriteExploded(dataDir); err != nil {
+			if _, err = bnd.WriteExploded(dataDir); err != nil {
 				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
 			}
 			// Release resources as the bundle has been exploded anyway.
@@ -162,8 +159,6 @@ func newConfig( //nolint: gocyclo
 		isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
 			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
-
-		var rh RuntimeHostConfig
 
 		// Configure host environment information.
 		cs, err := consensus.GetStatus(context.Background())
@@ -297,29 +292,23 @@ func newConfig( //nolint: gocyclo
 		}
 
 		// Create a composite provisioner to provision the individual components.
-		rh.Provisioner = hostComposite.NewProvisioner(provisioners)
+		cfg.Provisioner = hostComposite.NewProvisioner(provisioners)
 
 		// Configure runtimes.
-		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
+		cfg.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
 		for _, bnd := range regularBundles {
 			id := bnd.Manifest.ID
-			if rh.Runtimes[id] == nil {
-				rh.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
+			if cfg.Runtimes[id] == nil {
+				cfg.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
 			}
-			if _, ok := rh.Runtimes[id][bnd.Manifest.Version]; ok {
+			if _, ok := cfg.Runtimes[id][bnd.Manifest.Version]; ok {
 				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
 			}
 
 			// Get any local runtime configuration.
 			var localConfig map[string]interface{}
-			if config.GlobalConfig.Runtime.RuntimeConfig != nil {
-				if lcRaw, ok := config.GlobalConfig.Runtime.RuntimeConfig[id.String()]; ok {
-					if lc, ok := lcRaw.(map[string]interface{}); ok {
-						localConfig = lc
-					} else {
-						return nil, fmt.Errorf("malformed runtime configuration for runtime %s", id.String())
-					}
-				}
+			if lc, ok := config.GlobalConfig.Runtime.RuntimeConfig[id.String()]; ok {
+				localConfig = lc
 			}
 
 			rtBnd := &runtimeHost.RuntimeBundle{
@@ -374,7 +363,7 @@ func newConfig( //nolint: gocyclo
 				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
-			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
+			cfg.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
 				Bundle:      rtBnd,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,
@@ -408,36 +397,47 @@ func newConfig( //nolint: gocyclo
 						component.ID_RONL,
 					},
 				}
-				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{
+				cfg.Runtimes[id] = map[version.Version]*runtimeHost.Config{
 					{}: runtimeHostCfg,
 				}
 			}
 		}
-		if len(rh.Runtimes) == 0 {
+		if len(cfg.Runtimes) == 0 {
 			return nil, fmt.Errorf("no runtimes configured")
 		}
-
-		cfg.Host = &rh
 	}
 
+	history, err := createHistoryFactory()
+	if err != nil {
+		return nil, err
+	}
+	cfg.History = history
+
+	return &cfg, nil
+}
+
+func createHistoryFactory() (history.Factory, error) {
+	var pruneFactory history.PrunerFactory
 	strategy := config.GlobalConfig.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
-		cfg.History.Pruner = history.NewNonePruner()
+		pruneFactory = history.NewNonePrunerFactory()
 	case history.PrunerStrategyKeepLast:
 		numKept := config.GlobalConfig.Runtime.Prune.NumKept
-		cfg.History.Pruner = history.NewKeepLastPruner(numKept)
+		pruneInterval := max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
+		pruneFactory = history.NewKeepLastPrunerFactory(numKept, pruneInterval)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
 
-	cfg.History.PruneInterval = config.GlobalConfig.Runtime.Prune.Interval
-	const minPruneInterval = 1 * time.Second
-	if cfg.History.PruneInterval < minPruneInterval {
-		cfg.History.PruneInterval = minPruneInterval
-	}
+	// Archive node won't commit any new blocks, so disable waiting for storage
+	// sync commits.
+	mode := config.GlobalConfig.Mode
+	hasLocalStorage := mode.HasLocalStorage() && !mode.IsArchive()
 
-	return &cfg, nil
+	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
+
+	return historyFactory, nil
 }
 
 func init() {

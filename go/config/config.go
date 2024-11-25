@@ -53,6 +53,11 @@ func (m NodeMode) IsClientOnly() bool {
 	return false
 }
 
+// IsArchive returns true iff the mode is set to archive node mode.
+func (m NodeMode) IsArchive() bool {
+	return m == ModeArchive
+}
+
 // HasLocalStorage returns true iff the mode is one that has local storage.
 func (m NodeMode) HasLocalStorage() bool {
 	switch m {

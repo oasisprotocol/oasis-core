@@ -13,11 +13,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -53,10 +51,6 @@ type Registry interface {
 	// NewUnmanagedRuntime creates a new runtime that is not managed by this
 	// registry.
 	NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error)
-
-	// AddRoles adds available node roles to the runtime. Specify nil as the runtimeID
-	// to set the role for all runtimes.
-	AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error
 
 	// RegisterClient registers a runtime client service. If the service has already been registered
 	// this method returns an error.
@@ -97,12 +91,6 @@ type Runtime interface {
 	// RegisterStorage sets the given local storage backend for the runtime.
 	RegisterStorage(storage storageAPI.Backend)
 
-	// AddRoles adds available node roles to the runtime.
-	AddRoles(roles node.RolesMask)
-
-	// HasRoles checks if the node has all of the roles specified for this runtime.
-	HasRoles(roles node.RolesMask) bool
-
 	// History returns the history for this runtime.
 	History() history.History
 
@@ -130,7 +118,6 @@ type runtime struct { // nolint: maligned
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
-	roles                node.RolesMask
 	managed              bool
 
 	consensus    consensus.Backend
@@ -211,20 +198,6 @@ func (r *runtime) RegisterStorage(storage storageAPI.Backend) {
 		panic("runtime storage backend already assigned")
 	}
 	r.storage = storage
-}
-
-func (r *runtime) AddRoles(roles node.RolesMask) {
-	r.Lock()
-	defer r.Unlock()
-
-	r.roles |= roles
-}
-
-func (r *runtime) HasRoles(roles node.RolesMask) bool {
-	r.Lock()
-	defer r.Unlock()
-
-	return r.roles&roles == roles
 }
 
 func (r *runtime) History() history.History {
@@ -407,6 +380,8 @@ type runtimeRegistry struct {
 	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
+
+	historyFactory history.Factory
 }
 
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
@@ -432,26 +407,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 }
 
 func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
-	return newRuntime(ctx, r.dataDir, runtimeID, r.cfg, r.consensus, r.logger)
-}
-
-func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error {
-	r.RLock()
-	defer r.RUnlock()
-
-	if runtimeID != nil {
-		rt, ok := r.runtimes[*runtimeID]
-		if !ok {
-			return fmt.Errorf("runtime/registry: runtime %s is not supported", *runtimeID)
-		}
-		rt.AddRoles(roles)
-		return nil
-	}
-
-	for _, rt := range r.runtimes {
-		rt.AddRoles(roles)
-	}
-	return nil
+	return r.newRuntime(ctx, runtimeID)
 }
 
 func (r *runtimeRegistry) RegisterClient(rc runtimeClient.RuntimeClient) error {
@@ -496,7 +452,7 @@ func (r *runtimeRegistry) FinishInitialization() error {
 	return nil
 }
 
-func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace) (rerr error) {
+func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, runtimeID common.Namespace) (rerr error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -504,11 +460,11 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return fmt.Errorf("runtime/registry: too many registered runtimes")
 	}
 
-	if _, ok := r.runtimes[id]; ok {
-		return fmt.Errorf("runtime/registry: runtime already registered: %s", id)
+	if _, ok := r.runtimes[runtimeID]; ok {
+		return fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(ctx, r.dataDir, id, r.cfg, r.consensus, r.logger)
+	rt, err := r.newRuntime(ctx, runtimeID)
 	if err != nil {
 		return err
 	}
@@ -520,68 +476,55 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	rt.managed = true
 
 	// Create runtime history keeper.
-	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
-	haveLocalStorageWorker := config.GlobalConfig.Mode.HasLocalStorage() && config.GlobalConfig.Mode != config.ModeArchive
-	history, err := history.New(rt.dataDir, id, &r.cfg.History, haveLocalStorageWorker)
+	history, err := r.historyFactory(runtimeID, rt.dataDir)
 	if err != nil {
-		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
+		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 	}
-
-	// Create runtime-specific storage backend.
-	var ns common.Namespace
-	copy(ns[:], id[:])
 
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
-		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
+		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
 	}
 
 	rt.history = history
-	r.runtimes[id] = rt
+	r.runtimes[runtimeID] = rt
 
 	return nil
 }
 
-func newRuntime(
-	ctx context.Context,
-	dataDir string,
-	id common.Namespace,
-	cfg *RuntimeConfig,
-	consensus consensus.Backend,
-	logger *logging.Logger,
-) (*runtime, error) {
+func (r *runtimeRegistry) newRuntime(ctx context.Context, runtimeID common.Namespace) (*runtime, error) {
 	// Ensure runtime state directory exists.
-	rtDataDir, err := EnsureRuntimeStateDir(dataDir, id)
+	rtDataDir, err := EnsureRuntimeStateDir(r.dataDir, runtimeID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create runtime-specific local storage backend.
-	localStorage, err := localstorage.New(rtDataDir, LocalStorageFile, id)
+	localStorage, err := localstorage.New(rtDataDir, LocalStorageFile, runtimeID)
 	if err != nil {
-		return nil, fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
+		return nil, fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", runtimeID, err)
 	}
 
 	watchCtx, cancel := context.WithCancel(ctx)
 
 	rt := &runtime{
-		id:                         id,
+		id:                         runtimeID,
 		dataDir:                    rtDataDir,
-		consensus:                  consensus,
+		consensus:                  r.consensus,
 		localStorage:               localStorage,
 		cancelCtx:                  cancel,
 		registryDescriptorCh:       make(chan struct{}),
 		registryDescriptorNotifier: pubsub.NewBroker(true),
 		activeDescriptorCh:         make(chan struct{}),
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
-		logger:                     logger.With("runtime_id", id),
+		logger:                     r.logger.With("runtime_id", runtimeID),
 	}
 	go rt.watchUpdates(watchCtx)
 
 	// Configure runtime host if needed.
-	if cfg.Host != nil {
-		rt.hostProvisioner = cfg.Host.Provisioner
-		rt.hostConfig = cfg.Host.Runtimes[id]
+	if r.cfg.Provisioner != nil {
+		rt.hostProvisioner = r.cfg.Provisioner
+		rt.hostConfig = r.cfg.Runtimes[runtimeID]
 	}
 
 	return rt, nil
@@ -596,20 +539,26 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
-	cfg, err := newConfig(dataDir, commonStore, identity, consensus, ias)
+	historyFactory, err := createHistoryFactory()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := newRuntimeConfig(dataDir, commonStore, identity, consensus, ias)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &runtimeRegistry{
-		logger:    logging.GetLogger("runtime/registry"),
-		dataDir:   dataDir,
-		cfg:       cfg,
-		consensus: consensus,
-		runtimes:  make(map[common.Namespace]*runtime),
+		logger:         logging.GetLogger("runtime/registry"),
+		dataDir:        dataDir,
+		cfg:            cfg,
+		consensus:      consensus,
+		runtimes:       make(map[common.Namespace]*runtime),
+		historyFactory: historyFactory,
 	}
 
-	for _, id := range cfg.Runtimes() {
+	for _, id := range cfg.RuntimeIDs() {
 		r.logger.Info("adding supported runtime",
 			"id", id,
 		)

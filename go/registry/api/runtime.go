@@ -650,7 +650,7 @@ type VersionInfo struct {
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
 
-	// BundleChecksum is the SHA256 hash of the runtime bundle (optional).
+	// BundleChecksum is the SHA256 hash of the runtime bundle manifest (optional).
 	BundleChecksum []byte `json:"bundle_checksum,omitempty"`
 }
 
