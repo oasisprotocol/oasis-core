@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 24.3.1 (2024-11-29)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- runtime: Do not persist updated trusted state for TDX
+  ([#5909](https://github.com/oasisprotocol/oasis-core/issues/5909))
+
+### Internal Changes
+
+- go: Bump go-libp2p to 0.37.2
+  ([#5951](https://github.com/oasisprotocol/oasis-core/issues/5951))
+
 ## 24.3 (2024-10-14)
 
 | Protocol          | Version   |
