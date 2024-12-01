@@ -128,7 +128,8 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 			if runtimes[id] == nil {
 				runtimes[id] = make(map[version.Version]*runtimeHost.Config)
 			}
-			if _, ok := runtimes[id][bnd.Manifest.Version]; ok {
+			version := bnd.Manifest.GetComponentByID(component.ID_RONL).Version
+			if _, ok := runtimes[id][version]; ok {
 				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
 			}
 
@@ -190,7 +191,7 @@ func newRuntimeConfig(dataDir string) (map[common.Namespace]map[version.Version]
 				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
-			runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
+			runtimes[id][version] = &runtimeHost.Config{
 				Bundle:      rtBnd,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,

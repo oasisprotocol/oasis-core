@@ -24,6 +24,7 @@ type Manifest struct {
 	ID common.Namespace `json:"id"`
 
 	// Version is the runtime version.
+	// NOTE: This may go away in the future, use `Component.Version` instead.
 	Version version.Version `json:"version,omitempty"`
 
 	// Executable is the name of the runtime ELF executable file.
@@ -115,6 +116,7 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 		return &Component{
 			Kind:       component.RONL,
 			Executable: m.Executable,
+			Version:    m.Version,
 			SGX:        m.SGX,
 		}
 	}
@@ -232,6 +234,9 @@ type Component struct {
 	// Name is the name of the component that can be used to filter components when multiple are
 	// provided by a runtime.
 	Name string `json:"name,omitempty"`
+
+	// Version is the component version.
+	Version version.Version
 
 	// Executable is the name of the runtime ELF executable file if any.
 	Executable string `json:"executable,omitempty"`

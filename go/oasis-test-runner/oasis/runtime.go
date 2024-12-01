@@ -259,9 +259,8 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	// Prepare bundle.
 	bnd := &bundle.Bundle{
 		Manifest: &bundle.Manifest{
-			Name:    "test-runtime",
-			ID:      rt.cfgSave.id,
-			Version: deployCfg.version,
+			Name: "test-runtime",
+			ID:   rt.cfgSave.id,
 		},
 	}
 
@@ -278,6 +277,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 
 		comp := &bundle.Component{
 			Kind:       compCfg.Kind,
+			Version:    deployCfg.version,
 			Executable: elfBin,
 		}
 

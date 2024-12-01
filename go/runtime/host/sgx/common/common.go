@@ -45,7 +45,7 @@ func GetQuotePolicy(
 		if err != nil {
 			return nil, fmt.Errorf("failed to query runtime descriptor: %w", err)
 		}
-		if d := rt.DeploymentForVersion(rtCfg.Bundle.Manifest.Version); d != nil {
+		if d := rt.DeploymentForVersion(comp.Version); d != nil {
 			var sc node.SGXConstraints
 			if err = cbor.Unmarshal(d.TEE, &sc); err != nil {
 				return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
