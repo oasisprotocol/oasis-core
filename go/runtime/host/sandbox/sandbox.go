@@ -369,18 +369,19 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	hi.LocalConfig = r.rtCfg.LocalConfig
 
 	// Perform common host initialization.
-	var rtVersion *version.Version
 	initCtx, cancelInit := context.WithTimeout(ctx, runtimeInitTimeout)
 	defer cancelInit()
-	if rtVersion, err = pc.InitHost(initCtx, conn, hi); err != nil {
+
+	rtVersion, err := pc.InitHost(initCtx, conn, hi)
+	if err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
-	if r.rtCfg.Components[0].IsRONL() {
+	if id := r.rtCfg.Components[0]; id.IsRONL() {
 		// Make sure the version matches what is configured in the bundle. This check is skipped for
 		// non-RONL components to support detached bundles.
-		if bndVersion := r.rtCfg.Bundle.Manifest.Version; *rtVersion != bndVersion {
-			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
+		if comp := r.rtCfg.Bundle.Manifest.GetComponentByID(id); comp.Version != *rtVersion {
+			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, comp.Version)
 		}
 	}
 

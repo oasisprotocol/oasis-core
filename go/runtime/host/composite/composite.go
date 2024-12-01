@@ -31,11 +31,10 @@ type rhost struct {
 // NewHost creates a new composite runtime host.
 func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	h := &rhost{
-		id:      cfg.Bundle.Manifest.ID,
-		version: cfg.Bundle.Manifest.Version,
-		comps:   make(map[component.ID]host.Runtime),
-		stopCh:  make(chan struct{}),
-		logger:  logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
+		id:     cfg.Bundle.Manifest.ID,
+		comps:  make(map[component.ID]host.Runtime),
+		stopCh: make(chan struct{}),
+		logger: logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
 	}
 
 	// Collect available components.
@@ -51,6 +50,8 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 		compCfg := cfg
 		compCfg.Components = []component.ID{id}
 		switch id.Kind {
+		case component.RONL:
+			h.version = c.Version
 		case component.ROFL:
 			// Wrap message handler for ROFL component.
 			var err error
