@@ -17,6 +17,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
+const (
+	// bundleFileExtension is the file extension used for storing the bundle.
+	bundleFileExtension = ".orc"
+
+	// bundleFilenameRegexp is the regular expression pattern used for
+	// validating bundle filenames.
+	bundleFilenameRegexp = `^[a-f0-9]{64}\.orc$`
+)
+
 // Bundle is a runtime bundle instance.
 type Bundle struct {
 	Manifest *Manifest
@@ -26,6 +35,11 @@ type Bundle struct {
 	archive *zip.ReadCloser
 	// manifestHash is the original manifest hash of the bundle at time the bundle was loaded.
 	manifestHash hash.Hash
+}
+
+// GenerateFilename returns the recommended filename for storing the bundle.
+func (bnd *Bundle) GenerateFilename() string {
+	return fmt.Sprintf("%s%s", bnd.manifestHash.Hex(), bundleFileExtension)
 }
 
 // Validate validates the runtime bundle for well-formedness.
