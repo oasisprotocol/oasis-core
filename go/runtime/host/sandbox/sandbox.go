@@ -408,6 +408,24 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	r.rtVersion = rtVersion
 	r.Unlock()
 
+	// Ensure the command queue is empty to avoid processing any stale requests after the
+	// runtime restarts.
+drainLoop:
+	for {
+		select {
+		case grq := <-r.ctrlCh:
+			switch rq := grq.(type) {
+			case *abortRequest:
+				rq.ch <- fmt.Errorf("runtime restarted")
+				close(rq.ch)
+			default:
+				// Ignore unknown requests.
+			}
+		default:
+			break drainLoop
+		}
+	}
+
 	// Notify subscribers that a runtime has been started.
 	r.notifier.Broadcast(&host.Event{Started: ev})
 
@@ -529,24 +547,6 @@ func (r *sandboxedRuntime) manager() {
 				})
 
 				continue
-			}
-
-			// Ensure the command queue is empty to avoid processing any stale requests after the
-			// runtime restarts.
-		drainLoop:
-			for {
-				select {
-				case grq := <-r.ctrlCh:
-					switch rq := grq.(type) {
-					case *abortRequest:
-						rq.ch <- fmt.Errorf("runtime restarted")
-						close(rq.ch)
-					default:
-						// Ignore unknown requests.
-					}
-				default:
-					break drainLoop
-				}
 			}
 		}
 
