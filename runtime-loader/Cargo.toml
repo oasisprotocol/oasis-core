@@ -5,10 +5,10 @@ authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 edition = "2018"
 
 [dependencies]
-clap = "4.5.20"
+clap = "4.5.22"
 anyhow = "1.0"
 futures = { version = "0.3.31", features = ["compat", "io-compat"] }
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.42", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aesm-client = { version = "0.6.0", features = ["sgxs"] }
