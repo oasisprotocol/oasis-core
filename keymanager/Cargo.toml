@@ -29,5 +29,8 @@ async-trait = "0.1.83"
 p384 = { version = "0.13.0" }
 p256 = { version = "0.13.2" }
 
+# TODO: Remove once lru upgrades to a newer version.
+hashbrown = "0.15.1"
+
 [features]
 debug-mock-sgx = ["oasis-core-runtime/debug-mock-sgx"]
