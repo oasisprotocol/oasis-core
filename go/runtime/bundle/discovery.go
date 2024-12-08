@@ -85,9 +85,6 @@ func (d *Discovery) Init() error {
 		return err
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	// Validate global repository URLs.
 	globalBaseURLs, err := validateAndNormalizeURLs(config.GlobalConfig.Runtime.Repositories)
 	if err != nil {
@@ -109,6 +106,9 @@ func (d *Discovery) Init() error {
 	}
 
 	// Update discovery.
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.globalBaseURLs = globalBaseURLs
 	d.runtimeBaseURLs = runtimeBaseURLs
 
