@@ -54,11 +54,18 @@ func TestProvisionerSGX(t *testing.T) {
 	_, err = bnd.WriteExploded(tmpDir)
 	require.NoError(err, "bnd.WriteExploded")
 
+	explodedDataDir := bnd.ExplodedPath(tmpDir, "")
+
 	cfg := host.Config{
-		Bundle: &host.RuntimeBundle{
-			Bundle:          bnd,
-			ExplodedDataDir: tmpDir,
-		},
+		Name: "test-runtime",
+		ID:   bnd.Manifest.ID,
+	}
+
+	for _, comp := range bnd.Manifest.Components {
+		cfg.Components = append(cfg.Components, &bundle.ExplodedComponent{
+			Component:       comp,
+			ExplodedDataDir: explodedDataDir,
+		})
 	}
 
 	ias, err := iasHttp.New(&iasHttp.Config{
@@ -69,7 +76,10 @@ func TestProvisionerSGX(t *testing.T) {
 	require.NoError(err, "iasHttp.New")
 
 	extraTests := []tests.TestCase{
-		{"AttestationWorker", testAttestationWorker}, // nolint: govet
+		{
+			Name: "AttestationWorker",
+			Fn:   testAttestationWorker,
+		},
 	}
 
 	t.Run("Naked", func(t *testing.T) {

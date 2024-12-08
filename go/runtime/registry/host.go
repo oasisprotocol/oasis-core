@@ -1,9 +1,7 @@
 package registry
 
 import (
-	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -27,98 +25,76 @@ const (
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
 type RuntimeHostNode struct {
-	sync.Mutex
+	agg *multi.Aggregate
+	rr  host.RichRuntime
 
-	factory  RuntimeHostHandlerFactory
+	runtime Runtime
+
 	notifier protocol.Notifier
+	handler  host.RuntimeHandler
 
-	agg           *multi.Aggregate
-	runtime       host.RichRuntime
-	runtimeNotify chan struct{}
+	provisioner host.Provisioner
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
 func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
-	return &RuntimeHostNode{
-		factory:       factory,
-		runtimeNotify: make(chan struct{}),
-	}, nil
-}
-
-// ProvisionHostedRuntime provisions the configured runtime.
-//
-// This method may return before the runtime is fully provisioned. The returned runtime will not be
-// started automatically, you must call Start explicitly.
-func (n *RuntimeHostNode) ProvisionHostedRuntime() (host.RichRuntime, protocol.Notifier, error) {
-	runtime := n.factory.GetRuntime()
-	cfgs := runtime.HostConfig()
-	provisioner := runtime.HostProvisioner()
-	if cfgs == nil || provisioner == nil {
-		return nil, nil, fmt.Errorf("runtime provisioner is not available")
-	}
-
+	runtime := factory.GetRuntime()
 	agg := multi.New(runtime.ID())
 	rr := host.NewRichRuntime(agg)
 
-	notifier := n.factory.NewRuntimeHostNotifier(agg)
-	handler := n.factory.NewRuntimeHostHandler()
+	notifier := factory.NewRuntimeHostNotifier(agg)
+	handler := factory.NewRuntimeHostHandler()
+	provisioner := runtime.HostProvisioner()
 
-	for version, cfg := range cfgs {
-		rtCfg := *cfg
-		rtCfg.MessageHandler = handler
-
-		// Provision the runtime.
-		rt, err := composite.NewHost(rtCfg, provisioner)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
-		}
-
-		if err := agg.AddVersion(rt, version); err != nil {
-			return nil, nil, fmt.Errorf("failed to add runtime version to aggregate %s: %w", version, err)
-		}
-	}
-
-	n.Lock()
-	n.agg = agg
-	n.runtime = rr
-	n.notifier = notifier
-	n.Unlock()
-
-	close(n.runtimeNotify)
-
-	return rr, notifier, nil
+	return &RuntimeHostNode{
+		agg:         agg,
+		rr:          rr,
+		runtime:     runtime,
+		notifier:    notifier,
+		handler:     handler,
+		provisioner: provisioner,
+	}, nil
 }
 
-// GetHostedRuntime returns the provisioned hosted runtime (if any).
+// ProvisionHostedRuntimeVersion provisions the configured runtime version.
+func (n *RuntimeHostNode) ProvisionHostedRuntimeVersion(version version.Version) error {
+	if n.agg.HasVersion(version) {
+		return nil
+	}
+
+	cfg := n.runtime.HostConfig(version)
+	if cfg == nil {
+		return fmt.Errorf("runtime version %s not found", version)
+	}
+
+	rtCfg := *cfg
+	rtCfg.MessageHandler = n.handler
+
+	rt, err := composite.NewHost(rtCfg, n.provisioner)
+	if err != nil {
+		return fmt.Errorf("failed to provision runtime version %s: %w", version, err)
+	}
+
+	if err := n.agg.AddVersion(rt, version); err != nil {
+		return fmt.Errorf("failed to add runtime version to aggregate %s: %w", version, err)
+	}
+
+	return nil
+}
+
+// GetHostedRuntime returns the hosted runtime.
 func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
-	n.Lock()
-	defer n.Unlock()
-
-	return n.runtime
+	return n.rr
 }
 
-// WaitHostedRuntime waits for the hosted runtime to be provisioned and returns it.
-func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRuntime, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-n.runtimeNotify:
-	}
-
-	return n.GetHostedRuntime(), nil
+// GetRuntimeHostNotifier returns the runtime host notifier.
+func (n *RuntimeHostNode) GetRuntimeHostNotifier() protocol.Notifier {
+	return n.notifier
 }
 
 // GetHostedRuntimeActiveVersion returns the version of the active runtime.
 func (n *RuntimeHostNode) GetHostedRuntimeActiveVersion() (*version.Version, error) {
-	n.Lock()
-	agg := n.agg
-	n.Unlock()
-
-	if agg == nil {
-		return nil, fmt.Errorf("runtime not available")
-	}
-
-	return agg.GetActiveVersion()
+	return n.agg.GetActiveVersion()
 }
 
 // GetHostedRuntimeCapabilityTEE returns the CapabilityTEE for the active runtime version.
@@ -126,15 +102,7 @@ func (n *RuntimeHostNode) GetHostedRuntimeActiveVersion() (*version.Version, err
 // It may be nil in case the CapabilityTEE is not available or if the runtime is not running
 // inside a TEE.
 func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE() (*node.CapabilityTEE, error) {
-	n.Lock()
-	agg := n.agg
-	n.Unlock()
-
-	if agg == nil {
-		return nil, fmt.Errorf("runtime not available")
-	}
-
-	return agg.GetCapabilityTEE()
+	return n.agg.GetCapabilityTEE()
 }
 
 // GetHostedRuntimeCapabilityTEEForVersion returns the CapabilityTEE for a specific runtime version.
@@ -142,15 +110,7 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE() (*node.CapabilityTEE, 
 // It may be nil in case the CapabilityTEE is not available or if the runtime is not running
 // inside a TEE.
 func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEEForVersion(version version.Version) (*node.CapabilityTEE, error) {
-	n.Lock()
-	agg := n.agg
-	n.Unlock()
-
-	if agg == nil {
-		return nil, fmt.Errorf("runtime not available")
-	}
-
-	rt, err := agg.GetVersion(version)
+	rt, err := n.agg.GetVersion(version)
 	if err != nil {
 		return nil, err
 	}
@@ -158,16 +118,6 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEEForVersion(version versio
 }
 
 // SetHostedRuntimeVersion sets the currently active and next versions for the hosted runtime.
-func (n *RuntimeHostNode) SetHostedRuntimeVersion(active *version.Version, next *version.Version) error {
-	n.Lock()
-	agg := n.agg
-	n.Unlock()
-
-	if agg == nil {
-		return fmt.Errorf("runtime not available")
-	}
-
+func (n *RuntimeHostNode) SetHostedRuntimeVersion(active *version.Version, next *version.Version) {
 	n.agg.SetVersion(active, next)
-
-	return nil
 }

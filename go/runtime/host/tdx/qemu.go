@@ -105,7 +105,7 @@ func (q *qemuProvisioner) Name() string {
 }
 
 func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
-	comp, err := rtCfg.GetComponent()
+	comp, err := rtCfg.GetExplodedComponent()
 	if err != nil {
 		return process.Config{}, err
 	}
@@ -114,10 +114,9 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	}
 
 	cid := rtCfg.Extra.(*QemuExtraConfig).CID // Ensured above.
-	bnd := rtCfg.Bundle
 	tdxCfg := comp.TDX
 	resources := tdxCfg.Resources
-	firmware := bnd.ExplodedPath(comp.ID(), tdxCfg.Firmware)
+	firmware := comp.ExplodedPath(tdxCfg.Firmware)
 
 	cfg := process.Config{
 		Path: defaultQemuSystemPath,
@@ -125,7 +124,7 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 			"-accel", "kvm",
 			"-m", fmt.Sprintf("%d", resources.Memory),
 			"-smp", fmt.Sprintf("%d", resources.CPUCount),
-			"-name", fmt.Sprintf("oasis-%s-%s", bnd.Manifest.ID, comp.ID()),
+			"-name", fmt.Sprintf("oasis-%s-%s", rtCfg.ID, comp.ID()),
 			"-cpu", "host",
 			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
 			"-bios", firmware,
@@ -144,18 +143,18 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	// Configure kernel when one is available. We can set up TDs that only include the virtual
 	// firmware for special-purpose locked down TDs.
 	if tdxCfg.HasKernel() {
-		kernelImage := bnd.ExplodedPath(comp.ID(), tdxCfg.Kernel)
+		kernelImage := comp.ExplodedPath(tdxCfg.Kernel)
 
 		cfg.Args = append(cfg.Args, "-kernel", kernelImage)
 		if tdxCfg.HasInitRD() {
-			initrdImage := bnd.ExplodedPath(comp.ID(), tdxCfg.InitRD)
+			initrdImage := comp.ExplodedPath(tdxCfg.InitRD)
 
 			cfg.Args = append(cfg.Args, "-initrd", initrdImage)
 		}
 
 		// Configure stage 2 image.
 		if tdxCfg.HasStage2() {
-			stage2Image := bnd.ExplodedPath(comp.ID(), tdxCfg.Stage2Image)
+			stage2Image := comp.ExplodedPath(tdxCfg.Stage2Image)
 
 			cfg.Args = append(cfg.Args,
 				// Stage 2 drive.
@@ -191,8 +190,8 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	// Logging.
 	logWrapper := host.NewRuntimeLogWrapper(
 		q.logger,
-		"runtime_id", rtCfg.Bundle.Manifest.ID,
-		"runtime_name", rtCfg.Bundle.Manifest.Name,
+		"runtime_id", rtCfg.ID,
+		"runtime_name", rtCfg.Name,
 		"component", comp.ID(),
 		"provisioner", q.Name(),
 	)

@@ -23,11 +23,12 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	runtimeCfg "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const (
-	baseNodePort = 20000
+	basePort = 20000
 
 	validatorStartDelay = 3 * time.Second
 
@@ -55,6 +56,7 @@ const (
 	nodePortP2P       = "p2p"
 	nodePortP2PSeed   = "p2p-seed"
 	nodePortPprof     = "pprof"
+	netPortRepository = "repository"
 
 	allInterfacesAddr = "tcp://0.0.0.0"
 	localhostAddr     = "tcp://127.0.0.1"
@@ -97,7 +99,7 @@ type Node struct { // nolint: maligned
 	extraArgs      []Argument
 	features       []Feature
 	hasValidators  bool
-	assignedPorts  map[string]uint16
+	ports          map[string]uint16
 	hostedRuntimes map[common.Namespace]*hostedRuntime
 
 	exitCh chan error
@@ -132,11 +134,11 @@ func (n *Node) SetArchiveMode(archive bool) {
 }
 
 func (n *Node) getProvisionedPort(portName string) uint16 {
-	port, ok := n.assignedPorts[portName]
+	port, ok := n.ports[portName]
 	if !ok {
-		port = n.net.nextNodePort
-		n.net.nextNodePort++
-		n.assignedPorts[portName] = port
+		port = n.net.nextPort
+		n.net.nextPort++
+		n.ports[portName] = port
 	}
 	return port
 }
@@ -292,15 +294,16 @@ func (n *Node) Start() error {
 			n.Config.Runtime.Prune.NumKept = hosted.runtime.pruner.NumKept
 		}
 
-		n.Config.Runtime.Paths = append(n.Config.Runtime.Paths, hosted.runtime.BundlePaths()...)
-
-		if hosted.localConfig != nil {
-			if n.Config.Runtime.RuntimeConfig == nil {
-				n.Config.Runtime.RuntimeConfig = make(map[string]map[string]interface{})
-			}
-			n.Config.Runtime.RuntimeConfig[hosted.runtime.ID().String()] = hosted.localConfig
+		rtCfg := runtimeCfg.RuntimeConfig{
+			ID:     hosted.runtime.cfgSave.id,
+			Config: hosted.localConfig,
 		}
+
+		n.Config.Runtime.Runtimes = append(n.Config.Runtime.Runtimes, rtCfg)
+		n.Config.Runtime.Paths = append(n.Config.Runtime.Paths, hosted.runtime.BundlePaths()...)
 	}
+
+	n.Config.Runtime.Repositories = []string{fmt.Sprintf("http://127.0.0.1:%d", n.net.getProvisionedPort(netPortRepository))}
 
 	if n.consensus.EnableArchiveMode {
 		n.Config.Mode = config.ModeArchive

@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -20,10 +21,11 @@ type Manifest struct {
 	// Name is the optional human readable runtime name.
 	Name string `json:"name,omitempty"`
 
-	// ID is the runtime ID.
+	// ID is the runtime identifier.
 	ID common.Namespace `json:"id"`
 
 	// Version is the runtime version.
+	// NOTE: This may go away in the future, use `Component.Version` instead.
 	Version version.Version `json:"version,omitempty"`
 
 	// Executable is the name of the runtime ELF executable file.
@@ -115,10 +117,29 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 		return &Component{
 			Kind:       component.RONL,
 			Executable: m.Executable,
+			Version:    m.Version,
 			SGX:        m.SGX,
 		}
 	}
 	return nil
+}
+
+// GetVersion returns the runtime version.
+func (m *Manifest) GetVersion() version.Version {
+	// We also support legacy manifests which define version at the top-level.
+	for _, comp := range m.Components {
+		if !comp.ID().IsRONL() {
+			continue
+		}
+
+		if comp.Version.ToU64() > m.Version.ToU64() {
+			return comp.Version
+		}
+
+		break
+	}
+
+	return m.Version
 }
 
 // SGXMetadata is the SGX specific manifest metadata.
@@ -224,6 +245,24 @@ type Identity struct {
 	Enclave sgx.EnclaveIdentity `json:"enclave"`
 }
 
+// ExplodedComponent is an exploded runtime component ready for execution.
+type ExplodedComponent struct {
+	*Component
+
+	// Detached returns true iff the bundle containing the component does not
+	// include a RONL component.
+	Detached bool
+
+	// ExplodedDataDir is the path to the data directory where the bundle
+	// containing the component has been extracted.
+	ExplodedDataDir string
+}
+
+// ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
+func (c *ExplodedComponent) ExplodedPath(fn string) string {
+	return filepath.Join(c.ExplodedDataDir, fn)
+}
+
 // Component is a runtime component.
 type Component struct {
 	// Kind is the component kind.
@@ -232,6 +271,9 @@ type Component struct {
 	// Name is the name of the component that can be used to filter components when multiple are
 	// provided by a runtime.
 	Name string `json:"name,omitempty"`
+
+	// Version is the component version.
+	Version version.Version
 
 	// Executable is the name of the runtime ELF executable file if any.
 	Executable string `json:"executable,omitempty"`

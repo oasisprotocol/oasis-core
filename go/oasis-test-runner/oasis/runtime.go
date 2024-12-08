@@ -30,10 +30,10 @@ type runtimeCfgSave struct {
 }
 
 type deploymentCfg struct {
-	version    version.Version
-	components []ComponentCfg
-	mrEnclave  *sgx.MrEnclave
-	bundle     *bundle.Bundle
+	components    []ComponentCfg
+	mrEnclave     *sgx.MrEnclave
+	bundle        *bundle.Bundle
+	excludeBundle bool
 }
 
 // Runtime is an Oasis runtime.
@@ -87,9 +87,9 @@ type RuntimeCfg struct { // nolint: maligned
 
 // DeploymentCfg is a deployment configuration.
 type DeploymentCfg struct {
-	Version    version.Version  `json:"version"`
-	ValidFrom  beacon.EpochTime `json:"valid_from"`
-	Components []ComponentCfg   `json:"components"`
+	ValidFrom     beacon.EpochTime `json:"valid_from"`
+	Components    []ComponentCfg   `json:"components"`
+	ExcludeBundle bool             `json:"exclude_bundle"`
 
 	// DeprecatedBinaries is deprecated, use Components.Binaries instead.
 	DeprecatedBinaries map[node.TEEHardware]string `json:"binaries"`
@@ -98,6 +98,7 @@ type DeploymentCfg struct {
 // ComponentCfg is a runtime component configuration.
 type ComponentCfg struct {
 	Kind     component.Kind              `json:"kind"`
+	Version  version.Version             `json:"version"`
 	Binaries map[node.TEEHardware]string `json:"binaries"`
 }
 
@@ -147,13 +148,16 @@ func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 }
 
 func (rt *Runtime) bundlePath(index int) string {
-	return filepath.Join(rt.dir.String(), fmt.Sprintf("bundle-%d.orc", index))
+	return filepath.Join(rt.dir.String(), fmt.Sprintf("bundle-%d%s", index, bundle.FileExtension))
 }
 
 // BundlePaths returns the paths to the dynamically generated bundles.
 func (rt *Runtime) BundlePaths() []string {
 	var paths []string
-	for i := range rt.cfgSave.deployments {
+	for i, dpl := range rt.cfgSave.deployments {
+		if dpl.excludeBundle {
+			continue
+		}
 		paths = append(paths, rt.bundlePath(i))
 	}
 	return paths
@@ -259,9 +263,8 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	// Prepare bundle.
 	bnd := &bundle.Bundle{
 		Manifest: &bundle.Manifest{
-			Name:    "test-runtime",
-			ID:      rt.cfgSave.id,
-			Version: deployCfg.version,
+			Name: "test-runtime",
+			ID:   rt.cfgSave.id,
 		},
 	}
 
@@ -278,6 +281,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 
 		comp := &bundle.Component{
 			Kind:       compCfg.Kind,
+			Version:    compCfg.Version,
 			Executable: elfBin,
 		}
 
@@ -304,6 +308,10 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	if err := refreshRONLIdentity(); err != nil {
 		return nil, err
 	}
+
+	// Update bundle's manifest checksum.
+	manifestHash := bnd.Manifest.Hash()
+	rt.descriptor.Deployments[deploymentIndex].BundleChecksum = manifestHash[:]
 
 	return bnd, nil
 }
@@ -371,14 +379,21 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		}
 		components = append(components, deployCfg.Components...)
 
-		rt.cfgSave.deployments = append(rt.cfgSave.deployments, &deploymentCfg{
-			version:    deployCfg.Version,
-			components: components,
-		})
-		rt.descriptor.Deployments = append(rt.descriptor.Deployments, &registry.VersionInfo{
-			Version:   deployCfg.Version,
+		versionInfo := registry.VersionInfo{
 			ValidFrom: deployCfg.ValidFrom,
+		}
+		for _, comp := range components {
+			if comp.Kind == component.RONL {
+				versionInfo.Version = comp.Version
+				break
+			}
+		}
+
+		rt.cfgSave.deployments = append(rt.cfgSave.deployments, &deploymentCfg{
+			components:    components,
+			excludeBundle: deployCfg.ExcludeBundle,
 		})
+		rt.descriptor.Deployments = append(rt.descriptor.Deployments, &versionInfo)
 	}
 
 	if _, err := rt.ToRuntimeBundles(); err != nil {

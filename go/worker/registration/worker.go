@@ -601,6 +601,10 @@ func (w *Worker) metricsWorker() {
 
 		// Runtime metrics.
 		for _, rt := range w.runtimeRegistry.Runtimes() {
+			if !rt.IsManaged() {
+				continue
+			}
+
 			rtLabel := rt.ID().String()
 
 			faults := nodeStatus.Faults[rt.ID()]

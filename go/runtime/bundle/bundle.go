@@ -17,6 +17,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
+// FileExtension is the file extension used for storing the bundle.
+const FileExtension = ".orc"
+
 // Bundle is a runtime bundle instance.
 type Bundle struct {
 	Manifest *Manifest
@@ -26,6 +29,11 @@ type Bundle struct {
 	archive *zip.ReadCloser
 	// manifestHash is the original manifest hash of the bundle at time the bundle was loaded.
 	manifestHash hash.Hash
+}
+
+// GenerateFilename returns the recommended filename for storing the bundle.
+func (bnd *Bundle) GenerateFilename() string {
+	return fmt.Sprintf("%s%s", bnd.manifestHash.Hex(), FileExtension)
 }
 
 // Validate validates the runtime bundle for well-formedness.
@@ -559,6 +567,16 @@ func Open(fn string) (*Bundle, error) {
 	}
 	if err = bnd.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Support legacy manifests where the runtime version is defined at the top level.
+	if bnd.Manifest.Version.ToU64() > 0 {
+		for _, comp := range bnd.Manifest.Components {
+			if comp.ID().IsRONL() {
+				comp.Version = bnd.Manifest.Version
+				break
+			}
+		}
 	}
 
 	return bnd, nil

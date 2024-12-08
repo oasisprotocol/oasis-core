@@ -241,11 +241,11 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
-						Version:   rtVersion,
 						ValidFrom: 0,
 						Components: []oasis.ComponentCfg{
 							{
-								Kind: component.RONL,
+								Kind:    component.RONL,
+								Version: rtVersion,
 								Binaries: map[node.TEEHardware]string{
 									tee: rt,
 								},

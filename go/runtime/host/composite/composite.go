@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -31,30 +32,23 @@ type rhost struct {
 // NewHost creates a new composite runtime host.
 func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	h := &rhost{
-		id:      cfg.Bundle.Manifest.ID,
-		version: cfg.Bundle.Manifest.Version,
-		comps:   make(map[component.ID]host.Runtime),
-		stopCh:  make(chan struct{}),
-		logger:  logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
+		id:     cfg.ID,
+		comps:  make(map[component.ID]host.Runtime),
+		stopCh: make(chan struct{}),
+		logger: logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.ID),
 	}
 
-	// Collect available components.
-	availableComps := cfg.Bundle.Manifest.GetAvailableComponents()
-
 	// Iterate over all wanted components and provision the individual runtimes.
-	for _, id := range cfg.Components {
-		c, ok := availableComps[id]
-		if !ok {
-			continue // Skip any components that we want but don't have.
-		}
-
+	for _, comp := range cfg.Components {
 		compCfg := cfg
-		compCfg.Components = []component.ID{id}
-		switch id.Kind {
+		compCfg.Components = []*bundle.ExplodedComponent{comp}
+		switch comp.Kind {
+		case component.RONL:
+			h.version = comp.Version
 		case component.ROFL:
 			// Wrap message handler for ROFL component.
 			var err error
-			compCfg.MessageHandler, err = compCfg.MessageHandler.NewSubHandler(h, c)
+			compCfg.MessageHandler, err = compCfg.MessageHandler.NewSubHandler(h, comp.Component)
 			if err != nil {
 				return nil, fmt.Errorf("host/composite: failed to create sub-handler: %w", err)
 			}
@@ -63,11 +57,12 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 
 		compRt, err := provisioner.NewRuntime(compCfg)
 		if err != nil {
-			return nil, fmt.Errorf("host/composite: failed to provision runtime component '%s': %w", id, err)
+			return nil, fmt.Errorf("host/composite: failed to provision runtime component '%s': %w", comp.ID(), err)
 		}
 
-		h.comps[id] = compRt
+		h.comps[comp.ID()] = compRt
 	}
+
 	if _, ronlExists := h.comps[component.ID_RONL]; !ronlExists {
 		return nil, fmt.Errorf("host/composite: required RONL component not available")
 	}
@@ -204,7 +199,7 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		return nil, fmt.Errorf("host/composite: exactly one component should be selected")
 	}
 
-	comp := cfg.Bundle.Manifest.GetComponentByID(cfg.Components[0])
+	comp := cfg.Components[0]
 	if comp == nil {
 		return nil, fmt.Errorf("host/composite: component not available")
 	}

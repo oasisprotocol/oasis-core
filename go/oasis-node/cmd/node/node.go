@@ -232,7 +232,7 @@ func (n *Node) initRuntimeWorkers() error {
 	if err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
+	n.svcMgr.Register(n.RuntimeRegistry)
 
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
@@ -353,6 +353,11 @@ func (n *Node) initRuntimeWorkers() error {
 }
 
 func (n *Node) startRuntimeWorkers() error {
+	// Start the runtime registry.
+	if err := n.RuntimeRegistry.Start(); err != nil {
+		return err
+	}
+
 	// Start the common worker.
 	if err := n.CommonWorker.Start(); err != nil {
 		return err
