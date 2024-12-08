@@ -28,6 +28,9 @@ const (
 
 	// requestTimeout is the time limit for http client requests.
 	requestTimeout = 10 * time.Second
+
+	// maxBundleSizeBytes is the maximum allowed bundle size in bytes.
+	maxBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
 // Discovery is responsible for discovering new bundles.
@@ -370,8 +373,17 @@ func (d *Discovery) fetchBundle(url string) (string, error) {
 		}
 	}()
 
-	if _, err = io.Copy(file, resp.Body); err != nil {
+	limitedReader := io.LimitedReader{
+		R: resp.Body,
+		N: maxBundleSizeBytes,
+	}
+
+	if _, err = io.Copy(file, &limitedReader); err != nil {
 		return "", fmt.Errorf("failed to save bundle: %w", err)
+	}
+
+	if limitedReader.N <= 0 {
+		return "", fmt.Errorf("bundle exceeds size limit of %d bytes", maxBundleSizeBytes)
 	}
 
 	return file.Name(), nil
