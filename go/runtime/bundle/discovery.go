@@ -22,8 +22,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 )
 
-// discoveryInterval is the time interval between (failed) bundle discoveries.
-const discoveryInterval = 15 * time.Minute
+const (
+	// discoveryInterval is the time interval between (failed) bundle discoveries.
+	discoveryInterval = 15 * time.Minute
+
+	// requestTimeout is the time limit for http client requests.
+	requestTimeout = 10 * time.Second
+)
 
 // Discovery is responsible for discovering new bundles.
 type Discovery struct {
@@ -37,6 +42,7 @@ type Discovery struct {
 
 	globalBaseURLs  []string
 	runtimeBaseURLs map[common.Namespace][]string
+	client          *http.Client
 
 	registry Registry
 
@@ -47,11 +53,16 @@ type Discovery struct {
 func NewDiscovery(dataDir string, registry Registry) *Discovery {
 	logger := logging.GetLogger("runtime/bundle/discovery")
 
+	client := http.Client{
+		Timeout: requestTimeout,
+	}
+
 	return &Discovery{
 		startOne:       cmSync.NewOne(),
+		discoverCh:     make(chan struct{}, 1),
 		bundleDir:      ExplodedPath(dataDir),
 		manifestHashes: make(map[common.Namespace][]hash.Hash),
-		discoverCh:     make(chan struct{}, 1),
+		client:         &client,
 		registry:       registry,
 		logger:         *logger,
 	}
@@ -337,7 +348,7 @@ func (d *Discovery) tryDownloadBundle(runtimeID common.Namespace, manifestHash h
 }
 
 func (d *Discovery) fetchBundle(url string) (string, error) {
-	resp, err := http.Get(url) // nolint: gosec
+	resp, err := d.client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch bundle: %w", err)
 	}
