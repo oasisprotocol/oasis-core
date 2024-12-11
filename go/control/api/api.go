@@ -216,7 +216,7 @@ type ComponentStatus struct {
 	// Version is the component version.
 	Version version.Version `json:"version,omitempty"`
 
-	// Detached specifies whether the component was in a detached bundled.
+	// Detached specifies whether the component was in a detached bundle.
 	Detached bool `json:"detached,omitempty"`
 
 	// Disabled specifies whether the component is disabled by default

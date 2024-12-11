@@ -249,7 +249,7 @@ type Identity struct {
 type ExplodedComponent struct {
 	*Component
 
-	// Detached returns true iff the bundle containing the component does not
+	// Detached is true iff the bundle containing the component does not
 	// include a RONL component.
 	Detached bool
 
