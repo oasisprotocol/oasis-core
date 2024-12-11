@@ -33,7 +33,8 @@ type Registry interface {
 	// AddBundle adds a bundle from the given path.
 	AddBundle(path string, manifestHash hash.Hash) error
 
-	// GetVersions returns versions for the given runtime.
+	// GetVersions returns versions for the given runtime, sorted in ascending
+	// order.
 	GetVersions(runtimeID common.Namespace) []version.Version
 
 	// WatchVersions provides a channel that streams runtime versions as they
@@ -201,7 +202,10 @@ func (r *registry) GetVersions(runtimeID common.Namespace) []version.Version {
 		}
 	}
 
-	return slices.Collect(maps.Keys(r.manifests[runtimeID]))
+	versions := slices.Collect(maps.Keys(r.manifests[runtimeID]))
+	slices.SortFunc(versions, version.Version.Cmp)
+
+	return versions
 }
 
 // WatchVersions implements Registry.
