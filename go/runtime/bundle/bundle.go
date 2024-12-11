@@ -518,7 +518,9 @@ func (bnd *Bundle) Close() error {
 }
 
 // Open opens and validates a runtime bundle instance.
-func Open(fn string) (*Bundle, error) {
+func Open(fn string, opts ...OpenOption) (*Bundle, error) {
+	options := NewOpenOptions(opts...)
+
 	r, err := zip.OpenReader(fn)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/bundle: failed to open bundle: %w", err)
@@ -558,12 +560,18 @@ func Open(fn string) (*Bundle, error) {
 		return nil, fmt.Errorf("runtime/bundle: failed to parse manifest: %w", err)
 	}
 
+	// Verify the manifest hash, if requested.
+	manifestHash := manifest.Hash()
+	if h := options.manifestHash; h != nil && !manifestHash.Equal(h) {
+		return nil, fmt.Errorf("runtime/bundle: invalid manifest (got: %s, expected: %s)", manifestHash.Hex(), h.Hex())
+	}
+
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
 		Manifest:     &manifest,
 		Data:         data,
 		archive:      r,
-		manifestHash: manifest.Hash(),
+		manifestHash: manifestHash,
 	}
 	if err = bnd.Validate(); err != nil {
 		return nil, err
@@ -630,4 +638,28 @@ func HashAllData(d Data) (hash.Hash, error) {
 	}
 	defer f.Close()
 	return hash.NewFromReader(f)
+}
+
+// OpenOptions are options for opening bundle files.
+type OpenOptions struct {
+	manifestHash *hash.Hash
+}
+
+// NewOpenOptions creates options using default and given values.
+func NewOpenOptions(opts ...OpenOption) *OpenOptions {
+	var o OpenOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &o
+}
+
+// OpenOption is an option used when opening a bundle file.
+type OpenOption func(o *OpenOptions)
+
+// WithManifestHash sets the manifest hash for verification.
+func WithManifestHash(manifestHash hash.Hash) OpenOption {
+	return func(o *OpenOptions) {
+		o.manifestHash = &manifestHash
+	}
 }
