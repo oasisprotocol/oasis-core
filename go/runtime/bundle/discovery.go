@@ -72,7 +72,7 @@ func NewDiscovery(dataDir string, registry Registry) *Discovery {
 }
 
 // Init sets up bundle discovery using node configuration and adds configured
-// and cached bundles to the registry.
+// and cached bundles (that are guaranteed to be exploded) to the registry.
 func (d *Discovery) Init() error {
 	// Consolidate all bundles in one place, which could be useful
 	// if we implement P2P sharing in the future.
@@ -80,7 +80,8 @@ func (d *Discovery) Init() error {
 		return err
 	}
 
-	// Add copied and cached bundles to the registry.
+	// Add copied and cached bundles (that are guaranteed to be exploded)
+	// to the registry.
 	if err := d.Discover(); err != nil {
 		return err
 	}
@@ -449,7 +450,7 @@ func (d *Discovery) copyBundle(src string) error {
 			"src", src,
 			"dst", dst,
 		)
-		return fmt.Errorf("failed to open bundle: %w", err)
+		return fmt.Errorf("failed to copy bundle: %w", err)
 	}
 
 	d.logger.Info("bundle copied",

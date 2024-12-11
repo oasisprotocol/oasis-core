@@ -47,7 +47,8 @@ type Registry interface {
 	// GetName returns optional human readable runtime name.
 	GetName(runtimeID common.Namespace, version version.Version) (string, error)
 
-	// GetComponents returns components for the given runtime and version.
+	// GetComponents returns RONL component for the given runtime and version,
+	// together with latest version of the remaining components.
 	GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error)
 }
 
@@ -106,7 +107,8 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	}
 	defer bnd.Close()
 
-	// Verify manifest hash.
+	// Verify that the manifest hash belongs to the bundle before checking
+	// if the bundle is already in the registry.
 	if !bnd.manifestHash.Equal(&manifestHash) {
 		return fmt.Errorf("invalid manifest hash (got: '%s', expected: '%s')",
 			bnd.manifestHash.Hex(),
@@ -119,7 +121,8 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 		return nil
 	}
 
-	// Verify that components are unique.
+	// Ensure the manifest doesn't include a component version already
+	// in the registry.
 	components := bnd.Manifest.GetAvailableComponents()
 
 	for compID, comp := range components {
