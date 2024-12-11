@@ -101,22 +101,14 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	)
 
 	// Open the bundle and release resources when done.
-	bnd, err := Open(path)
+	bnd, err := Open(path, WithManifestHash(manifestHash))
 	if err != nil {
 		return fmt.Errorf("failed to open bundle '%s': %w", path, err)
 	}
 	defer bnd.Close()
 
-	// Verify that the manifest hash belongs to the bundle before checking
-	// if the bundle is already in the registry.
-	if !bnd.manifestHash.Equal(&manifestHash) {
-		return fmt.Errorf("invalid manifest hash (got: '%s', expected: '%s')",
-			bnd.manifestHash.Hex(),
-			manifestHash.Hex(),
-		)
-	}
-
-	// Skip already processed bundles.
+	// Skip already processed bundles. This check should be performed
+	// after the bundle is opened and its manifest hash is verified.
 	if _, ok := r.bundles[manifestHash]; ok {
 		return nil
 	}
