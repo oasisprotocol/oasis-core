@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -314,6 +315,13 @@ func (w *Worker) selectBlockHeight(epoch beacon.EpochTime, from uint8, to uint8)
 		return 0, fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 	interval := params.Interval()
+
+	// Use a zero interval when mocking epoch time, as the interval is untrusted.
+	// It is set in genesis to a fixed value, but the real interval can vary
+	// between epochs.
+	if cmdFlags.DebugDontBlameOasis() && params.DebugMockBackend {
+		interval = 0
+	}
 
 	// Pick a random block from the given percentile.
 	offset := interval * int64(from) / 100
