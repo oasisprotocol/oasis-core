@@ -518,13 +518,19 @@ func (bnd *Bundle) Close() error {
 }
 
 // Open opens and validates a runtime bundle instance.
-func Open(fn string, opts ...OpenOption) (*Bundle, error) {
+func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 	options := NewOpenOptions(opts...)
 
+	// Open the zip file and close it on error.
 	r, err := zip.OpenReader(fn)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/bundle: failed to open bundle: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			r.Close()
+		}
+	}()
 
 	// Read the contents.
 	data := make(map[string]Data)
