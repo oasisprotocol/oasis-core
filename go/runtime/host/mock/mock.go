@@ -28,7 +28,7 @@ var CheckTxFailInput = []byte("checktx-mock-fail")
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	r := &runtime{
-		runtimeID: cfg.Bundle.Manifest.ID,
+		runtimeID: cfg.ID,
 		notifier:  pubsub.NewBroker(false),
 	}
 	return r, nil

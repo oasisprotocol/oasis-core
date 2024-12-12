@@ -235,8 +235,11 @@ func New(
 		return w, nil
 	}
 
-	// Register all configured runtimes.
+	// Register all configured managed runtimes.
 	for _, rt := range runtimeRegistry.Runtimes() {
+		if !rt.IsManaged() {
+			continue
+		}
 		if err := w.registerRuntime(rt); err != nil {
 			return nil, err
 		}

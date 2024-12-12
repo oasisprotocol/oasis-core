@@ -81,17 +81,15 @@ type provisioner struct {
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	id := cfg.Bundle.Manifest.ID
-
 	r := &sandboxedRuntime{
 		cfg:                         p.cfg,
 		rtCfg:                       cfg,
-		id:                          id,
+		id:                          cfg.ID,
 		stopCh:                      make(chan struct{}),
 		ctrlCh:                      make(chan interface{}, ctrlChannelBufferSize),
 		notifier:                    pubsub.NewBroker(false),
 		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
-		logger:                      p.cfg.Logger.With("runtime_id", id),
+		logger:                      p.cfg.Logger.With("runtime_id", cfg.ID),
 	}
 
 	err := cfg.MessageHandler.AttachRuntime(r)
@@ -369,17 +367,18 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	hi.LocalConfig = r.rtCfg.LocalConfig
 
 	// Perform common host initialization.
-	var rtVersion *version.Version
 	initCtx, cancelInit := context.WithTimeout(ctx, runtimeInitTimeout)
 	defer cancelInit()
-	if rtVersion, err = pc.InitHost(initCtx, conn, hi); err != nil {
+
+	rtVersion, err := pc.InitHost(initCtx, conn, hi)
+	if err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
-	if r.rtCfg.Components[0].IsRONL() {
+	if comp := r.rtCfg.Components[0]; comp.ID().IsRONL() {
 		// Make sure the version matches what is configured in the bundle. This check is skipped for
 		// non-RONL components to support detached bundles.
-		if bndVersion := r.rtCfg.Bundle.Manifest.Version; *rtVersion != bndVersion {
+		if bndVersion := comp.Version; *rtVersion != bndVersion {
 			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
 		}
 	}
@@ -408,6 +407,24 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	r.capabilityTEE = ev.CapabilityTEE
 	r.rtVersion = rtVersion
 	r.Unlock()
+
+	// Ensure the command queue is empty to avoid processing any stale requests after the
+	// runtime restarts.
+drainLoop:
+	for {
+		select {
+		case grq := <-r.ctrlCh:
+			switch rq := grq.(type) {
+			case *abortRequest:
+				rq.ch <- fmt.Errorf("runtime restarted")
+				close(rq.ch)
+			default:
+				// Ignore unknown requests.
+			}
+		default:
+			break drainLoop
+		}
+	}
 
 	// Notify subscribers that a runtime has been started.
 	r.notifier.Broadcast(&host.Event{Started: ev})
@@ -531,24 +548,6 @@ func (r *sandboxedRuntime) manager() {
 
 				continue
 			}
-
-			// Ensure the command queue is empty to avoid processing any stale requests after the
-			// runtime restarts.
-		drainLoop:
-			for {
-				select {
-				case grq := <-r.ctrlCh:
-					switch rq := grq.(type) {
-					case *abortRequest:
-						rq.ch <- fmt.Errorf("runtime restarted")
-						close(rq.ch)
-					default:
-						// Ignore unknown requests.
-					}
-				default:
-					break drainLoop
-				}
-			}
 		}
 
 		// Wait for either the runtime or the runtime manager to terminate.
@@ -604,21 +603,21 @@ func (r *sandboxedRuntime) manager() {
 // DefaultGetSandboxConfig is the default function for generating sandbox configuration.
 func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
 	return func(hostCfg host.Config, _ Connector, _ string) (process.Config, error) {
-		comp, err := hostCfg.GetComponent()
+		comp, err := hostCfg.GetExplodedComponent()
 		if err != nil {
 			return process.Config{}, err
 		}
 
 		logWrapper := host.NewRuntimeLogWrapper(
 			logger,
-			"runtime_id", hostCfg.Bundle.Manifest.ID,
-			"runtime_name", hostCfg.Bundle.Manifest.Name,
+			"runtime_id", hostCfg.ID,
+			"runtime_name", hostCfg.Name,
 			"component", comp.ID(),
 			"provisioner", "sandbox",
 		)
 
 		return process.Config{
-			Path:              hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
+			Path:              comp.ExplodedPath(comp.Executable),
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
 			Stderr:            logWrapper,
