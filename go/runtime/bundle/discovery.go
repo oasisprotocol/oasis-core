@@ -29,8 +29,9 @@ const (
 	// requestTimeout is the time limit for http client requests.
 	requestTimeout = 10 * time.Second
 
-	// maxBundleSizeBytes is the maximum allowed bundle size in bytes.
-	maxBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
+	// maxDefaultBundleSizeBytes is the maximum allowed default bundle size
+	// in bytes.
+	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
 // Discovery is responsible for discovering new bundles.
@@ -47,6 +48,8 @@ type Discovery struct {
 	runtimeBaseURLs map[common.Namespace][]string
 	client          *http.Client
 
+	maxBundleSizeBytes int64
+
 	registry Registry
 
 	logger logging.Logger
@@ -60,14 +63,20 @@ func NewDiscovery(dataDir string, registry Registry) *Discovery {
 		Timeout: requestTimeout,
 	}
 
+	bundleSize := int64(maxDefaultBundleSizeBytes)
+	if size := config.GlobalConfig.Runtime.MaxBundleSize; size != "" {
+		bundleSize = int64(config.ParseSizeInBytes(size))
+	}
+
 	return &Discovery{
-		startOne:       cmSync.NewOne(),
-		discoverCh:     make(chan struct{}, 1),
-		bundleDir:      ExplodedPath(dataDir),
-		manifestHashes: make(map[common.Namespace][]hash.Hash),
-		client:         &client,
-		registry:       registry,
-		logger:         *logger,
+		startOne:           cmSync.NewOne(),
+		discoverCh:         make(chan struct{}, 1),
+		bundleDir:          ExplodedPath(dataDir),
+		manifestHashes:     make(map[common.Namespace][]hash.Hash),
+		client:             &client,
+		maxBundleSizeBytes: bundleSize,
+		registry:           registry,
+		logger:             *logger,
 	}
 }
 
@@ -376,7 +385,7 @@ func (d *Discovery) fetchBundle(url string) (string, error) {
 
 	limitedReader := io.LimitedReader{
 		R: resp.Body,
-		N: maxBundleSizeBytes,
+		N: d.maxBundleSizeBytes,
 	}
 
 	if _, err = io.Copy(file, &limitedReader); err != nil {
@@ -384,7 +393,7 @@ func (d *Discovery) fetchBundle(url string) (string, error) {
 	}
 
 	if limitedReader.N <= 0 {
-		return "", fmt.Errorf("bundle exceeds size limit of %d bytes", maxBundleSizeBytes)
+		return "", fmt.Errorf("bundle exceeds size limit of %d bytes", d.maxBundleSizeBytes)
 	}
 
 	return file.Name(), nil

@@ -117,6 +117,11 @@ type Config struct {
 
 	// Repositories is the list of URLs used to fetch runtime bundles.
 	Repositories []string `yaml:"repositories,omitempty"`
+
+	// MaxBundleSize is the maximum allowed bundle size.
+	//
+	// If not specified, a default value is used.
+	MaxBundleSize string `yaml:"max_bundle_size,omitempty"`
 }
 
 // GetComponent returns the configuration for the given component
