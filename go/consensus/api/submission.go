@@ -176,6 +176,11 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 		err = m.backend.SubmitTx(ctx, sigTx)
 	}
 	if err != nil {
+		// If the transaction check fails (which cannot be determined from
+		// the error), the nonce in the cache should be either decremented
+		// or cleared to ensure consistency.
+		m.clearSignerNonce(signerAddr)
+
 		switch {
 		case errors.Is(err, transaction.ErrUpgradePending):
 			// Pending upgrade, retry submission.
@@ -183,7 +188,6 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 			return nil, nil, err
 		case errors.Is(err, transaction.ErrInvalidNonce):
 			// Invalid nonce, retry submission.
-			m.clearSignerNonce(signerAddr)
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
 				"account_address", signerAddr,
 				"nonce", tx.Nonce,
