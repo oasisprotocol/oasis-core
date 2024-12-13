@@ -12,7 +12,7 @@ import (
 
 const (
 	manifestPath = "META-INF"
-	manifestName = manifestPath + "/MANIFEST.MF"
+	ManifestName = manifestPath + "/MANIFEST.MF"
 )
 
 // Manifest is a deserialized runtime bundle manifest.

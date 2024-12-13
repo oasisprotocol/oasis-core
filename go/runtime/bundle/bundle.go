@@ -113,7 +113,7 @@ func (bnd *Bundle) Validate() error {
 			// Ignore the manifest not having a digest entry, though
 			// it having one and being valid (while quite a feat) is
 			// also ok.
-			if fn == manifestName {
+			if fn == ManifestName {
 				continue
 			}
 			return fmt.Errorf("runtime/bundle: missing digest: '%s'", fn)
@@ -299,7 +299,7 @@ func (bnd *Bundle) verifySgxSignature(comp *Component) error {
 //
 // This needs to be used after doing modifications to bundles.
 func (bnd *Bundle) ResetManifest() {
-	delete(bnd.Data, manifestName)
+	delete(bnd.Data, ManifestName)
 }
 
 // Write serializes a runtime bundle to the on-disk representation.
@@ -314,7 +314,7 @@ func (bnd *Bundle) Write(fn string) error {
 	if err != nil {
 		return fmt.Errorf("runtime/bundle: failed to serialize manifest: %w", err)
 	}
-	if bnd.Data[manifestName] != nil {
+	if bnd.Data[ManifestName] != nil {
 		// While this is "ok", instead of trying to figure out if the
 		// deserialized manifest matches the serialied one, just bail.
 		return fmt.Errorf("runtime/bundle: data contains manifest entry")
@@ -330,7 +330,7 @@ func (bnd *Bundle) Write(fn string) error {
 	}
 	writeFiles := []writeFile{
 		{
-			fn: manifestName,
+			fn: ManifestName,
 			d:  NewBytesData(rawManifest),
 		},
 	}
@@ -524,7 +524,7 @@ func Open(fn string) (*Bundle, error) {
 		switch i {
 		case 0:
 			// Much like the JAR files, the manifest MUST come first.
-			if v.Name != manifestName {
+			if v.Name != ManifestName {
 				return nil, fmt.Errorf("runtime/bundle: invalid manifest file name: '%s'", v.Name)
 			}
 		default:
@@ -538,7 +538,7 @@ func Open(fn string) (*Bundle, error) {
 
 	// Decode the manifest.
 	var manifest Manifest
-	d, ok := data[manifestName]
+	d, ok := data[ManifestName]
 	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: missing manifest")
 	}

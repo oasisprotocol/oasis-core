@@ -2,9 +2,11 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -13,7 +15,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -438,6 +442,76 @@ func createHistoryFactory() (history.Factory, error) {
 	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
 
 	return historyFactory, nil
+}
+
+// CleanStaleBundles removes regular and detached exploded bundles,
+// for the runtimes no longer present in the configuration.
+func (cfg *RuntimeConfig) CleanStaleBundles(ctx context.Context, dataDir string) {
+	logger := logging.GetLogger("runtime/registry/config")
+
+	cleanDir := func(bundlesDir string) {
+		entries, err := os.ReadDir(bundlesDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return
+			}
+			logger.Debug("error reading bundles dir",
+				"dir", bundlesDir,
+				"err", err)
+		}
+		runtimes := cfg.RuntimeIDs()
+		for _, entry := range entries {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if !entry.IsDir() {
+					continue
+				}
+				manifestHash := entry.Name()
+				// Verify subdir is valid hex encoded manifesthash.
+				if len(manifestHash) != 2*hash.Size {
+					continue
+				}
+				manifestPath := filepath.Join(bundlesDir, manifestHash, bundle.ManifestName)
+				data, err := os.ReadFile(manifestPath)
+				if err != nil {
+					logger.Debug("Error reading manifest file",
+						"path", manifestPath,
+						"err", err)
+					continue
+				}
+				var manifest bundle.Manifest
+				if err = json.Unmarshal(data, &manifest); err != nil {
+					logger.Debug("Error unmarshalling manifest data",
+						"path", manifestPath,
+						"err", err)
+					continue
+				}
+				stale := true
+				for _, id := range runtimes {
+					if manifest.ID == id {
+						stale = false
+						break
+					}
+				}
+				if stale {
+					explodedDir := filepath.Join(bundlesDir, manifestHash)
+					if err = os.RemoveAll(explodedDir); err != nil {
+						logger.Debug("Failed removing exploded bundle",
+							"path", explodedDir,
+							"err", err)
+						continue
+					}
+				}
+			}
+		}
+	}
+	regDir := bundle.ExplodedPath(dataDir)
+	detachDir := bundle.DetachedExplodedPath(dataDir)
+
+	cleanDir(regDir)
+	cleanDir(detachDir)
 }
 
 func init() {

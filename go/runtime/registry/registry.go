@@ -219,6 +219,8 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 }
 
 func (r *runtime) HostConfig() map[version.Version]*runtimeHost.Config {
+	r.RLock()
+	defer r.RUnlock()
 	return r.hostConfig
 }
 
@@ -548,6 +550,8 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+
+	go cfg.CleanStaleBundles(ctx, dataDir)
 
 	r := &runtimeRegistry{
 		logger:         logging.GetLogger("runtime/registry"),

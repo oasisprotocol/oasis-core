@@ -83,8 +83,8 @@ func TestBundle(t *testing.T) {
 
 		// Ignore the manifest, the bundle we used to create the file
 		// will not have it.
-		delete(bundle2.Manifest.Digests, manifestName)
-		delete(bundle2.Data, manifestName)
+		delete(bundle2.Manifest.Digests, ManifestName)
+		delete(bundle2.Data, ManifestName)
 
 		ensureBundlesEqual(t, bundle, bundle2, "opened bundle mismatch")
 
@@ -182,8 +182,8 @@ func TestDetachedBundle(t *testing.T) {
 
 		// Ignore the manifest, the bundle we used to create the file
 		// will not have it.
-		delete(bundle2.Manifest.Digests, manifestName)
-		delete(bundle2.Data, manifestName)
+		delete(bundle2.Manifest.Digests, ManifestName)
+		delete(bundle2.Data, ManifestName)
 
 		ensureBundlesEqual(t, bundle, bundle2, "opened bundle mismatch")
 	})
