@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -56,11 +57,13 @@ type Discovery struct {
 
 	registry Registry
 
+	runtimeIDsCfg []common.Namespace
+
 	logger logging.Logger
 }
 
 // NewDiscovery creates a new bundle discovery.
-func NewDiscovery(dataDir string, registry Registry) *Discovery {
+func NewDiscovery(dataDir string, registry Registry, runtimeIDs []common.Namespace) *Discovery {
 	logger := logging.GetLogger("runtime/bundle/discovery")
 
 	client := http.Client{
@@ -80,6 +83,7 @@ func NewDiscovery(dataDir string, registry Registry) *Discovery {
 		client:             &client,
 		maxBundleSizeBytes: bundleSize,
 		registry:           registry,
+		runtimeIDsCfg:      runtimeIDs,
 		logger:             *logger,
 	}
 }
@@ -140,6 +144,11 @@ func (d *Discovery) Stop() {
 }
 
 func (d *Discovery) run(ctx context.Context) {
+	// In case of a legacy configuration (config.GlobalConfig.Runtime.Paths)
+	// cached exploded bundles are never removed, even for runtimes no longer
+	// present in the configuration.
+	d.cleanBundles()
+
 	d.logger.Info("starting discovery",
 		"dir", d.bundleDir,
 	)
@@ -513,6 +522,67 @@ func (d *Discovery) copyBundle(src string) error {
 	)
 
 	return nil
+}
+
+// cleanBundles removes exploded dir of regular and detached bundles for the
+// runtimes no longer present in the configuration.
+func (d *Discovery) cleanBundles() {
+	d.logger.Info("removing stale bundles")
+	cleanDir := func(bundlesDir string) {
+		entries, err := os.ReadDir(bundlesDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return
+			}
+			d.logger.Error("failed to read bundles dir",
+				"dir", bundlesDir,
+				"err", err,
+			)
+		}
+		runtimes := make(map[common.Namespace]struct{}, len(d.runtimeIDsCfg))
+		for _, id := range d.runtimeIDsCfg {
+			runtimes[id] = struct{}{}
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			manifestHash := entry.Name()
+			// Verify subdir is valid hex encoded manifesthash.
+			if len(manifestHash) != 2*hash.Size {
+				continue
+			}
+			manifestPath := filepath.Join(bundlesDir, manifestHash, ManifestPath)
+			data, err := os.ReadFile(manifestPath)
+			if err != nil {
+				d.logger.Error("failed to read manifest file",
+					"path", manifestPath,
+					"err", err)
+				continue
+			}
+			var manifest Manifest
+			if err = json.Unmarshal(data, &manifest); err != nil {
+				d.logger.Error("failed to unmarshall manifest data",
+					"manifestHash", manifestHash,
+					"err", err,
+				)
+				continue
+			}
+			if _, configured := runtimes[manifest.ID]; configured {
+				continue
+			}
+			explodedDir := filepath.Join(bundlesDir, manifestHash)
+			if err = os.RemoveAll(explodedDir); err != nil {
+				d.logger.Error("error removing exploded bundle",
+					"manifestHash", manifestHash,
+					"err", err)
+				continue
+			}
+		}
+	}
+
+	cleanDir(d.bundleDir)
+	cleanDir(filepath.Join(d.bundleDir, DetachedSubdir))
 }
 
 func validateAndNormalizeURL(rawURL string) (string, error) {

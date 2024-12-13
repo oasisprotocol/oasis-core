@@ -17,8 +17,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
-// FileExtension is the file extension used for storing the bundle.
-const FileExtension = ".orc"
+const (
+	// FileExtension is the file extension used for storing the bundle.
+	FileExtension = ".orc"
+	// DetachedSubdir is subdir name for detached bundles inside bundles dir.
+	DetachedSubdir = "detached"
+)
 
 // Bundle is a runtime bundle instance.
 type Bundle struct {
@@ -404,7 +408,7 @@ func ExplodedPath(dataDir string) string {
 // DetachedExplodedPath returns the path under the data directory that contains all of the detached
 // exploded bundles.
 func DetachedExplodedPath(dataDir string) string {
-	return filepath.Join(ExplodedPath(dataDir), "detached")
+	return filepath.Join(ExplodedPath(dataDir), DetachedSubdir)
 }
 
 // ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
