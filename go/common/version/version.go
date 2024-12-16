@@ -53,6 +53,26 @@ func FromU64(v uint64) Version {
 	}
 }
 
+// compare compares the current Version with another.
+// Returns:
+// - Positive int if the current version is greater than the other.
+// - Zero if the versions are equal.
+// - Negative int if the current version is less than the other.
+func (v Version) compare(other Version) int {
+	if diff := v.Major - other.Major; diff != 0 {
+		return int(diff)
+	}
+	if diff := v.Minor - other.Minor; diff != 0 {
+		return int(diff)
+	}
+	return int(v.Patch - other.Patch)
+}
+
+// Less checks if the current Version is strictly less than another Version.
+func (v Version) Less(other Version) bool {
+	return v.compare(other) < 0
+}
+
 // String returns the protocol version as a string.
 func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
