@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,6 +29,9 @@ const (
 
 	// requestTimeout is the time limit for http client requests.
 	requestTimeout = 10 * time.Second
+
+	// maxMetadataSizeBytes is the maximum allowed metadata size in bytes.
+	maxMetadataSizeBytes = 2 * 1024 // 2 KB
 
 	// maxDefaultBundleSizeBytes is the maximum allowed default bundle size
 	// in bytes.
@@ -295,7 +299,7 @@ func (d *Discovery) downloadBundle(runtimeID common.Namespace, manifestHash hash
 
 	for _, baseURLs := range [][]string{d.runtimeBaseURLs[runtimeID], d.globalBaseURLs} {
 		for _, baseURL := range baseURLs {
-			if err := d.tryDownloadBundle(runtimeID, manifestHash, baseURL); err != nil {
+			if err := d.tryDownloadBundle(manifestHash, baseURL); err != nil {
 				errs = errors.Join(errs, err)
 				continue
 			}
@@ -307,39 +311,49 @@ func (d *Discovery) downloadBundle(runtimeID common.Namespace, manifestHash hash
 	return errs
 }
 
-func (d *Discovery) tryDownloadBundle(runtimeID common.Namespace, manifestHash hash.Hash, baseURL string) error {
-	filename := fmt.Sprintf("%s%s", manifestHash.Hex(), FileExtension)
-
-	d.logger.Debug("downloading bundle",
-		"runtime_id", runtimeID,
-		"base_url", baseURL,
-		"filename", filename,
-	)
-
-	url, err := url.JoinPath(baseURL, filename)
+func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) error {
+	metaURL, err := url.JoinPath(baseURL, manifestHash.Hex())
 	if err != nil {
-		d.logger.Error("failed to construct URL",
+		d.logger.Error("failed to construct metadata URL",
 			"err", err,
-			"base_url", baseURL,
-			"filename", filename,
 		)
-		return fmt.Errorf("failed to construct URL: %w", err)
+		return fmt.Errorf("failed to construct metadata URL: %w", err)
 	}
 
-	src, err := d.fetchBundle(url)
+	d.logger.Debug("downloading metadata",
+		"url", metaURL,
+	)
+
+	bundleURL, err := d.fetchMetadata(metaURL)
+	if err != nil {
+		d.logger.Error("failed to download metadata",
+			"err", err,
+			"url", metaURL,
+		)
+		return fmt.Errorf("failed to download metadata: %w", err)
+	}
+
+	bundleURL, err = validateAndNormalizeURL(bundleURL)
+	if err != nil {
+		return err
+	}
+
+	d.logger.Debug("downloading bundle",
+		"url", bundleURL,
+	)
+
+	src, err := d.fetchBundle(bundleURL)
 	if err != nil {
 		d.logger.Error("failed to download bundle",
 			"err", err,
-			"url", url,
+			"url", metaURL,
 		)
 		return fmt.Errorf("failed to download bundle: %w", err)
 	}
 	defer os.Remove(src)
 
 	d.logger.Info("bundle downloaded",
-		"runtime_id", runtimeID,
-		"base_url", baseURL,
-		"filename", filename,
+		"url", bundleURL,
 	)
 
 	if err := d.registry.AddBundle(src, manifestHash); err != nil {
@@ -349,6 +363,7 @@ func (d *Discovery) tryDownloadBundle(runtimeID common.Namespace, manifestHash h
 		return fmt.Errorf("failed to add bundle: %w", err)
 	}
 
+	filename := fmt.Sprintf("%s%s", manifestHash.Hex(), FileExtension)
 	dst := filepath.Join(d.bundleDir, filename)
 	if err = os.Rename(src, dst); err != nil {
 		d.logger.Error("failed to move bundle",
@@ -357,7 +372,37 @@ func (d *Discovery) tryDownloadBundle(runtimeID common.Namespace, manifestHash h
 			"dst", dst,
 		)
 	}
+
+	d.logger.Debug("bundle stored",
+		"dst", dst,
+	)
+
 	return nil
+}
+
+func (d *Discovery) fetchMetadata(url string) (string, error) {
+	resp, err := d.client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch metadata: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch metadata: invalid status code %d", resp.StatusCode)
+	}
+
+	limitedReader := io.LimitedReader{
+		R: resp.Body,
+		N: maxMetadataSizeBytes,
+	}
+
+	var buffer bytes.Buffer
+	_, err = buffer.ReadFrom(&limitedReader)
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read metadata content: %w", err)
+	}
+
+	return strings.TrimSpace(buffer.String()), nil
 }
 
 func (d *Discovery) fetchBundle(url string) (string, error) {
@@ -470,15 +515,23 @@ func (d *Discovery) copyBundle(src string) error {
 	return nil
 }
 
+func validateAndNormalizeURL(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL '%s': %w", rawURL, err)
+	}
+	return parsedURL.String(), nil
+}
+
 func validateAndNormalizeURLs(rawURLs []string) ([]string, error) {
 	var normalizedURLs []string
 
 	for _, rawURL := range rawURLs {
-		parsedURL, err := url.Parse(rawURL)
+		normalizedURL, err := validateAndNormalizeURL(rawURL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid URL '%s': %w", rawURL, err)
+			return nil, err
 		}
-		normalizedURLs = append(normalizedURLs, parsedURL.String())
+		normalizedURLs = append(normalizedURLs, normalizedURL)
 	}
 
 	return normalizedURLs, nil

@@ -115,7 +115,7 @@ type Config struct {
 	// LoadBalancer is the load balancer configuration.
 	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
 
-	// Repositories is the list of URLs used to fetch runtime bundles.
+	// Repositories is the list of URLs used to fetch runtime bundle metadata.
 	Repositories []string `yaml:"repositories,omitempty"`
 
 	// MaxBundleSize is the maximum allowed bundle size.
@@ -166,7 +166,7 @@ type RuntimeConfig struct {
 	// Config contains runtime local configuration.
 	Config map[string]interface{} `yaml:"config,omitempty"`
 
-	// Repositories is the list of URLs used to fetch runtime bundles.
+	// Repositories is the list of URLs used to fetch runtime bundle metadata.
 	Repositories []string `yaml:"repositories,omitempty"`
 }
 

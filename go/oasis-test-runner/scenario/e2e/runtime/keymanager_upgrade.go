@@ -80,7 +80,7 @@ func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	port := parsedURL.Port()
 
 	// Start serving bundles.
-	server := newBundleServer(port, bundles)
+	server := newBundleServer(port, bundles, sc.Logger)
 	server.Start()
 	defer server.Stop()
 
@@ -90,7 +90,7 @@ func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Verify that all key manager nodes requested bundle from the server.
-	n := len(sc.Net.Keymanagers())
+	n := 2 * len(sc.Net.Keymanagers())
 	if m := server.getRequestCount(); m != n {
 		return fmt.Errorf("invalid number of bundle requests (got: %d, expected: %d)", m, n)
 	}

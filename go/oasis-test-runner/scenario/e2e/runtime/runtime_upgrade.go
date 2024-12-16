@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -87,7 +88,7 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	port := parsedURL.Port()
 
 	// Start serving bundles.
-	server := newBundleServer(port, bundles)
+	server := newBundleServer(port, bundles, sc.Logger)
 	server.Start()
 	defer server.Stop()
 
@@ -97,7 +98,7 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	}
 
 	// Verify that all client and compute nodes requested bundle from the server.
-	n := len(sc.Net.Clients()) + len(sc.Net.ComputeWorkers())
+	n := 2 * (len(sc.Net.Clients()) + len(sc.Net.ComputeWorkers()))
 	if m := server.getRequestCount(); m != n {
 		return fmt.Errorf("invalid number of bundle requests (got: %d, expected: %d)", m, n)
 	}
@@ -117,13 +118,16 @@ type bundleServer struct {
 	bundles map[string]string
 
 	requestCount uint64
+
+	logger *logging.Logger
 }
 
-func newBundleServer(port string, bundles map[string]string) *bundleServer {
+func newBundleServer(port string, bundles map[string]string, logger *logging.Logger) *bundleServer {
 	return &bundleServer{
 		startOne: cmSync.NewOne(),
 		port:     port,
 		bundles:  bundles,
+		logger:   logger,
 	}
 }
 
@@ -160,6 +164,30 @@ func (s *bundleServer) run(ctx context.Context) {
 }
 
 func (s *bundleServer) handleRequest(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("handling request",
+		"path", r.URL.Path,
+	)
+
+	if strings.HasSuffix(r.URL.Path, bundle.FileExtension) {
+		s.handleGetBundle(w, r)
+	} else {
+		s.handleGetMetadata(w, r)
+	}
+}
+
+func (s *bundleServer) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
+	manifestHash := path.Base(r.URL.Path)
+	content := []byte(fmt.Sprintf("http://127.0.0.1:%s/%s%s\n", s.port, manifestHash, bundle.FileExtension))
+
+	w.Header().Set("Content-Disposition", "attachment; filename=metadata.txt")
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
+
+	atomic.AddUint64(&s.requestCount, 1)
+}
+
+func (s *bundleServer) handleGetBundle(w http.ResponseWriter, r *http.Request) {
 	filename := path.Base(r.URL.Path)
 
 	path, ok := s.bundles[filename]
@@ -174,7 +202,8 @@ func (s *bundleServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", "attachment; filename=bundle.orc")
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(content)
 
