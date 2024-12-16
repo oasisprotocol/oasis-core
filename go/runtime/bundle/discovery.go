@@ -28,7 +28,7 @@ const (
 	discoveryInterval = 15 * time.Minute
 
 	// requestTimeout is the time limit for http client requests.
-	requestTimeout = 10 * time.Second
+	requestTimeout = time.Minute
 
 	// maxMetadataSizeBytes is the maximum allowed metadata size in bytes.
 	maxMetadataSizeBytes = 2 * 1024 // 2 KB
