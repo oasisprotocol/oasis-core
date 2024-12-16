@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -229,6 +230,8 @@ func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
 }
 
 func (r *runtime) HostVersions() []version.Version {
+	r.RLock()
+	defer r.RUnlock()
 	var versions []version.Version
 	for v := range r.hostConfig {
 		versions = append(versions, v)
@@ -236,8 +239,38 @@ func (r *runtime) HostVersions() []version.Version {
 	return versions
 }
 
+// cleanOldVersions removes all exploded (cached) bundles, for versions lower then active.
+// Finally it removes them from hostConfig.
+func (r *runtime) cleanOldVersions(ctx context.Context, active version.Version) {
+	for v, cfg := range r.HostConfig() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if v.Less(active) {
+				if err := os.RemoveAll(cfg.Bundle.ExplodedDataDir); err != nil {
+					r.logger.Error("failed to remove stale exploded (regular) bundle",
+						"id", r.ID(),
+						"runtime_version", v,
+						"ExplodedDataDir", cfg.Bundle.ExplodedDataDir,
+						"err", err,
+					)
+					continue
+				}
+				r.removeHostVersion(v)
+			}
+		}
+	}
+}
+
+func (r *runtime) removeHostVersion(v version.Version) {
+	r.RLock()
+	defer r.RUnlock()
+	delete(r.hostConfig, v)
+}
+
 func (r *runtime) stop() {
-	// Stop watching runtime updates.
+	// Stop watching runtime updates and cleaning cached exploded bundles.
 	r.cancelCtx()
 	// Close local storage backend.
 	r.localStorage.Stop()
@@ -249,6 +282,57 @@ func (r *runtime) stop() {
 	if r.history != nil {
 		r.history.Close()
 	}
+}
+
+// cleanStaleExplodedBundles triggers cleanup of exploded bundles and `hostConfig`,
+// on every change of active runtime version.
+func (r *runtime) cleanStaleExplodedBundles(ctx context.Context) {
+	ch, sub, err := r.WatchActiveDescriptor()
+	if err != nil {
+		r.logger.Error("unable to watch active descriptor changes",
+			"id", r.ID(),
+			"err", err,
+		)
+		return
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+			// Change of active version should trigger clean-up.
+			active, err := r.activeRuntimeVersion(ctx)
+			if err != nil {
+				r.logger.Debug("failed to get runtime active version",
+					"id", r.ID(),
+					"err", err,
+				)
+				continue
+			}
+			r.cleanOldVersions(ctx, active)
+
+		}
+	}
+}
+
+func (r *runtime) activeRuntimeVersion(ctx context.Context) (version.Version, error) {
+	var v version.Version
+	height := consensus.HeightLatest
+	epoch, err := r.consensus.Beacon().GetEpoch(ctx, height)
+	if err != nil {
+		return v, fmt.Errorf("failed to fetch epoch for block height %d: %w", height, err)
+	}
+
+	// TODO convince yourself r.ActiveDescriptor is wrong in this context.
+	rt, err := r.RegistryDescriptor(ctx)
+	if err != nil {
+		return v, fmt.Errorf("r.RegistryDescriptor: %w", err)
+	}
+
+	v = rt.ActiveDeployment(epoch).Version
+	return v, nil
 }
 
 func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
@@ -522,6 +606,7 @@ func (r *runtimeRegistry) newRuntime(ctx context.Context, runtimeID common.Names
 		logger:                     r.logger.With("runtime_id", runtimeID),
 	}
 	go rt.watchUpdates(watchCtx)
+	go rt.cleanStaleExplodedBundles(watchCtx)
 
 	// Configure runtime host if needed.
 	if r.cfg.Provisioner != nil {
