@@ -264,8 +264,10 @@ func (r *registry) GetComponents(runtimeID common.Namespace, version version.Ver
 		return []*ExplodedComponent{
 			{
 				Component: &Component{
-					Kind:       component.RONL,
-					Executable: "mock",
+					Kind: component.RONL,
+					ELF: &ELFMetadata{
+						Executable: "mock",
+					},
 				},
 				Detached: false,
 			},

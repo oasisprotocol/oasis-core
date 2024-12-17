@@ -114,10 +114,12 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 	// We also support legacy manifests which define the RONL component at the top-level.
 	if id.IsRONL() && m.IsLegacy() {
 		return &Component{
-			Kind:       component.RONL,
-			Executable: m.Executable,
-			Version:    m.Version,
-			SGX:        m.SGX,
+			Kind:    component.RONL,
+			Version: m.Version,
+			ELF: &ELFMetadata{
+				Executable: m.Executable,
+			},
+			SGX: m.SGX,
 		}
 	}
 	return nil
@@ -139,6 +141,20 @@ func (m *Manifest) GetVersion() version.Version {
 	}
 
 	return m.Version
+}
+
+// ELFMetadata is the ELF specific manifest metadata.
+type ELFMetadata struct {
+	// Executable is the name of the ELF executable file.
+	Executable string `json:"executable"`
+}
+
+// Validate validates the ELF metadata structure for well-formedness.
+func (e *ELFMetadata) Validate() error {
+	if e.Executable == "" {
+		return fmt.Errorf("executable must be set")
+	}
+	return nil
 }
 
 // SGXMetadata is the SGX specific manifest metadata.

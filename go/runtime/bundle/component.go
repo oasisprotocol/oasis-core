@@ -40,7 +40,11 @@ type Component struct {
 	Version version.Version
 
 	// Executable is the name of the runtime ELF executable file if any.
+	// NOTE: This may go away in the future, use `ELFMetadata` instead.
 	Executable string `json:"executable,omitempty"`
+
+	// ELF is the ELF specific manifest metadata if any.
+	ELF *ELFMetadata `json:"elf,omitempty"`
 
 	// SGX is the SGX specific manifest metadata if any.
 	SGX *SGXMetadata `json:"sgx,omitempty"`
@@ -78,6 +82,12 @@ func (c *Component) Validate() error {
 	) {
 		return fmt.Errorf("each component can only include metadata for a single TEE")
 	}
+	if c.ELF != nil {
+		err := c.ELF.Validate()
+		if err != nil {
+			return fmt.Errorf("elf: %w", err)
+		}
+	}
 	if c.SGX != nil {
 		err := c.SGX.Validate()
 		if err != nil {
@@ -96,7 +106,7 @@ func (c *Component) Validate() error {
 		if c.Name != "" {
 			return fmt.Errorf("RONL component must have an empty name")
 		}
-		if c.Executable == "" {
+		if c.Executable == "" && c.ELF == nil {
 			return fmt.Errorf("RONL component must define an executable")
 		}
 		if c.Disabled {
@@ -123,7 +133,7 @@ func (c *Component) IsNetworkAllowed() bool {
 
 // IsTEERequired returns true iff the component only provides TEE executables.
 func (c *Component) IsTEERequired() bool {
-	return c.Executable == "" && c.TEEKind() != component.TEEKindNone
+	return c.Executable == "" && c.ELF == nil && c.TEEKind() != component.TEEKindNone
 }
 
 // TEEKind returns the kind of TEE supported by the component.

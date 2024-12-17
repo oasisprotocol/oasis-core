@@ -25,9 +25,11 @@ func createSyntheticBundle(dir string, runtimeID common.Namespace, version versi
 		switch comp {
 		case component.RONL:
 			manifest.Components = append(manifest.Components, &Component{
-				Kind:       component.RONL,
-				Version:    version,
-				Executable: "runtime.bin",
+				Kind:    component.RONL,
+				Version: version,
+				ELF: &ELFMetadata{
+					Executable: "runtime.bin",
+				},
 			})
 		case component.ROFL:
 			manifest.Components = append(manifest.Components, &Component{
@@ -43,7 +45,7 @@ func createSyntheticBundle(dir string, runtimeID common.Namespace, version versi
 	}
 
 	if slices.Contains(components, component.RONL) {
-		if err := bnd.Add(manifest.Components[0].Executable, NewBytesData([]byte{1})); err != nil {
+		if err := bnd.Add(manifest.Components[0].ELF.Executable, NewBytesData([]byte{1})); err != nil {
 			return "", err
 		}
 	}
