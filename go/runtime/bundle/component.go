@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
@@ -40,7 +41,7 @@ type Component struct {
 	Version version.Version
 
 	// Executable is the name of the runtime ELF executable file if any.
-	// NOTE: This may go away in the future, use `ELFMetadata` instead.
+	// NOTE: This may go away in the future, use `ELF` instead.
 	Executable string `json:"executable,omitempty"`
 
 	// ELF is the ELF specific manifest metadata if any.
@@ -146,4 +147,121 @@ func (c *Component) TEEKind() component.TEEKind {
 	default:
 		return component.TEEKindNone
 	}
+}
+
+// ELFMetadata is the ELF specific manifest metadata.
+type ELFMetadata struct {
+	// Executable is the name of the ELF executable file.
+	Executable string `json:"executable"`
+}
+
+// Validate validates the ELF metadata structure for well-formedness.
+func (e *ELFMetadata) Validate() error {
+	if e.Executable == "" {
+		return fmt.Errorf("executable must be set")
+	}
+	return nil
+}
+
+// SGXMetadata is the SGX specific manifest metadata.
+type SGXMetadata struct {
+	// Executable is the name of the SGX enclave executable file.
+	Executable string `json:"executable"`
+
+	// Signature is the name of the SGX enclave signature file.
+	Signature string `json:"signature"`
+}
+
+// Validate validates the SGX metadata structure for well-formedness.
+func (s *SGXMetadata) Validate() error {
+	if s.Executable == "" {
+		return fmt.Errorf("executable must be set")
+	}
+	return nil
+}
+
+// TDXMetadata is the TDX specific manifest metadata.
+//
+// Note that changes to these fields may change the TD measurements.
+type TDXMetadata struct {
+	// Firmware is the name of the virtual firmware file. It should rarely change and multiple
+	// components may use the same firmware.
+	Firmware string `json:"firmware"`
+	// Kernel is the name of the kernel image file. It should rarely change and multiple components
+	// may use the same kernel.
+	Kernel string `json:"kernel,omitempty"`
+	// InitRD is the name of the initial RAM disk image file. It should rarely change and multiple
+	// components may use the same initrd.
+	InitRD string `json:"initrd,omitempty"`
+	// ExtraKernelOptions are the extra kernel options to pass to the kernel after any of the
+	// default options. Note that kernel options affect TD measurements.
+	ExtraKernelOptions []string `json:"extra_kernel_options,omitempty"`
+
+	// Stage2Image is the name of the stage 2 VM image file.
+	Stage2Image string `json:"stage2_image,omitempty"`
+
+	// Resources are the requested VM resources.
+	Resources TDXResources `json:"resources"`
+}
+
+// Validate validates the TDX metadata structure for well-formedness.
+func (t *TDXMetadata) Validate() error {
+	if t.Firmware == "" {
+		return fmt.Errorf("firmware must be set")
+	}
+	if !t.HasKernel() && t.HasStage2() {
+		return fmt.Errorf("kernel must be set if stage 2 image is set")
+	}
+	if !t.HasKernel() && t.HasInitRD() {
+		return fmt.Errorf("kernel must be set if initrd image is set")
+	}
+	if err := t.Resources.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// HasKernel returns true iff the TDX metadata indicates there is a kernel present.
+func (t *TDXMetadata) HasKernel() bool {
+	return t.Kernel != ""
+}
+
+// HasInitRD returns true iff the TDX metadata indicates there is an initial RAM disk image present.
+func (t *TDXMetadata) HasInitRD() bool {
+	return t.InitRD != ""
+}
+
+// HasStage2 returns true iff the TDX metadata indicates there is a stage 2 image present.
+func (t *TDXMetadata) HasStage2() bool {
+	return t.Stage2Image != ""
+}
+
+// TDXResources are the requested VM resources for TDX VMs.
+//
+// Note that changes to these fields may change the TD measurements.
+type TDXResources struct {
+	// Memory is the requested VM memory amount in megabytes.
+	Memory uint64 `json:"memory"`
+	// CPUCount is the requested number of vCPUs.
+	CPUCount uint8 `json:"cpus"`
+}
+
+// Validate validates the VM resources.
+func (r *TDXResources) Validate() error {
+	if r.Memory < 16 {
+		return fmt.Errorf("memory limit must be at least 16M")
+	}
+	if r.CPUCount < 1 {
+		return fmt.Errorf("vCPU count must be at least 1")
+	}
+	return nil
+}
+
+// Identity is the cryptographic identity of a component.
+type Identity struct {
+	// Hypervisor is the optional hypervisor this identity is for.
+	Hypervisor string `json:"hypervisor,omitempty"`
+
+	// Enclave is the enclave identity.
+	Enclave sgx.EnclaveIdentity `json:"enclave"`
 }
