@@ -698,21 +698,9 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
-	// Create bundle registry.
+	// Create bundle registry and discovery.
 	bundleRegistry := bundle.NewRegistry(dataDir)
-
-	// Fill the registry with local bundles.
-	//
-	// This enables the provisioner to determine which runtime environment
-	// to use when the configuration is set to 'auto'.
-	//
-	// FIXME: Handle cases where the configuration is set to 'auto' but
-	//        no bundles are configured. After addressing this, move the
-	//        initialization to the bottom for better organization.
 	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry)
-	if err := bundleDiscovery.Init(); err != nil {
-		return nil, err
-	}
 
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
@@ -733,7 +721,7 @@ func New(
 	}
 
 	// Create runtime provisioner.
-	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, bundleRegistry, ias, qs)
+	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, ias, qs)
 	if err != nil {
 		return nil, err
 	}
@@ -749,6 +737,11 @@ func New(
 		historyFactory:  historyFactory,
 		bundleRegistry:  bundleRegistry,
 		bundleDiscovery: bundleDiscovery,
+	}
+
+	// Fill the registry with local bundles.
+	if err := bundleDiscovery.Init(); err != nil {
+		return nil, err
 	}
 
 	// Initialize the runtime registry.
