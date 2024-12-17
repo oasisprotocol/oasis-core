@@ -17,6 +17,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
+// FileExtension is the file extension used for storing the bundle.
+const FileExtension = ".orc"
+
 // Bundle is a runtime bundle instance.
 type Bundle struct {
 	Manifest *Manifest
@@ -26,6 +29,11 @@ type Bundle struct {
 	archive *zip.ReadCloser
 	// manifestHash is the original manifest hash of the bundle at time the bundle was loaded.
 	manifestHash hash.Hash
+}
+
+// GenerateFilename returns the recommended filename for storing the bundle.
+func (bnd *Bundle) GenerateFilename() string {
+	return fmt.Sprintf("%s%s", bnd.manifestHash.Hex(), FileExtension)
 }
 
 // Validate validates the runtime bundle for well-formedness.
@@ -510,11 +518,19 @@ func (bnd *Bundle) Close() error {
 }
 
 // Open opens and validates a runtime bundle instance.
-func Open(fn string) (*Bundle, error) {
+func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
+	options := NewOpenOptions(opts...)
+
+	// Open the zip file and close it on error.
 	r, err := zip.OpenReader(fn)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/bundle: failed to open bundle: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			r.Close()
+		}
+	}()
 
 	// Read the contents.
 	data := make(map[string]Data)
@@ -550,15 +566,31 @@ func Open(fn string) (*Bundle, error) {
 		return nil, fmt.Errorf("runtime/bundle: failed to parse manifest: %w", err)
 	}
 
+	// Verify the manifest hash, if requested.
+	manifestHash := manifest.Hash()
+	if h := options.manifestHash; h != nil && !manifestHash.Equal(h) {
+		return nil, fmt.Errorf("runtime/bundle: invalid manifest (got: %s, expected: %s)", manifestHash.Hex(), h.Hex())
+	}
+
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
 		Manifest:     &manifest,
 		Data:         data,
 		archive:      r,
-		manifestHash: manifest.Hash(),
+		manifestHash: manifestHash,
 	}
 	if err = bnd.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Support legacy manifests where the runtime version is defined at the top level.
+	if bnd.Manifest.Version.ToU64() > 0 {
+		for _, comp := range bnd.Manifest.Components {
+			if comp.ID().IsRONL() {
+				comp.Version = bnd.Manifest.Version
+				break
+			}
+		}
 	}
 
 	return bnd, nil
@@ -612,4 +644,28 @@ func HashAllData(d Data) (hash.Hash, error) {
 	}
 	defer f.Close()
 	return hash.NewFromReader(f)
+}
+
+// OpenOptions are options for opening bundle files.
+type OpenOptions struct {
+	manifestHash *hash.Hash
+}
+
+// NewOpenOptions creates options using default and given values.
+func NewOpenOptions(opts ...OpenOption) *OpenOptions {
+	var o OpenOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &o
+}
+
+// OpenOption is an option used when opening a bundle file.
+type OpenOption func(o *OpenOptions)
+
+// WithManifestHash sets the manifest hash for verification.
+func WithManifestHash(manifestHash hash.Hash) OpenOption {
+	return func(o *OpenOptions) {
+		o.manifestHash = &manifestHash
+	}
 }

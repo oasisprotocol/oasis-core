@@ -4,7 +4,6 @@ package host
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -17,12 +16,14 @@ import (
 
 // Config contains common configuration for the provisioned runtime.
 type Config struct {
-	// Bundle is the runtime bundle.
-	Bundle *RuntimeBundle
+	// Name is the optional human readable runtime name.
+	Name string
 
-	// Components are optional component ids that should be provisioned in case the runtime has
-	// multiple components.
-	Components []component.ID
+	// ID is the runtime identifier.
+	ID common.Namespace
+
+	// Components are components that should be provisioned.
+	Components []*bundle.ExplodedComponent
 
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
@@ -34,36 +35,24 @@ type Config struct {
 	LocalConfig map[string]interface{}
 }
 
-// GetComponent ensures that only a single component is configured for this runtime and returns it.
-func (cfg *Config) GetComponent() (*bundle.Component, error) {
+// GetExplodedComponent ensures that only a single exploded component is configured for this runtime
+// and returns it.
+func (cfg *Config) GetExplodedComponent() (*bundle.ExplodedComponent, error) {
 	if numComps := len(cfg.Components); numComps != 1 {
 		return nil, fmt.Errorf("expected a single component (got %d)", numComps)
 	}
-	comp := cfg.Bundle.Manifest.GetComponentByID(cfg.Components[0])
-	if comp == nil {
-		return nil, fmt.Errorf("component '%s' not available", cfg.Components[0])
-	}
-	return comp, nil
+
+	return cfg.Components[0], nil
 }
 
-// RuntimeBundle is a exploded runtime bundle ready for execution.
-type RuntimeBundle struct {
-	*bundle.Bundle
-
-	// ExplodedDataDir is the path to the data directory under which the bundle has been exploded.
-	ExplodedDataDir string
-
-	// ExplodedDetachedDirs are the paths to the data directories of detached components.
-	ExplodedDetachedDirs map[component.ID]string
-}
-
-// ExplodedPath returns the path where the given asset for the given component can be found.
-func (bnd *RuntimeBundle) ExplodedPath(comp component.ID, fn string) string {
-	if detachedDir, ok := bnd.ExplodedDetachedDirs[comp]; ok {
-		return filepath.Join(detachedDir, fn)
+// GetComponent ensures that only a single component is configured for this runtime and returns it.
+func (cfg *Config) GetComponent() (*bundle.Component, error) {
+	comp, err := cfg.GetExplodedComponent()
+	if err != nil {
+		return nil, err
 	}
-	// Default to the exploded bundle.
-	return bnd.Bundle.ExplodedPath(bnd.ExplodedDataDir, fn)
+
+	return comp.Component, nil
 }
 
 // Provisioner is the runtime provisioner interface.

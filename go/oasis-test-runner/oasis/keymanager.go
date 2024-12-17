@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	runtimeCfg "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	keymanagerConfig "github.com/oasisprotocol/oasis-core/go/worker/keymanager/config"
 )
@@ -296,7 +297,14 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.Runtime.Provisioner = km.runtimeProvisioner
 	km.Config.Runtime.SGXLoader = km.net.cfg.RuntimeSGXLoaderBinary
 	km.Config.Runtime.AttestInterval = km.net.cfg.RuntimeAttestInterval
+
+	rtCfg := runtimeCfg.RuntimeConfig{
+		ID: km.runtime.cfgSave.id,
+	}
+
+	km.Config.Runtime.Runtimes = append(km.Config.Runtime.Runtimes, rtCfg)
 	km.Config.Runtime.Paths = append(km.Config.Runtime.Paths, km.runtime.BundlePaths()...)
+	km.Config.Runtime.Repositories = []string{fmt.Sprintf("http://127.0.0.1:%d", km.net.getProvisionedPort(netPortRepository))}
 
 	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()
 	km.Config.Keymanager.PrivatePeerPubKeys = km.privatePeerPubKeys

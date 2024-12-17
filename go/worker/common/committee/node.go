@@ -443,10 +443,10 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		}
 	}
 
-	_ = n.SetHostedRuntimeVersion(activeVersion, nextVersion)
+	n.SetHostedRuntimeVersion(activeVersion, nextVersion)
 
 	if _, err := n.GetHostedRuntimeActiveVersion(); err != nil {
-		n.logger.Error("failed to activate runtime version(s)",
+		n.logger.Warn("failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,
 			"next_version", nextVersion,
@@ -680,14 +680,31 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Provision the hosted runtime.
-	hrt, hrtNotifier, err := n.ProvisionHostedRuntime()
-	if err != nil {
-		n.logger.Error("failed to provision hosted runtime",
-			"err", err,
-		)
-		return
+	// Start watching runtime versions so that we can provision new versions
+	// once they are discovered.
+	versionCh, versionSub := n.GetRuntime().WatchHostVersions()
+	defer versionSub.Close()
+
+	// Provision all known versions.
+	for _, version := range n.GetRuntime().HostVersions() {
+		if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
+			n.logger.Error("failed to provision hosted runtime",
+				"err", err,
+				"version", version,
+			)
+			return
+		}
 	}
+
+	// Perform initial hosted runtime version update to ensure we have something even in cases where
+	// initial block processing fails for any reason.
+	n.CrossNode.Lock()
+	n.updateHostedRuntimeVersionLocked()
+	n.CrossNode.Unlock()
+
+	// Start the runtime and its notifier.
+	hrt := n.GetHostedRuntime()
+	hrtNotifier := n.GetRuntimeHostNotifier()
 
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
@@ -698,12 +715,7 @@ func (n *Node) worker() {
 	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
-	// Perform initial hosted runtime version update to ensure we have something even in cases where
-	// initial block processing fails for any reason.
-	n.CrossNode.Lock()
-	n.updateHostedRuntimeVersionLocked()
-	n.CrossNode.Unlock()
-
+	// Enter the main processing loop.
 	initialized := false
 	for {
 		select {
@@ -747,6 +759,14 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleRuntimeHostEventLocked(ev)
 			}()
+		case version := <-versionCh:
+			// Received a new runtime version.
+			if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
+				n.logger.Error("failed to provision hosted runtime",
+					"err", err,
+					"version", version,
+				)
+			}
 		}
 	}
 }
@@ -843,7 +863,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, identity, runtime, consensus)
+	group, err := NewGroup(ctx, runtime.ID(), identity, consensus)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -882,7 +902,7 @@ func NewNode(
 	n.RuntimeHostNode = rhn
 
 	// Prepare transaction pool.
-	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, n, runtime.History(), n)
+	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})

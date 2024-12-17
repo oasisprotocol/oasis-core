@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -36,7 +38,7 @@ func (sc *KmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	if sc.upgradedKeyManagerIndex, err = sc.UpgradeKeyManagerFixture(f); err != nil {
+	if sc.upgradedKeyManagerIndex, err = sc.UpgradeKeyManagerFixture(f, true); err != nil {
 		return nil, err
 	}
 
@@ -63,9 +65,34 @@ func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
+	// Discover bundles.
+	bundles, err := findBundles(sc.Net.BasePath())
+	if err != nil {
+		return err
+	}
+
+	// Determine the port on which the nodes are trying to fetch bundles.
+	rawURL := sc.Net.Clients()[0].Config.Runtime.Repositories[0]
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+	port := parsedURL.Port()
+
+	// Start serving bundles.
+	server := newBundleServer(port, bundles, sc.Logger)
+	server.Start()
+	defer server.Stop()
+
 	// Upgrade the key manager runtime.
 	if err := sc.UpgradeKeyManager(ctx, childEnv, cli, sc.upgradedKeyManagerIndex, 0); err != nil {
 		return err
+	}
+
+	// Verify that all key manager nodes requested bundle from the server.
+	n := 2 * len(sc.Net.Keymanagers())
+	if m := server.getRequestCount(); m != n {
+		return fmt.Errorf("invalid number of bundle requests (got: %d, expected: %d)", m, n)
 	}
 
 	// Run client again.

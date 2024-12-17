@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"crypto/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,17 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 func TestBundle(t *testing.T) {
-	execFile := os.Args[0]
-	execBuf, err := os.ReadFile(execFile)
-	if err != nil {
-		t.Fatalf("failed to read test executable %s: %v", execFile, err)
-	}
-
 	// Create a synthetic bundle.
 	//
 	// Assets will be populated during the Add/Write combined test.
@@ -60,17 +54,9 @@ func TestBundle(t *testing.T) {
 	require.False(t, manifest.IsDetached(), "manifest with RONL component should not be detached")
 
 	t.Run("Add_Write", func(t *testing.T) {
-		// Generate random assets.
-		randomBuffer := func() []byte {
-			b := make([]byte, 1024*256)
-			_, err := rand.Read(b)
-			require.NoError(t, err, "rand.Read")
-			return b
-		}
-
-		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(execBuf))
+		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(randBuffer(3252)))
 		require.NoError(t, err, "bundle.Add(elf)")
-		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randomBuffer()))
+		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randBuffer(6541)))
 		require.NoError(t, err, "bundle.Add(sgx)")
 
 		err = bundle.Write(bundleFn)
@@ -94,6 +80,19 @@ func TestBundle(t *testing.T) {
 		require.Len(t, eids, 1)
 		require.Equal(t, "0100000000000000000000000000000000000000000000000000000000000000", eids[0].MrSigner.String())
 		require.Equal(t, "0200000000000000000000000000000000000000000000000000000000000000", eids[0].MrEnclave.String())
+	})
+
+	t.Run("Open_WithManifestHash", func(t *testing.T) {
+		var manifestHash hash.Hash
+		err := manifestHash.UnmarshalHex("905e9866eccb967e8991698273f41d20c616cab4f9e9332a2a12d9d3a1c8a486")
+		require.NoError(t, err, "UnmarshalHex")
+
+		_, err = Open(bundleFn, WithManifestHash(manifestHash))
+		require.NoError(t, err, "Open_WithManifestHash")
+
+		_, err = Open(bundleFn, WithManifestHash(hash.Hash{}))
+		require.Error(t, err, "Open_WithManifestHash")
+		require.ErrorContains(t, err, "invalid manifest (got: 905e9866eccb967e8991698273f41d20c616cab4f9e9332a2a12d9d3a1c8a486, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
 	})
 
 	t.Run("ResetManifest", func(t *testing.T) {
@@ -121,12 +120,6 @@ func TestBundle(t *testing.T) {
 }
 
 func TestDetachedBundle(t *testing.T) {
-	execFile := os.Args[0]
-	execBuf, err := os.ReadFile(execFile)
-	if err != nil {
-		t.Fatalf("failed to read test executable %s: %v", execFile, err)
-	}
-
 	// Create a synthetic bundle.
 	//
 	// Assets will be populated during the Add/Write combined test.
@@ -159,17 +152,9 @@ func TestDetachedBundle(t *testing.T) {
 	require.True(t, manifest.IsDetached(), "manifest without RONL component should be detached")
 
 	t.Run("Add_Write", func(t *testing.T) {
-		// Generate random assets.
-		randomBuffer := func() []byte {
-			b := make([]byte, 1024*256)
-			_, err := rand.Read(b)
-			require.NoError(t, err, "rand.Read")
-			return b
-		}
-
-		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(execBuf))
+		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(randBuffer(2231)))
 		require.NoError(t, err, "bundle.Add(elf)")
-		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randomBuffer()))
+		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randBuffer(7627)))
 		require.NoError(t, err, "bundle.Add(sgx)")
 
 		err = bundle.Write(bundleFn)
@@ -245,4 +230,13 @@ func ensureBundlesEqual(t *testing.T, b1, b2 *Bundle, msg string) {
 
 		require.EqualValues(t, d1, d2, msg)
 	}
+}
+
+func randBuffer(seed int) []byte {
+	buffer := make([]byte, 1024*256)
+	for i := range buffer {
+		buffer[i] = byte((seed * 0x3C5C5) ^ 0xDEADBEEF)
+		seed++
+	}
+	return buffer
 }

@@ -391,16 +391,61 @@ func (w *Worker) worker() {
 	}
 	w.logger.Info("consensus has finished initial synchronization")
 
-	// Provision the hosted runtime.
+	// Key managers always need to use the enclave version given to them in the bundle
+	// as they need to make sure that replication is possible during upgrades.
+	var version version.Version
+
+	if ok := func() bool {
+		// Start watching runtime versions so that we can wait for the runtime
+		// to be discovered.
+		versionCh, versionSub := w.GetRuntime().WatchHostVersions()
+		defer versionSub.Close()
+
+		// Make sure we have one version before proceeding.
+		versions := w.runtime.HostVersions()
+
+		switch numVers := len(versions); numVers {
+		case 0:
+			w.logger.Info("waiting runtime version to be discovered")
+
+			select {
+			case version = <-versionCh:
+			case <-w.ctx.Done():
+				return false
+			}
+		case 1:
+			version = versions[0]
+		default:
+			w.logger.Error("expected a single runtime version (got %d)", numVers)
+			return false
+		}
+
+		w.logger.Info("runtime version discovered",
+			"version", version,
+		)
+
+		return true
+	}(); !ok {
+		return
+	}
+
+	// Provision the specified runtime version.
 	w.logger.Info("provisioning key manager runtime")
 
-	hrt, hrtNotifier, err := w.ProvisionHostedRuntime()
-	if err != nil {
+	if err := w.ProvisionHostedRuntimeVersion(version); err != nil {
 		w.logger.Error("failed to provision key manager runtime",
 			"err", err,
+			"version", version,
 		)
 		return
 	}
+
+	// Set the runtime to the specified version.
+	w.SetHostedRuntimeVersion(&version, nil)
+
+	// Start the runtime and its notifier.
+	hrt := w.GetHostedRuntime()
+	hrtNotifier := w.GetRuntimeHostNotifier()
 
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
@@ -411,15 +456,11 @@ func (w *Worker) worker() {
 	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
-	// Key managers always need to use the enclave version given to them in the bundle
-	// as they need to make sure that replication is possible during upgrades.
-	activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
-	_ = w.SetHostedRuntimeVersion(&activeVersion, nil)
-
+	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
 		w.logger.Error("failed to activate key manager runtime version",
 			"err", err,
-			"version", activeVersion,
+			"version", version,
 		)
 		return
 	}

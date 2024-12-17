@@ -135,6 +135,11 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
+	bundles, err := n.getBundleStatus()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bundle status: %w", err)
+	}
+
 	kms, err := n.getKeymanagerStatus()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key manager worker status: %w", err)
@@ -165,6 +170,7 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		Consensus:       cs,
 		LightClient:     lcs,
 		Runtimes:        runtimes,
+		Bundles:         bundles,
 		Keymanager:      kms,
 		Registration:    rs,
 		PendingUpgrades: pendingUpgrades,
@@ -199,6 +205,10 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
 
 	for _, rt := range n.RuntimeRegistry.Runtimes() {
+		if !rt.IsManaged() {
+			continue
+		}
+
 		var status control.RuntimeStatus
 
 		// Fetch runtime registry descriptor. Do not wait too long for the descriptor to become
@@ -341,6 +351,41 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		runtimes[rt.ID()] = status
 	}
 	return runtimes, nil
+}
+
+func (n *Node) getBundleStatus() ([]control.BundleStatus, error) {
+	bundleRegistry := n.RuntimeRegistry.GetBundleRegistry()
+	manifests := bundleRegistry.GetManifests()
+	bundles := make([]control.BundleStatus, 0, len(manifests))
+
+	for _, manifest := range manifests {
+		explodedComponents, err := bundleRegistry.GetComponents(manifest.ID, manifest.GetVersion())
+		if err != nil {
+			return nil, err
+		}
+
+		components := make([]control.ComponentStatus, 0, len(explodedComponents))
+		for _, comp := range explodedComponents {
+			component := control.ComponentStatus{
+				Kind:     comp.Kind,
+				Name:     comp.Name,
+				Version:  comp.Version,
+				Detached: comp.Detached,
+				Disabled: comp.Disabled,
+			}
+			components = append(components, component)
+		}
+
+		bundle := control.BundleStatus{
+			Name:       manifest.Name,
+			ID:         manifest.ID,
+			Components: components,
+		}
+
+		bundles = append(bundles, bundle)
+	}
+
+	return bundles, nil
 }
 
 func (n *Node) getKeymanagerStatus() (*keymanagerWorker.Status, error) {

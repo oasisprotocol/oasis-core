@@ -39,6 +39,18 @@ func (v Version) ValidateBasic() error {
 	return nil
 }
 
+// Cmp returns a negative number when the given version is larger, a positive
+// number when smaller, and zero when both versions are equal.
+func (v Version) Cmp(other Version) int {
+	if v.Major != other.Major {
+		return int(v.Major) - int(other.Major)
+	}
+	if v.Minor != other.Minor {
+		return int(v.Minor) - int(other.Minor)
+	}
+	return int(v.Patch) - int(other.Patch)
+}
+
 // ToU64 returns the version as platform-dependent uint64.
 func (v Version) ToU64() uint64 {
 	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16) | (uint64(v.Patch))

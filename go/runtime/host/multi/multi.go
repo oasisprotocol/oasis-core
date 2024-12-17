@@ -359,6 +359,15 @@ func (agg *Aggregate) GetVersion(version version.Version) (host.Runtime, error) 
 	return host.host, nil
 }
 
+// HasVersion checks if runtime host exists for the specified version.
+func (agg *Aggregate) HasVersion(version version.Version) bool {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	_, ok := agg.hosts[version]
+	return ok
+}
+
 // AddVersion adds a new runtime version to the aggregate.
 //
 // If the newly added version matches the active or the next version,

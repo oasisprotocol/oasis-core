@@ -126,7 +126,7 @@ type runtimeHistory struct {
 	syncRoundLock          sync.RWMutex
 	lastStorageSyncedRound uint64
 
-	haveLocalStorageWorker bool
+	hasLocalStorage bool
 
 	pruner  Pruner
 	pruneCh *channels.RingChannel
@@ -149,7 +149,7 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 
 	// If no local storage worker, notify the block watcher that new block is committed,
 	// otherwise the storage-sync-checkpoint will do the notification.
-	if h.haveLocalStorageWorker || !notify {
+	if h.hasLocalStorage || !notify {
 		return nil
 	}
 	h.blocksNotifier.Broadcast(blk)
@@ -167,7 +167,7 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 		return nil
 	}
 
-	if !h.haveLocalStorageWorker {
+	if !h.hasLocalStorage {
 		panic("received storage sync checkpoint when local storage worker is disabled")
 	}
 
@@ -249,7 +249,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Also take storage sync state into account.
-		if includeStorage && h.haveLocalStorageWorker && h.lastStorageSyncedRound < meta.LastRound {
+		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < meta.LastRound {
 			return h.lastStorageSyncedRound, nil
 		}
 		return meta.LastRound, nil
@@ -257,7 +257,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Ensure round exists.
-		if includeStorage && h.haveLocalStorageWorker && h.lastStorageSyncedRound < round {
+		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < round {
 			return roothash.RoundInvalid, roothash.ErrNotFound
 		}
 		return round, nil
@@ -368,7 +368,7 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, haveLocalStorageWorker bool) (History, error) {
+func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, hasLocalStorage bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
@@ -382,17 +382,17 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	h := &runtimeHistory{
-		runtimeID:              runtimeID,
-		logger:                 logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
-		ctx:                    ctx,
-		cancelCtx:              cancelCtx,
-		db:                     db,
-		haveLocalStorageWorker: haveLocalStorageWorker,
-		blocksNotifier:         pubsub.NewBroker(true),
-		pruner:                 pruner,
-		pruneCh:                channels.NewRingChannel(1),
-		stopCh:                 make(chan struct{}),
-		quitCh:                 make(chan struct{}),
+		runtimeID:       runtimeID,
+		logger:          logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		db:              db,
+		hasLocalStorage: hasLocalStorage,
+		blocksNotifier:  pubsub.NewBroker(true),
+		pruner:          pruner,
+		pruneCh:         channels.NewRingChannel(1),
+		stopCh:          make(chan struct{}),
+		quitCh:          make(chan struct{}),
 	}
 
 	go h.pruneWorker()
