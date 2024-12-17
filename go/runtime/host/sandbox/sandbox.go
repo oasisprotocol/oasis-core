@@ -616,8 +616,13 @@ func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) G
 			"provisioner", "sandbox",
 		)
 
+		executable := comp.Executable
+		if comp.ELF != nil {
+			executable = comp.ELF.Executable
+		}
+
 		return process.Config{
-			Path:              comp.ExplodedPath(comp.Executable),
+			Path:              comp.ExplodedPath(executable),
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
 			Stderr:            logWrapper,

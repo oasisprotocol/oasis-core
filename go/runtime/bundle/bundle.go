@@ -50,11 +50,22 @@ func (bnd *Bundle) Validate() error {
 	}
 	var needFiles []bundleFile
 	for id, comp := range bnd.Manifest.GetAvailableComponents() {
-		needFiles = append(needFiles, bundleFile{
-			descr:    fmt.Sprintf("%s: ELF executable", id),
-			fn:       comp.Executable,
-			optional: true,
-		})
+		if elf := comp.ELF; elf != nil {
+			needFiles = append(needFiles,
+				[]bundleFile{
+					{
+						descr: fmt.Sprintf("%s: ELF executable", id),
+						fn:    elf.Executable,
+					},
+				}...,
+			)
+		} else {
+			needFiles = append(needFiles, bundleFile{
+				descr:    fmt.Sprintf("%s: ELF executable", id),
+				fn:       comp.Executable,
+				optional: true,
+			})
+		}
 		if sgx := comp.SGX; sgx != nil {
 			needFiles = append(needFiles,
 				[]bundleFile{
@@ -494,7 +505,11 @@ func (bnd *Bundle) WriteExploded(dataDir string) (string, error) {
 		}
 
 		for id, comp := range bnd.Manifest.GetAvailableComponents() {
-			if comp.Executable != "" {
+			if comp.ELF != nil {
+				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.ELF.Executable), 0o700); err != nil {
+					return "", fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
+				}
+			} else if comp.Executable != "" {
 				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.Executable), 0o700); err != nil {
 					return "", fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
 				}

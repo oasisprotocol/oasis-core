@@ -30,8 +30,10 @@ func TestBundle(t *testing.T) {
 		}(),
 		Components: []*Component{
 			{
-				Kind:       component.RONL,
-				Executable: "runtime.bin",
+				Kind: component.RONL,
+				ELF: &ELFMetadata{
+					Executable: "runtime.bin",
+				},
 				SGX: &SGXMetadata{
 					Executable: "runtime.sgx",
 				},
@@ -54,7 +56,7 @@ func TestBundle(t *testing.T) {
 	require.False(t, manifest.IsDetached(), "manifest with RONL component should not be detached")
 
 	t.Run("Add_Write", func(t *testing.T) {
-		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(randBuffer(3252)))
+		err := bundle.Add(manifest.Components[0].ELF.Executable, NewBytesData(randBuffer(3252)))
 		require.NoError(t, err, "bundle.Add(elf)")
 		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randBuffer(6541)))
 		require.NoError(t, err, "bundle.Add(sgx)")
@@ -84,7 +86,7 @@ func TestBundle(t *testing.T) {
 
 	t.Run("Open_WithManifestHash", func(t *testing.T) {
 		var manifestHash hash.Hash
-		err := manifestHash.UnmarshalHex("905e9866eccb967e8991698273f41d20c616cab4f9e9332a2a12d9d3a1c8a486")
+		err := manifestHash.UnmarshalHex("2faad6101e24f0034a82b99aee10f4de909a00b1b2c125f7d6fb97d65dc7984b")
 		require.NoError(t, err, "UnmarshalHex")
 
 		_, err = Open(bundleFn, WithManifestHash(manifestHash))
@@ -92,7 +94,7 @@ func TestBundle(t *testing.T) {
 
 		_, err = Open(bundleFn, WithManifestHash(hash.Hash{}))
 		require.Error(t, err, "Open_WithManifestHash")
-		require.ErrorContains(t, err, "invalid manifest (got: 905e9866eccb967e8991698273f41d20c616cab4f9e9332a2a12d9d3a1c8a486, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
+		require.ErrorContains(t, err, "invalid manifest (got: 2faad6101e24f0034a82b99aee10f4de909a00b1b2c125f7d6fb97d65dc7984b, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
 	})
 
 	t.Run("ResetManifest", func(t *testing.T) {
@@ -137,8 +139,10 @@ func TestDetachedBundle(t *testing.T) {
 		Components: []*Component{
 			// No RONL component in the manifest.
 			{
-				Kind:       component.ROFL,
-				Executable: "runtime.bin",
+				Kind: component.ROFL,
+				ELF: &ELFMetadata{
+					Executable: "runtime.bin",
+				},
 				SGX: &SGXMetadata{
 					Executable: "runtime.sgx",
 				},
@@ -152,7 +156,7 @@ func TestDetachedBundle(t *testing.T) {
 	require.True(t, manifest.IsDetached(), "manifest without RONL component should be detached")
 
 	t.Run("Add_Write", func(t *testing.T) {
-		err := bundle.Add(manifest.Components[0].Executable, NewBytesData(randBuffer(2231)))
+		err := bundle.Add(manifest.Components[0].ELF.Executable, NewBytesData(randBuffer(2231)))
 		require.NoError(t, err, "bundle.Add(elf)")
 		err = bundle.Add(manifest.Components[0].SGX.Executable, NewBytesData(randBuffer(7627)))
 		require.NoError(t, err, "bundle.Add(sgx)")

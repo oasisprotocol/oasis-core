@@ -280,9 +280,11 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 		_ = bnd.Add(elfBin, bundle.NewBytesData(binBuf))
 
 		comp := &bundle.Component{
-			Kind:       compCfg.Kind,
-			Version:    compCfg.Version,
-			Executable: elfBin,
+			Kind:    compCfg.Kind,
+			Version: compCfg.Version,
+			ELF: &bundle.ELFMetadata{
+				Executable: elfBin,
+			},
 		}
 
 		if rt.teeHardware == node.TEEHardwareIntelSGX {
