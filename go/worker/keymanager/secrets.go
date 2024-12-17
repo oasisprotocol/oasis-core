@@ -601,6 +601,7 @@ func (w *secretsWorker) registerNode(rsp *secrets.SignedInitResponse, version ve
 	w.logger.Info("registering key manager",
 		"is_secure", rsp.InitResponse.IsSecure,
 		"checksum", hex.EncodeToString(rsp.InitResponse.Checksum),
+		"next_checksum", hex.EncodeToString(rsp.InitResponse.NextChecksum),
 		"policy_checksum", hex.EncodeToString(rsp.InitResponse.PolicyChecksum),
 		"rsk", rsp.InitResponse.RSK,
 		"next_rsk", rsp.InitResponse.NextRSK,
