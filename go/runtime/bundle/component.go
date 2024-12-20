@@ -199,6 +199,8 @@ type TDXMetadata struct {
 
 	// Stage2Image is the name of the stage 2 VM image file.
 	Stage2Image string `json:"stage2_image,omitempty"`
+	// Stage2Format is the format of the stage 2 VM image file. Empty means raw.
+	Stage2Format string `json:"stage2_format,omitempty"`
 
 	// Resources are the requested VM resources.
 	Resources TDXResources `json:"resources"`
