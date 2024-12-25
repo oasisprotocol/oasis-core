@@ -42,14 +42,14 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.20.5
-	github.com/prometheus/common v0.60.0
+	github.com/prometheus/common v0.61.0
 	github.com/prometheus/procfs v0.15.1
 	github.com/seccomp/libseccomp-golang v0.10.0
 	github.com/spf13/cast v1.6.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tidwall/btree v1.6.0
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -60,7 +60,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
 	google.golang.org/grpc v1.67.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
