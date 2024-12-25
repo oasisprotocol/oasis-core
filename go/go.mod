@@ -16,7 +16,7 @@ replace (
 require (
 	github.com/a8m/envsubst v1.4.2
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
-	github.com/cenkalti/backoff/v4 v4.2.1
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cometbft/cometbft v0.37.11
 	github.com/cometbft/cometbft-db v0.9.5
 	github.com/cosmos/gogoproto v1.7.0
