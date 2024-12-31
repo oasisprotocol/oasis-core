@@ -155,10 +155,20 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 		// Configure stage 2 image.
 		if tdxCfg.HasStage2() {
 			stage2Image := comp.ExplodedPath(tdxCfg.Stage2Image)
+			stage2Format := tdxCfg.Stage2Format
+			switch stage2Format {
+			case "":
+				// Default to raw format.
+				stage2Format = "raw"
+			case "raw", "qcow2":
+				// These formats are supported as-is.
+			default:
+				return process.Config{}, fmt.Errorf("format '%s' is not supported", stage2Format)
+			}
 
 			cfg.Args = append(cfg.Args,
 				// Stage 2 drive.
-				"-drive", fmt.Sprintf("format=raw,file=%s,if=none,id=drive0,read-only=on", stage2Image),
+				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=on", stage2Format, stage2Image),
 				"-device", "virtio-blk-pci,drive=drive0",
 			)
 		}
