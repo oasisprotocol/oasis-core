@@ -128,6 +128,10 @@ type Node struct { // nolint: maligned
 	entity *Entity
 }
 
+func (n *Node) GetDir() *env.Dir {
+	return n.dir
+}
+
 // SetArchiveMode sets the archive mode.
 func (n *Node) SetArchiveMode(archive bool) {
 	n.consensus.EnableArchiveMode = archive

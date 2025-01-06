@@ -106,6 +106,28 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
 	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveEncWithSecretsScenarioV2)
+
+	// Ensure that after upgrade, every compute worker had its old bundle file
+	// (cd0b61aa46a800c6845292b4cb6b38c1b1fb0153e4ef81c3b9331721bd615fa9.orc),
+	// together with exploded subdir removed from its datadir/runtimes/bundles.
+	for _, worker := range sc.Net.ComputeWorkers() {
+		dir := bundle.ExplodedPath(worker.GetDir().String())
+		sc.Logger.Info("Ensuring old bundle and its exploded subdir was removed",
+			"worker", worker.Name,
+			"bundles dir", dir)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			sc.Logger.Error("Failed to read %s's bundle dir: %v", worker.Name, err)
+			return err
+		}
+		// There should be only two entries:
+		//     1. datadir/runtimes/bundles/b74de387b08b0c1d5bf9dc53d61be0d594b0d36f16a1491c8218d6a58d215f9e.orc
+		//     2. datadir/runtimes/bundles/b74de387b08b0c1d5bf9dc53d61be0d594b0d36f16a1491c8218d6a58d215f9e
+		if n := len(entries); n != 2 {
+			return fmt.Errorf("failed to remove old bundle and its exploded subdir: expected 2 entries, but %d got", n)
+		}
+	}
+
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
 
