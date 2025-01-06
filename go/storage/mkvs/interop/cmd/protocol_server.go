@@ -89,7 +89,7 @@ func doProtoServer(*cobra.Command, []string) {
 		if err != nil {
 			logger.Error("failed getting fixture",
 				"err", err,
-				"fixture", fixture.Name(),
+				"fixture", fixtureName,
 			)
 			return
 		}
@@ -98,7 +98,7 @@ func doProtoServer(*cobra.Command, []string) {
 		if err != nil {
 			logger.Error("failed to populate fixture",
 				"err", err,
-				"fixture", fixture.Name(),
+				"fixture", fixtureName,
 			)
 			return
 		}
