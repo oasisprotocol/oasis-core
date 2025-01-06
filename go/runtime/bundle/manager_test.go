@@ -28,6 +28,14 @@ func (r *mockStore) AddManifest(manifest *ExplodedManifest) error {
 	return nil
 }
 
+func (r *mockStore) Manifests() []*ExplodedManifest {
+	panic("not implemented")
+}
+
+func (r *mockStore) RemoveManifest(hash.Hash) bool {
+	panic("not implemented")
+}
+
 func TestRegisterManifest(t *testing.T) {
 	store := newMockStore()
 	manager, err := NewManager("", nil, store)

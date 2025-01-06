@@ -14,12 +14,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 )
 
@@ -106,7 +109,71 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
 	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveEncWithSecretsScenarioV2)
-	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
+	if err := sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
+		return err
+	}
+
+	// Ensure that after upgrade, every compute worker had its old exploded
+	// bundle removed from its bundles dir.
+	// We do so by getting the manifest hash of the active deployment,
+	// and ensuring there is a dir with corresponding hash.
+	manifestHash, err := sc.activeDeploymentManifestHash(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch active deployment manifest hash: %w", err)
+	}
+	for _, worker := range sc.Net.ComputeWorkers() {
+		if err := sc.verifyBundleDir(worker, manifestHash); err != nil {
+			return fmt.Errorf("failed to verify clean-up of %s's bundle dir after upgrade: %w", worker.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func (sc *runtimeUpgradeImpl) verifyBundleDir(worker *oasis.Compute, manifestHash hash.Hash) error {
+	sc.Logger.Info("ensuring cached exploded bundle for old version was removed",
+		"worker", worker.Name,
+	)
+	// There should be only one exploded bundle dir.
+	bundlesDir := bundle.ExplodedPath(worker.DataDir())
+	entries, err := os.ReadDir(bundlesDir)
+	if err != nil {
+		return err
+	}
+	if n := len(entries); n != 1 {
+		return fmt.Errorf("unexpected number of dir entries: expected 1, got %d", n)
+	}
+	entry := entries[0]
+	if !entry.IsDir() {
+		return fmt.Errorf("%s is not a dir", entry.Name())
+	}
+	if entry.Name() != manifestHash.String() {
+		return fmt.Errorf("unexpected folder name: want %v, got %v", entry.Name(), manifestHash.String())
+	}
+	return nil
+}
+
+func (sc *runtimeUpgradeImpl) activeDeploymentManifestHash(ctx context.Context) (hash.Hash, error) {
+	rt, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
+		Height: consensus.HeightLatest,
+		ID:     KeyValueRuntimeID,
+	})
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to get runtime descriptor: %w", err)
+	}
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to get current epoch: %w", err)
+	}
+	active := rt.ActiveDeployment(epoch)
+	if active == nil {
+		return hash.Hash{}, fmt.Errorf("missing active descriptor for epoch %v", epoch)
+	}
+	var manifestHash hash.Hash
+	if err = manifestHash.UnmarshalBinary(active.BundleChecksum); err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to unmarshal active deployment manifest hash")
+	}
+	return manifestHash, nil
 }
 
 type bundleServer struct {

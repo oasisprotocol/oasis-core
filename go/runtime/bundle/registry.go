@@ -23,7 +23,7 @@ import (
 type Registry struct {
 	mu sync.RWMutex
 
-	manifestHashes   map[hash.Hash]struct{}
+	manifests        map[hash.Hash]*ExplodedManifest
 	regularManifests map[common.Namespace]map[version.Version]*ExplodedManifest
 	components       map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
 	notifiers        map[common.Namespace]*pubsub.Broker
@@ -36,7 +36,7 @@ func NewRegistry() *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
 	return &Registry{
-		manifestHashes:   make(map[hash.Hash]struct{}),
+		manifests:        make(map[hash.Hash]*ExplodedManifest),
 		regularManifests: make(map[common.Namespace]map[version.Version]*ExplodedManifest),
 		components:       make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
 		notifiers:        make(map[common.Namespace]*pubsub.Broker),
@@ -50,7 +50,7 @@ func (r *Registry) HasManifest(hash hash.Hash) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	_, ok := r.manifestHashes[hash]
+	_, ok := r.manifests[hash]
 	return ok
 }
 
@@ -67,7 +67,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 	)
 
 	// Skip already processed manifests.
-	if _, ok := r.manifestHashes[manifestHash]; ok {
+	if _, ok := r.manifests[manifestHash]; ok {
 		return nil
 	}
 
@@ -141,7 +141,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 	}
 
 	// Remember which manifests were added.
-	r.manifestHashes[manifestHash] = struct{}{}
+	r.manifests[manifestHash] = manifest
 
 	r.logger.Info("manifest added",
 		"name", manifest.Name,
@@ -149,6 +149,49 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 	)
 
 	return nil
+}
+
+// Manifests returns all known manifests.
+func (r *Registry) Manifests() []*ExplodedManifest {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return slices.Collect(maps.Values(r.manifests))
+}
+
+// RemoveManifest removes a manifest with provided hash.
+func (r *Registry) RemoveManifest(hash hash.Hash) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.logger.Info("removing manifest",
+		"manifest_hash", hash,
+	)
+
+	manifest, ok := r.manifests[hash]
+	if !ok {
+		return false
+	}
+
+	delete(r.manifests, hash)
+
+	if ronl := manifest.GetComponentByID(component.ID_RONL); ronl != nil {
+		delete(r.regularManifests[manifest.ID], ronl.Version)
+		if len(r.regularManifests[manifest.ID]) == 0 {
+			delete(r.regularManifests, manifest.ID)
+		}
+	}
+
+	for _, c := range manifest.Manifest.Components {
+		delete(r.components[manifest.ID][c.ID()], c.Version)
+		if len(r.components[manifest.ID][c.ID()]) == 0 {
+			delete(r.components[manifest.ID], c.ID())
+		}
+	}
+	if len(r.components[manifest.ID]) == 0 {
+		delete(r.components, manifest.ID)
+	}
+
+	return true
 }
 
 // GetVersions returns versions for the given runtime, sorted in ascending
