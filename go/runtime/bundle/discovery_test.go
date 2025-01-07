@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,6 +56,11 @@ func (r *mockRegistry) GetName(common.Namespace, version.Version) (string, error
 
 // GetComponents implements Registry.
 func (r *mockRegistry) GetComponents(common.Namespace, version.Version) ([]*ExplodedComponent, error) {
+	panic("unimplemented")
+}
+
+// CleanStaleBundles implements Registry.
+func (r *mockRegistry) CleanStaleBundles(context.Context, common.Namespace, version.Version) {
 	panic("unimplemented")
 }
 

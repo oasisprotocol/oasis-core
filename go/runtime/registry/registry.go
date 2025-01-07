@@ -383,16 +383,33 @@ func (r *runtime) run(ctx context.Context) {
 	}
 	defer regSub.Close()
 
+	wg := &sync.WaitGroup{}
 	var regInitialized, activeInitialized bool
 	for {
 		select {
 		case <-ctx.Done():
+			// Ensure bundle clean-up terminates before returning.
+			wg.Wait()
 			return
-		case <-epoCh:
+		case epoch := <-epoCh:
 			if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
 				close(r.activeDescriptorCh)
 				activeInitialized = true
 			}
+
+			r.RLock()
+			rt := r.activeDescriptor
+			r.RUnlock()
+			if rt != nil {
+				if active := rt.ActiveDeployment(epoch); active != nil {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						r.bundleRegistry.CleanStaleBundles(ctx, r.ID(), active.Version)
+					}()
+				}
+			}
+
 		case rt := <-regCh:
 			if !rt.ID.Equal(&r.id) {
 				continue

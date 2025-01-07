@@ -1,6 +1,8 @@
 package bundle
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -91,7 +93,10 @@ func TestBundleRegistry(t *testing.T) {
 	path3, err := createSyntheticBundle(dir, runtimeID1, version1, []component.Kind{component.RONL})
 	require.NoError(t, err)
 
-	paths := []string{path0, path1, path2, path3}
+	path4, err := createSyntheticBundle(dir, runtimeID1, version2, []component.Kind{component.RONL})
+	require.NoError(t, err)
+
+	paths := []string{path0, path1, path2, path3, path4}
 
 	// Compute manifest hashes.
 	var hashes []hash.Hash
@@ -147,4 +152,49 @@ func TestBundleRegistry(t *testing.T) {
 	_, err = registry.GetComponents(runtimeID1, version3)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "component 'ronl', version '3.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001' not found")
+
+	// Add fifth bundle (new RONL component for runtime 1).
+	err = registry.AddBundle(paths[4], hashes[4])
+	require.NoError(t, err)
+
+	// We should have 3 exploded subdirs for regular bundles.
+	require.Equal(t, 3, explodedRegBundleNum(t, dir))
+
+	// We should have 2 versions for runtime 1.
+	versions := registry.GetVersions(runtimeID1)
+	require.Equal(t, 2, len(versions))
+
+	// Fetch components for runtime 1, version 2.
+	comps, err = registry.GetComponents(runtimeID1, version2)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(comps))
+	require.Equal(t, version2, comps[0].Version)
+	require.Equal(t, version2, comps[1].Version)
+
+	// Remove version 1 for runtime 1 from the registry.
+	registry.CleanStaleBundles(context.Background(), runtimeID1, version2)
+
+	// We should have 1 versions for runtime 1.
+	versions = registry.GetVersions(runtimeID1)
+	require.Equal(t, 1, len(versions))
+
+	// Attempt to fetch components for runtime 1, version 1 (just deleted).
+	_, err = registry.GetComponents(runtimeID1, version1)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "component 'ronl', version '1.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001' not found")
+
+	// We should have two exploded subdirs for regular bundles.
+	require.Equal(t, 2, explodedRegBundleNum(t, dir))
+}
+
+func explodedRegBundleNum(t *testing.T, dir string) int {
+	entries, err := os.ReadDir(ExplodedPath(dir))
+	require.NoError(t, err)
+	var res int
+	for _, entry := range entries {
+		if entry.Name() != "detached" {
+			res++
+		}
+	}
+	return res
 }
