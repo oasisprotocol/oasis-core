@@ -12,10 +12,22 @@ oasis-test-runner list
 If no flags are provided, all scenarios are executed.
 
 To run a specific scenario, e.g `e2e/runtime/runtime-dynamic`, pass the
-`--scenario` flag (or its short version, `-s`) followed by scenario's name:
+`--scenario` flag (or its short version, `-s`) followed by scenario's name,
+together with the relevant parameters:
 
 ```bash
-oasis-test-runner --scenario e2e/runtime/runtime-dynamic
+oasis-test-runner \
+  --e2e.node.binary go/oasis-node/oasis-node \
+  --e2e/runtime.runtime.binary_dir.default ./target/default/release \
+  --log.level debug \
+  --scenario e2e/runtime/runtime-dynamic
+```
+
+To avoid manually setting parameters, you may run the CI script from the root
+instead:
+
+```bash
+.buildkite/scripts/test_e2e.sh --scenario=e2e.runtime.runtime-dynamic
 ```
 
 ## Benchmarking

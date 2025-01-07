@@ -40,23 +40,6 @@ and supports reading, writing, and fetching string values associated with the
 given key. To learn how to create your own runtime, see the sources of the
 [simple-keyvalue example] and [Building a runtime] chapter in the Oasis SDK.
 
-Finally, to test Oasis node, we will run a test client written specifically
-for the `simple-keyvalue` runtime. The client sends a few keys with associated
-values and fetches them back over RPC defined in the runtime's API. Execute the
-client as follows (substituting the socket path from your log output) in a
-different terminal:
-
-```
-./target/default/release/simple-keyvalue-client \
-  --runtime-id 8000000000000000000000000000000000000000000000000000000000000000 \
-  --node-address unix:/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
-```
-
-By default, Oasis node is configured with a 30-second epoch, so you may
-initially need to wait for the first epoch to pass before the test client will
-make any progress. For more information on writing your own client, see the
-[Oasis SDK](https://github.com/oasisprotocol/oasis-sdk).
-
 <!-- markdownlint-disable line-length -->
 [the default network fixture]: https://github.com/oasisprotocol/oasis-core/tree/master/go/oasis-net-runner/fixtures/default.go
 [simple-keyvalue example]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
