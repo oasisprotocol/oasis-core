@@ -682,7 +682,7 @@ func (net *Network) startOasisNode(
 		if os.Getenv("OASIS_UNSAFE_LAX_AVR_VERIFY") != "" {
 			extraArgs = extraArgs.debugTCBLaxVerify()
 		}
-		if os.Getenv("OASIS_UNSAFE_MOCK_SGX") != "" {
+		if os.Getenv("OASIS_UNSAFE_MOCK_TEE") != "" {
 			cfg.Runtime.DebugMockTEE = true
 		}
 	} else {
