@@ -116,7 +116,13 @@ func createProvisioner(
 	attestInterval := config.GlobalConfig.Runtime.AttestInterval
 	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
 	sgxLoader := config.GlobalConfig.Runtime.SGXLoader
-	runtimeEnv := config.GlobalConfig.Runtime.Environment
+	insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
+
+	// Support legacy configuration where the runtime environment determines
+	// whether the TEE should be mocked.
+	if config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentSGXMock {
+		insecureMock = true
+	}
 
 	// Register provisioners based on the configured provisioner.
 	provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
@@ -156,7 +162,6 @@ func createProvisioner(
 		}
 
 		// Configure the Intel SGX provisioner.
-		insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
 		if insecureMock && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
 		}

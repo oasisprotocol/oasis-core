@@ -79,10 +79,11 @@ type Config struct {
 	// Path to the sandbox binary (bubblewrap).
 	SandboxBinary string `yaml:"sandbox_binary,omitempty"`
 
-	// Path to SGXS runtime loader binary (for SGX runtimes).
+	// Path to SGX runtime loader binary (for SGX runtimes).
 	SGXLoader string `yaml:"sgx_loader,omitempty"`
 
 	// The runtime environment (sgx, elf, auto).
+	// NOTE: This may go away in the future, use `DebugMockTEE` instead.
 	Environment RuntimeEnvironment `yaml:"environment,omitempty"`
 
 	// History pruner configuration.
@@ -117,6 +118,11 @@ type Config struct {
 	//
 	// If not specified, a default value is used.
 	MaxBundleSize string `yaml:"max_bundle_size,omitempty"`
+
+	// DebugMockTEE enables mocking of the Trusted Execution Environment (TEE).
+	//
+	// This flag can only be used if the DebugDontBlameOasis flag is set.
+	DebugMockTEE bool `yaml:"debug_mock_tee,omitempty"`
 }
 
 // GetComponent returns the configuration for the given component
