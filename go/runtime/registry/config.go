@@ -134,8 +134,7 @@ func createProvisioner(
 	}()
 
 	isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
-	forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
-		(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
+	forceNoSGX := config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX
 
 	// Register provisioners based on the configured provisioner.
 	var insecureNoSandbox bool

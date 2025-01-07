@@ -61,11 +61,6 @@ const (
 	// Use of this runtime environment is only allowed if DebugDontBlameOasis flag is set.
 	RuntimeEnvironmentSGXMock RuntimeEnvironment = "sgx-mock"
 
-	// RuntimeEnvironmentELF specifies to run the runtime in the OS address space.
-	//
-	// Use of this runtime environment is only allowed if DebugDontBlameOasis flag is set.
-	RuntimeEnvironmentELF RuntimeEnvironment = "elf"
-
 	// RuntimeEnvironmentAuto specifies to run the runtime in the most appropriate location.
 	RuntimeEnvironmentAuto RuntimeEnvironment = "auto"
 )
@@ -231,7 +226,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("sgx_loader must be set when using sgx environment")
 		}
 	case RuntimeEnvironmentSGXMock:
-	case RuntimeEnvironmentELF:
 	case RuntimeEnvironmentAuto:
 	default:
 		return fmt.Errorf("unknown runtime environment: %s", c.Environment)
