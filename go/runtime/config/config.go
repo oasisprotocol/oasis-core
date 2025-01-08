@@ -65,6 +65,23 @@ const (
 	RuntimeEnvironmentAuto RuntimeEnvironment = "auto"
 )
 
+// TEESelectMode is the selection mode for the Trusted Execution Environment (TEE).
+type TEESelectMode string
+
+const (
+	// TEESelectModeAuto specifies that the runtime should run in the most appropriate TEE.
+	TEESelectModeAuto TEESelectMode = ""
+
+	// TEESelectModeNone specifies that the runtime should run without using any TEE.
+	TEESelectModeNone TEESelectMode = "none"
+
+	// TEESelectModeSGX specifies that the runtime should run in an SGX environment.
+	TEESelectModeSGX TEESelectMode = "sgx"
+
+	// TEESelectModeTDX specifies that the runtime should run in a TDX environment.
+	TEESelectModeTDX TEESelectMode = "tdx"
+)
+
 // Config is the runtime registry configuration structure.
 type Config struct {
 	// Runtimes is the list of runtimes to configure.
@@ -171,14 +188,59 @@ type RuntimeConfig struct {
 	Repositories []string `yaml:"repositories,omitempty"`
 }
 
+// Validate validates the runtime configuration.
+func (c *RuntimeConfig) Validate() error {
+	for _, comp := range c.Components {
+		if err := comp.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ComponentConfig is the component configuration.
 type ComponentConfig struct {
 	// ID is the component identifier.
 	ID component.ID `yaml:"id"`
 
+	// TEE specifies the kind of Trusted Execution Environment (TEE)
+	// in which the component should run (none, sgx, tdx).
+	//
+	// If not provided, the TEE kind is selected automatically.
+	TEE TEESelectMode `yaml:"tee,omitempty"`
+
 	// Disabled specifies whether the component is disabled. If a component is specified and not
 	// disabled, it is enabled.
 	Disabled bool `yaml:"disabled,omitempty"`
+}
+
+// Validate validates the component configuration.
+func (c *ComponentConfig) Validate() error {
+	switch c.TEE {
+	case TEESelectModeAuto:
+	case TEESelectModeNone:
+	case TEESelectModeSGX:
+	case TEESelectModeTDX:
+	default:
+		return fmt.Errorf("unknown TEE select mode: %s", c.TEE)
+	}
+
+	return nil
+}
+
+// TEEKind returns the kind of Trusted Execution Environment (TEE)
+// in which the component should run, if it is specified.
+func (c *ComponentConfig) TEEKind() (component.TEEKind, bool) {
+	switch c.TEE {
+	case TEESelectModeNone:
+		return component.TEEKindNone, true
+	case TEESelectModeSGX:
+		return component.TEEKindSGX, true
+	case TEESelectModeTDX:
+		return component.TEEKindTDX, true
+	default:
+		return 0, false
+	}
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler.
@@ -249,6 +311,12 @@ func (c *Config) Validate() error {
 
 	if c.LoadBalancer.NumInstances > 128 {
 		return fmt.Errorf("cannot specify more than 128 instances for load balancing")
+	}
+
+	for _, rt := range c.Runtimes {
+		if err := rt.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

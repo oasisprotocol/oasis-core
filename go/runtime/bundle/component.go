@@ -14,6 +14,10 @@ import (
 type ExplodedComponent struct {
 	*Component
 
+	// TEEKind specifies the kind of Trusted Execution Environment (TEE)
+	// in which the component should run.
+	TEEKind component.TEEKind
+
 	// Detached is true iff the bundle containing the component does not
 	// include a RONL component.
 	Detached bool

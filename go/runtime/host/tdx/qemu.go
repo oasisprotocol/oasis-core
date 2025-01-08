@@ -109,7 +109,7 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	if err != nil {
 		return process.Config{}, err
 	}
-	if comp.TEEKind() != component.TEEKindTDX {
+	if comp.TDX == nil {
 		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", comp.ID())
 	}
 

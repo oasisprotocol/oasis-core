@@ -284,7 +284,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		return cfg, nil
 	}
 
-	if comp.TEEKind() != component.TEEKindSGX {
+	if comp.SGX == nil {
 		return process.Config{}, fmt.Errorf("component '%s' is not an SGX component", comp.ID())
 	}
 
