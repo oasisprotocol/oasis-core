@@ -200,6 +200,9 @@ type TDXMetadata struct {
 	Stage2Image string `json:"stage2_image,omitempty"`
 	// Stage2Format is the format of the stage 2 VM image file. Empty means raw.
 	Stage2Format string `json:"stage2_format,omitempty"`
+	// Stage2Persist is the flag specifying whether the modifications to stage 2 image file should
+	// be (locally) persisted across TD restarts.
+	Stage2Persist bool `json:"stage2_persist,omitempty"`
 
 	// Resources are the requested VM resources.
 	Resources TDXResources `json:"resources"`
