@@ -86,7 +86,7 @@ func TestBundle(t *testing.T) {
 
 	t.Run("Open_WithManifestHash", func(t *testing.T) {
 		var manifestHash hash.Hash
-		err := manifestHash.UnmarshalHex("2faad6101e24f0034a82b99aee10f4de909a00b1b2c125f7d6fb97d65dc7984b")
+		err := manifestHash.UnmarshalHex("eaf1a8c7362dfd3381b2a0e6c63c1ec25732563a4ab180751acb9717435c5eef")
 		require.NoError(t, err, "UnmarshalHex")
 
 		_, err = Open(bundleFn, WithManifestHash(manifestHash))
@@ -94,7 +94,7 @@ func TestBundle(t *testing.T) {
 
 		_, err = Open(bundleFn, WithManifestHash(hash.Hash{}))
 		require.Error(t, err, "Open_WithManifestHash")
-		require.ErrorContains(t, err, "invalid manifest (got: 2faad6101e24f0034a82b99aee10f4de909a00b1b2c125f7d6fb97d65dc7984b, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
+		require.ErrorContains(t, err, "invalid manifest (got: eaf1a8c7362dfd3381b2a0e6c63c1ec25732563a4ab180751acb9717435c5eef, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
 	})
 
 	t.Run("ResetManifest", func(t *testing.T) {

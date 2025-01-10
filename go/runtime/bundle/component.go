@@ -42,7 +42,7 @@ type Component struct {
 	Name string `json:"name,omitempty"`
 
 	// Version is the component version.
-	Version version.Version
+	Version version.Version `json:"version,omitempty"`
 
 	// Executable is the name of the runtime ELF executable file if any.
 	// NOTE: This may go away in the future, use `ELF` instead.
