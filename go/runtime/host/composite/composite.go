@@ -203,9 +203,9 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	if comp == nil {
 		return nil, fmt.Errorf("host/composite: component not available")
 	}
-	provisioner, ok := p.kinds[comp.TEEKind()]
+	provisioner, ok := p.kinds[comp.TEEKind]
 	if !ok {
-		return nil, fmt.Errorf("host/composite: provisioner for kind '%s' is not available", comp.TEEKind())
+		return nil, fmt.Errorf("host/composite: provisioner for kind '%s' is not available", comp.TEEKind)
 	}
 	return provisioner.NewRuntime(cfg)
 }

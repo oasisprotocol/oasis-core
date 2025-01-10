@@ -41,7 +41,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -683,8 +682,8 @@ func (net *Network) startOasisNode(
 		if os.Getenv("OASIS_UNSAFE_LAX_AVR_VERIFY") != "" {
 			extraArgs = extraArgs.debugTCBLaxVerify()
 		}
-		if os.Getenv("OASIS_UNSAFE_MOCK_SGX") != "" {
-			cfg.Runtime.Environment = runtimeConfig.RuntimeEnvironmentSGXMock
+		if os.Getenv("OASIS_UNSAFE_MOCK_TEE") != "" {
+			cfg.Runtime.DebugMockTEE = true
 		}
 	} else {
 		baseArgs = append(baseArgs, "--"+cmdFlags.CfgGenesisFile, net.GenesisPath())

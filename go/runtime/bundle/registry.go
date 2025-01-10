@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
 // CfgDebugMockIDs configures mock runtime IDs for the purpose of testing.
@@ -153,6 +154,22 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 
 	// Add components to the registry.
 	for compID, comp := range components {
+		teeKind := comp.TEEKind()
+		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(bnd.Manifest.ID, compID); ok {
+			if kind, ok := compCfg.TEEKind(); ok {
+				teeKind = kind
+			}
+		} else {
+			// Support legacy configuration where the runtime environment determines
+			// whether the client node should run the runtime in an SGX environment.
+			isEnvAuto := config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentAuto
+			hasSGXLoader := config.GlobalConfig.Runtime.SGXLoader != ""
+			insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
+			if comp.ID().IsRONL() && config.GlobalConfig.Mode.IsClientOnly() && isEnvAuto && !hasSGXLoader && !insecureMock {
+				teeKind = component.TEEKindNone
+			}
+		}
+
 		runtimeComponents, ok := r.components[bnd.Manifest.ID]
 		if !ok {
 			runtimeComponents = make(map[component.ID]map[version.Version]*ExplodedComponent)
@@ -167,6 +184,7 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 
 		componentVersions[comp.Version] = &ExplodedComponent{
 			Component:       comp,
+			TEEKind:         teeKind,
 			Detached:        detached,
 			ExplodedDataDir: explodedDataDir,
 		}

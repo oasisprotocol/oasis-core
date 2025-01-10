@@ -14,6 +14,10 @@ import (
 type ExplodedComponent struct {
 	*Component
 
+	// TEEKind specifies the kind of Trusted Execution Environment (TEE)
+	// in which the component should run.
+	TEEKind component.TEEKind
+
 	// Detached is true iff the bundle containing the component does not
 	// include a RONL component.
 	Detached bool
@@ -130,11 +134,6 @@ func (c *Component) IsNetworkAllowed() bool {
 		// Network access is generally not allowed.
 		return false
 	}
-}
-
-// IsTEERequired returns true iff the component only provides TEE executables.
-func (c *Component) IsTEERequired() bool {
-	return c.Executable == "" && c.ELF == nil && c.TEEKind() != component.TEEKindNone
 }
 
 // TEEKind returns the kind of TEE supported by the component.

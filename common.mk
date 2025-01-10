@@ -352,8 +352,8 @@ endif
 # https://goreleaser.com/customization/build/#define-build-tag
 export GORELEASER_CURRENT_TAG := $(RELEASE_TAG)
 
-# If mock SGX is configured, define extra runtime build flags.
-ifdef OASIS_UNSAFE_MOCK_SGX
+# If mock TEE is configured, define extra runtime build flags.
+ifdef OASIS_UNSAFE_MOCK_TEE
 	OASIS_RUNTIME_NONSGX_FLAGS := --features debug-mock-sgx
 else
 	OASIS_RUNTIME_NONSGX_FLAGS :=

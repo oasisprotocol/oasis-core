@@ -107,40 +107,24 @@ func createProvisioner(
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	hostInfo *hostProtocol.HostInfo,
-	bundleRegistry bundle.Registry,
 	ias []ias.Endpoint,
 	qs pcs.QuoteService,
 ) (runtimeHost.Provisioner, error) {
 	var err error
+	var insecureNoSandbox bool
 
-	// By default start with the environment specified in configuration.
-	runtimeEnv := config.GlobalConfig.Runtime.Environment
+	attestInterval := config.GlobalConfig.Runtime.AttestInterval
+	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
+	sgxLoader := config.GlobalConfig.Runtime.SGXLoader
+	insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
 
-	// If the runtime environment is set to automatic selection and at least
-	// one bundle has a component that requires the use of a TEE, force a TEE
-	// environment to simplify configuration.
-	func() {
-		if runtimeEnv != rtConfig.RuntimeEnvironmentAuto {
-			return
-		}
-		for _, manifest := range bundleRegistry.GetManifests() {
-			for _, comp := range manifest.GetAvailableComponents() {
-				if comp.IsTEERequired() {
-					runtimeEnv = rtConfig.RuntimeEnvironmentSGX
-					return
-				}
-			}
-		}
-	}()
-
-	isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
-	forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
-		(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
+	// Support legacy configuration where the runtime environment determines
+	// whether the TEE should be mocked.
+	if config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentSGXMock {
+		insecureMock = true
+	}
 
 	// Register provisioners based on the configured provisioner.
-	var insecureNoSandbox bool
-	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
-	attestInterval := config.GlobalConfig.Runtime.AttestInterval
 	provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
 	switch p := config.GlobalConfig.Runtime.Provisioner; p {
 	case rtConfig.RuntimeProvisionerMock:
@@ -178,46 +162,30 @@ func createProvisioner(
 		}
 
 		// Configure the Intel SGX provisioner.
-		switch sgxLoader := config.GlobalConfig.Runtime.SGXLoader; {
-		case forceNoSGX:
-			// Remap SGX to non-SGX when forced to do so.
-			provisioners[component.TEEKindSGX], err = hostSandbox.New(hostSandbox.Config{
-				HostInfo:          hostInfo,
-				InsecureNoSandbox: insecureNoSandbox,
-				SandboxBinaryPath: sandboxBinary,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
-			}
-		case sgxLoader == "" && runtimeEnv == rtConfig.RuntimeEnvironmentSGX:
-			// SGX environment is forced, but we don't have the needed loader.
-			return nil, fmt.Errorf("SGX runtime environment requires setting the SGX loader")
-		case sgxLoader == "" && runtimeEnv != rtConfig.RuntimeEnvironmentSGXMock:
+		if insecureMock && !cmdFlags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
+		}
+
+		if !insecureMock && sgxLoader == "" {
 			// SGX may be needed, but we don't have a loader configured.
 			break
-		default:
-			// Configure mock SGX if configured and we are in a debug mode.
-			insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
-			if insecureMock && !cmdFlags.DebugDontBlameOasis() {
-				return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
-			}
+		}
 
-			provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
-				HostInfo:              hostInfo,
-				CommonStore:           commonStore,
-				LoaderPath:            sgxLoader,
-				IAS:                   ias,
-				PCS:                   qs,
-				Consensus:             consensus,
-				Identity:              identity,
-				SandboxBinaryPath:     sandboxBinary,
-				InsecureNoSandbox:     insecureNoSandbox,
-				InsecureMock:          insecureMock,
-				RuntimeAttestInterval: attestInterval,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
-			}
+		provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
+			HostInfo:              hostInfo,
+			CommonStore:           commonStore,
+			LoaderPath:            sgxLoader,
+			IAS:                   ias,
+			PCS:                   qs,
+			Consensus:             consensus,
+			Identity:              identity,
+			SandboxBinaryPath:     sandboxBinary,
+			InsecureNoSandbox:     insecureNoSandbox,
+			InsecureMock:          insecureMock,
+			RuntimeAttestInterval: attestInterval,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)

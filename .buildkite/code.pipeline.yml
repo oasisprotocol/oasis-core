@@ -354,7 +354,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption
     env:
       OASIS_TEE_HARDWARE: intel-sgx
-      OASIS_UNSAFE_MOCK_SGX: "1"
+      OASIS_UNSAFE_MOCK_TEE: "1"
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp

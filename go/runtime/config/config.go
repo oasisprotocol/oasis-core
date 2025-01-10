@@ -61,13 +61,25 @@ const (
 	// Use of this runtime environment is only allowed if DebugDontBlameOasis flag is set.
 	RuntimeEnvironmentSGXMock RuntimeEnvironment = "sgx-mock"
 
-	// RuntimeEnvironmentELF specifies to run the runtime in the OS address space.
-	//
-	// Use of this runtime environment is only allowed if DebugDontBlameOasis flag is set.
-	RuntimeEnvironmentELF RuntimeEnvironment = "elf"
-
 	// RuntimeEnvironmentAuto specifies to run the runtime in the most appropriate location.
 	RuntimeEnvironmentAuto RuntimeEnvironment = "auto"
+)
+
+// TEESelectMode is the selection mode for the Trusted Execution Environment (TEE).
+type TEESelectMode string
+
+const (
+	// TEESelectModeAuto specifies that the runtime should run in the most appropriate TEE.
+	TEESelectModeAuto TEESelectMode = ""
+
+	// TEESelectModeNone specifies that the runtime should run without using any TEE.
+	TEESelectModeNone TEESelectMode = "none"
+
+	// TEESelectModeSGX specifies that the runtime should run in an SGX environment.
+	TEESelectModeSGX TEESelectMode = "sgx"
+
+	// TEESelectModeTDX specifies that the runtime should run in a TDX environment.
+	TEESelectModeTDX TEESelectMode = "tdx"
 )
 
 // Config is the runtime registry configuration structure.
@@ -84,10 +96,11 @@ type Config struct {
 	// Path to the sandbox binary (bubblewrap).
 	SandboxBinary string `yaml:"sandbox_binary,omitempty"`
 
-	// Path to SGXS runtime loader binary (for SGX runtimes).
+	// Path to SGX runtime loader binary (for SGX runtimes).
 	SGXLoader string `yaml:"sgx_loader,omitempty"`
 
 	// The runtime environment (sgx, elf, auto).
+	// NOTE: This may go away in the future, use `DebugMockTEE` instead.
 	Environment RuntimeEnvironment `yaml:"environment,omitempty"`
 
 	// History pruner configuration.
@@ -122,6 +135,11 @@ type Config struct {
 	//
 	// If not specified, a default value is used.
 	MaxBundleSize string `yaml:"max_bundle_size,omitempty"`
+
+	// DebugMockTEE enables mocking of the Trusted Execution Environment (TEE).
+	//
+	// This flag can only be used if the DebugDontBlameOasis flag is set.
+	DebugMockTEE bool `yaml:"debug_mock_tee,omitempty"`
 }
 
 // GetComponent returns the configuration for the given component
@@ -170,14 +188,59 @@ type RuntimeConfig struct {
 	Repositories []string `yaml:"repositories,omitempty"`
 }
 
+// Validate validates the runtime configuration.
+func (c *RuntimeConfig) Validate() error {
+	for _, comp := range c.Components {
+		if err := comp.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ComponentConfig is the component configuration.
 type ComponentConfig struct {
 	// ID is the component identifier.
 	ID component.ID `yaml:"id"`
 
+	// TEE specifies the kind of Trusted Execution Environment (TEE)
+	// in which the component should run (none, sgx, tdx).
+	//
+	// If not provided, the TEE kind is selected automatically.
+	TEE TEESelectMode `yaml:"tee,omitempty"`
+
 	// Disabled specifies whether the component is disabled. If a component is specified and not
 	// disabled, it is enabled.
 	Disabled bool `yaml:"disabled,omitempty"`
+}
+
+// Validate validates the component configuration.
+func (c *ComponentConfig) Validate() error {
+	switch c.TEE {
+	case TEESelectModeAuto:
+	case TEESelectModeNone:
+	case TEESelectModeSGX:
+	case TEESelectModeTDX:
+	default:
+		return fmt.Errorf("unknown TEE select mode: %s", c.TEE)
+	}
+
+	return nil
+}
+
+// TEEKind returns the kind of Trusted Execution Environment (TEE)
+// in which the component should run, if it is specified.
+func (c *ComponentConfig) TEEKind() (component.TEEKind, bool) {
+	switch c.TEE {
+	case TEESelectModeNone:
+		return component.TEEKindNone, true
+	case TEESelectModeSGX:
+		return component.TEEKindSGX, true
+	case TEESelectModeTDX:
+		return component.TEEKindTDX, true
+	default:
+		return 0, false
+	}
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler.
@@ -231,7 +294,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("sgx_loader must be set when using sgx environment")
 		}
 	case RuntimeEnvironmentSGXMock:
-	case RuntimeEnvironmentELF:
 	case RuntimeEnvironmentAuto:
 	default:
 		return fmt.Errorf("unknown runtime environment: %s", c.Environment)
@@ -249,6 +311,12 @@ func (c *Config) Validate() error {
 
 	if c.LoadBalancer.NumInstances > 128 {
 		return fmt.Errorf("cannot specify more than 128 instances for load balancing")
+	}
+
+	for _, rt := range c.Runtimes {
+		if err := rt.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil
