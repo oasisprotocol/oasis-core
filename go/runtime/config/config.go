@@ -12,6 +12,9 @@ import (
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
 )
 
+// oasisBundleRegistryURL is the URL of the metadata folder in the Oasis bundle registry.
+const oasisBundleRegistryURL = "https://raw.githubusercontent.com/oasisprotocol/bundle-registry/main/metadata/"
+
 // RuntimeProvisioner is the runtime provisioner.
 type RuntimeProvisioner string
 
@@ -348,5 +351,6 @@ func DefaultConfig() Config {
 		LoadBalancer: LoadBalancerConfig{
 			NumInstances: 0,
 		},
+		Repositories: []string{oasisBundleRegistryURL},
 	}
 }
