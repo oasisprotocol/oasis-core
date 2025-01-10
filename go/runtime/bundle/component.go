@@ -248,6 +248,8 @@ type TDXResources struct {
 	Memory uint64 `json:"memory"`
 	// CPUCount is the requested number of vCPUs.
 	CPUCount uint8 `json:"cpus"`
+	// GPU is the optional GPU resource configuration.
+	GPU *GPUResource `json:"gpu,omitempty"`
 }
 
 // Validate validates the VM resources.
@@ -257,6 +259,35 @@ func (r *TDXResources) Validate() error {
 	}
 	if r.CPUCount < 1 {
 		return fmt.Errorf("vCPU count must be at least 1")
+	}
+	if r.GPU != nil {
+		err := r.GPU.Validate()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const (
+	// GPUNvidiaH100 is the NVIDIA H100 GPU.
+	GPUNvidiaH100 = "nvidia-h100"
+	// GPUNvidiaH200 is the NVIDIA H200 GPU.
+	GPUNvidiaH200 = "nvidia-h200"
+)
+
+// GPUResource is the GPU resource descriptor.
+type GPUResource struct {
+	// Model is the GPU model. It may be omitted to specify that the model is not important.
+	Model string `json:"model,omitempty"`
+	// Count is the number of GPUs requested.
+	Count uint8 `json:"count"`
+}
+
+// Validate validates the GPU resource.
+func (g *GPUResource) Validate() error {
+	if g.Count < 1 {
+		return fmt.Errorf("GPU count must be at least 1")
 	}
 	return nil
 }
