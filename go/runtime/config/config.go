@@ -131,8 +131,8 @@ type Config struct {
 	// LoadBalancer is the load balancer configuration.
 	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
 
-	// Repositories is the list of URLs used to fetch runtime bundle metadata.
-	Repositories []string `yaml:"repositories,omitempty"`
+	// Registries is the list of URLs used to fetch runtime bundle metadata.
+	Registries []string `yaml:"registries,omitempty"`
 
 	// MaxBundleSize is the maximum allowed bundle size.
 	//
@@ -187,8 +187,8 @@ type RuntimeConfig struct {
 	// Config contains runtime local configuration.
 	Config map[string]interface{} `yaml:"config,omitempty"`
 
-	// Repositories is the list of URLs used to fetch runtime bundle metadata.
-	Repositories []string `yaml:"repositories,omitempty"`
+	// Registries is the list of URLs used to fetch runtime bundle metadata.
+	Registries []string `yaml:"registries,omitempty"`
 }
 
 // Validate validates the runtime configuration.
@@ -351,6 +351,6 @@ func DefaultConfig() Config {
 		LoadBalancer: LoadBalancerConfig{
 			NumInstances: 0,
 		},
-		Repositories: []string{oasisBundleRegistryURL},
+		Registries: []string{oasisBundleRegistryURL},
 	}
 }
