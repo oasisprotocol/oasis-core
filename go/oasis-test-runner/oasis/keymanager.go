@@ -304,7 +304,7 @@ func (km *Keymanager) ModifyConfig() error {
 
 	km.Config.Runtime.Runtimes = append(km.Config.Runtime.Runtimes, rtCfg)
 	km.Config.Runtime.Paths = append(km.Config.Runtime.Paths, km.runtime.BundlePaths()...)
-	km.Config.Runtime.Repositories = []string{fmt.Sprintf("http://127.0.0.1:%d", km.net.getProvisionedPort(netPortRepository))}
+	km.Config.Runtime.Registries = []string{fmt.Sprintf("http://127.0.0.1:%d", km.net.getProvisionedPort(netPortRegistry))}
 
 	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()
 	km.Config.Keymanager.PrivatePeerPubKeys = km.privatePeerPubKeys

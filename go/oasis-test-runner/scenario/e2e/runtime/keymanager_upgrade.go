@@ -72,7 +72,7 @@ func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Determine the port on which the nodes are trying to fetch bundles.
-	rawURL := sc.Net.Clients()[0].Config.Runtime.Repositories[0]
+	rawURL := sc.Net.Clients()[0].Config.Runtime.Registries[0]
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return err

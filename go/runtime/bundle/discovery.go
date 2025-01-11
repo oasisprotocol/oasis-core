@@ -99,17 +99,17 @@ func (d *Discovery) Init() error {
 		return err
 	}
 
-	// Validate global repository URLs.
-	globalBaseURLs, err := validateAndNormalizeURLs(config.GlobalConfig.Runtime.Repositories)
+	// Validate global registry URLs.
+	globalBaseURLs, err := validateAndNormalizeURLs(config.GlobalConfig.Runtime.Registries)
 	if err != nil {
 		return err
 	}
 
-	// Validate each runtime's repository URLs.
+	// Validate each runtime's registry URLs.
 	runtimeBaseURLs := make(map[common.Namespace][]string)
 
 	for _, runtime := range config.GlobalConfig.Runtime.Runtimes {
-		urls, err := validateAndNormalizeURLs(runtime.Repositories)
+		urls, err := validateAndNormalizeURLs(runtime.Registries)
 		if err != nil {
 			return err
 		}

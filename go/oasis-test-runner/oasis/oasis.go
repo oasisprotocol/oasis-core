@@ -56,7 +56,7 @@ const (
 	nodePortP2P       = "p2p"
 	nodePortP2PSeed   = "p2p-seed"
 	nodePortPprof     = "pprof"
-	netPortRepository = "repository"
+	netPortRegistry   = "registry"
 
 	allInterfacesAddr = "tcp://0.0.0.0"
 	localhostAddr     = "tcp://127.0.0.1"
@@ -303,7 +303,7 @@ func (n *Node) Start() error {
 		n.Config.Runtime.Paths = append(n.Config.Runtime.Paths, hosted.runtime.BundlePaths()...)
 	}
 
-	n.Config.Runtime.Repositories = []string{fmt.Sprintf("http://127.0.0.1:%d", n.net.getProvisionedPort(netPortRepository))}
+	n.Config.Runtime.Registries = []string{fmt.Sprintf("http://127.0.0.1:%d", n.net.getProvisionedPort(netPortRegistry))}
 
 	if n.consensus.EnableArchiveMode {
 		n.Config.Mode = config.ModeArchive
