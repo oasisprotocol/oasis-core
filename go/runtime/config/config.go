@@ -131,7 +131,11 @@ type Config struct {
 	// LoadBalancer is the load balancer configuration.
 	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
 
-	// Registries is the list of URLs used to fetch runtime bundle metadata.
+	// Registries is the list of base URLs used to fetch runtime bundle metadata.
+	//
+	// The actual metadata URLs are constructed by appending the manifest hash
+	// to the base URL. Therefore, the provided URLs don't need to be valid
+	// endpoints themselves, only the constructed URLs need to be valid.
 	Registries []string `yaml:"registries,omitempty"`
 
 	// MaxBundleSize is the maximum allowed bundle size.
@@ -187,7 +191,11 @@ type RuntimeConfig struct {
 	// Config contains runtime local configuration.
 	Config map[string]interface{} `yaml:"config,omitempty"`
 
-	// Registries is the list of URLs used to fetch runtime bundle metadata.
+	// Registries is the list of base URLs used to fetch runtime bundle metadata.
+	//
+	// The actual metadata URLs are constructed by appending the manifest hash
+	// to the base URL. Therefore, the provided URLs don't need to be valid
+	// endpoints themselves, only the constructed URLs need to be valid.
 	Registries []string `yaml:"registries,omitempty"`
 }
 
