@@ -17,8 +17,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
-// FileExtension is the file extension used for storing the bundle.
-const FileExtension = ".orc"
+const (
+	// FileExtension is the file extension used for storing the bundle.
+	FileExtension = ".orc"
+	// DetachedSubdir is subdir name for detached bundles inside bundles dir.
+	DetachedSubdir = "detached"
+)
 
 // Bundle is a runtime bundle instance.
 type Bundle struct {
@@ -132,7 +136,7 @@ func (bnd *Bundle) Validate() error {
 			// Ignore the manifest not having a digest entry, though
 			// it having one and being valid (while quite a feat) is
 			// also ok.
-			if fn == manifestName {
+			if fn == ManifestPath {
 				continue
 			}
 			return fmt.Errorf("runtime/bundle: missing digest: '%s'", fn)
@@ -318,7 +322,7 @@ func (bnd *Bundle) verifySgxSignature(comp *Component) error {
 //
 // This needs to be used after doing modifications to bundles.
 func (bnd *Bundle) ResetManifest() {
-	delete(bnd.Data, manifestName)
+	delete(bnd.Data, ManifestPath)
 }
 
 // Write serializes a runtime bundle to the on-disk representation.
@@ -333,7 +337,7 @@ func (bnd *Bundle) Write(fn string) error {
 	if err != nil {
 		return fmt.Errorf("runtime/bundle: failed to serialize manifest: %w", err)
 	}
-	if bnd.Data[manifestName] != nil {
+	if bnd.Data[ManifestPath] != nil {
 		// While this is "ok", instead of trying to figure out if the
 		// deserialized manifest matches the serialied one, just bail.
 		return fmt.Errorf("runtime/bundle: data contains manifest entry")
@@ -349,7 +353,7 @@ func (bnd *Bundle) Write(fn string) error {
 	}
 	writeFiles := []writeFile{
 		{
-			fn: manifestName,
+			fn: ManifestPath,
 			d:  NewBytesData(rawManifest),
 		},
 	}
@@ -404,7 +408,7 @@ func ExplodedPath(dataDir string) string {
 // DetachedExplodedPath returns the path under the data directory that contains all of the detached
 // exploded bundles.
 func DetachedExplodedPath(dataDir string) string {
-	return filepath.Join(ExplodedPath(dataDir), "detached")
+	return filepath.Join(ExplodedPath(dataDir), DetachedSubdir)
 }
 
 // ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
@@ -471,7 +475,7 @@ func (bnd *Bundle) WriteExploded(dataDir string) (string, error) {
 
 		for _, v := range []string{
 			subDir,
-			bnd.ExplodedPath(dataDir, manifestPath),
+			bnd.ExplodedPath(dataDir, manifestMetadataSubdir),
 		} {
 			if err = os.MkdirAll(v, 0o700); err != nil {
 				return "", fmt.Errorf("runtime/bundle: failed to create asset sub-dir '%s': %w", v, err)
@@ -555,7 +559,7 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 		switch i {
 		case 0:
 			// Much like the JAR files, the manifest MUST come first.
-			if v.Name != manifestName {
+			if v.Name != ManifestPath {
 				return nil, fmt.Errorf("runtime/bundle: invalid manifest file name: '%s'", v.Name)
 			}
 		default:
@@ -569,7 +573,7 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 
 	// Decode the manifest.
 	var manifest Manifest
-	d, ok := data[manifestName]
+	d, ok := data[ManifestPath]
 	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: missing manifest")
 	}

@@ -1,8 +1,11 @@
 package bundle
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"sync"
 
@@ -33,6 +36,11 @@ type Registry interface {
 
 	// AddBundle adds a bundle from the given path.
 	AddBundle(path string, manifestHash hash.Hash) error
+
+	// CleanStaleBundles removes (regular) bundles (components and manifests)
+	// for versions less then active. It also removes bundle file and
+	// corresponding exploded dir.
+	CleanStaleBundles(ctx context.Context, runtimeID common.Namespace, active version.Version)
 
 	// GetVersions returns versions for the given runtime, sorted in ascending
 	// order.
@@ -200,6 +208,90 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	)
 
 	return nil
+}
+
+// CleanStaleBundles implements Registry.
+func (r *registry) CleanStaleBundles(ctx context.Context, runtimeID common.Namespace, active version.Version) {
+	for _, v := range r.GetVersions(runtimeID) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if v.Less(active) {
+				r.logger.Info("Removing bundle with version lower then active",
+					"runtimeId", runtimeID,
+					"version", v,
+					"activeVersion", active,
+				)
+				r.cleanBundle(runtimeID, v)
+			}
+		}
+	}
+}
+
+// cleanBundle removes (regular) bundle from the registry.
+//
+// Additionally, it removes exploded subdir and bundle file from the bundle dir.
+func (r *registry) cleanBundle(runtimeID common.Namespace, version version.Version) {
+	explDir, err := r.removeBundle(runtimeID, version)
+	if err != nil {
+		r.logger.Warn("Bundle clean-up unsuccessful: invalid registry state",
+			"error", err,
+			"id", runtimeID,
+			"runtime_version", version,
+		)
+	}
+
+	if err := os.RemoveAll(explDir); err != nil {
+		r.logger.Error("failed to remove stale exploded (regular) bundle dir",
+			"id", runtimeID,
+			"runtime_version", version,
+			"ExplodedDataDir", explDir,
+			"err", err,
+		)
+	}
+
+	if err := os.Remove(explDir + FileExtension); err != nil {
+		r.logger.Error("failed to remove stale exploded (regular) bundle file",
+			"id", runtimeID,
+			"runtime_version", version,
+			"ExplodedDataDir", explDir,
+			"err", err,
+		)
+	}
+}
+
+// removeBundle removes bundle for the runtimeID and version from the registry,
+// if it exists.
+func (r *registry) removeBundle(runtimeID common.Namespace, version version.Version) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var explDir string
+	manifest, ok := r.manifests[runtimeID][version]
+	if !ok {
+		return explDir, errors.New("registry missing Manifest")
+	}
+	explComp := r.components[runtimeID][component.ID_RONL][version]
+	if explComp == nil {
+		return explDir, errors.New("components missing RONL component")
+	}
+	explDir = explComp.ExplodedDataDir
+	manifestHash := manifest.Hash()
+
+	r.logger.Debug("Removing (regular) bundle from registry",
+		"ronl_version", version,
+		"runtimeID", runtimeID,
+		"manifestHash", manifestHash,
+		"exploded_subdir", explDir,
+	)
+
+	// Removal should be atomic.
+	delete(r.manifests[runtimeID], version)
+	delete(r.bundles, manifestHash)
+	for _, c := range manifest.Components {
+		delete(r.components[runtimeID][c.ID()], c.Version)
+	}
+	return explDir, nil
 }
 
 // GetVersions implements Registry.

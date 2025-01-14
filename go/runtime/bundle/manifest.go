@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	manifestPath = "META-INF"
-	manifestName = manifestPath + "/MANIFEST.MF"
+	// ManifestPath is a relative path to manifest file inside a bundle.
+	ManifestPath           = manifestMetadataSubdir + "/MANIFEST.MF"
+	manifestMetadataSubdir = "META-INF"
 )
 
 // Manifest is a deserialized runtime bundle manifest.

@@ -383,16 +383,33 @@ func (r *runtime) run(ctx context.Context) {
 	}
 	defer regSub.Close()
 
+	wg := &sync.WaitGroup{}
 	var regInitialized, activeInitialized bool
 	for {
 		select {
 		case <-ctx.Done():
+			// Ensure bundle clean-up terminates before returning.
+			wg.Wait()
 			return
-		case <-epoCh:
+		case epoch := <-epoCh:
 			if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
 				close(r.activeDescriptorCh)
 				activeInitialized = true
 			}
+
+			r.RLock()
+			rt := r.activeDescriptor
+			r.RUnlock()
+			if rt != nil {
+				if active := rt.ActiveDeployment(epoch); active != nil {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						r.bundleRegistry.CleanStaleBundles(ctx, r.ID(), active.Version)
+					}()
+				}
+			}
+
 		case rt := <-regCh:
 			if !rt.ID.Equal(&r.id) {
 				continue
@@ -668,12 +685,7 @@ func (r *runtimeRegistry) Cleanup() {
 
 // Init initializes the runtime registry by adding runtimes from the global
 // runtime configuration to the registry.
-func (r *runtimeRegistry) Init(ctx context.Context) error {
-	runtimeIDs, err := getConfiguredRuntimeIDs(r.bundleRegistry)
-	if err != nil {
-		return err
-	}
-
+func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespace) error {
 	managed := config.GlobalConfig.Mode != config.ModeKeyManager
 
 	for _, runtimeID := range runtimeIDs {
@@ -698,9 +710,18 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
+	logger := logging.GetLogger("runtime/registry")
+
+	// Get configured Runtime IDs.
+	runtimeIDs, err := getConfiguredRuntimeIDs(logger)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create bundle registry and discovery.
 	bundleRegistry := bundle.NewRegistry(dataDir)
-	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry)
+
+	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry, runtimeIDs)
 
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
@@ -728,7 +749,7 @@ func New(
 
 	// Create runtime registry.
 	r := &runtimeRegistry{
-		logger:          logging.GetLogger("runtime/registry"),
+		logger:          logger,
 		quitCh:          make(chan struct{}),
 		dataDir:         dataDir,
 		consensus:       consensus,
@@ -745,7 +766,7 @@ func New(
 	}
 
 	// Initialize the runtime registry.
-	if err = r.Init(ctx); err != nil {
+	if err = r.Init(ctx, runtimeIDs); err != nil {
 		return nil, err
 	}
 

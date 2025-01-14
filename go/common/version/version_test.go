@@ -269,3 +269,25 @@ func TestProtocolVersionCompatible(t *testing.T) {
 		require.Equal(t, v.isCompatible, Versions.Compatible(v.versions()), v.msg)
 	}
 }
+
+func TestLess(t *testing.T) {
+	tests := []struct {
+		name   string
+		v1     Version
+		v2     Version
+		expect bool
+	}{
+		{"v1 less than v2", Version{1, 3, 0}, Version{2, 0, 0}, true},
+		{"v1 equal to v2", Version{1, 0, 0}, Version{1, 0, 0}, false},
+		{"v1 greater than v2", Version{2, 0, 0}, Version{1, 0, 5}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.v1.Less(tc.v2)
+			if result != tc.expect {
+				t.Errorf("Less(%v, %v) = %v, want %v", tc.v1, tc.v2, result, tc.expect)
+			}
+		})
+	}
+}

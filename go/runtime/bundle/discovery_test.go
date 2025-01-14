@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 var _ Registry = (*mockRegistry)(nil)
@@ -57,6 +59,11 @@ func (r *mockRegistry) GetComponents(common.Namespace, version.Version) ([]*Expl
 	panic("unimplemented")
 }
 
+// CleanStaleBundles implements Registry.
+func (r *mockRegistry) CleanStaleBundles(context.Context, common.Namespace, version.Version) {
+	panic("unimplemented")
+}
+
 func newMockListener() *mockRegistry {
 	return &mockRegistry{
 		manifestHashes: make(map[hash.Hash]struct{}),
@@ -69,7 +76,7 @@ func TestBundleDiscovery(t *testing.T) {
 
 	// Create discovery.
 	registry := newMockListener()
-	discovery := NewDiscovery(dataDir, registry)
+	discovery := NewDiscovery(dataDir, registry, nil)
 
 	// Get bundle directory.
 	dir := ExplodedPath(dataDir)
@@ -109,4 +116,71 @@ func TestBundleDiscovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, total, len(registry.manifestHashes))
 	}
+}
+
+func TestCleanStaleExplodedBundles(t *testing.T) {
+	// Prepare a temporary directory for storing bundles.
+	dir := t.TempDir()
+
+	// Create Runtime IDs.
+	var runtimeID1 common.Namespace
+	err := runtimeID1.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001")
+	require.NoError(t, err)
+
+	var runtimeID2 common.Namespace
+	err = runtimeID2.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002")
+	require.NoError(t, err)
+
+	// Create discovery, that has only runtimeID2 registered.
+	registry := newMockListener()
+	discovery := NewDiscovery(dir, registry, []common.Namespace{runtimeID2})
+
+	version1 := version.Version{Major: 1}
+	version2 := version.Version{Major: 2}
+
+	// Generate synthetic bundles.
+	path0, err := createSyntheticBundle(dir, runtimeID1, version1, []component.Kind{component.RONL, component.ROFL})
+	require.NoError(t, err)
+
+	path1, err := createSyntheticBundle(dir, runtimeID1, version2, []component.Kind{component.ROFL})
+	require.NoError(t, err)
+
+	path2, err := createSyntheticBundle(dir, runtimeID2, version1, []component.Kind{component.RONL, component.ROFL})
+	require.NoError(t, err)
+
+	path3, err := createSyntheticBundle(dir, runtimeID2, version1, []component.Kind{component.ROFL})
+	require.NoError(t, err)
+
+	paths := []string{path0, path1, path2, path3}
+
+	for _, path := range paths {
+		// Explode the bundle.
+		bnd, err := Open(path)
+		require.NoError(t, err)
+		_, err = bnd.WriteExploded(dir)
+		require.NoError(t, err)
+	}
+
+	// Ensure bundle were exploded successfully.
+	entries, err := os.ReadDir(ExplodedPath(dir))
+	require.NoError(t, err)
+	// 2 x RONL manifest + "detached subdir".
+	require.Equal(t, 3, len(entries))
+	entries, err = os.ReadDir(DetachedExplodedPath(dir))
+	require.NoError(t, err)
+	// 2 s ROFL manifests.
+	require.Equal(t, 2, len(entries))
+
+	// Clean stale bundles.
+	discovery.cleanBundles()
+
+	// All exploded bundles for runtimeID1 should be removed.
+	entries, err = os.ReadDir(ExplodedPath(dir))
+	require.NoError(t, err)
+	// 1 x RONL manifest + "detached subdir".
+	require.Equal(t, 2, len(entries))
+	entries, err = os.ReadDir(DetachedExplodedPath(dir))
+	require.NoError(t, err)
+	// 1 X ROFL manifest.
+	require.Equal(t, 1, len(entries))
 }
