@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -37,7 +38,12 @@ func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
 	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
 }
 
-func getConfiguredRuntimeIDs(registry bundle.Registry) ([]common.Namespace, error) {
+// getConfiguredRuntimeIDs returns a slice of configured runtimeIDS, from
+// both Runtime.Runtimes and legacy Runtime.Paths.
+//
+// Warning: This is only use at init, if you reuse this consider wrapping it
+// with only once for efficiency.
+func getConfiguredRuntimeIDs(logger *logging.Logger) ([]common.Namespace, error) {
 	// Check if any runtimes are configured to be hosted.
 	runtimes := make(map[common.Namespace]struct{})
 	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {
@@ -46,8 +52,24 @@ func getConfiguredRuntimeIDs(registry bundle.Registry) ([]common.Namespace, erro
 
 	// Support legacy configurations where runtimes are specified within
 	// configured bundles.
-	for _, manifest := range registry.GetManifests() {
-		runtimes[manifest.ID] = struct{}{}
+	for _, path := range config.GlobalConfig.Runtime.Paths {
+		err := func() error {
+			bnd, err := bundle.Open(path)
+			if err != nil {
+				logger.Error("failed to open bundle",
+					"err", err,
+					"src", path,
+				)
+				return fmt.Errorf("failed to open bundle: %w", err)
+			}
+			defer bnd.Close()
+
+			runtimes[bnd.Manifest.ID] = struct{}{}
+			return nil
+		}()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if cmdFlags.DebugDontBlameOasis() && viper.IsSet(bundle.CfgDebugMockIDs) {
