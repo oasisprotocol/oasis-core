@@ -37,7 +37,7 @@ func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
 	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
 }
 
-func getConfiguredRuntimeIDs(registry *bundle.Registry) ([]common.Namespace, error) {
+func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 	// Check if any runtimes are configured to be hosted.
 	runtimes := make(map[common.Namespace]struct{})
 	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {
@@ -46,8 +46,19 @@ func getConfiguredRuntimeIDs(registry *bundle.Registry) ([]common.Namespace, err
 
 	// Support legacy configurations where runtimes are specified within
 	// configured bundles.
-	for _, manifest := range registry.GetManifests() {
-		runtimes[manifest.ID] = struct{}{}
+	for _, path := range config.GlobalConfig.Runtime.Paths {
+		if err := func() error {
+			bnd, err := bundle.Open(path)
+			if err != nil {
+				return fmt.Errorf("failed to open bundle: %w", err)
+			}
+			defer bnd.Close()
+
+			runtimes[bnd.Manifest.ID] = struct{}{}
+			return nil
+		}(); err != nil {
+			return nil, err
+		}
 	}
 
 	if cmdFlags.DebugDontBlameOasis() && viper.IsSet(bundle.CfgDebugMockIDs) {

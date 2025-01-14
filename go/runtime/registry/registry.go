@@ -669,7 +669,7 @@ func (r *runtimeRegistry) Cleanup() {
 // Init initializes the runtime registry by adding runtimes from the global
 // runtime configuration to the registry.
 func (r *runtimeRegistry) Init(ctx context.Context) error {
-	runtimeIDs, err := getConfiguredRuntimeIDs(r.bundleRegistry)
+	runtimeIDs, err := getConfiguredRuntimeIDs()
 	if err != nil {
 		return err
 	}
