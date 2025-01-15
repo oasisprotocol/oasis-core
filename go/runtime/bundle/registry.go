@@ -6,7 +6,6 @@ import (
 	"slices"
 	"sync"
 
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -19,12 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
-
-// CfgDebugMockIDs configures mock runtime IDs for the purpose of testing.
-const CfgDebugMockIDs = "runtime.debug.mock_ids"
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Registry is an interface for handling newly discovered bundles.
 type Registry interface {
@@ -355,11 +348,4 @@ func (r *registry) GetComponents(runtimeID common.Namespace, version version.Ver
 	}
 
 	return components, nil
-}
-
-func init() {
-	Flags.StringSlice(CfgDebugMockIDs, nil, "Mock runtime IDs (format: <path>,<path>,...)")
-	_ = Flags.MarkHidden(CfgDebugMockIDs)
-
-	_ = viper.BindPFlags(Flags)
 }
