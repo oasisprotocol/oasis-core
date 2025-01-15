@@ -19,35 +19,8 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
-// Registry is an interface for handling newly discovered bundles.
-type Registry interface {
-	// HasBundle returns true iff the registry has the bundle.
-	HasBundle(manifestHash hash.Hash) bool
-
-	// AddBundle adds a bundle from the given path.
-	AddBundle(path string, manifestHash hash.Hash) error
-
-	// GetVersions returns versions for the given runtime, sorted in ascending
-	// order.
-	GetVersions(runtimeID common.Namespace) []version.Version
-
-	// WatchVersions provides a channel that streams runtime versions as they
-	// are added to the registry.
-	WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription)
-
-	// GetManifests returns all known manifests that contain RONL component.
-	GetManifests() []*Manifest
-
-	// GetName returns optional human readable runtime name.
-	GetName(runtimeID common.Namespace, version version.Version) (string, error)
-
-	// GetComponents returns RONL component for the given runtime and version,
-	// together with latest version of the remaining components.
-	GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error)
-}
-
-// registry is a registry of runtime bundle manifests and components.
-type registry struct {
+// Registry is a registry of runtime bundle manifests and components.
+type Registry struct {
 	mu sync.RWMutex
 
 	dataDir string
@@ -62,10 +35,10 @@ type registry struct {
 
 // NewRegistry creates a new bundle registry, using the given data directory
 // to store the extracted bundle files.
-func NewRegistry(dataDir string) Registry {
+func NewRegistry(dataDir string) *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
-	return &registry{
+	return &Registry{
 		dataDir:    dataDir,
 		bundles:    make(map[hash.Hash]struct{}),
 		manifests:  make(map[common.Namespace]map[version.Version]*Manifest),
@@ -75,8 +48,9 @@ func NewRegistry(dataDir string) Registry {
 	}
 }
 
-// HasBundle implements Registry.
-func (r *registry) HasBundle(manifestHash hash.Hash) bool {
+// HasBundle returns true iff the registry already contains a bundle
+// with the given manifest hash.
+func (r *Registry) HasBundle(manifestHash hash.Hash) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -84,8 +58,9 @@ func (r *registry) HasBundle(manifestHash hash.Hash) bool {
 	return ok
 }
 
-// AddBundle implements Registry.
-func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
+// AddBundle adds a bundle from the given path and validates
+// it against the provided manifest hash.
+func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -195,8 +170,9 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	return nil
 }
 
-// GetVersions implements Registry.
-func (r *registry) GetVersions(runtimeID common.Namespace) []version.Version {
+// GetVersions returns versions for the given runtime, sorted in ascending
+// order.
+func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -214,8 +190,9 @@ func (r *registry) GetVersions(runtimeID common.Namespace) []version.Version {
 	return versions
 }
 
-// WatchVersions implements Registry.
-func (r *registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
+// WatchVersions provides a channel that streams runtime versions as they
+// are added to the registry.
+func (r *Registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -232,8 +209,8 @@ func (r *registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Ver
 	return ch, sub
 }
 
-// GetManifests implements Registry.
-func (r *registry) GetManifests() []*Manifest {
+// GetManifests returns all known manifests that contain RONL component.
+func (r *Registry) GetManifests() []*Manifest {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -245,8 +222,8 @@ func (r *registry) GetManifests() []*Manifest {
 	return manifests
 }
 
-// GetName implements Registry.
-func (r *registry) GetName(runtimeID common.Namespace, version version.Version) (string, error) {
+// GetName returns optional human readable runtime name.
+func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -264,8 +241,9 @@ func (r *registry) GetName(runtimeID common.Namespace, version version.Version) 
 	return manifest.Name, nil
 }
 
-// GetComponents implements Registry.
-func (r *registry) GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error) {
+// GetComponents returns RONL component for the given runtime and version,
+// together with latest version of the remaining components.
+func (r *Registry) GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

@@ -10,57 +10,26 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
-var _ Registry = (*mockRegistry)(nil)
-
-type mockRegistry struct {
+type mockStore struct {
 	manifestHashes map[hash.Hash]struct{}
 }
 
-// HasBundle implements Registry.
-func (r *mockRegistry) HasBundle(manifestHash hash.Hash) bool {
+func newMockStore() *mockStore {
+	return &mockStore{
+		manifestHashes: make(map[hash.Hash]struct{}),
+	}
+}
+
+func (r *mockStore) HasBundle(manifestHash hash.Hash) bool {
 	_, ok := r.manifestHashes[manifestHash]
 	return ok
 }
 
-// AddBundle implements Registry.
-func (r *mockRegistry) AddBundle(_ string, manifestHash hash.Hash) error {
+func (r *mockStore) AddBundle(manifestHash hash.Hash, _ string) error {
 	r.manifestHashes[manifestHash] = struct{}{}
 	return nil
-}
-
-// GetVersions implements Registry.
-func (r *mockRegistry) GetVersions(common.Namespace) []version.Version {
-	panic("unimplemented")
-}
-
-// WatchVersions implements Registry.
-func (r *mockRegistry) WatchVersions(common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
-	panic("unimplemented")
-}
-
-// GetManifests implements Registry.
-func (r *mockRegistry) GetManifests() []*Manifest {
-	panic("unimplemented")
-}
-
-// GetName implements Registry.
-func (r *mockRegistry) GetName(common.Namespace, version.Version) (string, error) {
-	panic("unimplemented")
-}
-
-// GetComponents implements Registry.
-func (r *mockRegistry) GetComponents(common.Namespace, version.Version) ([]*ExplodedComponent, error) {
-	panic("unimplemented")
-}
-
-func newMockListener() *mockRegistry {
-	return &mockRegistry{
-		manifestHashes: make(map[hash.Hash]struct{}),
-	}
 }
 
 func TestBundleDiscovery(t *testing.T) {
@@ -68,8 +37,8 @@ func TestBundleDiscovery(t *testing.T) {
 	dataDir := t.TempDir()
 
 	// Create discovery.
-	registry := newMockListener()
-	discovery := NewDiscovery(dataDir, registry)
+	store := newMockStore()
+	discovery := NewDiscovery(dataDir, store)
 
 	// Get bundle directory.
 	dir := ExplodedPath(dataDir)
@@ -84,7 +53,7 @@ func TestBundleDiscovery(t *testing.T) {
 	// Discovery should not find any bundles at this point.
 	err = discovery.Discover()
 	require.NoError(t, err)
-	require.Equal(t, 0, len(registry.manifestHashes))
+	require.Equal(t, 0, len(store.manifestHashes))
 
 	// Test multiple rounds of discovery.
 	total := 0
@@ -107,6 +76,6 @@ func TestBundleDiscovery(t *testing.T) {
 		// Discovery should find the newly added bundles.
 		err = discovery.Discover()
 		require.NoError(t, err)
-		require.Equal(t, total, len(registry.manifestHashes))
+		require.Equal(t, total, len(store.manifestHashes))
 	}
 }

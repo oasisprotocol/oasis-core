@@ -38,6 +38,17 @@ const (
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
+// Store is an interface that defines methods for storing bundles.
+type Store interface {
+	// HasBundle returns true iff the store already contains a bundle
+	// with the given manifest hash.
+	HasBundle(manifestHash hash.Hash) bool
+
+	// AddBundle adds a bundle from the given path and validates
+	// it against the provided manifest hash.
+	AddBundle(manifestHash hash.Hash, path string) error
+}
+
 // Discovery is responsible for discovering new bundles.
 type Discovery struct {
 	mu sync.RWMutex
@@ -54,13 +65,13 @@ type Discovery struct {
 
 	maxBundleSizeBytes int64
 
-	registry Registry
+	store Store
 
 	logger logging.Logger
 }
 
 // NewDiscovery creates a new bundle discovery.
-func NewDiscovery(dataDir string, registry Registry) *Discovery {
+func NewDiscovery(dataDir string, store Store) *Discovery {
 	logger := logging.GetLogger("runtime/bundle/discovery")
 
 	client := http.Client{
@@ -79,13 +90,13 @@ func NewDiscovery(dataDir string, registry Registry) *Discovery {
 		manifestHashes:     make(map[common.Namespace][]hash.Hash),
 		client:             &client,
 		maxBundleSizeBytes: bundleSize,
-		registry:           registry,
+		store:              store,
 		logger:             *logger,
 	}
 }
 
 // Init sets up bundle discovery using node configuration and adds configured
-// and cached bundles (that are guaranteed to be exploded) to the registry.
+// and cached bundles (that are guaranteed to be exploded) to the store.
 func (d *Discovery) Init() error {
 	// Consolidate all bundles in one place, which could be useful
 	// if we implement P2P sharing in the future.
@@ -94,7 +105,7 @@ func (d *Discovery) Init() error {
 	}
 
 	// Add copied and cached bundles (that are guaranteed to be exploded)
-	// to the registry.
+	// to the store.
 	if err := d.Discover(); err != nil {
 		return err
 	}
@@ -162,7 +173,7 @@ func (d *Discovery) run(ctx context.Context) {
 }
 
 // Discover searches for new bundles in the bundle directory and adds them
-// to the bundle registry.
+// to the store.
 func (d *Discovery) Discover() error {
 	d.logger.Debug("discovering bundles")
 
@@ -191,7 +202,7 @@ func (d *Discovery) Discover() error {
 			continue
 		}
 
-		if d.registry.HasBundle(manifestHash) {
+		if d.store.HasBundle(manifestHash) {
 			continue
 		}
 
@@ -200,12 +211,12 @@ func (d *Discovery) Discover() error {
 		)
 
 		path := filepath.Join(d.bundleDir, filename)
-		if err = d.registry.AddBundle(path, manifestHash); err != nil {
-			d.logger.Error("failed to add bundle to registry",
+		if err = d.store.AddBundle(manifestHash, path); err != nil {
+			d.logger.Error("failed to add bundle to store",
 				"err", err,
 				"path", path,
 			)
-			return fmt.Errorf("failed to add bundle to registry: %w", err)
+			return fmt.Errorf("failed to add bundle to store: %w", err)
 		}
 	}
 
@@ -226,7 +237,7 @@ func (d *Discovery) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash
 	// Filter out bundles that have already been fetched.
 	var hashes []hash.Hash
 	for _, hash := range manifestHashes {
-		if d.registry.HasBundle(hash) {
+		if d.store.HasBundle(hash) {
 			continue
 		}
 		hashes = append(hashes, hash)
@@ -356,8 +367,8 @@ func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) er
 		"url", bundleURL,
 	)
 
-	if err := d.registry.AddBundle(src, manifestHash); err != nil {
-		d.logger.Error("failed to add bundle to registry",
+	if err := d.store.AddBundle(manifestHash, src); err != nil {
+		d.logger.Error("failed to add bundle to store",
 			"err", err,
 		)
 		return fmt.Errorf("failed to add bundle: %w", err)

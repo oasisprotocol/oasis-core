@@ -37,7 +37,7 @@ func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
 	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
 }
 
-func getConfiguredRuntimeIDs(registry bundle.Registry) ([]common.Namespace, error) {
+func getConfiguredRuntimeIDs(registry *bundle.Registry) ([]common.Namespace, error) {
 	// Check if any runtimes are configured to be hosted.
 	runtimes := make(map[common.Namespace]struct{})
 	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {

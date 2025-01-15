@@ -108,16 +108,16 @@ func TestBundleRegistry(t *testing.T) {
 
 	// Add bundles to the registry
 	for i := 0; i < 3; i++ {
-		err = registry.AddBundle(paths[i], hashes[i])
+		err = registry.AddBundle(hashes[i], paths[i])
 		require.NoError(t, err)
 	}
 
 	// Attempt to add the first bundle again (duplicate manifest hash).
-	err = registry.AddBundle(paths[0], hashes[0])
+	err = registry.AddBundle(hashes[0], paths[0])
 	require.NoError(t, err)
 
 	// Attempt to add the fourth bundle (duplicate RONL component).
-	err = registry.AddBundle(paths[3], hashes[3])
+	err = registry.AddBundle(hashes[3], paths[3])
 	require.Error(t, err)
 	require.ErrorContains(t, err, "duplicate component 'ronl', version '1.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001'")
 

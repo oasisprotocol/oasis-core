@@ -70,7 +70,7 @@ type Registry interface {
 	FinishInitialization() error
 
 	// GetBundleRegistry returns the bundle registry.
-	GetBundleRegistry() bundle.Registry
+	GetBundleRegistry() *bundle.Registry
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -149,7 +149,7 @@ type runtime struct { // nolint: maligned
 
 	hostProvisioner runtimeHost.Provisioner
 
-	bundleRegistry  bundle.Registry
+	bundleRegistry  *bundle.Registry
 	bundleDiscovery *bundle.Discovery
 
 	logger *logging.Logger
@@ -161,7 +161,7 @@ func newRuntime(
 	dataDir string,
 	consensus consensus.Backend,
 	provisioner runtimeHost.Provisioner,
-	bundleRegistry bundle.Registry,
+	bundleRegistry *bundle.Registry,
 	bundleDiscovery *bundle.Discovery,
 ) (*runtime, error) {
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
@@ -516,7 +516,7 @@ type runtimeRegistry struct {
 	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
 
-	bundleRegistry  bundle.Registry
+	bundleRegistry  *bundle.Registry
 	bundleDiscovery *bundle.Discovery
 }
 
@@ -630,7 +630,7 @@ func (r *runtimeRegistry) FinishInitialization() error {
 }
 
 // GetBundleRegistry implements Registry.
-func (r *runtimeRegistry) GetBundleRegistry() bundle.Registry {
+func (r *runtimeRegistry) GetBundleRegistry() *bundle.Registry {
 	return r.bundleRegistry
 }
 
