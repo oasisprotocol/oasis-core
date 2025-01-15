@@ -25,10 +25,10 @@ type Registry struct {
 
 	dataDir string
 
-	bundles    map[hash.Hash]struct{}
-	manifests  map[common.Namespace]map[version.Version]*Manifest
-	components map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
-	notifiers  map[common.Namespace]*pubsub.Broker
+	manifestHashes    map[hash.Hash]struct{}
+	attachedManifests map[common.Namespace]map[version.Version]*Manifest
+	components        map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
+	notifiers         map[common.Namespace]*pubsub.Broker
 
 	logger *logging.Logger
 }
@@ -39,12 +39,12 @@ func NewRegistry(dataDir string) *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
 	return &Registry{
-		dataDir:    dataDir,
-		bundles:    make(map[hash.Hash]struct{}),
-		manifests:  make(map[common.Namespace]map[version.Version]*Manifest),
-		components: make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
-		notifiers:  make(map[common.Namespace]*pubsub.Broker),
-		logger:     logger,
+		dataDir:           dataDir,
+		manifestHashes:    make(map[hash.Hash]struct{}),
+		attachedManifests: make(map[common.Namespace]map[version.Version]*Manifest),
+		components:        make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
+		notifiers:         make(map[common.Namespace]*pubsub.Broker),
+		logger:            logger,
 	}
 }
 
@@ -54,7 +54,7 @@ func (r *Registry) HasBundle(manifestHash hash.Hash) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	_, ok := r.bundles[manifestHash]
+	_, ok := r.manifestHashes[manifestHash]
 	return ok
 }
 
@@ -78,7 +78,7 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 
 	// Skip already processed bundles. This check should be performed
 	// after the bundle is opened and its manifest hash is verified.
-	if _, ok := r.bundles[manifestHash]; ok {
+	if _, ok := r.manifestHashes[manifestHash]; ok {
 		return nil
 	}
 
@@ -107,10 +107,10 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 	if ronl, ok := components[component.ID_RONL]; ok {
 		detached = false
 
-		rtManifests, ok := r.manifests[bnd.Manifest.ID]
+		rtManifests, ok := r.attachedManifests[bnd.Manifest.ID]
 		if !ok {
 			rtManifests = make(map[version.Version]*Manifest)
-			r.manifests[bnd.Manifest.ID] = rtManifests
+			r.attachedManifests[bnd.Manifest.ID] = rtManifests
 		}
 
 		rtManifests[ronl.Version] = bnd.Manifest
@@ -159,7 +159,7 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 	}
 
 	// Remember which bundles were added.
-	r.bundles[manifestHash] = struct{}{}
+	r.manifestHashes[manifestHash] = struct{}{}
 
 	r.logger.Info("bundle added",
 		"path", path,
@@ -184,7 +184,7 @@ func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 		}
 	}
 
-	versions := slices.Collect(maps.Keys(r.manifests[runtimeID]))
+	versions := slices.Collect(maps.Keys(r.attachedManifests[runtimeID]))
 	slices.SortFunc(versions, version.Version.Cmp)
 
 	return versions
@@ -215,7 +215,7 @@ func (r *Registry) GetManifests() []*Manifest {
 	defer r.mu.RUnlock()
 
 	manifests := make([]*Manifest, 0)
-	for _, manifest := range r.manifests {
+	for _, manifest := range r.attachedManifests {
 		manifests = slices.AppendSeq(manifests, maps.Values(manifest))
 	}
 
@@ -233,7 +233,7 @@ func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) 
 		return "mock-runtime", nil
 	}
 
-	manifest, ok := r.manifests[runtimeID][version]
+	manifest, ok := r.attachedManifests[runtimeID][version]
 	if !ok {
 		return "", fmt.Errorf("manifest for runtime '%s', version '%s' not found", runtimeID, version)
 	}
