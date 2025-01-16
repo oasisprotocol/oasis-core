@@ -668,12 +668,7 @@ func (r *runtimeRegistry) Cleanup() {
 
 // Init initializes the runtime registry by adding runtimes from the global
 // runtime configuration to the registry.
-func (r *runtimeRegistry) Init(ctx context.Context) error {
-	runtimeIDs, err := getConfiguredRuntimeIDs()
-	if err != nil {
-		return err
-	}
-
+func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespace) error {
 	managed := config.GlobalConfig.Mode != config.ModeKeyManager
 
 	for _, runtimeID := range runtimeIDs {
@@ -698,9 +693,18 @@ func New(
 	consensus consensus.Backend,
 	ias []ias.Endpoint,
 ) (Registry, error) {
+	// Get configured runtime IDs.
+	runtimeIDs, err := getConfiguredRuntimeIDs()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create bundle registry and discovery.
 	bundleRegistry := bundle.NewRegistry()
-	bundleManager := bundle.NewManager(dataDir, bundleRegistry)
+	bundleManager, err := bundle.NewManager(dataDir, runtimeIDs, bundleRegistry)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
@@ -739,13 +743,8 @@ func New(
 		bundleManager:  bundleManager,
 	}
 
-	// Fill the registry with local bundles.
-	if err := bundleManager.Init(); err != nil {
-		return nil, err
-	}
-
 	// Initialize the runtime registry.
-	if err = r.Init(ctx); err != nil {
+	if err = r.Init(ctx, runtimeIDs); err != nil {
 		return nil, err
 	}
 
