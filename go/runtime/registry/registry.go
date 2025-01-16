@@ -699,7 +699,7 @@ func New(
 	ias []ias.Endpoint,
 ) (Registry, error) {
 	// Create bundle registry and discovery.
-	bundleRegistry := bundle.NewRegistry(dataDir)
+	bundleRegistry := bundle.NewRegistry()
 	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry)
 
 	// Create history keeper factory.

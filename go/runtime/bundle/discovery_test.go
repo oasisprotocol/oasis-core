@@ -1,8 +1,6 @@
 package bundle
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +8,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 type mockStore struct {
@@ -22,33 +22,36 @@ func newMockStore() *mockStore {
 	}
 }
 
-func (r *mockStore) HasBundle(manifestHash hash.Hash) bool {
-	_, ok := r.manifestHashes[manifestHash]
+func (r *mockStore) HasManifest(hash hash.Hash) bool {
+	_, ok := r.manifestHashes[hash]
 	return ok
 }
 
-func (r *mockStore) AddBundle(manifestHash hash.Hash, _ string) error {
-	r.manifestHashes[manifestHash] = struct{}{}
+func (r *mockStore) AddManifest(manifest *Manifest, _ string) error {
+	r.manifestHashes[manifest.Hash()] = struct{}{}
 	return nil
 }
 
-func TestBundleDiscovery(t *testing.T) {
+func TestDiscovery(t *testing.T) {
 	// Prepare a temporary directory for storing bundles.
-	dataDir := t.TempDir()
+	dir := t.TempDir()
+
+	// Create bundle directory.
+	path := ExplodedPath(dir)
+	err := common.Mkdir(path)
+	require.NoError(t, err)
+
+	// Prepare runtime ID.
+	var runtimeID common.Namespace
+	err = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
+	require.NoError(t, err)
+
+	// Prepare version.
+	version := version.Version{Major: 1}
 
 	// Create discovery.
 	store := newMockStore()
-	discovery := NewDiscovery(dataDir, store)
-
-	// Get bundle directory.
-	dir := ExplodedPath(dataDir)
-	err := common.Mkdir(dir)
-	require.NoError(t, err)
-
-	// Create an empty file, which should be ignored by the discovery.
-	file, err := os.Create(filepath.Join(dir, fmt.Sprintf("bundle%s", FileExtension)))
-	require.NoError(t, err)
-	file.Close()
+	discovery := NewDiscovery(dir, store)
 
 	// Discovery should not find any bundles at this point.
 	err = discovery.Discover()
@@ -60,14 +63,13 @@ func TestBundleDiscovery(t *testing.T) {
 	for r := 0; r < 3; r++ {
 		// Add new bundle files for this round.
 		for i := 0; i < r+2; i++ {
-			manifestHash := hash.Hash{byte(total)}
-			fn := fmt.Sprintf("%s%s", manifestHash.Hex(), FileExtension)
-			path := filepath.Join(dir, fn)
+			version.Patch++
 
-			file, err := os.Create(path)
+			bnd, err := createSyntheticBundle(runtimeID, version, []component.Kind{component.RONL})
 			require.NoError(t, err)
 
-			err = file.Close()
+			fn := filepath.Join(path, bnd.GenerateFilename())
+			err = bnd.Write(fn)
 			require.NoError(t, err)
 
 			total++

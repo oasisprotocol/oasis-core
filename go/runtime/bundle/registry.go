@@ -19,87 +19,70 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
-// Registry is a registry of runtime bundle manifests and components.
+// Registry is a registry of manifests and components.
 type Registry struct {
 	mu sync.RWMutex
 
-	dataDir string
-
-	manifestHashes    map[hash.Hash]struct{}
-	attachedManifests map[common.Namespace]map[version.Version]*Manifest
-	components        map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
-	notifiers         map[common.Namespace]*pubsub.Broker
+	manifestHashes   map[hash.Hash]struct{}
+	regularManifests map[common.Namespace]map[version.Version]*Manifest
+	components       map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
+	notifiers        map[common.Namespace]*pubsub.Broker
 
 	logger *logging.Logger
 }
 
-// NewRegistry creates a new bundle registry, using the given data directory
-// to store the extracted bundle files.
-func NewRegistry(dataDir string) *Registry {
+// NewRegistry creates a new registry of manifests and components.
+func NewRegistry() *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
 	return &Registry{
-		dataDir:           dataDir,
-		manifestHashes:    make(map[hash.Hash]struct{}),
-		attachedManifests: make(map[common.Namespace]map[version.Version]*Manifest),
-		components:        make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
-		notifiers:         make(map[common.Namespace]*pubsub.Broker),
-		logger:            logger,
+		manifestHashes:   make(map[hash.Hash]struct{}),
+		regularManifests: make(map[common.Namespace]map[version.Version]*Manifest),
+		components:       make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
+		notifiers:        make(map[common.Namespace]*pubsub.Broker),
+		logger:           logger,
 	}
 }
 
-// HasBundle returns true iff the registry already contains a bundle
-// with the given manifest hash.
-func (r *Registry) HasBundle(manifestHash hash.Hash) bool {
+// HasManifest returns true iff the store already contains a manifest
+// with the given hash.
+func (r *Registry) HasManifest(hash hash.Hash) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	_, ok := r.manifestHashes[manifestHash]
+	_, ok := r.manifestHashes[hash]
 	return ok
 }
 
-// AddBundle adds a bundle from the given path and validates
-// it against the provided manifest hash.
-func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
+// AddManifest adds the provided manifest, whose components were extracted
+// to the specified directory, to the store.
+func (r *Registry) AddManifest(manifest *Manifest, dir string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.logger.Info("adding bundle",
-		"path", path,
-		"manifest_hash", manifestHash,
+	manifestHash := manifest.Hash()
+
+	r.logger.Info("adding manifest",
+		"name", manifest.Name,
+		"hash", manifestHash,
 	)
 
-	// Open the bundle and release resources when done.
-	bnd, err := Open(path, WithManifestHash(manifestHash))
-	if err != nil {
-		return fmt.Errorf("failed to open bundle '%s': %w", path, err)
-	}
-	defer bnd.Close()
-
-	// Skip already processed bundles. This check should be performed
-	// after the bundle is opened and its manifest hash is verified.
+	// Skip already processed manifests.
 	if _, ok := r.manifestHashes[manifestHash]; ok {
 		return nil
 	}
 
 	// Ensure the manifest doesn't include a component version already
 	// in the registry.
-	components := bnd.Manifest.GetAvailableComponents()
-
+	components := manifest.GetAvailableComponents()
 	for compID, comp := range components {
-		if _, ok := r.components[bnd.Manifest.ID][compID][comp.Version]; ok {
+		if _, ok := r.components[manifest.ID][compID][comp.Version]; ok {
 			return fmt.Errorf("duplicate component '%s', version '%s', for runtime '%s'",
 				compID,
 				comp.Version,
-				bnd.Manifest.ID,
+				manifest.ID,
 			)
 		}
-	}
-
-	// Explode the bundle.
-	explodedDataDir, err := bnd.WriteExploded(r.dataDir)
-	if err != nil {
-		return fmt.Errorf("failed to explode bundle '%s': %w", path, err)
 	}
 
 	// Add manifests containing RONL component to the registry.
@@ -107,15 +90,15 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 	if ronl, ok := components[component.ID_RONL]; ok {
 		detached = false
 
-		rtManifests, ok := r.attachedManifests[bnd.Manifest.ID]
+		rtManifests, ok := r.regularManifests[manifest.ID]
 		if !ok {
 			rtManifests = make(map[version.Version]*Manifest)
-			r.attachedManifests[bnd.Manifest.ID] = rtManifests
+			r.regularManifests[manifest.ID] = rtManifests
 		}
 
-		rtManifests[ronl.Version] = bnd.Manifest
+		rtManifests[ronl.Version] = manifest
 
-		if notifier, ok := r.notifiers[bnd.Manifest.ID]; ok {
+		if notifier, ok := r.notifiers[manifest.ID]; ok {
 			notifier.Broadcast(ronl.Version)
 		}
 	}
@@ -123,7 +106,7 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 	// Add components to the registry.
 	for compID, comp := range components {
 		teeKind := comp.TEEKind()
-		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(bnd.Manifest.ID, compID); ok {
+		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(manifest.ID, compID); ok {
 			if kind, ok := compCfg.TEEKind(); ok {
 				teeKind = kind
 			}
@@ -138,10 +121,10 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 			}
 		}
 
-		runtimeComponents, ok := r.components[bnd.Manifest.ID]
+		runtimeComponents, ok := r.components[manifest.ID]
 		if !ok {
 			runtimeComponents = make(map[component.ID]map[version.Version]*ExplodedComponent)
-			r.components[bnd.Manifest.ID] = runtimeComponents
+			r.components[manifest.ID] = runtimeComponents
 		}
 
 		componentVersions, ok := runtimeComponents[compID]
@@ -154,17 +137,16 @@ func (r *Registry) AddBundle(manifestHash hash.Hash, path string) error {
 			Component:       comp,
 			TEEKind:         teeKind,
 			Detached:        detached,
-			ExplodedDataDir: explodedDataDir,
+			ExplodedDataDir: dir,
 		}
 	}
 
-	// Remember which bundles were added.
+	// Remember which manifests were added.
 	r.manifestHashes[manifestHash] = struct{}{}
 
-	r.logger.Info("bundle added",
-		"path", path,
-		"runtime_id", bnd.Manifest.ID,
-		"manifest_hash", bnd.manifestHash,
+	r.logger.Info("manifest added",
+		"name", manifest.Name,
+		"hash", manifestHash,
 	)
 
 	return nil
@@ -184,7 +166,7 @@ func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 		}
 	}
 
-	versions := slices.Collect(maps.Keys(r.attachedManifests[runtimeID]))
+	versions := slices.Collect(maps.Keys(r.regularManifests[runtimeID]))
 	slices.SortFunc(versions, version.Version.Cmp)
 
 	return versions
@@ -215,7 +197,7 @@ func (r *Registry) GetManifests() []*Manifest {
 	defer r.mu.RUnlock()
 
 	manifests := make([]*Manifest, 0)
-	for _, manifest := range r.attachedManifests {
+	for _, manifest := range r.regularManifests {
 		manifests = slices.AppendSeq(manifests, maps.Values(manifest))
 	}
 
@@ -233,7 +215,7 @@ func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) 
 		return "mock-runtime", nil
 	}
 
-	manifest, ok := r.attachedManifests[runtimeID][version]
+	manifest, ok := r.regularManifests[runtimeID][version]
 	if !ok {
 		return "", fmt.Errorf("manifest for runtime '%s', version '%s' not found", runtimeID, version)
 	}

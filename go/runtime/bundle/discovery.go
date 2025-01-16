@@ -38,15 +38,15 @@ const (
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
-// Store is an interface that defines methods for storing bundles.
-type Store interface {
-	// HasBundle returns true iff the store already contains a bundle
-	// with the given manifest hash.
-	HasBundle(manifestHash hash.Hash) bool
+// ManifestStore is an interface that defines methods for storing manifests.
+type ManifestStore interface {
+	// HasManifest returns true iff the store already contains a manifest
+	// with the given hash.
+	HasManifest(hash hash.Hash) bool
 
-	// AddBundle adds a bundle from the given path and validates
-	// it against the provided manifest hash.
-	AddBundle(manifestHash hash.Hash, path string) error
+	// AddManifest adds the provided manifest, whose components were extracted
+	// to the specified directory, to the store.
+	AddManifest(manifest *Manifest, dir string) error
 }
 
 // Discovery is responsible for discovering new bundles.
@@ -56,6 +56,7 @@ type Discovery struct {
 	startOne   cmSync.One
 	discoverCh chan struct{}
 
+	dataDir        string
 	bundleDir      string
 	manifestHashes map[common.Namespace][]hash.Hash
 
@@ -65,13 +66,13 @@ type Discovery struct {
 
 	maxBundleSizeBytes int64
 
-	store Store
+	store ManifestStore
 
 	logger logging.Logger
 }
 
 // NewDiscovery creates a new bundle discovery.
-func NewDiscovery(dataDir string, store Store) *Discovery {
+func NewDiscovery(dataDir string, store ManifestStore) *Discovery {
 	logger := logging.GetLogger("runtime/bundle/discovery")
 
 	client := http.Client{
@@ -86,6 +87,7 @@ func NewDiscovery(dataDir string, store Store) *Discovery {
 	return &Discovery{
 		startOne:           cmSync.NewOne(),
 		discoverCh:         make(chan struct{}, 1),
+		dataDir:            dataDir,
 		bundleDir:          ExplodedPath(dataDir),
 		manifestHashes:     make(map[common.Namespace][]hash.Hash),
 		client:             &client,
@@ -179,6 +181,10 @@ func (d *Discovery) Discover() error {
 
 	entries, err := os.ReadDir(d.bundleDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+
 		d.logger.Error("failed to read bundle directory",
 			"err", err,
 			"dir", d.bundleDir,
@@ -202,7 +208,7 @@ func (d *Discovery) Discover() error {
 			continue
 		}
 
-		if d.store.HasBundle(manifestHash) {
+		if d.store.HasManifest(manifestHash) {
 			continue
 		}
 
@@ -210,13 +216,21 @@ func (d *Discovery) Discover() error {
 			"file", filename,
 		)
 
-		path := filepath.Join(d.bundleDir, filename)
-		if err = d.store.AddBundle(manifestHash, path); err != nil {
-			d.logger.Error("failed to add bundle to store",
+		src := filepath.Join(d.bundleDir, filename)
+		manifest, dir, err := d.explodeBundle(src, WithManifestHash(manifestHash))
+		if err != nil {
+			d.logger.Error("failed to explode bundle",
 				"err", err,
-				"path", path,
+				"src", src,
 			)
-			return fmt.Errorf("failed to add bundle to store: %w", err)
+			return err
+		}
+
+		if err = d.store.AddManifest(manifest, dir); err != nil {
+			d.logger.Error("failed to add manifest to store",
+				"err", err,
+			)
+			return fmt.Errorf("failed to add manifest to store: %w", err)
 		}
 	}
 
@@ -237,7 +251,7 @@ func (d *Discovery) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash
 	// Filter out bundles that have already been fetched.
 	var hashes []hash.Hash
 	for _, hash := range manifestHashes {
-		if d.store.HasBundle(hash) {
+		if d.store.HasManifest(hash) {
 			continue
 		}
 		hashes = append(hashes, hash)
@@ -367,11 +381,20 @@ func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) er
 		"url", bundleURL,
 	)
 
-	if err := d.store.AddBundle(manifestHash, src); err != nil {
-		d.logger.Error("failed to add bundle to store",
+	manifest, dir, err := d.explodeBundle(src, WithManifestHash(manifestHash))
+	if err != nil {
+		d.logger.Error("failed to explode bundle",
+			"err", err,
+			"src", src,
+		)
+		return err
+	}
+
+	if err := d.store.AddManifest(manifest, dir); err != nil {
+		d.logger.Error("failed to add manifest to store",
 			"err", err,
 		)
-		return fmt.Errorf("failed to add bundle: %w", err)
+		return fmt.Errorf("failed to add manifest: %w", err)
 	}
 
 	filename := fmt.Sprintf("%s%s", manifestHash.Hex(), FileExtension)
@@ -524,6 +547,29 @@ func (d *Discovery) copyBundle(src string) error {
 	)
 
 	return nil
+}
+
+func (d *Discovery) explodeBundle(path string, opts ...OpenOption) (*Manifest, string, error) {
+	d.logger.Info("exploding bundle",
+		"path", path,
+	)
+
+	bnd, err := Open(path, opts...)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to open bundle: %w", err)
+	}
+	defer bnd.Close()
+
+	dir, err := bnd.WriteExploded(d.dataDir)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to explode bundle: %w", err)
+	}
+
+	d.logger.Info("bundle exploded",
+		"dir", dir,
+	)
+
+	return bnd.Manifest, dir, nil
 }
 
 func validateAndNormalizeURL(rawURL string) (string, error) {
