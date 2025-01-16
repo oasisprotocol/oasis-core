@@ -149,8 +149,8 @@ type runtime struct { // nolint: maligned
 
 	hostProvisioner runtimeHost.Provisioner
 
-	bundleRegistry  *bundle.Registry
-	bundleDiscovery *bundle.Discovery
+	bundleRegistry *bundle.Registry
+	bundleManager  *bundle.Manager
 
 	logger *logging.Logger
 }
@@ -162,7 +162,7 @@ func newRuntime(
 	consensus consensus.Backend,
 	provisioner runtimeHost.Provisioner,
 	bundleRegistry *bundle.Registry,
-	bundleDiscovery *bundle.Discovery,
+	bundleManager *bundle.Manager,
 ) (*runtime, error) {
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
 
@@ -191,7 +191,7 @@ func newRuntime(
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
 		hostProvisioner:            provisioner,
 		bundleRegistry:             bundleRegistry,
-		bundleDiscovery:            bundleDiscovery,
+		bundleManager:              bundleManager,
 		logger:                     logger,
 	}, nil
 }
@@ -446,7 +446,7 @@ func (r *runtime) run(ctx context.Context) {
 				}
 			}
 
-			r.bundleDiscovery.Queue(r.id, manifestHashes)
+			r.bundleManager.Queue(r.id, manifestHashes)
 		}
 	}
 }
@@ -516,8 +516,8 @@ type runtimeRegistry struct {
 	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
 
-	bundleRegistry  *bundle.Registry
-	bundleDiscovery *bundle.Discovery
+	bundleRegistry *bundle.Registry
+	bundleManager  *bundle.Manager
 }
 
 // GetRuntime implements Registry.
@@ -562,7 +562,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 		return nil, fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.bundleRegistry, r.bundleDiscovery)
+	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.bundleRegistry, r.bundleManager)
 	if err != nil {
 		return nil, err
 	}
@@ -641,13 +641,13 @@ func (r *runtimeRegistry) Name() string {
 
 // Start implements BackgroundService.
 func (r *runtimeRegistry) Start() error {
-	r.bundleDiscovery.Start()
+	r.bundleManager.Start()
 	return nil
 }
 
 // Stop implements BackgroundService.
 func (r *runtimeRegistry) Stop() {
-	r.bundleDiscovery.Stop()
+	r.bundleManager.Stop()
 	close(r.quitCh)
 }
 
@@ -700,7 +700,7 @@ func New(
 ) (Registry, error) {
 	// Create bundle registry and discovery.
 	bundleRegistry := bundle.NewRegistry()
-	bundleDiscovery := bundle.NewDiscovery(dataDir, bundleRegistry)
+	bundleManager := bundle.NewManager(dataDir, bundleRegistry)
 
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
@@ -728,19 +728,19 @@ func New(
 
 	// Create runtime registry.
 	r := &runtimeRegistry{
-		logger:          logging.GetLogger("runtime/registry"),
-		quitCh:          make(chan struct{}),
-		dataDir:         dataDir,
-		consensus:       consensus,
-		runtimes:        make(map[common.Namespace]*runtime),
-		provisioner:     provisioner,
-		historyFactory:  historyFactory,
-		bundleRegistry:  bundleRegistry,
-		bundleDiscovery: bundleDiscovery,
+		logger:         logging.GetLogger("runtime/registry"),
+		quitCh:         make(chan struct{}),
+		dataDir:        dataDir,
+		consensus:      consensus,
+		runtimes:       make(map[common.Namespace]*runtime),
+		provisioner:    provisioner,
+		historyFactory: historyFactory,
+		bundleRegistry: bundleRegistry,
+		bundleManager:  bundleManager,
 	}
 
 	// Fill the registry with local bundles.
-	if err := bundleDiscovery.Init(); err != nil {
+	if err := bundleManager.Init(); err != nil {
 		return nil, err
 	}
 

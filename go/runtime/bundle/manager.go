@@ -49,8 +49,8 @@ type ManifestStore interface {
 	AddManifest(manifest *Manifest, dir string) error
 }
 
-// Discovery is responsible for discovering new bundles.
-type Discovery struct {
+// Manager is responsible for managing bundles.
+type Manager struct {
 	mu sync.RWMutex
 
 	startOne   cmSync.One
@@ -71,9 +71,9 @@ type Discovery struct {
 	logger logging.Logger
 }
 
-// NewDiscovery creates a new bundle discovery.
-func NewDiscovery(dataDir string, store ManifestStore) *Discovery {
-	logger := logging.GetLogger("runtime/bundle/discovery")
+// NewManager creates a new bundle manager.
+func NewManager(dataDir string, store ManifestStore) *Manager {
+	logger := logging.GetLogger("runtime/bundle/manager")
 
 	client := http.Client{
 		Timeout: requestTimeout,
@@ -84,7 +84,7 @@ func NewDiscovery(dataDir string, store ManifestStore) *Discovery {
 		bundleSize = int64(config.ParseSizeInBytes(size))
 	}
 
-	return &Discovery{
+	return &Manager{
 		startOne:           cmSync.NewOne(),
 		discoverCh:         make(chan struct{}, 1),
 		dataDir:            dataDir,
@@ -97,18 +97,18 @@ func NewDiscovery(dataDir string, store ManifestStore) *Discovery {
 	}
 }
 
-// Init sets up bundle discovery using node configuration and adds configured
+// Init sets up bundle manager using node configuration and adds configured
 // and cached bundles (that are guaranteed to be exploded) to the store.
-func (d *Discovery) Init() error {
+func (m *Manager) Init() error {
 	// Consolidate all bundles in one place, which could be useful
 	// if we implement P2P sharing in the future.
-	if err := d.copyBundles(); err != nil {
+	if err := m.copyBundles(); err != nil {
 		return err
 	}
 
 	// Add copied and cached bundles (that are guaranteed to be exploded)
 	// to the store.
-	if err := d.Discover(); err != nil {
+	if err := m.Discover(); err != nil {
 		return err
 	}
 
@@ -132,29 +132,29 @@ func (d *Discovery) Init() error {
 		runtimeBaseURLs[runtime.ID] = urls
 	}
 
-	// Update discovery.
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	// Update manager.
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	d.globalBaseURLs = globalBaseURLs
-	d.runtimeBaseURLs = runtimeBaseURLs
+	m.globalBaseURLs = globalBaseURLs
+	m.runtimeBaseURLs = runtimeBaseURLs
 
 	return nil
 }
 
-// Start starts the bundle discovery.
-func (d *Discovery) Start() {
-	d.startOne.TryStart(d.run)
+// Start starts the bundle manager.
+func (m *Manager) Start() {
+	m.startOne.TryStart(m.run)
 }
 
-// Stop halts the bundle discovery.
-func (d *Discovery) Stop() {
-	d.startOne.TryStop()
+// Stop halts the bundle manager.
+func (m *Manager) Stop() {
+	m.startOne.TryStop()
 }
 
-func (d *Discovery) run(ctx context.Context) {
-	d.logger.Info("starting discovery",
-		"dir", d.bundleDir,
+func (m *Manager) run(ctx context.Context) {
+	m.logger.Info("starting",
+		"dir", m.bundleDir,
 	)
 
 	ticker := time.NewTicker(discoveryInterval)
@@ -163,31 +163,31 @@ func (d *Discovery) run(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-		case <-d.discoverCh:
+		case <-m.discoverCh:
 		case <-ctx.Done():
-			d.logger.Info("stopping discovery")
+			m.logger.Info("stopping")
 			return
 		}
 
-		_ = d.Discover()
-		d.Download()
+		_ = m.Discover()
+		m.Download()
 	}
 }
 
 // Discover searches for new bundles in the bundle directory and adds them
 // to the store.
-func (d *Discovery) Discover() error {
-	d.logger.Debug("discovering bundles")
+func (m *Manager) Discover() error {
+	m.logger.Debug("discovering bundles")
 
-	entries, err := os.ReadDir(d.bundleDir)
+	entries, err := os.ReadDir(m.bundleDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 
-		d.logger.Error("failed to read bundle directory",
+		m.logger.Error("failed to read bundle directory",
 			"err", err,
-			"dir", d.bundleDir,
+			"dir", m.bundleDir,
 		)
 		return fmt.Errorf("failed to read bundle directory: %w", err)
 	}
@@ -208,26 +208,26 @@ func (d *Discovery) Discover() error {
 			continue
 		}
 
-		if d.store.HasManifest(manifestHash) {
+		if m.store.HasManifest(manifestHash) {
 			continue
 		}
 
-		d.logger.Info("found new bundle",
+		m.logger.Info("found new bundle",
 			"file", filename,
 		)
 
-		src := filepath.Join(d.bundleDir, filename)
-		manifest, dir, err := d.explodeBundle(src, WithManifestHash(manifestHash))
+		src := filepath.Join(m.bundleDir, filename)
+		manifest, dir, err := m.explodeBundle(src, WithManifestHash(manifestHash))
 		if err != nil {
-			d.logger.Error("failed to explode bundle",
+			m.logger.Error("failed to explode bundle",
 				"err", err,
 				"src", src,
 			)
 			return err
 		}
 
-		if err = d.store.AddManifest(manifest, dir); err != nil {
-			d.logger.Error("failed to add manifest to store",
+		if err = m.store.AddManifest(manifest, dir); err != nil {
+			m.logger.Error("failed to add manifest to store",
 				"err", err,
 			)
 			return fmt.Errorf("failed to add manifest to store: %w", err)
@@ -239,19 +239,19 @@ func (d *Discovery) Discover() error {
 
 // Queue updates the checksums of bundles that need to be downloaded
 // for the given runtime.
-func (d *Discovery) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+func (m *Manager) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// Download bundles only if at least one endpoint is configured.
-	if len(d.globalBaseURLs) == 0 && len(d.runtimeBaseURLs[runtimeID]) == 0 {
+	if len(m.globalBaseURLs) == 0 && len(m.runtimeBaseURLs[runtimeID]) == 0 {
 		return
 	}
 
 	// Filter out bundles that have already been fetched.
 	var hashes []hash.Hash
 	for _, hash := range manifestHashes {
-		if d.store.HasManifest(hash) {
+		if m.store.HasManifest(hash) {
 			continue
 		}
 		hashes = append(hashes, hash)
@@ -259,39 +259,39 @@ func (d *Discovery) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash
 
 	// Update the queue with the new hashes.
 	if len(hashes) == 0 {
-		delete(d.manifestHashes, runtimeID)
+		delete(m.manifestHashes, runtimeID)
 		return
 	}
-	d.manifestHashes[runtimeID] = hashes
+	m.manifestHashes[runtimeID] = hashes
 
 	// Trigger immediate discovery or download of new bundles.
 	select {
-	case d.discoverCh <- struct{}{}:
+	case m.discoverCh <- struct{}{}:
 	default:
 	}
 }
 
 // Download tries to download bundles in the queue.
-func (d *Discovery) Download() {
-	d.mu.RLock()
-	runtimeIDs := slices.Collect(maps.Keys(d.manifestHashes))
-	d.mu.RUnlock()
+func (m *Manager) Download() {
+	m.mu.RLock()
+	runtimeIDs := slices.Collect(maps.Keys(m.manifestHashes))
+	m.mu.RUnlock()
 
 	for _, runtimeID := range runtimeIDs {
-		d.downloadBundles(runtimeID)
+		m.downloadBundles(runtimeID)
 	}
 }
 
-func (d *Discovery) downloadBundles(runtimeID common.Namespace) {
+func (m *Manager) downloadBundles(runtimeID common.Namespace) {
 	// Try to download queued bundles.
-	d.mu.RLock()
-	hashes := d.manifestHashes[runtimeID]
-	d.mu.RUnlock()
+	m.mu.RLock()
+	hashes := m.manifestHashes[runtimeID]
+	m.mu.RUnlock()
 
 	downloaded := make(map[hash.Hash]struct{})
 	for _, hash := range hashes {
-		if err := d.downloadBundle(runtimeID, hash); err != nil {
-			d.logger.Error("failed to download bundle",
+		if err := m.downloadBundle(runtimeID, hash); err != nil {
+			m.logger.Error("failed to download bundle",
 				"err", err,
 				"runtime_id", runtimeID,
 				"manifest_hash", hash.Hex(),
@@ -302,29 +302,29 @@ func (d *Discovery) downloadBundles(runtimeID common.Namespace) {
 	}
 
 	// Remove downloaded bundles from the queue.
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	var pending []hash.Hash
-	for _, hash := range d.manifestHashes[runtimeID] {
+	for _, hash := range m.manifestHashes[runtimeID] {
 		if _, ok := downloaded[hash]; ok {
 			continue
 		}
 		pending = append(pending, hash)
 	}
 	if len(pending) == 0 {
-		delete(d.manifestHashes, runtimeID)
+		delete(m.manifestHashes, runtimeID)
 		return
 	}
-	d.manifestHashes[runtimeID] = pending
+	m.manifestHashes[runtimeID] = pending
 }
 
-func (d *Discovery) downloadBundle(runtimeID common.Namespace, manifestHash hash.Hash) error {
+func (m *Manager) downloadBundle(runtimeID common.Namespace, manifestHash hash.Hash) error {
 	var errs error
 
-	for _, baseURLs := range [][]string{d.runtimeBaseURLs[runtimeID], d.globalBaseURLs} {
+	for _, baseURLs := range [][]string{m.runtimeBaseURLs[runtimeID], m.globalBaseURLs} {
 		for _, baseURL := range baseURLs {
-			if err := d.tryDownloadBundle(manifestHash, baseURL); err != nil {
+			if err := m.tryDownloadBundle(manifestHash, baseURL); err != nil {
 				errs = errors.Join(errs, err)
 				continue
 			}
@@ -336,22 +336,22 @@ func (d *Discovery) downloadBundle(runtimeID common.Namespace, manifestHash hash
 	return errs
 }
 
-func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) error {
+func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) error {
 	metaURL, err := url.JoinPath(baseURL, manifestHash.Hex())
 	if err != nil {
-		d.logger.Error("failed to construct metadata URL",
+		m.logger.Error("failed to construct metadata URL",
 			"err", err,
 		)
 		return fmt.Errorf("failed to construct metadata URL: %w", err)
 	}
 
-	d.logger.Debug("downloading metadata",
+	m.logger.Debug("downloading metadata",
 		"url", metaURL,
 	)
 
-	bundleURL, err := d.fetchMetadata(metaURL)
+	bundleURL, err := m.fetchMetadata(metaURL)
 	if err != nil {
-		d.logger.Error("failed to download metadata",
+		m.logger.Error("failed to download metadata",
 			"err", err,
 			"url", metaURL,
 		)
@@ -363,13 +363,13 @@ func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) er
 		return err
 	}
 
-	d.logger.Debug("downloading bundle",
+	m.logger.Debug("downloading bundle",
 		"url", bundleURL,
 	)
 
-	src, err := d.fetchBundle(bundleURL)
+	src, err := m.fetchBundle(bundleURL)
 	if err != nil {
-		d.logger.Error("failed to download bundle",
+		m.logger.Error("failed to download bundle",
 			"err", err,
 			"url", metaURL,
 		)
@@ -377,45 +377,45 @@ func (d *Discovery) tryDownloadBundle(manifestHash hash.Hash, baseURL string) er
 	}
 	defer os.Remove(src)
 
-	d.logger.Info("bundle downloaded",
+	m.logger.Info("bundle downloaded",
 		"url", bundleURL,
 	)
 
-	manifest, dir, err := d.explodeBundle(src, WithManifestHash(manifestHash))
+	manifest, dir, err := m.explodeBundle(src, WithManifestHash(manifestHash))
 	if err != nil {
-		d.logger.Error("failed to explode bundle",
+		m.logger.Error("failed to explode bundle",
 			"err", err,
 			"src", src,
 		)
 		return err
 	}
 
-	if err := d.store.AddManifest(manifest, dir); err != nil {
-		d.logger.Error("failed to add manifest to store",
+	if err := m.store.AddManifest(manifest, dir); err != nil {
+		m.logger.Error("failed to add manifest to store",
 			"err", err,
 		)
 		return fmt.Errorf("failed to add manifest: %w", err)
 	}
 
 	filename := fmt.Sprintf("%s%s", manifestHash.Hex(), FileExtension)
-	dst := filepath.Join(d.bundleDir, filename)
+	dst := filepath.Join(m.bundleDir, filename)
 	if err = os.Rename(src, dst); err != nil {
-		d.logger.Error("failed to move bundle",
+		m.logger.Error("failed to move bundle",
 			"err", err,
 			"src", src,
 			"dst", dst,
 		)
 	}
 
-	d.logger.Debug("bundle stored",
+	m.logger.Debug("bundle stored",
 		"dst", dst,
 	)
 
 	return nil
 }
 
-func (d *Discovery) fetchMetadata(url string) (string, error) {
-	resp, err := d.client.Get(url)
+func (m *Manager) fetchMetadata(url string) (string, error) {
+	resp, err := m.client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch metadata: %w", err)
 	}
@@ -439,8 +439,8 @@ func (d *Discovery) fetchMetadata(url string) (string, error) {
 	return strings.TrimSpace(buffer.String()), nil
 }
 
-func (d *Discovery) fetchBundle(url string) (string, error) {
-	resp, err := d.client.Get(url)
+func (m *Manager) fetchBundle(url string) (string, error) {
+	resp, err := m.client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch bundle: %w", err)
 	}
@@ -464,7 +464,7 @@ func (d *Discovery) fetchBundle(url string) (string, error) {
 
 	limitedReader := io.LimitedReader{
 		R: resp.Body,
-		N: d.maxBundleSizeBytes,
+		N: m.maxBundleSizeBytes,
 	}
 
 	if _, err = io.Copy(file, &limitedReader); err != nil {
@@ -472,19 +472,19 @@ func (d *Discovery) fetchBundle(url string) (string, error) {
 	}
 
 	if limitedReader.N <= 0 {
-		return "", fmt.Errorf("bundle exceeds size limit of %d bytes", d.maxBundleSizeBytes)
+		return "", fmt.Errorf("bundle exceeds size limit of %d bytes", m.maxBundleSizeBytes)
 	}
 
 	return file.Name(), nil
 }
 
-func (d *Discovery) copyBundles() error {
-	if err := common.Mkdir(d.bundleDir); err != nil {
+func (m *Manager) copyBundles() error {
+	if err := common.Mkdir(m.bundleDir); err != nil {
 		return err
 	}
 
 	for _, path := range config.GlobalConfig.Runtime.Paths {
-		if err := d.copyBundle(path); err != nil {
+		if err := m.copyBundle(path); err != nil {
 			return err
 		}
 	}
@@ -492,15 +492,15 @@ func (d *Discovery) copyBundles() error {
 	return nil
 }
 
-func (d *Discovery) copyBundle(src string) error {
-	d.logger.Info("copying bundle",
+func (m *Manager) copyBundle(src string) error {
+	m.logger.Info("copying bundle",
 		"src", src,
 	)
 
 	filename, err := func() (string, error) {
 		bnd, err := Open(src)
 		if err != nil {
-			d.logger.Error("failed to open bundle",
+			m.logger.Error("failed to open bundle",
 				"err", err,
 				"src", src,
 			)
@@ -514,17 +514,17 @@ func (d *Discovery) copyBundle(src string) error {
 		return err
 	}
 
-	dst := filepath.Join(d.bundleDir, filename)
+	dst := filepath.Join(m.bundleDir, filename)
 	switch _, err := os.Stat(dst); err {
 	case nil:
-		d.logger.Info("bundle already exists",
+		m.logger.Info("bundle already exists",
 			"src", src,
 			"dst", dst,
 		)
 		return nil
 	default:
 		if !os.IsNotExist(err) {
-			d.logger.Error("failed to stat bundle",
+			m.logger.Error("failed to stat bundle",
 				"err", err,
 				"dst", dst,
 			)
@@ -533,7 +533,7 @@ func (d *Discovery) copyBundle(src string) error {
 	}
 
 	if err := common.CopyFile(src, dst); err != nil {
-		d.logger.Error("failed to copy bundle",
+		m.logger.Error("failed to copy bundle",
 			"err", err,
 			"src", src,
 			"dst", dst,
@@ -541,7 +541,7 @@ func (d *Discovery) copyBundle(src string) error {
 		return fmt.Errorf("failed to copy bundle: %w", err)
 	}
 
-	d.logger.Info("bundle copied",
+	m.logger.Info("bundle copied",
 		"src", src,
 		"dst", dst,
 	)
@@ -549,8 +549,8 @@ func (d *Discovery) copyBundle(src string) error {
 	return nil
 }
 
-func (d *Discovery) explodeBundle(path string, opts ...OpenOption) (*Manifest, string, error) {
-	d.logger.Info("exploding bundle",
+func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*Manifest, string, error) {
+	m.logger.Info("exploding bundle",
 		"path", path,
 	)
 
@@ -560,12 +560,12 @@ func (d *Discovery) explodeBundle(path string, opts ...OpenOption) (*Manifest, s
 	}
 	defer bnd.Close()
 
-	dir, err := bnd.WriteExploded(d.dataDir)
+	dir, err := bnd.WriteExploded(m.dataDir)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to explode bundle: %w", err)
 	}
 
-	d.logger.Info("bundle exploded",
+	m.logger.Info("bundle exploded",
 		"dir", dir,
 	)
 

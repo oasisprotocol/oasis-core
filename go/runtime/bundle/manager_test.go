@@ -49,12 +49,12 @@ func TestDiscovery(t *testing.T) {
 	// Prepare version.
 	version := version.Version{Major: 1}
 
-	// Create discovery.
+	// Create manager.
 	store := newMockStore()
-	discovery := NewDiscovery(dir, store)
+	manager := NewManager(dir, store)
 
 	// Discovery should not find any bundles at this point.
-	err = discovery.Discover()
+	err = manager.Discover()
 	require.NoError(t, err)
 	require.Equal(t, 0, len(store.manifestHashes))
 
@@ -76,7 +76,7 @@ func TestDiscovery(t *testing.T) {
 		}
 
 		// Discovery should find the newly added bundles.
-		err = discovery.Discover()
+		err = manager.Discover()
 		require.NoError(t, err)
 		require.Equal(t, total, len(store.manifestHashes))
 	}
