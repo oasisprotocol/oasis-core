@@ -401,32 +401,9 @@ func ExplodedPath(dataDir string) string {
 	return filepath.Join(dataDir, "runtimes", "bundles")
 }
 
-// DetachedExplodedPath returns the path under the data directory that contains all of the detached
-// exploded bundles.
-func DetachedExplodedPath(dataDir string) string {
-	return filepath.Join(ExplodedPath(dataDir), "detached")
-}
-
 // ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
 func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
-	var subDir string
-	switch bnd.Manifest.IsDetached() {
-	case false:
-		// DATADIR/runtimes/bundles/manifestHash
-		subDir = filepath.Join(ExplodedPath(dataDir),
-			bnd.manifestHash.String(),
-		)
-	case true:
-		// DATADIR/runtimes/bundles/detached/manifestHash
-		subDir = filepath.Join(DetachedExplodedPath(dataDir),
-			bnd.manifestHash.String(),
-		)
-	}
-
-	if fn == "" {
-		return subDir
-	}
-	return filepath.Join(subDir, fn)
+	return filepath.Join(ExplodedPath(dataDir), bnd.manifestHash.String(), fn)
 }
 
 // WriteExploded extracts the runtime bundle, writes it to the appropriate

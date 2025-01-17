@@ -1,20 +1,17 @@
 package bundle
 
 import (
-	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
-func createSyntheticBundle(dir string, runtimeID common.Namespace, version version.Version, components []component.Kind) (string, error) {
+func createSyntheticBundle(runtimeID common.Namespace, version version.Version, components []component.Kind) (*Bundle, error) {
 	manifest := &Manifest{
 		Name:       "test-runtime",
 		ID:         runtimeID,
@@ -40,31 +37,23 @@ func createSyntheticBundle(dir string, runtimeID common.Namespace, version versi
 		}
 	}
 
-	bnd := &Bundle{
+	bnd := Bundle{
 		Manifest: manifest,
 	}
 
 	if slices.Contains(components, component.RONL) {
 		if err := bnd.Add(manifest.Components[0].ELF.Executable, NewBytesData([]byte{1})); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
 	bnd.manifestHash = manifest.Hash()
-	path := filepath.Join(dir, bnd.GenerateFilename())
 
-	if err := bnd.Write(path); err != nil {
-		return "", err
-	}
-
-	return path, nil
+	return &bnd, nil
 }
 
-func TestBundleRegistry(t *testing.T) {
-	// Prepare a temporary directory for storing bundles.
-	dir := t.TempDir()
-
-	// Initialize runtimes.
+func TestRegistry(t *testing.T) {
+	// Prepare runtimes.
 	var runtimeID1 common.Namespace
 	err := runtimeID1.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001")
 	require.NoError(t, err)
@@ -73,51 +62,41 @@ func TestBundleRegistry(t *testing.T) {
 	err = runtimeID2.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002")
 	require.NoError(t, err)
 
-	// Define versions.
+	// Prepare versions.
 	version1 := version.Version{Major: 1}
 	version2 := version.Version{Major: 2}
 	version3 := version.Version{Major: 3}
 
 	// Generate synthetic bundles.
-	path0, err := createSyntheticBundle(dir, runtimeID1, version1, []component.Kind{component.RONL, component.ROFL})
+	bnd0, err := createSyntheticBundle(runtimeID1, version1, []component.Kind{component.RONL, component.ROFL})
 	require.NoError(t, err)
 
-	path1, err := createSyntheticBundle(dir, runtimeID1, version2, []component.Kind{component.ROFL})
+	bnd1, err := createSyntheticBundle(runtimeID1, version2, []component.Kind{component.ROFL})
 	require.NoError(t, err)
 
-	path2, err := createSyntheticBundle(dir, runtimeID2, version3, []component.Kind{component.RONL})
+	bnd2, err := createSyntheticBundle(runtimeID2, version3, []component.Kind{component.RONL})
 	require.NoError(t, err)
 
-	path3, err := createSyntheticBundle(dir, runtimeID1, version1, []component.Kind{component.RONL})
+	bnd3, err := createSyntheticBundle(runtimeID1, version1, []component.Kind{component.RONL})
 	require.NoError(t, err)
 
-	paths := []string{path0, path1, path2, path3}
-
-	// Compute manifest hashes.
-	var hashes []hash.Hash
-	for _, path := range paths {
-		var hash hash.Hash
-		err = hash.UnmarshalHex(strings.TrimSuffix(filepath.Base(path), FileExtension))
-		require.NoError(t, err)
-
-		hashes = append(hashes, hash)
-	}
+	bnds := []*Bundle{bnd0, bnd1, bnd2, bnd3}
 
 	// Create registry instance.
-	registry := NewRegistry(dir)
+	registry := NewRegistry()
 
-	// Add bundles to the registry
+	// Add manifests to the registry.
 	for i := 0; i < 3; i++ {
-		err = registry.AddBundle(paths[i], hashes[i])
+		err = registry.AddManifest(bnds[i].Manifest, "")
 		require.NoError(t, err)
 	}
 
-	// Attempt to add the first bundle again (duplicate manifest hash).
-	err = registry.AddBundle(paths[0], hashes[0])
+	// Attempt to add the first manifest again (duplicate hash).
+	err = registry.AddManifest(bnds[0].Manifest, "")
 	require.NoError(t, err)
 
-	// Attempt to add the fourth bundle (duplicate RONL component).
-	err = registry.AddBundle(paths[3], hashes[3])
+	// Attempt to add the fourth manifest (duplicate RONL component).
+	err = registry.AddManifest(bnds[3].Manifest, "")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "duplicate component 'ronl', version '1.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001'")
 

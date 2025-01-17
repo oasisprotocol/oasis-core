@@ -6,7 +6,6 @@ import (
 	"slices"
 	"sync"
 
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -20,118 +19,70 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
-// CfgDebugMockIDs configures mock runtime IDs for the purpose of testing.
-const CfgDebugMockIDs = "runtime.debug.mock_ids"
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
-// Registry is an interface for handling newly discovered bundles.
-type Registry interface {
-	// HasBundle returns true iff the registry has the bundle.
-	HasBundle(manifestHash hash.Hash) bool
-
-	// AddBundle adds a bundle from the given path.
-	AddBundle(path string, manifestHash hash.Hash) error
-
-	// GetVersions returns versions for the given runtime, sorted in ascending
-	// order.
-	GetVersions(runtimeID common.Namespace) []version.Version
-
-	// WatchVersions provides a channel that streams runtime versions as they
-	// are added to the registry.
-	WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription)
-
-	// GetManifests returns all known manifests that contain RONL component.
-	GetManifests() []*Manifest
-
-	// GetName returns optional human readable runtime name.
-	GetName(runtimeID common.Namespace, version version.Version) (string, error)
-
-	// GetComponents returns RONL component for the given runtime and version,
-	// together with latest version of the remaining components.
-	GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error)
-}
-
-// registry is a registry of runtime bundle manifests and components.
-type registry struct {
+// Registry is a registry of manifests and components.
+type Registry struct {
 	mu sync.RWMutex
 
-	dataDir string
-
-	bundles    map[hash.Hash]struct{}
-	manifests  map[common.Namespace]map[version.Version]*Manifest
-	components map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
-	notifiers  map[common.Namespace]*pubsub.Broker
+	manifestHashes   map[hash.Hash]struct{}
+	regularManifests map[common.Namespace]map[version.Version]*Manifest
+	components       map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
+	notifiers        map[common.Namespace]*pubsub.Broker
 
 	logger *logging.Logger
 }
 
-// NewRegistry creates a new bundle registry, using the given data directory
-// to store the extracted bundle files.
-func NewRegistry(dataDir string) Registry {
+// NewRegistry creates a new registry of manifests and components.
+func NewRegistry() *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
-	return &registry{
-		dataDir:    dataDir,
-		bundles:    make(map[hash.Hash]struct{}),
-		manifests:  make(map[common.Namespace]map[version.Version]*Manifest),
-		components: make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
-		notifiers:  make(map[common.Namespace]*pubsub.Broker),
-		logger:     logger,
+	return &Registry{
+		manifestHashes:   make(map[hash.Hash]struct{}),
+		regularManifests: make(map[common.Namespace]map[version.Version]*Manifest),
+		components:       make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
+		notifiers:        make(map[common.Namespace]*pubsub.Broker),
+		logger:           logger,
 	}
 }
 
-// HasBundle implements Registry.
-func (r *registry) HasBundle(manifestHash hash.Hash) bool {
+// HasManifest returns true iff the store already contains a manifest
+// with the given hash.
+func (r *Registry) HasManifest(hash hash.Hash) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	_, ok := r.bundles[manifestHash]
+	_, ok := r.manifestHashes[hash]
 	return ok
 }
 
-// AddBundle implements Registry.
-func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
+// AddManifest adds the provided manifest, whose components were extracted
+// to the specified directory, to the store.
+func (r *Registry) AddManifest(manifest *Manifest, dir string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.logger.Info("adding bundle",
-		"path", path,
-		"manifest_hash", manifestHash,
+	manifestHash := manifest.Hash()
+
+	r.logger.Info("adding manifest",
+		"name", manifest.Name,
+		"hash", manifestHash,
 	)
 
-	// Open the bundle and release resources when done.
-	bnd, err := Open(path, WithManifestHash(manifestHash))
-	if err != nil {
-		return fmt.Errorf("failed to open bundle '%s': %w", path, err)
-	}
-	defer bnd.Close()
-
-	// Skip already processed bundles. This check should be performed
-	// after the bundle is opened and its manifest hash is verified.
-	if _, ok := r.bundles[manifestHash]; ok {
+	// Skip already processed manifests.
+	if _, ok := r.manifestHashes[manifestHash]; ok {
 		return nil
 	}
 
 	// Ensure the manifest doesn't include a component version already
 	// in the registry.
-	components := bnd.Manifest.GetAvailableComponents()
-
+	components := manifest.GetAvailableComponents()
 	for compID, comp := range components {
-		if _, ok := r.components[bnd.Manifest.ID][compID][comp.Version]; ok {
+		if _, ok := r.components[manifest.ID][compID][comp.Version]; ok {
 			return fmt.Errorf("duplicate component '%s', version '%s', for runtime '%s'",
 				compID,
 				comp.Version,
-				bnd.Manifest.ID,
+				manifest.ID,
 			)
 		}
-	}
-
-	// Explode the bundle.
-	explodedDataDir, err := bnd.WriteExploded(r.dataDir)
-	if err != nil {
-		return fmt.Errorf("failed to explode bundle '%s': %w", path, err)
 	}
 
 	// Add manifests containing RONL component to the registry.
@@ -139,15 +90,15 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	if ronl, ok := components[component.ID_RONL]; ok {
 		detached = false
 
-		rtManifests, ok := r.manifests[bnd.Manifest.ID]
+		rtManifests, ok := r.regularManifests[manifest.ID]
 		if !ok {
 			rtManifests = make(map[version.Version]*Manifest)
-			r.manifests[bnd.Manifest.ID] = rtManifests
+			r.regularManifests[manifest.ID] = rtManifests
 		}
 
-		rtManifests[ronl.Version] = bnd.Manifest
+		rtManifests[ronl.Version] = manifest
 
-		if notifier, ok := r.notifiers[bnd.Manifest.ID]; ok {
+		if notifier, ok := r.notifiers[manifest.ID]; ok {
 			notifier.Broadcast(ronl.Version)
 		}
 	}
@@ -155,7 +106,7 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 	// Add components to the registry.
 	for compID, comp := range components {
 		teeKind := comp.TEEKind()
-		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(bnd.Manifest.ID, compID); ok {
+		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(manifest.ID, compID); ok {
 			if kind, ok := compCfg.TEEKind(); ok {
 				teeKind = kind
 			}
@@ -170,10 +121,10 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 			}
 		}
 
-		runtimeComponents, ok := r.components[bnd.Manifest.ID]
+		runtimeComponents, ok := r.components[manifest.ID]
 		if !ok {
 			runtimeComponents = make(map[component.ID]map[version.Version]*ExplodedComponent)
-			r.components[bnd.Manifest.ID] = runtimeComponents
+			r.components[manifest.ID] = runtimeComponents
 		}
 
 		componentVersions, ok := runtimeComponents[compID]
@@ -186,24 +137,24 @@ func (r *registry) AddBundle(path string, manifestHash hash.Hash) error {
 			Component:       comp,
 			TEEKind:         teeKind,
 			Detached:        detached,
-			ExplodedDataDir: explodedDataDir,
+			ExplodedDataDir: dir,
 		}
 	}
 
-	// Remember which bundles were added.
-	r.bundles[manifestHash] = struct{}{}
+	// Remember which manifests were added.
+	r.manifestHashes[manifestHash] = struct{}{}
 
-	r.logger.Info("bundle added",
-		"path", path,
-		"runtime_id", bnd.Manifest.ID,
-		"manifest_hash", bnd.manifestHash,
+	r.logger.Info("manifest added",
+		"name", manifest.Name,
+		"hash", manifestHash,
 	)
 
 	return nil
 }
 
-// GetVersions implements Registry.
-func (r *registry) GetVersions(runtimeID common.Namespace) []version.Version {
+// GetVersions returns versions for the given runtime, sorted in ascending
+// order.
+func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -215,14 +166,15 @@ func (r *registry) GetVersions(runtimeID common.Namespace) []version.Version {
 		}
 	}
 
-	versions := slices.Collect(maps.Keys(r.manifests[runtimeID]))
+	versions := slices.Collect(maps.Keys(r.regularManifests[runtimeID]))
 	slices.SortFunc(versions, version.Version.Cmp)
 
 	return versions
 }
 
-// WatchVersions implements Registry.
-func (r *registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
+// WatchVersions provides a channel that streams runtime versions as they
+// are added to the registry.
+func (r *Registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -239,21 +191,21 @@ func (r *registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Ver
 	return ch, sub
 }
 
-// GetManifests implements Registry.
-func (r *registry) GetManifests() []*Manifest {
+// GetManifests returns all known manifests that contain RONL component.
+func (r *Registry) GetManifests() []*Manifest {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	manifests := make([]*Manifest, 0)
-	for _, manifest := range r.manifests {
+	for _, manifest := range r.regularManifests {
 		manifests = slices.AppendSeq(manifests, maps.Values(manifest))
 	}
 
 	return manifests
 }
 
-// GetName implements Registry.
-func (r *registry) GetName(runtimeID common.Namespace, version version.Version) (string, error) {
+// GetName returns optional human readable runtime name.
+func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -263,7 +215,7 @@ func (r *registry) GetName(runtimeID common.Namespace, version version.Version) 
 		return "mock-runtime", nil
 	}
 
-	manifest, ok := r.manifests[runtimeID][version]
+	manifest, ok := r.regularManifests[runtimeID][version]
 	if !ok {
 		return "", fmt.Errorf("manifest for runtime '%s', version '%s' not found", runtimeID, version)
 	}
@@ -271,8 +223,9 @@ func (r *registry) GetName(runtimeID common.Namespace, version version.Version) 
 	return manifest.Name, nil
 }
 
-// GetComponents implements Registry.
-func (r *registry) GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error) {
+// GetComponents returns RONL component for the given runtime and version,
+// together with latest version of the remaining components.
+func (r *Registry) GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -355,11 +308,4 @@ func (r *registry) GetComponents(runtimeID common.Namespace, version version.Ver
 	}
 
 	return components, nil
-}
-
-func init() {
-	Flags.StringSlice(CfgDebugMockIDs, nil, "Mock runtime IDs (format: <path>,<path>,...)")
-	_ = Flags.MarkHidden(CfgDebugMockIDs)
-
-	_ = viper.BindPFlags(Flags)
 }
