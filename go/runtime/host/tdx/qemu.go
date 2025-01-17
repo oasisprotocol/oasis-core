@@ -2,14 +2,19 @@ package tdx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mdlayher/vsock"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -17,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -28,10 +34,15 @@ import (
 const (
 	// defaultQemuSystemPath is the default QEMU system binary path.
 	defaultQemuSystemPath = "/usr/bin/qemu-system-x86_64"
+	// defaultQemuImgPath is the default qemu-bin binary path.
+	defaultQemuImgPath = "/usr/bin/qemu-img"
 	// defaultStartCid is the default start CID.
 	defaultStartCid = 0xA5150000
 	// defaultRuntimeAttestInterval is the default runtime (re-)attestation interval.
 	defaultRuntimeAttestInterval = 2 * time.Hour
+	// persistentImageDir is the name of the directory within the runtime data directory
+	// where persistent overlay images can be stored.
+	persistentImageDir = "images"
 
 	// vsockPortRHP is the VSOCK port used for the Runtime-Host Protocol.
 	vsockPortRHP = 1
@@ -41,6 +52,8 @@ const (
 
 // QemuConfig is the configuration of the QEMU-based TDX runtime provisioner.
 type QemuConfig struct {
+	// DataDir is the runtime data directory.
+	DataDir string
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
 
@@ -166,9 +179,20 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 				return process.Config{}, fmt.Errorf("format '%s' is not supported", stage2Format)
 			}
 
+			// Set up a persistent overlay image when configured to do so.
+			snapshotMode := "on" // Default to ephemeral images.
+			if tdxCfg.Stage2Persist {
+				stage2Image, err = q.createPersistentOverlayImage(rtCfg, comp, stage2Image, stage2Format)
+				if err != nil {
+					return process.Config{}, err
+				}
+				stage2Format = "qcow2"
+				snapshotMode = "off"
+			}
+
 			cfg.Args = append(cfg.Args,
 				// Stage 2 drive.
-				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=on", stage2Format, stage2Image),
+				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=%s", stage2Format, stage2Image, snapshotMode),
 				"-device", "virtio-blk-pci,drive=drive0",
 			)
 		}
@@ -209,6 +233,65 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	cfg.Stderr = logWrapper
 
 	return cfg, nil
+}
+
+// createPersistentOverlayImage creates a persistent overlay image for the given backing image and
+// returns the full path to the overlay image. In case the image already exists, it is reused.
+//
+// The format of the resulting image is always qcow2.
+func (q *qemuProvisioner) createPersistentOverlayImage(
+	rtCfg host.Config,
+	comp *bundle.ExplodedComponent,
+	image string,
+	format string,
+) (string, error) {
+	compID, _ := comp.ID().MarshalText()
+	imageDir := filepath.Join(q.cfg.DataDir, persistentImageDir, rtCfg.ID.String(), string(compID))
+	imageFn := filepath.Join(imageDir, fmt.Sprintf("%s.overlay", filepath.Base(image)))
+	switch _, err := os.Stat(imageFn); {
+	case err == nil:
+		// Image already exists, perform a rebase operation to account for the backing file location
+		// changing (e.g. due to an upgrade).
+		cmd := exec.Command(
+			defaultQemuImgPath,
+			"rebase",
+			"-u",
+			"-f", "qcow2",
+			"-b", image,
+			"-F", format,
+			imageFn,
+		)
+		var out strings.Builder
+		cmd.Stderr = &out
+		cmd.Stdout = &out
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to rebase persistent overlay image: %s\n%w", out.String(), err)
+		}
+	case errors.Is(err, os.ErrNotExist):
+		// Create image directory if it doesn't yet exist.
+		if err := common.Mkdir(imageDir); err != nil {
+			return "", fmt.Errorf("failed to create persistent overlay image directory: %w", err)
+		}
+
+		// Create the persistent overlay image.
+		cmd := exec.Command(
+			defaultQemuImgPath,
+			"create",
+			"-f", "qcow2",
+			"-b", image,
+			"-F", format,
+			imageFn,
+		)
+		var out strings.Builder
+		cmd.Stderr = &out
+		cmd.Stdout = &out
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to create persistent overlay image: %s\n%w", out.String(), err)
+		}
+	default:
+		return "", fmt.Errorf("failed to stat persistent overlay image: %w", err)
+	}
+	return imageFn, nil
 }
 
 func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (cap *node.CapabilityTEE, aerr error) {

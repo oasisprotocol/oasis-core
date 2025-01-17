@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -114,6 +115,7 @@ func createHostInfo(consensus consensus.Backend) (*hostProtocol.HostInfo, error)
 }
 
 func createProvisioner(
+	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
 	consensus consensus.Backend,
@@ -205,6 +207,7 @@ func createProvisioner(
 	// Configure TDX provisioner.
 	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
 	provisioners[component.TEEKindTDX], err = hostTdx.NewQemu(hostTdx.QemuConfig{
+		DataDir:               filepath.Join(dataDir, RuntimesDir),
 		HostInfo:              hostInfo,
 		CommonStore:           commonStore,
 		PCS:                   qs,

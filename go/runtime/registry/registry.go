@@ -725,7 +725,7 @@ func New(
 	}
 
 	// Create runtime provisioner.
-	provisioner, err := createProvisioner(commonStore, identity, consensus, hostInfo, ias, qs)
+	provisioner, err := createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs)
 	if err != nil {
 		return nil, err
 	}
