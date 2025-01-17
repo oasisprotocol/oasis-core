@@ -140,6 +140,7 @@ func TestDetachedBundle(t *testing.T) {
 			// No RONL component in the manifest.
 			{
 				Kind: component.ROFL,
+				Name: "my-rofl-comp",
 				ELF: &ELFMetadata{
 					Executable: "runtime.bin",
 				},

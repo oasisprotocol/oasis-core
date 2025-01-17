@@ -41,6 +41,7 @@ func (sc *roflImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add ROFL component.
 	f.Runtimes[1].Deployments[0].Components = append(f.Runtimes[1].Deployments[0].Components, oasis.ComponentCfg{
 		Kind:     component.ROFL,
+		Name:     "test-rofl",
 		Binaries: sc.ResolveRuntimeBinaries(ROFLComponentBinary),
 	})
 
