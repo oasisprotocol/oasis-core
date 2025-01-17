@@ -98,6 +98,7 @@ type DeploymentCfg struct {
 // ComponentCfg is a runtime component configuration.
 type ComponentCfg struct {
 	Kind     component.Kind              `json:"kind"`
+	Name     string                      `json:"name,omitempty"`
 	Version  version.Version             `json:"version"`
 	Binaries map[node.TEEHardware]string `json:"binaries"`
 }
@@ -281,6 +282,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 
 		comp := &bundle.Component{
 			Kind:    compCfg.Kind,
+			Name:    compCfg.Name,
 			Version: compCfg.Version,
 			ELF: &bundle.ELFMetadata{
 				Executable: elfBin,

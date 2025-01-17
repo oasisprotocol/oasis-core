@@ -3,11 +3,22 @@ package bundle
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+)
+
+// componentNameRegexp is the regular expression for valid component names.
+var componentNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+const (
+	// minComponentNameLen is the minimum length of a valid component name.
+	minComponentNameLen = 3
+	// maxComponentNameLen is the maximum length of a valid component name.
+	maxComponentNameLen = 128
 )
 
 // ExplodedComponent is an exploded runtime component ready for execution.
@@ -118,6 +129,15 @@ func (c *Component) Validate() error {
 			return fmt.Errorf("RONL component cannot be disabled")
 		}
 	case component.ROFL:
+		if len(c.Name) < minComponentNameLen {
+			return fmt.Errorf("ROFL component name must be at least %d characters long", minComponentNameLen)
+		}
+		if len(c.Name) > maxComponentNameLen {
+			return fmt.Errorf("ROFL component name must be at most %d characters long", maxComponentNameLen)
+		}
+		if !componentNameRegexp.MatchString(c.Name) {
+			return fmt.Errorf("ROFL component name is invalid (must satisfy: %s)", componentNameRegexp)
+		}
 	default:
 		return fmt.Errorf("unknown component kind: '%s'", c.Kind)
 	}

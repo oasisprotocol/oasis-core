@@ -31,6 +31,7 @@ func createSyntheticBundle(runtimeID common.Namespace, version version.Version, 
 		case component.ROFL:
 			manifest.Components = append(manifest.Components, &Component{
 				Kind:    component.ROFL,
+				Name:    "my-rofl-comp",
 				Version: version,
 			})
 		default:
