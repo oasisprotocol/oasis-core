@@ -446,7 +446,7 @@ func (r *runtime) run(ctx context.Context) {
 				}
 			}
 
-			r.bundleManager.Queue(r.id, manifestHashes)
+			r.bundleManager.Download(r.id, manifestHashes)
 		}
 	}
 }

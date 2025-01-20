@@ -197,15 +197,15 @@ func (m *Manager) run(ctx context.Context) {
 			return
 		}
 
-		m.Download()
+		m.download()
 	}
 }
 
-// Queue updates the checksums of bundles pending download for the given runtime.
+// Download updates the checksums of bundles pending download for the given runtime.
 //
 // Any existing checksums in the download queue for the given runtime are removed
 // and replaced with the given ones.
-func (m *Manager) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) {
+func (m *Manager) Download(runtimeID common.Namespace, manifestHashes []hash.Hash) {
 	// Download bundles only for the configured runtimes.
 	if _, ok := m.runtimeIDs[runtimeID]; !ok {
 		return
@@ -242,8 +242,8 @@ func (m *Manager) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) 
 	}
 }
 
-// Download tries to download bundles in the queue.
-func (m *Manager) Download() {
+// download tries to download bundles in the queue.
+func (m *Manager) download() {
 	for runtimeID := range m.runtimeIDs {
 		m.downloadBundles(runtimeID)
 	}
