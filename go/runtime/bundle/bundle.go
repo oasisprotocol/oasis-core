@@ -575,16 +575,6 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 		return nil, err
 	}
 
-	// Support legacy manifests where the runtime version is defined at the top level.
-	if bnd.Manifest.Version.ToU64() > 0 {
-		for _, comp := range bnd.Manifest.Components {
-			if comp.ID().IsRONL() {
-				comp.Version = bnd.Manifest.Version
-				break
-			}
-		}
-	}
-
 	return bnd, nil
 }
 

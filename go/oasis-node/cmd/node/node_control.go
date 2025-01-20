@@ -13,6 +13,7 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
@@ -359,7 +360,12 @@ func (n *Node) getBundleStatus() ([]control.BundleStatus, error) {
 	bundles := make([]control.BundleStatus, 0, len(manifests))
 
 	for _, manifest := range manifests {
-		explodedComponents, err := bundleRegistry.GetComponents(manifest.ID, manifest.GetVersion())
+		ronl := manifest.GetComponentByID(component.ID_RONL)
+		if ronl == nil {
+			continue
+		}
+
+		explodedComponents, err := bundleRegistry.GetComponents(manifest.ID, ronl.Version)
 		if err != nil {
 			return nil, err
 		}
