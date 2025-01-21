@@ -107,6 +107,23 @@ const testManifestLegacyJSON = `
 }
 `
 
+const testManifestLegacyVersionJSON = `
+{
+  "name": "name",
+  "id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "version": {
+    "major": 1,
+    "minor": 2,
+    "patch": 3
+  },
+  "components": [
+    {
+      "kind": "ronl"
+    }
+  ]
+}
+`
+
 func TestManifestHash_EmptyJSON(t *testing.T) {
 	var manifest Manifest
 	err := json.Unmarshal([]byte(testManifestEmptyJSON), &manifest)
@@ -126,6 +143,23 @@ func TestManifestHash_LegacyJSON(t *testing.T) {
 	err := json.Unmarshal([]byte(testManifestLegacyJSON), &manifest)
 	require.NoError(t, err)
 	require.Equal(t, "bd2987c59d2c672dee5c723b2d01adf6a7030c67efa368c342b54f887c1fe188", manifest.Hash().String())
+}
+
+func TestManifestHash_LegacyVersionJSON(t *testing.T) {
+	var manifest Manifest
+	err := json.Unmarshal([]byte(testManifestLegacyVersionJSON), &manifest)
+	require.NoError(t, err)
+
+	// Verify that the manifest version is correctly copied to the RONL component.
+	ronl := manifest.GetComponentByID(component.ID_RONL)
+	require.NotNil(t, ronl)
+	require.Equal(t, manifest.Version, ronl.Version)
+
+	// Ensure that the manifest hash remains unchanged even if the version is copied.
+	newHash := manifest.Hash()
+	ronl.Version = version.Version{}
+	legacyHash := manifest.Hash()
+	require.Equal(t, legacyHash, newHash)
 }
 
 func TestManifestHash_EmptyManifest(t *testing.T) {

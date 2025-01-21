@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -44,6 +45,19 @@ type Manifest struct {
 
 // Hash returns a cryptographic hash of the CBOR-serialized manifest.
 func (m *Manifest) Hash() hash.Hash {
+	// Support legacy manifests where the runtime version is defined at the top level.
+	if m.Version.ToU64() > 0 {
+		for _, comp := range m.Components {
+			if comp.ID().IsRONL() {
+				v := comp.Version
+				comp.Version = version.Version{}
+				h := hash.NewFrom(m)
+				comp.Version = v
+				return h
+			}
+		}
+	}
+
 	return hash.NewFrom(m)
 }
 
@@ -124,20 +138,24 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 	return nil
 }
 
-// GetVersion returns the runtime version.
-func (m *Manifest) GetVersion() version.Version {
-	// We also support legacy manifests which define version at the top-level.
-	for _, comp := range m.Components {
-		if !comp.ID().IsRONL() {
-			continue
-		}
-
-		if comp.Version.ToU64() > m.Version.ToU64() {
-			return comp.Version
-		}
-
-		break
+// UnmarshalJSON customizes the unmarshalling of the manifest.
+func (m *Manifest) UnmarshalJSON(b []byte) (err error) {
+	// Unmarshal into the auxiliary struct to avoid recursion.
+	type alias Manifest
+	aux := (*alias)(m)
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
 	}
 
-	return m.Version
+	// Support legacy manifests where the runtime version is defined at the top level.
+	if m.Version.ToU64() > 0 {
+		for _, comp := range m.Components {
+			if comp.ID().IsRONL() {
+				comp.Version = m.Version
+				break
+			}
+		}
+	}
+
+	return nil
 }
