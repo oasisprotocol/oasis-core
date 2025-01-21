@@ -55,7 +55,7 @@ func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime, com
 
 	logger := logging.GetLogger("runtime/registry/host").
 		With("runtime_id", parent.runtime.ID()).
-		With("component", component.ROFL)
+		With("component_id", comp.ID())
 
 	return &roflHostHandler{
 		parent:        parent,
