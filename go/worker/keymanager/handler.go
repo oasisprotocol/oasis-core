@@ -18,6 +18,18 @@ func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
 	return w.runtime
 }
 
+// NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
+func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
+	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
+	runtimeID := w.runtime.ID()
+	kmCli.SetKeyManagerID(&runtimeID)
+
+	return runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{
+		w:     w,
+		kmCli: kmCli,
+	}, w.runtime, w.commonWorker.Consensus)
+}
+
 // NewRuntimeHostNotifier implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier {
 	return runtimeRegistry.NewRuntimeHostNotifier(w.runtime, host, w.commonWorker.Consensus)
@@ -55,16 +67,4 @@ func (env *workerEnvironment) GetLightClient() (consensusAPI.LightClient, error)
 // GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
 func (env *workerEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 	return env.w.commonWorker.RuntimeRegistry
-}
-
-// NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
-	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
-	runtimeID := w.runtime.ID()
-	kmCli.SetKeyManagerID(&runtimeID)
-
-	return runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{
-		w:     w,
-		kmCli: kmCli,
-	}, w.runtime, w.commonWorker.Consensus)
 }

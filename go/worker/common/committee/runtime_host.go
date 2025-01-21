@@ -17,6 +17,11 @@ func (n *Node) GetRuntime() runtimeRegistry.Runtime {
 	return n.Runtime
 }
 
+// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
+func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
+	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
+}
+
 // NewRuntimeHostNotifier implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier {
 	return runtimeRegistry.NewRuntimeHostNotifier(n.Runtime, host, n.Consensus)
@@ -52,9 +57,4 @@ func (env *nodeEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
 // GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 	return env.n.RuntimeRegistry
-}
-
-// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
-func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
-	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 }
