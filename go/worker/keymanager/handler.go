@@ -58,9 +58,6 @@ func (env *workerEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 
 // GetIdentity implements RuntimeHostHandlerEnvironment.
 func (env *workerEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
-	if env.w.commonWorker.LightClient == nil {
-		return nil, fmt.Errorf("no light client available")
-	}
 	return env.w.commonWorker.LightClient, nil
 }
 
