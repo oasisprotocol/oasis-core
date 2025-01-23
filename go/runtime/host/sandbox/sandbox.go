@@ -84,7 +84,7 @@ type provisioner struct {
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	r := &sandboxedRuntime{
+	return &sandboxedRuntime{
 		cfg:                         p.cfg,
 		rtCfg:                       cfg,
 		id:                          cfg.ID,
@@ -93,14 +93,7 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		notifier:                    pubsub.NewBroker(false),
 		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
 		logger:                      p.cfg.Logger.With("runtime_id", cfg.ID),
-	}
-
-	err := cfg.MessageHandler.AttachRuntime(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to attach host: %w", err)
-	}
-
-	return r, nil
+	}, nil
 }
 
 // Implements host.Provisioner.

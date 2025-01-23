@@ -2,7 +2,6 @@ package registry
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"

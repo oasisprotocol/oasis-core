@@ -117,10 +117,10 @@ type RuntimeHandler interface {
 	protocol.Handler
 
 	// NewSubHandler creates a sub-handler specialized for the given runtime component.
-	NewSubHandler(cr CompositeRuntime, component *bundle.Component) (RuntimeHandler, error)
+	NewSubHandler(id component.ID) (RuntimeHandler, error)
 
 	// AttachRuntime attaches a given hosted runtime instance to this handler.
-	AttachRuntime(host Runtime) error
+	AttachRuntime(id component.ID, host Runtime) error
 }
 
 // RuntimeEventEmitter is the interface for emitting events for a provisioned runtime.

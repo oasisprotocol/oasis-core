@@ -39,6 +39,7 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 	}
 
 	// Iterate over all wanted components and provision the individual runtimes.
+	handlers := make(map[component.ID]host.RuntimeHandler)
 	for _, comp := range cfg.Components {
 		compCfg := cfg
 		compCfg.Components = []*bundle.ExplodedComponent{comp}
@@ -47,11 +48,12 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 			h.version = comp.Version
 		case component.ROFL:
 			// Wrap message handler for ROFL component.
-			var err error
-			compCfg.MessageHandler, err = compCfg.MessageHandler.NewSubHandler(h, comp.Component)
+			handler, err := compCfg.MessageHandler.NewSubHandler(comp.ID())
 			if err != nil {
 				return nil, fmt.Errorf("host/composite: failed to create sub-handler: %w", err)
 			}
+			handlers[comp.ID()] = handler
+			compCfg.MessageHandler = handler
 		default:
 		}
 
@@ -63,8 +65,18 @@ func NewHost(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error
 		h.comps[comp.ID()] = compRt
 	}
 
-	if _, ronlExists := h.comps[component.ID_RONL]; !ronlExists {
+	ronl, ok := h.comps[component.ID_RONL]
+	if !ok {
 		return nil, fmt.Errorf("host/composite: required RONL component not available")
+	}
+
+	for id, handler := range handlers {
+		if err := handler.AttachRuntime(id, h.comps[id]); err != nil {
+			return nil, fmt.Errorf("failed to attach ROFL host: %w", err)
+		}
+		if err := handler.AttachRuntime(component.ID_RONL, ronl); err != nil {
+			return nil, fmt.Errorf("failed to attach RONL host: %w", err)
+		}
 	}
 
 	switch {
