@@ -6,7 +6,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -58,7 +57,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeVersion(version version.Version)
 	rtCfg := *cfg
 	rtCfg.MessageHandler = n.handler
 
-	rt, err := composite.NewHost(rtCfg, n.provisioner)
+	rt, err := n.provisioner.NewRuntime(rtCfg)
 	if err != nil {
 		return fmt.Errorf("failed to provision runtime version %s: %w", version, err)
 	}

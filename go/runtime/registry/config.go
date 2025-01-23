@@ -146,7 +146,7 @@ func createProvisioner(
 			return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
 		}
 
-		provisioners[component.TEEKindNone] = hostMock.New()
+		provisioners[component.TEEKindNone] = hostMock.NewProvisioner()
 	case rtConfig.RuntimeProvisionerUnconfined:
 		// Unconfined provisioner, can be used with no TEE or with Intel SGX.
 		if !cmdFlags.DebugDontBlameOasis() {
@@ -165,7 +165,7 @@ func createProvisioner(
 		}
 
 		// Configure the non-TEE provisioner.
-		provisioners[component.TEEKindNone], err = hostSandbox.New(hostSandbox.Config{
+		provisioners[component.TEEKindNone], err = hostSandbox.NewProvisioner(hostSandbox.Config{
 			HostInfo:          hostInfo,
 			InsecureNoSandbox: insecureNoSandbox,
 			SandboxBinaryPath: sandboxBinary,
@@ -184,7 +184,7 @@ func createProvisioner(
 			break
 		}
 
-		provisioners[component.TEEKindSGX], err = hostSgx.New(hostSgx.Config{
+		provisioners[component.TEEKindSGX], err = hostSgx.NewProvisioner(hostSgx.Config{
 			HostInfo:              hostInfo,
 			CommonStore:           commonStore,
 			LoaderPath:            sgxLoader,
@@ -206,7 +206,7 @@ func createProvisioner(
 
 	// Configure TDX provisioner.
 	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
-	provisioners[component.TEEKindTDX], err = hostTdx.NewQemu(hostTdx.QemuConfig{
+	provisioners[component.TEEKindTDX], err = hostTdx.NewQemuProvisioner(hostTdx.QemuConfig{
 		DataDir:               filepath.Join(dataDir, RuntimesDir),
 		HostInfo:              hostInfo,
 		CommonStore:           commonStore,
@@ -221,7 +221,7 @@ func createProvisioner(
 
 	// Configure optional load balancing.
 	for tee, rp := range provisioners {
-		provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
+		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, hostLoadBalance.Config{
 			NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
 		})
 	}

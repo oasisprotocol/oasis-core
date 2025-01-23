@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -26,7 +25,7 @@ type Config struct {
 	NumInstances int
 }
 
-type lbRuntime struct {
+type lbHost struct {
 	id        common.Namespace
 	instances []host.Runtime
 
@@ -41,25 +40,36 @@ type lbRuntime struct {
 	logger *logging.Logger
 }
 
-// Implements host.Runtime.
-func (lb *lbRuntime) ID() common.Namespace {
-	return lb.id
+// NewHost creates a new load balancer runtime host.
+func NewHost(id common.Namespace, instances []host.Runtime) host.Runtime {
+	return &lbHost{
+		id:               id,
+		instances:        instances,
+		healthyInstances: make(map[int]struct{}),
+		stopCh:           make(chan struct{}),
+		logger:           logging.GetLogger("runtime/host/loadbalance").With("runtime_id", id),
+	}
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
-	return lb.instances[0].GetInfo(ctx)
+func (h *lbHost) ID() common.Namespace {
+	return h.id
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) GetActiveVersion() (*version.Version, error) {
-	return lb.instances[0].GetActiveVersion()
+func (h *lbHost) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
+	return h.instances[0].GetInfo(ctx)
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
+func (h *lbHost) GetActiveVersion() (*version.Version, error) {
+	return h.instances[0].GetActiveVersion()
+}
+
+// Implements host.Runtime.
+func (h *lbHost) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	// TODO: This won't work when registration of all client runtimes is required.
-	return lb.instances[0].GetCapabilityTEE()
+	return h.instances[0].GetCapabilityTEE()
 }
 
 // shouldPropagateToAll checks whether the given runtime request should be propagated to all
@@ -80,7 +90,7 @@ func shouldPropagateToAll(body *protocol.Body) bool {
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+func (h *lbHost) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	switch {
 	case shouldPropagateToAll(body):
 		// Propagate call to all instances.
@@ -89,7 +99,7 @@ func (lb *lbRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.B
 			err error
 		}
 		resCh := make(chan *result)
-		for _, rt := range lb.instances {
+		for _, rt := range h.instances {
 			go func() {
 				rsp, err := rt.Call(ctx, body)
 				resCh <- &result{
@@ -103,7 +113,7 @@ func (lb *lbRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.B
 			anyErr error
 			rsp    *protocol.Body
 		)
-		for range lb.instances {
+		for range h.instances {
 			res := <-resCh
 			// Return the response of the instance that finished last. Note that currently all of
 			// the propagated methods return a `protocol.Empty` response so this does not matter.
@@ -116,32 +126,32 @@ func (lb *lbRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.B
 		return rsp, nil
 	case body.RuntimeQueryRequest != nil, body.RuntimeCheckTxBatchRequest != nil:
 		// Load-balance queries.
-		idx, err := lb.selectInstance()
+		idx, err := h.selectInstance()
 		if err != nil {
 			return nil, err
 		}
 
 		lbRequestCount.With(prometheus.Labels{
-			"runtime":     lb.id.String(),
+			"runtime":     h.id.String(),
 			"lb_instance": fmt.Sprintf("%d", idx),
 		}).Inc()
 
-		return lb.instances[idx].Call(ctx, body)
+		return h.instances[idx].Call(ctx, body)
 	default:
 		// Propagate only to the first instance.
-		return lb.instances[0].Call(ctx, body)
+		return h.instances[0].Call(ctx, body)
 	}
 }
 
-func (lb *lbRuntime) selectInstance() (int, error) {
-	lb.l.Lock()
-	defer lb.l.Unlock()
+func (h *lbHost) selectInstance() (int, error) {
+	h.l.Lock()
+	defer h.l.Unlock()
 
-	for attempt := 0; attempt < len(lb.instances); attempt++ {
-		idx := lb.nextIdx
-		lb.nextIdx = (lb.nextIdx + 1) % len(lb.instances)
+	for attempt := 0; attempt < len(h.instances); attempt++ {
+		idx := h.nextIdx
+		h.nextIdx = (h.nextIdx + 1) % len(h.instances)
 
-		if _, healthy := lb.healthyInstances[idx]; healthy {
+		if _, healthy := h.healthyInstances[idx]; healthy {
 			return idx, nil
 		}
 	}
@@ -150,21 +160,21 @@ func (lb *lbRuntime) selectInstance() (int, error) {
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) UpdateCapabilityTEE() {
-	for _, rt := range lb.instances {
+func (h *lbHost) UpdateCapabilityTEE() {
+	for _, rt := range h.instances {
 		rt.UpdateCapabilityTEE()
 	}
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
-	return lb.instances[0].WatchEvents()
+func (h *lbHost) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
+	return h.instances[0].WatchEvents()
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) Start() {
-	lb.startOnce.Do(func() {
-		for idx, rt := range lb.instances {
+func (h *lbHost) Start() {
+	h.startOnce.Do(func() {
+		for idx, rt := range h.instances {
 			// Subscribe to runtime events before starting runtime to make sure we don't miss the
 			// started event.
 			evCh, sub := rt.WatchEvents()
@@ -179,34 +189,34 @@ func (lb *lbRuntime) Start() {
 						switch {
 						case ev.Started != nil:
 							// Mark instance as available.
-							lb.logger.Info("instance is available",
+							h.logger.Info("instance is available",
 								"instance", idx,
 							)
 
-							lb.l.Lock()
-							lb.healthyInstances[idx] = struct{}{}
-							lb.l.Unlock()
+							h.l.Lock()
+							h.healthyInstances[idx] = struct{}{}
+							h.l.Unlock()
 						case ev.FailedToStart != nil, ev.Stopped != nil:
 							// Mark instance as failed.
-							lb.logger.Warn("instance is no longer available",
+							h.logger.Warn("instance is no longer available",
 								"instance", idx,
 							)
 
-							lb.l.Lock()
-							delete(lb.healthyInstances, idx)
-							lb.l.Unlock()
+							h.l.Lock()
+							delete(h.healthyInstances, idx)
+							h.l.Unlock()
 						default:
 						}
 
 						// Update healthy instance count metrics.
-						lb.l.Lock()
-						healthyInstanceCount := len(lb.healthyInstances)
-						lb.l.Unlock()
+						h.l.Lock()
+						healthyInstanceCount := len(h.healthyInstances)
+						h.l.Unlock()
 
 						lbHealthyInstanceCount.With(prometheus.Labels{
-							"runtime": lb.id.String(),
+							"runtime": h.id.String(),
 						}).Set(float64(healthyInstanceCount))
-					case <-lb.stopCh:
+					case <-h.stopCh:
 						return
 					}
 				}
@@ -218,17 +228,17 @@ func (lb *lbRuntime) Start() {
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) Abort(ctx context.Context, force bool) error {
+func (h *lbHost) Abort(ctx context.Context, force bool) error {
 	// We don't know which instance to abort, so we abort all instances.
 	errCh := make(chan error)
-	for _, rt := range lb.instances {
+	for _, rt := range h.instances {
 		go func() {
 			errCh <- rt.Abort(ctx, force)
 		}()
 	}
 
 	var anyErr error
-	for range lb.instances {
+	for range h.instances {
 		err := <-errCh
 		anyErr = errors.Join(anyErr, err)
 	}
@@ -236,72 +246,12 @@ func (lb *lbRuntime) Abort(ctx context.Context, force bool) error {
 }
 
 // Implements host.Runtime.
-func (lb *lbRuntime) Stop() {
-	lb.stopOnce.Do(func() {
-		close(lb.stopCh)
+func (h *lbHost) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.stopCh)
 
-		for _, rt := range lb.instances {
+		for _, rt := range h.instances {
 			rt.Stop()
 		}
 	})
-}
-
-type lbProvisioner struct {
-	inner host.Provisioner
-	cfg   Config
-}
-
-// Implements host.Provisioner.
-func (lb *lbProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	if lb.cfg.NumInstances < 2 {
-		// This should never happen as the provisioner constructor made sure, but just to be safe.
-		return nil, fmt.Errorf("host/loadbalance: number of instances must be at least two")
-	}
-
-	// The load-balancer can only be used for the RONL component. For others, do pass-through.
-	if len(cfg.Components) != 1 {
-		return nil, fmt.Errorf("host/loadbalance: must specify a single component")
-	}
-	if cfg.Components[0].ID() != component.ID_RONL {
-		return lb.inner.NewRuntime(cfg)
-	}
-
-	// Use the inner provisioner to provision multiple runtimes.
-	var instances []host.Runtime
-	for i := 0; i < lb.cfg.NumInstances; i++ {
-		rt, err := lb.inner.NewRuntime(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("host/loadbalance: failed to provision instance %d: %w", i, err)
-		}
-
-		instances = append(instances, rt)
-	}
-
-	return &lbRuntime{
-		id:               cfg.ID,
-		instances:        instances,
-		healthyInstances: make(map[int]struct{}),
-		stopCh:           make(chan struct{}),
-		logger:           logging.GetLogger("runtime/host/loadbalance").With("runtime_id", cfg.ID),
-	}, nil
-}
-
-// Implements host.Provisioner.
-func (lb *lbProvisioner) Name() string {
-	return fmt.Sprintf("load-balancer[%d]/%s", lb.cfg.NumInstances, lb.inner.Name())
-}
-
-// New creates a load-balancing runtime provisioner.
-func New(inner host.Provisioner, cfg Config) host.Provisioner {
-	if cfg.NumInstances < 2 {
-		// If there is only a single instance configured just return the inner provisioner.
-		return inner
-	}
-
-	initMetrics()
-
-	return &lbProvisioner{
-		inner: inner,
-		cfg:   cfg,
-	}
 }

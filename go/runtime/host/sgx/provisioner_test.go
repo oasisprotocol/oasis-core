@@ -84,7 +84,7 @@ func TestProvisionerSGX(t *testing.T) {
 
 	t.Run("Naked", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return New(Config{
+			return NewProvisioner(Config{
 				HostInfo: &protocol.HostInfo{
 					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
@@ -100,7 +100,7 @@ func TestProvisionerSGX(t *testing.T) {
 
 	t.Run("Sandboxed", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return New(Config{
+			return NewProvisioner(Config{
 				HostInfo: &protocol.HostInfo{
 					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,

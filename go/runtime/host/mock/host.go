@@ -20,38 +20,22 @@ import (
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
-type provisioner struct{}
-
 // CheckTxFailInput is the input that will cause a CheckTx failure in the mock runtime.
 var CheckTxFailInput = []byte("checktx-mock-fail")
 
-// Implements host.Provisioner.
-func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	r := &runtime{
-		runtimeID: cfg.ID,
-		notifier:  pubsub.NewBroker(false),
-	}
-	return r, nil
-}
-
-// Implements host.Provisioner.
-func (p *provisioner) Name() string {
-	return "mock"
-}
-
-type runtime struct {
+type mockHost struct {
 	runtimeID common.Namespace
 
 	notifier *pubsub.Broker
 }
 
 // Implements host.Runtime.
-func (r *runtime) ID() common.Namespace {
-	return r.runtimeID
+func (h *mockHost) ID() common.Namespace {
+	return h.runtimeID
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error) {
+func (h *mockHost) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error) {
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
@@ -64,17 +48,17 @@ func (r *runtime) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetActiveVersion() (*version.Version, error) {
+func (h *mockHost) GetActiveVersion() (*version.Version, error) {
 	return nil, nil
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
+func (h *mockHost) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	return nil, nil
 }
 
 // Implements host.Runtime.
-func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+func (h *mockHost) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	switch {
 	case body.RuntimeExecuteTxBatchRequest != nil:
 		rq := body.RuntimeExecuteTxBatchRequest
@@ -190,38 +174,33 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 }
 
 // Implements host.Runtime.
-func (r *runtime) UpdateCapabilityTEE() {
+func (h *mockHost) UpdateCapabilityTEE() {
 }
 
 // Implements host.Runtime.
-func (r *runtime) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
+func (h *mockHost) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
 	typedCh := make(chan *host.Event)
-	sub := r.notifier.Subscribe()
+	sub := h.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
 // Implements host.Runtime.
-func (r *runtime) Start() {
-	r.notifier.Broadcast(&host.Event{
+func (h *mockHost) Start() {
+	h.notifier.Broadcast(&host.Event{
 		Started: &host.StartedEvent{},
 	})
 }
 
 // Implements host.Runtime.
-func (r *runtime) Abort(context.Context, bool) error {
+func (h *mockHost) Abort(context.Context, bool) error {
 	return nil
 }
 
 // Implements host.Runtime.
-func (r *runtime) Stop() {
-	r.notifier.Broadcast(&host.Event{
+func (h *mockHost) Stop() {
+	h.notifier.Broadcast(&host.Event{
 		Stopped: &host.StoppedEvent{},
 	})
-}
-
-// New creates a new mock runtime provisioner useful for tests.
-func New() host.Provisioner {
-	return &provisioner{}
 }
