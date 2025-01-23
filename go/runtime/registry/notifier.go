@@ -22,6 +22,17 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
+const (
+	// notifyTimeout is the maximum time to wait for a notification to be processed by the runtime.
+	notifyTimeout = 10 * time.Second
+
+	// retryInterval is the time interval used between failed key manager updates.
+	retryInterval = time.Second
+
+	// minAttestationInterval is the minimum attestation interval.
+	minAttestationInterval = 5 * time.Minute
+)
+
 // Ensure that the runtime host notifier implements the Notifier interface.
 var _ protocol.Notifier = (*runtimeHostNotifier)(nil)
 
