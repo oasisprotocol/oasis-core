@@ -98,31 +98,26 @@ func (p *sandboxProvisioner) Name() string {
 
 // DefaultGetSandboxConfig is the default function for generating sandbox configuration.
 func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
-	return func(hostCfg host.Config, _ Connector, _ string) (process.Config, error) {
-		comp, err := hostCfg.GetExplodedComponent()
-		if err != nil {
-			return process.Config{}, err
-		}
-
+	return func(cfg host.Config, _ Connector, _ string) (process.Config, error) {
 		logWrapper := host.NewRuntimeLogWrapper(
 			logger,
-			"runtime_id", hostCfg.ID,
-			"runtime_name", hostCfg.Name,
-			"component", comp.ID(),
+			"runtime_id", cfg.ID,
+			"runtime_name", cfg.Name,
+			"component", cfg.Component.ID(),
 			"provisioner", "sandbox",
 		)
 
-		executable := comp.Executable
-		if comp.ELF != nil {
-			executable = comp.ELF.Executable
+		executable := cfg.Component.Executable
+		if cfg.Component.ELF != nil {
+			executable = cfg.Component.ELF.Executable
 		}
 
 		return process.Config{
-			Path:              comp.ExplodedPath(executable),
+			Path:              cfg.Component.ExplodedPath(executable),
 			SandboxBinaryPath: sandboxBinaryPath,
 			Stdout:            logWrapper,
 			Stderr:            logWrapper,
-			AllowNetwork:      comp.IsNetworkAllowed(),
+			AllowNetwork:      cfg.Component.IsNetworkAllowed(),
 		}, nil
 	}
 }

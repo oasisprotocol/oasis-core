@@ -221,9 +221,8 @@ func createProvisioner(
 
 	// Configure optional load balancing.
 	for tee, rp := range provisioners {
-		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, hostLoadBalance.Config{
-			NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
-		})
+		numInstances := int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances)
+		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, numInstances)
 	}
 
 	// Create a composite provisioner to provision the individual components.

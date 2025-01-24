@@ -13,7 +13,6 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
@@ -136,11 +135,6 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
-	bundles, err := n.getBundleStatus()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bundle status: %w", err)
-	}
-
 	kms, err := n.getKeymanagerStatus()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key manager worker status: %w", err)
@@ -171,7 +165,6 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		Consensus:       cs,
 		LightClient:     lcs,
 		Runtimes:        runtimes,
-		Bundles:         bundles,
 		Keymanager:      kms,
 		Registration:    rs,
 		PendingUpgrades: pendingUpgrades,
@@ -349,49 +342,21 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			status.Provisioner = provisioner.Name()
 		}
 
-		runtimes[rt.ID()] = status
-	}
-	return runtimes, nil
-}
-
-func (n *Node) getBundleStatus() ([]control.BundleStatus, error) {
-	bundleRegistry := n.RuntimeRegistry.GetBundleRegistry()
-	manifests := bundleRegistry.GetManifests()
-	bundles := make([]control.BundleStatus, 0, len(manifests))
-
-	for _, manifest := range manifests {
-		ronl := manifest.GetComponentByID(component.ID_RONL)
-		if ronl == nil {
-			continue
-		}
-
-		explodedComponents, err := bundleRegistry.GetComponents(manifest.ID, ronl.Version)
-		if err != nil {
-			return nil, err
-		}
-
-		components := make([]control.ComponentStatus, 0, len(explodedComponents))
-		for _, comp := range explodedComponents {
-			component := control.ComponentStatus{
+		// Fetch the status of all components associated with the runtime.
+		for _, comp := range n.RuntimeRegistry.GetBundleRegistry().Components(rt.ID()) {
+			status.Components = append(status.Components, control.ComponentStatus{
 				Kind:     comp.Kind,
 				Name:     comp.Name,
 				Version:  comp.Version,
 				Detached: comp.Detached,
 				Disabled: comp.Disabled,
-			}
-			components = append(components, component)
+			})
 		}
 
-		bundle := control.BundleStatus{
-			Name:       manifest.Name,
-			ID:         manifest.ID,
-			Components: components,
-		}
-
-		bundles = append(bundles, bundle)
+		// Store the runtime status.
+		runtimes[rt.ID()] = status
 	}
-
-	return bundles, nil
+	return runtimes, nil
 }
 
 func (n *Node) getKeymanagerStatus() (*keymanagerWorker.Status, error) {

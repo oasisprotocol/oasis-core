@@ -23,6 +23,7 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -393,55 +394,64 @@ func (w *Worker) worker() {
 
 	// Key managers always need to use the enclave version given to them in the bundle
 	// as they need to make sure that replication is possible during upgrades.
-	var version version.Version
-
+	var comp *bundle.ExplodedComponent
 	if ok := func() bool {
-		// Start watching runtime versions so that we can wait for the runtime
+		// Start watching runtime components so that we can wait for the runtime
 		// to be discovered.
-		versionCh, versionSub := w.GetRuntime().WatchHostVersions()
-		defer versionSub.Close()
+		bundleRegistry := w.commonWorker.RuntimeRegistry.GetBundleRegistry()
+		compCh, compSub := bundleRegistry.WatchComponents(w.runtimeID)
+		defer compSub.Close()
 
 		// Make sure we have one version before proceeding.
-		versions := w.runtime.HostVersions()
+		comps := bundleRegistry.Components(w.runtimeID)
 
-		switch numVers := len(versions); numVers {
+		switch numComps := len(comps); numComps {
 		case 0:
-			w.logger.Info("waiting runtime version to be discovered")
+			w.logger.Info("waiting runtime component to be discovered")
 
 			select {
-			case version = <-versionCh:
+			case comp = <-compCh:
 			case <-w.ctx.Done():
 				return false
 			}
 		case 1:
-			version = versions[0]
+			comp = comps[0]
 		default:
-			w.logger.Error("expected a single runtime version (got %d)", numVers)
+			w.logger.Error("expected a single runtime component (got %d)", numComps)
 			return false
 		}
 
-		w.logger.Info("runtime version discovered",
-			"version", version,
+		w.logger.Info("runtime component discovered",
+			"id", comp.ID(),
+			"version", comp.Version,
 		)
 
 		return true
 	}(); !ok {
 		return
 	}
+	if !comp.ID().IsRONL() {
+		w.logger.Error("expected a RONL key manager runtime component (got %d)", comp.ID())
+		return
+	}
 
-	// Provision the specified runtime version.
-	w.logger.Info("provisioning key manager runtime")
+	// Provision the specified runtime component.
+	w.logger.Info("provisioning key manager runtime component",
+		"id", comp.ID(),
+		"version", comp.Version,
+	)
 
-	if err := w.ProvisionHostedRuntimeVersion(version); err != nil {
-		w.logger.Error("failed to provision key manager runtime",
+	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
+		w.logger.Error("failed to provision key manager runtime component",
 			"err", err,
-			"version", version,
+			"id", comp.ID(),
+			"version", comp.Version,
 		)
 		return
 	}
 
 	// Set the runtime to the specified version.
-	w.SetHostedRuntimeVersion(&version, nil)
+	w.SetHostedRuntimeVersion(&comp.Version, nil)
 
 	// Start the runtime and its notifier.
 	hrt := w.GetHostedRuntime()
@@ -458,9 +468,10 @@ func (w *Worker) worker() {
 
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
-		w.logger.Error("failed to activate key manager runtime version",
+		w.logger.Error("failed to activate key manager runtime component",
 			"err", err,
-			"version", version,
+			"id", comp.ID(),
+			"version", comp.Version,
 		)
 		return
 	}

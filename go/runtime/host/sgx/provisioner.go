@@ -213,12 +213,7 @@ func (p *sgxProvisioner) discoverSGXDevice() (string, error) {
 	return "", fmt.Errorf("no SGX device was found on this system")
 }
 
-func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
-	comp, err := rtCfg.GetExplodedComponent()
-	if err != nil {
-		return process.Config{}, err
-	}
-
+func (p *sgxProvisioner) getSandboxConfig(cfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
 	us, ok := conn.(*sandbox.UnixSocketConnector)
 	if !ok {
 		return process.Config{}, fmt.Errorf("UNIX socket connector is required")
@@ -234,7 +229,7 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		signaturePath = filepath.Join(runtimeDir, signaturePath)
 	}
 
-	sgxs, sig, err := p.loadEnclaveBinaries(comp)
+	sgxs, sig, err := p.loadEnclaveBinaries(cfg.Component)
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
@@ -243,9 +238,9 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		// In insecure mock mode, we simply use the non-SGX binary.
 		p.logger.Warn("using mock SGX enclaves due to configuration options")
 
-		var cfg process.Config
+		var pcfg process.Config
 		gsc := sandbox.DefaultGetSandboxConfig(p.logger, p.cfg.SandboxBinaryPath)
-		cfg, err = gsc(rtCfg, conn, runtimeDir)
+		pcfg, err = gsc(cfg, conn, runtimeDir)
 		if err != nil {
 			return process.Config{}, err
 		}
@@ -255,16 +250,16 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
 			return process.Config{}, err
 		}
-		if cfg.Env == nil {
-			cfg.Env = make(map[string]string)
+		if pcfg.Env == nil {
+			pcfg.Env = make(map[string]string)
 		}
-		cfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
+		pcfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
 
-		return cfg, nil
+		return pcfg, nil
 	}
 
-	if comp.SGX == nil {
-		return process.Config{}, fmt.Errorf("component '%s ' is not an SGX component", comp.ID())
+	if cfg.Component.SGX == nil {
+		return process.Config{}, fmt.Errorf("component '%s' is not an SGX component", cfg.Component.ID())
 	}
 
 	sgxDev, err := p.discoverSGXDevice()
@@ -275,9 +270,9 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 
 	logWrapper := host.NewRuntimeLogWrapper(
 		p.logger,
-		"runtime_id", rtCfg.ID,
-		"runtime_name", rtCfg.Name,
-		"component", comp.ID(),
+		"runtime_id", cfg.ID,
+		"runtime_name", cfg.Name,
+		"component", cfg.Component.ID(),
 		"provisioner", p.Name(),
 	)
 
@@ -287,7 +282,7 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		"--signature", signaturePath,
 		runtimePath,
 	}
-	if comp.IsNetworkAllowed() {
+	if cfg.Component.IsNetworkAllowed() {
 		args = append(args, "--allow-network")
 	}
 
@@ -307,7 +302,7 @@ func (p *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		SandboxBinaryPath: p.cfg.SandboxBinaryPath,
 		Stdout:            logWrapper,
 		Stderr:            logWrapper,
-		AllowNetwork:      comp.IsNetworkAllowed(),
+		AllowNetwork:      cfg.Component.IsNetworkAllowed(),
 	}, nil
 }
 

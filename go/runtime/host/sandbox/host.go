@@ -300,7 +300,7 @@ func (h *sandboxHost) startProcess(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
-	if comp := h.rtCfg.Components[0]; comp.ID().IsRONL() {
+	if comp := h.rtCfg.Component; comp.ID().IsRONL() {
 		// Make sure the version matches what is configured in the bundle. This check is skipped for
 		// non-RONL components to support detached bundles.
 		if bndVersion := comp.Version; *rtVersion != bndVersion {

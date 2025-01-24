@@ -320,7 +320,7 @@ func (n *Node) GetStatus() (*api.Status, error) {
 
 	status.Peers = n.P2P.Peers(n.Runtime.ID())
 
-	status.Host.Versions = n.Runtime.HostVersions()
+	status.Host.Versions = n.RuntimeRegistry.GetBundleRegistry().GetVersions(n.Runtime.ID())
 
 	return &status, nil
 }
@@ -680,17 +680,19 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Start watching runtime versions so that we can provision new versions
+	// Start watching runtime components so that we can provision new versions
 	// once they are discovered.
-	versionCh, versionSub := n.GetRuntime().WatchHostVersions()
-	defer versionSub.Close()
+	bundleRegistry := n.RuntimeRegistry.GetBundleRegistry()
+	compCh, compSub := bundleRegistry.WatchComponents(n.Runtime.ID())
+	defer compSub.Close()
 
-	// Provision all known versions.
-	for _, version := range n.GetRuntime().HostVersions() {
-		if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
-			n.logger.Error("failed to provision hosted runtime",
+	// Provision all known components.
+	for _, comp := range bundleRegistry.Components(n.Runtime.ID()) {
+		if err := n.ProvisionHostedRuntimeComponent(comp); err != nil {
+			n.logger.Error("failed to provision runtime component",
 				"err", err,
-				"version", version,
+				"id", comp.ID(),
+				"version", comp.Version,
 			)
 			return
 		}
@@ -759,14 +761,22 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleRuntimeHostEventLocked(ev)
 			}()
-		case version := <-versionCh:
-			// Received a new runtime version.
-			if err := n.ProvisionHostedRuntimeVersion(version); err != nil {
+		case comp := <-compCh:
+			// Received a new version of a runtime component.
+			if err := n.ProvisionHostedRuntimeComponent(comp); err != nil {
 				n.logger.Error("failed to provision hosted runtime",
 					"err", err,
-					"version", version,
+					"id", comp.ID(),
+					"version", comp.Version,
 				)
+				return
 			}
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.updateHostedRuntimeVersionLocked()
+			}()
+
 		}
 	}
 }

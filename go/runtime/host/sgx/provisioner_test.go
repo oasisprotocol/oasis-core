@@ -1,6 +1,7 @@
 package sgx
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -56,18 +57,6 @@ func TestProvisionerSGX(t *testing.T) {
 
 	explodedDataDir := bnd.ExplodedPath(tmpDir, "")
 
-	cfg := host.Config{
-		Name: "test-runtime",
-		ID:   bnd.Manifest.ID,
-	}
-
-	for _, comp := range bnd.Manifest.Components {
-		cfg.Components = append(cfg.Components, &bundle.ExplodedComponent{
-			Component:       comp,
-			ExplodedDataDir: explodedDataDir,
-		})
-	}
-
 	ias, err := iasHttp.New(&iasHttp.Config{
 		SPID:               "9b3085a55a5863f7cc66b380dcad0082",
 		QuoteSignatureType: cmnIAS.SignatureUnlinkable,
@@ -82,36 +71,48 @@ func TestProvisionerSGX(t *testing.T) {
 		},
 	}
 
-	t.Run("Naked", func(t *testing.T) {
-		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return NewProvisioner(Config{
-				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         cmt.BackendName,
-					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
-				},
-				LoaderPath:            envRuntimeLoaderPath,
-				IAS:                   []api.Endpoint{ias},
-				RuntimeAttestInterval: 2 * time.Second,
-				InsecureNoSandbox:     true,
-				SandboxBinaryPath:     bwrapPath,
-			})
-		}, extraTests)
-	})
+	cfg := host.Config{
+		Name: "test-runtime",
+		ID:   bnd.Manifest.ID,
+	}
 
-	t.Run("Sandboxed", func(t *testing.T) {
-		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return NewProvisioner(Config{
-				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         cmt.BackendName,
-					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
-				},
-				LoaderPath:            envRuntimeLoaderPath,
-				RuntimeAttestInterval: 2 * time.Second,
-				IAS:                   []api.Endpoint{ias},
-				SandboxBinaryPath:     bwrapPath,
-			})
-		}, extraTests)
-	})
+	for _, comp := range bnd.Manifest.Components {
+		cfg.Component = &bundle.ExplodedComponent{
+			Component:       comp,
+			ExplodedDataDir: explodedDataDir,
+		}
+
+		t.Run(fmt.Sprintf("Naked %s", comp.ID()), func(t *testing.T) {
+			tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
+				return NewProvisioner(Config{
+					HostInfo: &protocol.HostInfo{
+						ConsensusBackend:         cmt.BackendName,
+						ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+					},
+					LoaderPath:            envRuntimeLoaderPath,
+					IAS:                   []api.Endpoint{ias},
+					RuntimeAttestInterval: 2 * time.Second,
+					InsecureNoSandbox:     true,
+					SandboxBinaryPath:     bwrapPath,
+				})
+			}, extraTests)
+		})
+
+		t.Run(fmt.Sprintf("Sandboxed %s", comp.ID()), func(t *testing.T) {
+			tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
+				return NewProvisioner(Config{
+					HostInfo: &protocol.HostInfo{
+						ConsensusBackend:         cmt.BackendName,
+						ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+					},
+					LoaderPath:            envRuntimeLoaderPath,
+					RuntimeAttestInterval: 2 * time.Second,
+					IAS:                   []api.Endpoint{ias},
+					SandboxBinaryPath:     bwrapPath,
+				})
+			}, extraTests)
+		})
+	}
 }
 
 func testAttestationWorker(t *testing.T, cfg host.Config, p host.Provisioner) {

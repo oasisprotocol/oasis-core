@@ -19,12 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
-// Config is the configuration for the runtime load balancer.
-type Config struct {
-	// NumInstances is the number of runtime instances to provision.
-	NumInstances int
-}
-
 type lbHost struct {
 	id        common.Namespace
 	instances []host.Runtime

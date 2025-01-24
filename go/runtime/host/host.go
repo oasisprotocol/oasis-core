@@ -3,7 +3,6 @@ package host
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -14,7 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
-// Config contains common configuration for the provisioned runtime.
+// Config contains common configuration for the provisioned runtime component.
 type Config struct {
 	// Name is the optional human readable runtime name.
 	Name string
@@ -22,8 +21,8 @@ type Config struct {
 	// ID is the runtime identifier.
 	ID common.Namespace
 
-	// Components are components that should be provisioned.
-	Components []*bundle.ExplodedComponent
+	// Component is the component that should be provisioned.
+	Component *bundle.ExplodedComponent
 
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
@@ -33,26 +32,6 @@ type Config struct {
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]interface{}
-}
-
-// GetExplodedComponent ensures that only a single exploded component is configured for this runtime
-// and returns it.
-func (cfg *Config) GetExplodedComponent() (*bundle.ExplodedComponent, error) {
-	if numComps := len(cfg.Components); numComps != 1 {
-		return nil, fmt.Errorf("expected a single component (got %d)", numComps)
-	}
-
-	return cfg.Components[0], nil
-}
-
-// GetComponent ensures that only a single component is configured for this runtime and returns it.
-func (cfg *Config) GetComponent() (*bundle.Component, error) {
-	comp, err := cfg.GetExplodedComponent()
-	if err != nil {
-		return nil, err
-	}
-
-	return comp.Component, nil
 }
 
 // Provisioner is the runtime provisioner interface.

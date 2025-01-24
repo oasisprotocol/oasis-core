@@ -150,27 +150,23 @@ func (p *qemuProvisioner) Name() string {
 	return "tdx-qemu"
 }
 
-func (p *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
-	comp, err := rtCfg.GetExplodedComponent()
-	if err != nil {
-		return process.Config{}, err
-	}
-	if comp.TDX == nil {
-		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", comp.ID())
+func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
+	if cfg.Component.TDX == nil {
+		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", cfg.Component.ID())
 	}
 
-	cid := rtCfg.Extra.(*QemuExtraConfig).CID // Ensured above.
-	tdxCfg := comp.TDX
+	cid := cfg.Extra.(*QemuExtraConfig).CID // Ensured above.
+	tdxCfg := cfg.Component.TDX
 	resources := tdxCfg.Resources
-	firmware := comp.ExplodedPath(tdxCfg.Firmware)
+	firmware := cfg.Component.ExplodedPath(tdxCfg.Firmware)
 
-	cfg := process.Config{
+	pcfg := process.Config{
 		Path: defaultQemuSystemPath,
 		Args: []string{
 			"-accel", "kvm",
 			"-m", fmt.Sprintf("%d", resources.Memory),
 			"-smp", fmt.Sprintf("%d", resources.CPUCount),
-			"-name", fmt.Sprintf("oasis-%s-%s", rtCfg.ID, comp.ID()),
+			"-name", fmt.Sprintf("oasis-%s-%s", cfg.ID, cfg.Component.ID()),
 			"-cpu", "host",
 			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
 			"-bios", firmware,
@@ -189,18 +185,18 @@ func (p *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	// Configure kernel when one is available. We can set up TDs that only include the virtual
 	// firmware for special-purpose locked down TDs.
 	if tdxCfg.HasKernel() {
-		kernelImage := comp.ExplodedPath(tdxCfg.Kernel)
+		kernelImage := cfg.Component.ExplodedPath(tdxCfg.Kernel)
 
-		cfg.Args = append(cfg.Args, "-kernel", kernelImage)
+		pcfg.Args = append(pcfg.Args, "-kernel", kernelImage)
 		if tdxCfg.HasInitRD() {
-			initrdImage := comp.ExplodedPath(tdxCfg.InitRD)
+			initrdImage := cfg.Component.ExplodedPath(tdxCfg.InitRD)
 
-			cfg.Args = append(cfg.Args, "-initrd", initrdImage)
+			pcfg.Args = append(pcfg.Args, "-initrd", initrdImage)
 		}
 
 		// Configure stage 2 image.
 		if tdxCfg.HasStage2() {
-			stage2Image := comp.ExplodedPath(tdxCfg.Stage2Image)
+			stage2Image := cfg.Component.ExplodedPath(tdxCfg.Stage2Image)
 			stage2Format := tdxCfg.Stage2Format
 			switch stage2Format {
 			case "":
@@ -215,7 +211,8 @@ func (p *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 			// Set up a persistent overlay image when configured to do so.
 			snapshotMode := "on" // Default to ephemeral images.
 			if tdxCfg.Stage2Persist {
-				stage2Image, err = p.createPersistentOverlayImage(rtCfg, comp, stage2Image, stage2Format)
+				var err error
+				stage2Image, err = p.createPersistentOverlayImage(cfg, cfg.Component, stage2Image, stage2Format)
 				if err != nil {
 					return process.Config{}, err
 				}
@@ -223,7 +220,7 @@ func (p *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 				snapshotMode = "off"
 			}
 
-			cfg.Args = append(cfg.Args,
+			pcfg.Args = append(pcfg.Args,
 				// Stage 2 drive.
 				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=%s", stage2Format, stage2Image, snapshotMode),
 				"-device", "virtio-blk-pci,drive=drive0",
@@ -232,40 +229,40 @@ func (p *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 
 		// Append any specified extra kernel options.
 		if len(tdxCfg.ExtraKernelOptions) > 0 {
-			cfg.Args = append(cfg.Args,
+			pcfg.Args = append(pcfg.Args,
 				"-append", strings.Join(tdxCfg.ExtraKernelOptions, " "),
 			)
 		}
 	}
 
 	// Configure network access.
-	switch comp.IsNetworkAllowed() {
+	switch cfg.Component.IsNetworkAllowed() {
 	case true:
-		cfg.Args = append(cfg.Args,
+		pcfg.Args = append(pcfg.Args,
 			"-netdev", "user,id=net0",
 		)
-		cfg.AllowNetwork = true
+		pcfg.AllowNetwork = true
 	case false:
-		cfg.Args = append(cfg.Args,
+		pcfg.Args = append(pcfg.Args,
 			"-netdev", "user,id=net0,restrict=y",
 		)
 	}
-	cfg.Args = append(cfg.Args,
+	pcfg.Args = append(pcfg.Args,
 		"-device", "virtio-net-pci,netdev=net0",
 	)
 
 	// Logging.
 	logWrapper := host.NewRuntimeLogWrapper(
 		p.logger,
-		"runtime_id", rtCfg.ID,
-		"runtime_name", rtCfg.Name,
-		"component", comp.ID(),
+		"runtime_id", cfg.ID,
+		"runtime_name", cfg.Name,
+		"component", cfg.Component.ID(),
 		"provisioner", p.Name(),
 	)
-	cfg.Stdout = logWrapper
-	cfg.Stderr = logWrapper
+	pcfg.Stdout = logWrapper
+	pcfg.Stderr = logWrapper
 
-	return cfg, nil
+	return pcfg, nil
 }
 
 // createPersistentOverlayImage creates a persistent overlay image for the given backing image and

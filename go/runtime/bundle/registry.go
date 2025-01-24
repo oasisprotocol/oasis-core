@@ -96,10 +96,6 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 		}
 
 		rtManifests[ronl.Version] = manifest
-
-		if notifier, ok := r.notifiers[manifest.ID]; ok {
-			notifier.Broadcast(ronl.Version)
-		}
 	}
 
 	// Add components to the registry.
@@ -120,23 +116,27 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			}
 		}
 
+		comp := &ExplodedComponent{
+			Component:       comp,
+			TEEKind:         teeKind,
+			Detached:        detached,
+			ExplodedDataDir: manifest.ExplodedDataDir,
+		}
+
 		runtimeComponents, ok := r.components[manifest.ID]
 		if !ok {
 			runtimeComponents = make(map[component.ID]map[version.Version]*ExplodedComponent)
 			r.components[manifest.ID] = runtimeComponents
 		}
-
 		componentVersions, ok := runtimeComponents[compID]
 		if !ok {
 			componentVersions = make(map[version.Version]*ExplodedComponent)
 			runtimeComponents[compID] = componentVersions
 		}
+		componentVersions[comp.Version] = comp
 
-		componentVersions[comp.Version] = &ExplodedComponent{
-			Component:       comp,
-			TEEKind:         teeKind,
-			Detached:        detached,
-			ExplodedDataDir: manifest.ExplodedDataDir,
+		if notifier, ok := r.notifiers[manifest.ID]; ok {
+			notifier.Broadcast(comp)
 		}
 	}
 
@@ -214,25 +214,6 @@ func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 	return versions
 }
 
-// WatchVersions provides a channel that streams runtime versions as they
-// are added to the registry.
-func (r *Registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Version, *pubsub.Subscription) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	notifier, ok := r.notifiers[runtimeID]
-	if !ok {
-		notifier = pubsub.NewBroker(false)
-		r.notifiers[runtimeID] = notifier
-	}
-
-	sub := notifier.Subscribe()
-	ch := make(chan version.Version)
-	sub.Unwrap(ch)
-
-	return ch, sub
-}
-
 // GetManifests returns all known exploded manifests that contain RONL component.
 func (r *Registry) GetManifests() []*ExplodedManifest {
 	r.mu.RLock()
@@ -265,9 +246,8 @@ func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) 
 	return manifest.Name, nil
 }
 
-// GetComponents returns RONL component for the given runtime and version,
-// together with latest version of the remaining components.
-func (r *Registry) GetComponents(runtimeID common.Namespace, version version.Version) ([]*ExplodedComponent, error) {
+// Components returns all components for the given runtime.
+func (r *Registry) Components(runtimeID common.Namespace) []*ExplodedComponent {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -284,70 +264,54 @@ func (r *Registry) GetComponents(runtimeID common.Namespace, version version.Ver
 				},
 				Detached: false,
 			},
-		}, nil
+		}
 	}
 
-	// Prepare function to determine what kind of components we want.
-	isComponentWanted := func(compID component.ID, comp *ExplodedComponent) bool {
-		// Skip the RONL component, as the exact version is added manually.
-		if compID.IsRONL() {
-			return false
+	var components []*ExplodedComponent
+	for _, comps := range r.components[runtimeID] {
+		for _, comp := range comps {
+			components = append(components, comp)
 		}
-
-		// Node configuration overrides all other settings.
-		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(runtimeID, compID); ok {
-			return !compCfg.Disabled
-		}
-
-		// Detached components are explicit and they should be enabled by default.
-		if comp.Detached {
-			return true
-		}
-
-		// On non-compute nodes, assume all components are disabled by default.
-		if config.GlobalConfig.Mode != config.ModeCompute {
-			return false
-		}
-
-		// By default honor the status of the component itself.
-		return !comp.Disabled
 	}
 
-	// Collect all components into a slice.
-	components := make([]*ExplodedComponent, 0, 1)
+	slices.SortFunc(components, func(a, b *ExplodedComponent) int {
+		switch {
+		case a.Component.Kind < b.Component.Kind:
+			return -1
+		case a.Component.Kind > b.Component.Kind:
+			return 1
+		default:
+		}
 
-	// Add the specified version of the RONL component.
-	ronl, ok := r.components[runtimeID][component.ID_RONL][version]
+		switch {
+		case a.Component.Name < b.Component.Name:
+			return -1
+		case a.Component.Name > b.Component.Name:
+			return 1
+		default:
+		}
+
+		return a.Version.Cmp(b.Version)
+	})
+
+	return components
+}
+
+// WatchComponents provides a channel that streams runtime components as they
+// are added to the registry.
+func (r *Registry) WatchComponents(runtimeID common.Namespace) (<-chan *ExplodedComponent, *pubsub.Subscription) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	notifier, ok := r.notifiers[runtimeID]
 	if !ok {
-		return nil, fmt.Errorf("component '%s', version '%s', for runtime '%s' not found", component.RONL, version, runtimeID)
-	}
-	components = append(components, ronl)
-
-	// Add the latest version of the remaining components.
-	for compID, runtimeComponents := range r.components[runtimeID] {
-		var latestVersion uint64
-		var latestComp *ExplodedComponent
-
-		for version, comp := range runtimeComponents {
-			// Skip if the version is not the highest.
-			if version.ToU64() < latestVersion {
-				continue
-			}
-
-			// Skip if the component is not wanted.
-			if !isComponentWanted(compID, comp) {
-				continue
-			}
-
-			latestVersion = version.ToU64()
-			latestComp = comp
-		}
-
-		if latestComp != nil {
-			components = append(components, latestComp)
-		}
-
+		notifier = pubsub.NewBroker(false)
+		r.notifiers[runtimeID] = notifier
 	}
 
-	return components, nil
+	sub := notifier.Subscribe()
+	ch := make(chan *ExplodedComponent)
+	sub.Unwrap(ch)
+
+	return ch, sub
 }

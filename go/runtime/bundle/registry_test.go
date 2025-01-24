@@ -63,6 +63,10 @@ func TestRegistry(t *testing.T) {
 	err = runtimeID2.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002")
 	require.NoError(t, err)
 
+	var runtimeID3 common.Namespace
+	err = runtimeID3.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000003")
+	require.NoError(t, err)
+
 	// Prepare versions.
 	version1 := version.Version{Major: 1}
 	version2 := version.Version{Major: 2}
@@ -105,26 +109,23 @@ func TestRegistry(t *testing.T) {
 	manifests := registry.GetManifests()
 	require.Equal(t, 2, len(manifests))
 
-	// Fetch components for runtime 1, version 1.
-	comps, err := registry.GetComponents(runtimeID1, version1)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(comps))
+	// Fetch components for runtime 1.
+	comps := registry.Components(runtimeID1)
+	require.Equal(t, 3, len(comps))
 	require.Equal(t, version1, comps[0].Version)
 	require.Equal(t, version2, comps[1].Version)
+	require.Equal(t, version1, comps[2].Version)
+	require.Equal(t, component.ROFL, comps[0].Kind)
+	require.Equal(t, component.ROFL, comps[1].Kind)
+	require.Equal(t, component.RONL, comps[2].Kind)
 
-	// Fetch components for runtime 2, version 3.
-	comps, err = registry.GetComponents(runtimeID2, version3)
-	require.NoError(t, err)
+	// Fetch components for runtime 2.
+	comps = registry.Components(runtimeID2)
 	require.Equal(t, 1, len(comps))
 	require.Equal(t, version3, comps[0].Version)
+	require.Equal(t, component.RONL, comps[0].Kind)
 
-	// Attempt to fetch components for runtime 1, version 2 (no RONL component).
-	_, err = registry.GetComponents(runtimeID1, version2)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "component 'ronl', version '2.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001' not found")
-
-	// Attempt to fetch components for runtime 1, version 3 (no components).
-	_, err = registry.GetComponents(runtimeID1, version3)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "component 'ronl', version '3.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001' not found")
+	// Fetch components for runtime 3 (no components).
+	comps = registry.Components(runtimeID3)
+	require.Empty(t, comps)
 }
