@@ -15,7 +15,7 @@ type Endpoint interface {
 	// certificate chain respectively.
 	VerifyEvidence(ctx context.Context, evidence *Evidence) (*ias.AVRBundle, error)
 
-	// GetSPID returns the SPID and associated info used by the endpoint.
+	// GetSPIDInfo returns the SPID and associated info used by the endpoint.
 	GetSPIDInfo(ctx context.Context) (*SPIDInfo, error)
 
 	// GetSigRL returns the Signature Revocation List for a given EPID group.
