@@ -294,7 +294,7 @@ func (q *qemuProvisioner) createPersistentOverlayImage(
 	return imageFn, nil
 }
 
-func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (cap *node.CapabilityTEE, aerr error) {
+func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (capTEE *node.CapabilityTEE, aerr error) {
 	defer func() {
 		sgxCommon.UpdateAttestationMetrics(hp.Runtime.ID(), component.TEEKindTDX, aerr)
 	}()

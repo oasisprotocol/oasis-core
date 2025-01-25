@@ -79,7 +79,7 @@ type Service interface {
 	PeerManager() PeerManager
 
 	// RegisterProtocol starts tracking and managing peers that support the given protocol.
-	RegisterProtocol(p core.ProtocolID, min int, total int)
+	RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int)
 
 	// RegisterProtocolServer registers a protocol server for the given protocol.
 	RegisterProtocolServer(srv rpc.Server)

@@ -60,13 +60,11 @@ func delegationAmount(shares quantity.Quantity, sharePool api.SharePool) quantit
 
 // lenLongestString returns the length of the longest string passed to it.
 func lenLongestString(strs ...string) int {
-	max := 0
+	maxLen := 0
 	for _, s := range strs {
-		if len(s) > max {
-			max = len(s)
-		}
+		maxLen = max(maxLen, len(s))
 	}
-	return max
+	return maxLen
 }
 
 // prettyPrintDelegationDescriptions pretty-prints the given list of delegation

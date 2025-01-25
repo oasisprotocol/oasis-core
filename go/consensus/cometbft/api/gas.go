@@ -129,13 +129,13 @@ func (ga *compositeGasAccountant) GasWanted() transaction.Gas {
 }
 
 func (ga *compositeGasAccountant) GasUsed() transaction.Gas {
-	var max transaction.Gas
+	var maxGas transaction.Gas
 	for _, a := range ga.accts {
-		if g := a.GasUsed(); g > max {
-			max = g
+		if g := a.GasUsed(); g > maxGas {
+			maxGas = g
 		}
 	}
-	return max
+	return maxGas
 }
 
 // NewCompositeGasAccountant creates a gas accountant that is composed

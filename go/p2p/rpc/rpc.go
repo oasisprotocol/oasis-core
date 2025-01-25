@@ -16,7 +16,7 @@ type P2P interface {
 	BlockPeer(peerID core.PeerID)
 
 	// RegisterProtocol starts tracking and managing peers that support given protocol.
-	RegisterProtocol(p core.ProtocolID, min int, total int)
+	RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int)
 
 	// Host returns the P2P host.
 	Host() core.Host

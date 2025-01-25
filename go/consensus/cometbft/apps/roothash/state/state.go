@@ -436,7 +436,7 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 //
 // This is used when reducing the MaxPastRootsStored consensus parameter in
 // changeParameters() in go/consensus/cometbft/apps/roothash/messages.go.
-func (s *MutableState) ShrinkPastRoots(ctx context.Context, max uint64) error {
+func (s *MutableState) ShrinkPastRoots(ctx context.Context, maxStoredRoots uint64) error {
 	// Go through all runtimes, so we can delete extra stored past
 	// roots for each one, where it's needed.
 	runtimes, err := s.Runtimes(ctx)
@@ -447,12 +447,12 @@ func (s *MutableState) ShrinkPastRoots(ctx context.Context, max uint64) error {
 	for _, r := range runtimes {
 		id := r.Runtime.ID
 		numStoredRoots := s.PastRoundRootsCount(ctx, id)
-		if numStoredRoots <= max {
+		if numStoredRoots <= maxStoredRoots {
 			// Nothing to delete.
 			continue
 		}
 
-		numPastRootsToDelete := numStoredRoots - max
+		numPastRootsToDelete := numStoredRoots - maxStoredRoots
 
 		it := s.is.NewIterator(ctx)
 

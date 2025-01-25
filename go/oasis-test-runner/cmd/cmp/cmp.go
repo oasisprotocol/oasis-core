@@ -258,16 +258,14 @@ func getSummableMetric(
 
 	// Compute average and max values.
 	avg := 0.0
-	max := 0.0
+	maximum := 0.0
 	for _, s := range result.(model.Vector) {
 		avg += float64(s.Value)
-		if max < float64(s.Value) {
-			max = float64(s.Value)
-		}
+		maximum = max(maximum, float64(s.Value))
 	}
 	avg /= float64(len(result.(model.Vector)))
 
-	return avg, max, nil
+	return avg, maximum, nil
 }
 
 // getNetwork returns average and maximum amount of network activity for all
@@ -315,18 +313,16 @@ func getNetwork(
 
 		// Compute average and max values.
 		avg := 0.0
-		max := 0.0
+		maximum := 0.0
 		for _, s := range result.(model.Matrix) {
 			// Network traffic is difference between last and first reading.
 			avg += float64(s.Values[len(s.Values)-1].Value - s.Values[0].Value)
-			if max < float64(s.Values[len(s.Values)-1].Value-s.Values[0].Value) {
-				max = float64(s.Values[len(s.Values)-1].Value - s.Values[0].Value)
-			}
+			maximum = max(maximum, float64(s.Values[len(s.Values)-1].Value-s.Values[0].Value))
 		}
 		avg /= float64(len(result.(model.Matrix)))
 
 		bytesTotalAvg[rxtx] = avg
-		bytesTotalMax[rxtx] = max
+		bytesTotalMax[rxtx] = maximum
 	}
 
 	return (bytesTotalAvg[metrics.MetricNetReceiveBytesTotal] + bytesTotalAvg[metrics.MetricNetTransmitBytesTotal]) / 2.0,

@@ -212,9 +212,6 @@ func convertValidators(d *genesis.Document) ([]cmttypes.GenesisValidator, error)
 	})
 
 	// Keep only the first MaxValidators validators.
-	max := d.Scheduler.Parameters.MaxValidators
-	if max > len(tmValidators) {
-		max = len(tmValidators)
-	}
-	return tmValidators[:max], nil
+	maxVal := min(d.Scheduler.Parameters.MaxValidators, len(tmValidators))
+	return tmValidators[:maxVal], nil
 }

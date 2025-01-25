@@ -86,10 +86,10 @@ func WithChainSeparation() ContextOption {
 
 // WithDynamicSuffix is a context option that configures the context to use
 // a dynamic suffix.
-func WithDynamicSuffix(str string, len int) ContextOption {
+func WithDynamicSuffix(str string, maxLen int) ContextOption {
 	return func(o *contextOptions) {
 		o.dynamicSuffix = str
-		o.dynamicSuffixMaxLen = len
+		o.dynamicSuffixMaxLen = maxLen
 	}
 }
 

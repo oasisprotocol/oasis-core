@@ -321,8 +321,8 @@ func (p *p2p) BlockPeer(peerID core.PeerID) {
 }
 
 // Implements api.Service.
-func (p *p2p) RegisterProtocol(pid core.ProtocolID, min int, total int) {
-	p.peerMgr.RegisterProtocol(pid, min, total)
+func (p *p2p) RegisterProtocol(pid core.ProtocolID, minPeers int, totalPeers int) {
+	p.peerMgr.RegisterProtocol(pid, minPeers, totalPeers)
 }
 
 // Implements api.Service.
