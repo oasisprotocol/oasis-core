@@ -192,6 +192,9 @@ type RuntimeStatus struct {
 	// Storage contains the storage worker status in case this node is a storage node.
 	Storage *storageWorker.Status `json:"storage,omitempty"`
 
+	// History is status of block history.
+	History *HistoryStatus `json:"history,omitempty"`
+
 	// Provisioner is the name of the runtime provisioner.
 	Provisioner string `json:"provisioner,omitempty"`
 
@@ -228,6 +231,14 @@ type SeedStatus struct {
 
 	// NodePeers is a list of peers that are connected to the node.
 	NodePeers []string `json:"node_peers"`
+}
+
+// HistoryStatus is the status as observed by the block history.
+type HistoryStatus struct {
+	// LastRound is the round of the latest block.
+	LastRound uint64 `json:"last_round"`
+	// LastHeight is the consensus height of the latest block.
+	LastHeight int64 `json:"last_height"`
 }
 
 // DebugModuleName is the module name for the debug controller service.
