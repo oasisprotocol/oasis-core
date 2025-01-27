@@ -182,12 +182,14 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue-upgrade.sgxs
       - buildkite-agent artifact upload simple-keymanager-upgrade.sgxs
       - buildkite-agent artifact upload simple-rofl.sgxs
+      - buildkite-agent artifact upload simple-rofl-upgrade.sgxs
       - cd /var/tmp/artifacts/default/release
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keyvalue-upgrade
       - buildkite-agent artifact upload simple-keymanager-upgrade
       - buildkite-agent artifact upload simple-rofl
+      - buildkite-agent artifact upload simple-rofl-upgrade
 
       # Build for mock SGX.
       - cd /workdir
