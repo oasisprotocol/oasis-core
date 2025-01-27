@@ -62,6 +62,12 @@ type NodeController interface {
 
 	// GetStatus returns the current status overview of the node.
 	GetStatus(ctx context.Context) (*Status, error)
+
+	// AddBundle adds bundle from the given path.
+	//
+	// If the bundle upgrades an existing ROFL component, the latter will
+	// be upgraded to the new version.
+	AddBundle(ctx context.Context, path string) error
 }
 
 // Status is the current status overview.

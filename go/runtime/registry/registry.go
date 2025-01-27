@@ -69,6 +69,9 @@ type Registry interface {
 
 	// GetBundleRegistry returns the bundle registry.
 	GetBundleRegistry() *bundle.Registry
+
+	// GetBundleManager returns the bundle manager.
+	GetBundleManager() *bundle.Manager
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -600,6 +603,11 @@ func (r *runtimeRegistry) FinishInitialization() error {
 // GetBundleRegistry implements Registry.
 func (r *runtimeRegistry) GetBundleRegistry() *bundle.Registry {
 	return r.bundleRegistry
+}
+
+// GetBundleManager implements Registry.
+func (r *runtimeRegistry) GetBundleManager() *bundle.Manager {
+	return r.bundleManager
 }
 
 // Name implements BackgroundService.

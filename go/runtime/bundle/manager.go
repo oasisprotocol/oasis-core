@@ -212,6 +212,27 @@ func (m *Manager) run(ctx context.Context) {
 	}
 }
 
+// Add adds bundle from the given path.
+func (m *Manager) Add(path string) error {
+	manifest, err := m.explodeBundle(path)
+	if err != nil {
+		m.logger.Error("failed to explode bundle",
+			"err", err,
+			"path", path,
+		)
+		return err
+	}
+
+	if err := m.registerManifest(manifest); err != nil {
+		m.logger.Error("failed to register manifest",
+			"err", err,
+		)
+		return fmt.Errorf("failed to register manifest: %w", err)
+	}
+
+	return nil
+}
+
 // Download updates the checksums of bundles pending download for the given runtime.
 //
 // Any existing checksums in the download queue for the given runtime are removed

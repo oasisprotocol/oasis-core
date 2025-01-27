@@ -172,6 +172,11 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 	}, nil
 }
 
+// AddBundle implements control.NodeController.
+func (n *Node) AddBundle(_ context.Context, path string) error {
+	return n.RuntimeRegistry.GetBundleManager().Add(path)
+}
+
 func (n *Node) getIdentityStatus() control.IdentityStatus {
 	return control.IdentityStatus{
 		Node:      n.Identity.NodeSigner.Public(),

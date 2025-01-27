@@ -77,6 +77,12 @@ var (
 		Deprecated: "use the `oasis` CLI instead.",
 	}
 
+	controlAddBundleCmd = &cobra.Command{
+		Use:   "add-bundle <path>",
+		Short: "adds runtime components from the bundle",
+		Run:   doAddBundle,
+	}
+
 	logger = logging.GetLogger("cmd/control")
 )
 
@@ -297,6 +303,23 @@ func doStatus(cmd *cobra.Command, _ []string) {
 	fmt.Println(string(prettyStatus))
 }
 
+func doAddBundle(cmd *cobra.Command, args []string) {
+	if len(args) != 1 {
+		logger.Error("expected bundle path")
+		os.Exit(1)
+	}
+
+	conn, client := DoConnect(cmd)
+	defer conn.Close()
+
+	if err := client.AddBundle(context.Background(), args[0]); err != nil {
+		logger.Error("failed to add bundle",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	controlCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
@@ -311,5 +334,6 @@ func Register(parentCmd *cobra.Command) {
 	controlCmd.AddCommand(controlCancelUpgradeCmd)
 	controlCmd.AddCommand(controlStatusCmd)
 	controlCmd.AddCommand(controlRuntimeStatsCmd)
+	controlCmd.AddCommand(controlAddBundleCmd)
 	parentCmd.AddCommand(controlCmd)
 }

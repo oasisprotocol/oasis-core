@@ -49,7 +49,7 @@ func (n *SeedNode) CancelUpgrade(context.Context, *upgrade.Descriptor) error {
 }
 
 // GetStatus implements control.NodeController.
-func (n *SeedNode) GetStatus(_ context.Context) (*control.Status, error) {
+func (n *SeedNode) GetStatus(context.Context) (*control.Status, error) {
 	tmAddresses, err := n.cometbftSeed.GetAddresses()
 	if err != nil {
 		return nil, err
@@ -80,4 +80,9 @@ func (n *SeedNode) GetStatus(_ context.Context) (*control.Status, error) {
 		Identity:        identity,
 		Seed:            &seedStatus,
 	}, nil
+}
+
+// AddBundle implements control.NodeController.
+func (n *SeedNode) AddBundle(context.Context, string) error {
+	return control.ErrNotImplemented
 }
