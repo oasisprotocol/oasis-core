@@ -92,8 +92,8 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context) error 
 
 	newInterval := height / app.interval
 	if newInterval != app.currentInterval {
-		min := height % app.interval
-		offset := rand.Int63n(app.interval-min) + min
+		minimum := height % app.interval
+		offset := rand.Int63n(app.interval-minimum) + minimum
 		app.currentInterval = newInterval
 		app.checkHeight = newInterval*app.interval + offset
 		logger.Debug("Entering new interval",

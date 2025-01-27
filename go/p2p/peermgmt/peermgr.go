@@ -173,59 +173,59 @@ func (m *PeerManager) NumTopicPeers(topic string) int {
 
 // RegisterProtocol starts tracking and managing peers that support the given protocol.
 // If the protocol is already registered, its values are updated.
-func (m *PeerManager) RegisterProtocol(p core.ProtocolID, min int, total int) {
+func (m *PeerManager) RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if w, ok := m.protocols[p]; ok {
-		w.min = min
-		w.total = total
+		w.min = minPeers
+		w.total = totalPeers
 
 		m.logger.Debug("protocol updated",
 			"protocol", p,
-			"min", min,
-			"total", total,
+			"min_peers", minPeers,
+			"total_peers", totalPeers,
 		)
 
 		return
 	}
 
-	m.protocols[p] = &watermark{min, total}
+	m.protocols[p] = &watermark{minPeers, totalPeers}
 	m.discovery.startAdvertising(string(p))
 
 	m.logger.Debug("protocol registered",
 		"protocol", p,
-		"min", min,
-		"total", total,
+		"min_peers", minPeers,
+		"total_peers", totalPeers,
 	)
 }
 
 // RegisterTopic starts tracking and managing peers that support the given topic.
 // If the topic is already registered, its values are updated.
-func (m *PeerManager) RegisterTopic(topic string, min int, total int) {
+func (m *PeerManager) RegisterTopic(topic string, minPeers int, totalPeers int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if data, ok := m.topics[topic]; ok {
-		data.min = min
-		data.total = total
+		data.min = minPeers
+		data.total = totalPeers
 
 		m.logger.Debug("topic updated",
 			"topic", topic,
-			"min", min,
-			"total", total,
+			"min_peers", minPeers,
+			"total_peers", totalPeers,
 		)
 
 		return
 	}
 
-	m.topics[topic] = &watermark{min, total}
+	m.topics[topic] = &watermark{minPeers, totalPeers}
 	m.discovery.startAdvertising(topic)
 
 	m.logger.Debug("topic registered",
 		"topic", topic,
-		"min", min,
-		"total", total,
+		"min_peers", minPeers,
+		"total_peers", totalPeers,
 	)
 }
 

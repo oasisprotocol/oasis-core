@@ -58,23 +58,23 @@ type StoreOptions struct {
 type StoreOption func(opts *StoreOptions)
 
 // WithMaxPeers configures maximum number of peers.
-func WithMaxPeers(max int) StoreOption {
+func WithMaxPeers(n int) StoreOption {
 	return func(opts *StoreOptions) {
-		opts.maxPeers = max
+		opts.maxPeers = n
 	}
 }
 
 // WithMaxNamespacePeers configures maximum number of peers in a namespace.
-func WithMaxNamespacePeers(max int) StoreOption {
+func WithMaxNamespacePeers(n int) StoreOption {
 	return func(opts *StoreOptions) {
-		opts.maxNsPeers = max
+		opts.maxNsPeers = n
 	}
 }
 
 // WithMaxPeerNamespaces configures maximum number of peer's namespaces.
-func WithMaxPeerNamespaces(max int) StoreOption {
+func WithMaxPeerNamespaces(n int) StoreOption {
 	return func(opts *StoreOptions) {
-		opts.maxPeerNs = max
+		opts.maxPeerNs = n
 	}
 }
 

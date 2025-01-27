@@ -58,8 +58,8 @@ func newPeerConnector(h host.Host, g connmgr.ConnectionGater) *peerConnector {
 //
 // Note that at the end more than max number of peers from the given list can be connected as some
 // of them might already be connected prior the method call or connected via some other means.
-func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.AddrInfo, max int) {
-	if max <= 0 {
+func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.AddrInfo, maxPeers int) {
+	if maxPeers <= 0 {
 		return
 	}
 
@@ -68,8 +68,8 @@ func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.Add
 
 	// Try connecting to peers in parallel until enough connections are established.
 	// Note that connections are throttled inside libp2p package.
-	ticketCh := make(chan bool, max)
-	for i := 0; i < max; i++ {
+	ticketCh := make(chan bool, maxPeers)
+	for i := 0; i < maxPeers; i++ {
 		ticketCh <- false
 	}
 
@@ -104,8 +104,8 @@ func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.Add
 				break
 			}
 
-			max--
-			if max == 0 {
+			maxPeers--
+			if maxPeers == 0 {
 				return
 			}
 		}
