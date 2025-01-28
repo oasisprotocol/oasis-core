@@ -24,7 +24,7 @@ type Registry struct {
 	mu sync.RWMutex
 
 	manifestHashes   map[hash.Hash]struct{}
-	regularManifests map[common.Namespace]map[version.Version]*Manifest
+	regularManifests map[common.Namespace]map[version.Version]*ExplodedManifest
 	components       map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
 	notifiers        map[common.Namespace]*pubsub.Broker
 
@@ -37,7 +37,7 @@ func NewRegistry() *Registry {
 
 	return &Registry{
 		manifestHashes:   make(map[hash.Hash]struct{}),
-		regularManifests: make(map[common.Namespace]map[version.Version]*Manifest),
+		regularManifests: make(map[common.Namespace]map[version.Version]*ExplodedManifest),
 		components:       make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
 		notifiers:        make(map[common.Namespace]*pubsub.Broker),
 		logger:           logger,
@@ -54,9 +54,8 @@ func (r *Registry) HasManifest(hash hash.Hash) bool {
 	return ok
 }
 
-// AddManifest adds the provided manifest, whose components were extracted
-// to the specified directory, to the store.
-func (r *Registry) AddManifest(manifest *Manifest, dir string) error {
+// AddManifest adds the provided exploded manifest to the store.
+func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -92,7 +91,7 @@ func (r *Registry) AddManifest(manifest *Manifest, dir string) error {
 
 		rtManifests, ok := r.regularManifests[manifest.ID]
 		if !ok {
-			rtManifests = make(map[version.Version]*Manifest)
+			rtManifests = make(map[version.Version]*ExplodedManifest)
 			r.regularManifests[manifest.ID] = rtManifests
 		}
 
@@ -137,7 +136,7 @@ func (r *Registry) AddManifest(manifest *Manifest, dir string) error {
 			Component:       comp,
 			TEEKind:         teeKind,
 			Detached:        detached,
-			ExplodedDataDir: dir,
+			ExplodedDataDir: manifest.ExplodedDataDir,
 		}
 	}
 
@@ -191,12 +190,12 @@ func (r *Registry) WatchVersions(runtimeID common.Namespace) (<-chan version.Ver
 	return ch, sub
 }
 
-// GetManifests returns all known manifests that contain RONL component.
-func (r *Registry) GetManifests() []*Manifest {
+// GetManifests returns all known exploded manifests that contain RONL component.
+func (r *Registry) GetManifests() []*ExplodedManifest {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	manifests := make([]*Manifest, 0)
+	manifests := make([]*ExplodedManifest, 0)
 	for _, manifest := range r.regularManifests {
 		manifests = slices.AppendSeq(manifests, maps.Values(manifest))
 	}

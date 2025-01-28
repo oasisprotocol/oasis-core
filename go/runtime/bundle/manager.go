@@ -37,15 +37,14 @@ const (
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
-// ManifestStore is an interface that defines methods for storing manifests.
+// ManifestStore is an interface that defines methods for storing exploded manifests.
 type ManifestStore interface {
-	// HasManifest returns true iff the store already contains a manifest
+	// HasManifest returns true iff the store already contains an exploded manifest
 	// with the given hash.
 	HasManifest(hash hash.Hash) bool
 
-	// AddManifest adds the provided manifest, whose components were extracted
-	// to the specified directory, to the store.
-	AddManifest(manifest *Manifest, dir string) error
+	// AddManifest adds the provided exploded manifest to the store.
+	AddManifest(manifest *ExplodedManifest) error
 }
 
 // Manager is responsible for managing bundles.
@@ -337,7 +336,7 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 	}
 	defer os.Remove(src)
 
-	manifest, dir, err := m.explodeBundle(src, WithManifestHash(manifestHash))
+	manifest, err := m.explodeBundle(src, WithManifestHash(manifestHash))
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,
@@ -346,7 +345,7 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 		return err
 	}
 
-	if err := m.registerManifest(manifest, dir); err != nil {
+	if err := m.registerManifest(manifest); err != nil {
 		m.logger.Error("failed to register manifest",
 			"err", err,
 		)
@@ -437,10 +436,10 @@ func (m *Manager) fetchBundle(url string) (string, error) {
 	return file.Name(), nil
 }
 
-func (m *Manager) loadManifests() (map[string]*Manifest, error) {
+func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 	m.logger.Info("loading manifests")
 
-	manifests := make(map[string]*Manifest)
+	manifests := make([]*ExplodedManifest, 0)
 
 	entries, err := os.ReadDir(m.bundleDir)
 	if err != nil {
@@ -468,13 +467,13 @@ func (m *Manager) loadManifests() (map[string]*Manifest, error) {
 			"hash", manifest.Hash(),
 		)
 
-		manifests[dir] = &manifest
+		manifests = append(manifests, &ExplodedManifest{&manifest, dir})
 	}
 
 	return manifests, nil
 }
 
-func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[string]*Manifest, error) {
+func (m *Manager) cleanupBundles(manifests, exploded []*ExplodedManifest) ([]*ExplodedManifest, error) {
 	m.logger.Info("cleaning bundles")
 
 	detached := make(map[hash.Hash]struct{})
@@ -484,7 +483,7 @@ func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[
 		}
 	}
 
-	shouldKeep := func(manifest *Manifest) bool {
+	shouldKeep := func(manifest *ExplodedManifest) bool {
 		if _, ok := m.runtimeIDs[manifest.ID]; !ok {
 			return false
 		}
@@ -497,14 +496,14 @@ func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[
 		return true
 	}
 
-	retained := make(map[string]*Manifest)
-	for dir, manifest := range manifests {
+	retained := make([]*ExplodedManifest, 0)
+	for _, manifest := range manifests {
 		if shouldKeep(manifest) {
-			retained[dir] = manifest
+			retained = append(retained, manifest)
 			continue
 		}
 
-		if err := m.removeBundle(dir); err != nil {
+		if err := m.removeBundle(manifest.ExplodedDataDir); err != nil {
 			return nil, err
 		}
 	}
@@ -532,55 +531,55 @@ func (m *Manager) removeBundle(dir string) error {
 	return nil
 }
 
-func (m *Manager) explodeBundles(paths []string) (map[string]*Manifest, error) {
+func (m *Manager) explodeBundles(paths []string) ([]*ExplodedManifest, error) {
 	m.logger.Info("exploding bundles")
 
-	manifests := make(map[string]*Manifest)
+	manifests := make([]*ExplodedManifest, 0)
 	for _, path := range paths {
-		manifest, dir, err := m.explodeBundle(path)
+		manifest, err := m.explodeBundle(path)
 		if err != nil {
 			return nil, err
 		}
-		manifests[dir] = manifest
+		manifests = append(manifests, manifest)
 	}
 
 	return manifests, nil
 }
 
-func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*Manifest, string, error) {
+func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManifest, error) {
 	m.logger.Info("exploding bundle",
 		"path", path,
 	)
 
 	bnd, err := Open(path, opts...)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to open bundle: %w", err)
+		return nil, fmt.Errorf("failed to open bundle: %w", err)
 	}
 	defer bnd.Close()
 
 	dir, err := bnd.WriteExploded(m.dataDir)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to explode bundle: %w", err)
+		return nil, fmt.Errorf("failed to explode bundle: %w", err)
 	}
 
 	m.logger.Info("bundle exploded",
 		"dir", dir,
 	)
 
-	return bnd.Manifest, dir, nil
+	return &ExplodedManifest{bnd.Manifest, dir}, nil
 }
 
-func (m *Manager) registerManifests(manifests map[string]*Manifest) error {
+func (m *Manager) registerManifests(manifests []*ExplodedManifest) error {
 	m.logger.Info("registering manifests")
 
 	// Register detached manifests first to ensure all components
 	// are available before a regular manifest is added.
 	for _, detached := range []bool{true, false} {
-		for dir, manifest := range manifests {
+		for _, manifest := range manifests {
 			if manifest.IsDetached() != detached {
 				continue
 			}
-			if err := m.registerManifest(manifest, dir); err != nil {
+			if err := m.registerManifest(manifest); err != nil {
 				return err
 			}
 		}
@@ -589,13 +588,13 @@ func (m *Manager) registerManifests(manifests map[string]*Manifest) error {
 	return nil
 }
 
-func (m *Manager) registerManifest(manifest *Manifest, dir string) error {
+func (m *Manager) registerManifest(manifest *ExplodedManifest) error {
 	m.logger.Info("registering manifest",
 		"name", manifest.Name,
 		"hash", manifest.Hash(),
 	)
 
-	return m.store.AddManifest(manifest, dir)
+	return m.store.AddManifest(manifest)
 }
 
 func validateAndNormalizeURL(rawURL string) (string, error) {
