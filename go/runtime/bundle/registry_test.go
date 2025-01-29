@@ -106,8 +106,8 @@ func TestRegistry(t *testing.T) {
 	require.ErrorContains(t, err, "duplicate component 'ronl', version '1.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001'")
 
 	// Fetch manifests.
-	manifests := registry.GetManifests()
-	require.Equal(t, 2, len(manifests))
+	manifests := registry.Manifests()
+	require.Equal(t, 3, len(manifests))
 
 	// Fetch components for runtime 1.
 	comps := registry.Components(runtimeID1)

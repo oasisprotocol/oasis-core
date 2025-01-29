@@ -177,8 +177,8 @@ func (bnd *Bundle) Add(fn string, data Data) error {
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
 func (bnd *Bundle) MrEnclave(id component.ID) (*sgx.MrEnclave, error) {
-	comp := bnd.Manifest.GetComponentByID(id)
-	if comp == nil {
+	comp, ok := bnd.Manifest.GetComponentByID(id)
+	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
 	}
 	if comp.SGX == nil {
@@ -203,8 +203,8 @@ func (bnd *Bundle) MrEnclave(id component.ID) (*sgx.MrEnclave, error) {
 
 // MrSigner returns the MRSIGNER that signed the SGX executable.
 func (bnd *Bundle) MrSigner(id component.ID) (*sgx.MrSigner, error) {
-	comp := bnd.Manifest.GetComponentByID(id)
-	if comp == nil {
+	comp, ok := bnd.Manifest.GetComponentByID(id)
+	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
 	}
 	if comp.SGX == nil {
@@ -252,8 +252,8 @@ func (bnd *Bundle) EnclaveIdentity(id component.ID) (*sgx.EnclaveIdentity, error
 // EnclaveIdentities returns the enclave identities of the given component.
 func (bnd *Bundle) EnclaveIdentities(id component.ID) ([]sgx.EnclaveIdentity, error) {
 	// If the component has a build-time known expected identity, use it.
-	comp := bnd.Manifest.GetComponentByID(id)
-	if comp == nil {
+	comp, ok := bnd.Manifest.GetComponentByID(id)
+	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
 	}
 	if len(comp.Identities) > 0 {

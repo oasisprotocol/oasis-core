@@ -598,11 +598,11 @@ func (m *Manager) cleanBundles(runtimeID common.Namespace) {
 			continue
 		}
 
-		if manifest.IsDetached() {
+		ronl, ok := manifest.GetComponentByID(component.ID_RONL)
+		if !ok {
 			continue
 		}
-
-		if ronl := manifest.GetComponentByID(component.ID_RONL); !ronl.Version.Less(maxVersion) {
+		if !ronl.Version.Less(maxVersion) {
 			continue
 		}
 

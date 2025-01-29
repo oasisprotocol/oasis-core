@@ -23,10 +23,9 @@ import (
 type Registry struct {
 	mu sync.RWMutex
 
-	manifests        map[hash.Hash]*ExplodedManifest
-	regularManifests map[common.Namespace]map[version.Version]*ExplodedManifest
-	components       map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
-	notifiers        map[common.Namespace]*pubsub.Broker
+	manifests  map[hash.Hash]*ExplodedManifest
+	components map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent
+	notifiers  map[common.Namespace]*pubsub.Broker
 
 	logger *logging.Logger
 }
@@ -36,11 +35,10 @@ func NewRegistry() *Registry {
 	logger := logging.GetLogger("runtime/bundle/registry")
 
 	return &Registry{
-		manifests:        make(map[hash.Hash]*ExplodedManifest),
-		regularManifests: make(map[common.Namespace]map[version.Version]*ExplodedManifest),
-		components:       make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
-		notifiers:        make(map[common.Namespace]*pubsub.Broker),
-		logger:           logger,
+		manifests:  make(map[hash.Hash]*ExplodedManifest),
+		components: make(map[common.Namespace]map[component.ID]map[version.Version]*ExplodedComponent),
+		notifiers:  make(map[common.Namespace]*pubsub.Broker),
+		logger:     logger,
 	}
 }
 
@@ -84,21 +82,12 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 		}
 	}
 
-	// Add manifests containing RONL component to the registry.
+	// Add components to the registry.
 	detached := true
-	if ronl, ok := components[component.ID_RONL]; ok {
+	if _, ok := components[component.ID_RONL]; ok {
 		detached = false
-
-		rtManifests, ok := r.regularManifests[manifest.ID]
-		if !ok {
-			rtManifests = make(map[version.Version]*ExplodedManifest)
-			r.regularManifests[manifest.ID] = rtManifests
-		}
-
-		rtManifests[ronl.Version] = manifest
 	}
 
-	// Add components to the registry.
 	for compID, comp := range components {
 		teeKind := comp.TEEKind()
 		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(manifest.ID, compID); ok {
@@ -174,13 +163,6 @@ func (r *Registry) RemoveManifest(hash hash.Hash) bool {
 
 	delete(r.manifests, hash)
 
-	if ronl := manifest.GetComponentByID(component.ID_RONL); ronl != nil {
-		delete(r.regularManifests[manifest.ID], ronl.Version)
-		if len(r.regularManifests[manifest.ID]) == 0 {
-			delete(r.regularManifests, manifest.ID)
-		}
-	}
-
 	for _, c := range manifest.Manifest.Components {
 		delete(r.components[manifest.ID][c.ID()], c.Version)
 		if len(r.components[manifest.ID][c.ID()]) == 0 {
@@ -208,42 +190,20 @@ func (r *Registry) GetVersions(runtimeID common.Namespace) []version.Version {
 		}
 	}
 
-	versions := slices.Collect(maps.Keys(r.regularManifests[runtimeID]))
+	versions := make([]version.Version, 0)
+	for _, manifest := range r.manifests {
+		if manifest.ID != runtimeID {
+			continue
+		}
+		ronl, ok := manifest.GetComponentByID(component.ID_RONL)
+		if !ok {
+			continue
+		}
+		versions = append(versions, ronl.Version)
+	}
 	slices.SortFunc(versions, version.Version.Cmp)
 
 	return versions
-}
-
-// GetManifests returns all known exploded manifests that contain RONL component.
-func (r *Registry) GetManifests() []*ExplodedManifest {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	manifests := make([]*ExplodedManifest, 0)
-	for _, manifest := range r.regularManifests {
-		manifests = slices.AppendSeq(manifests, maps.Values(manifest))
-	}
-
-	return manifests
-}
-
-// GetName returns optional human readable runtime name.
-func (r *Registry) GetName(runtimeID common.Namespace, version version.Version) (string, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs) {
-		// Allow the mock provisioner to function, as it does not use an actual
-		// runtime. This is only used for the basic node tests.
-		return "mock-runtime", nil
-	}
-
-	manifest, ok := r.regularManifests[runtimeID][version]
-	if !ok {
-		return "", fmt.Errorf("manifest for runtime '%s', version '%s' not found", runtimeID, version)
-	}
-
-	return manifest.Name, nil
 }
 
 // Components returns all components for the given runtime.
