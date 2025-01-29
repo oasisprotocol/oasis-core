@@ -15,6 +15,15 @@ const (
 	manifestName = manifestPath + "/MANIFEST.MF"
 )
 
+// ExplodedManifest is manifest with corresponding exploded bundle dir.
+type ExplodedManifest struct {
+	*Manifest
+
+	// ExplodedDataDir is the path to the data directory where the bundle
+	// represented by manifest has been extracted.
+	ExplodedDataDir string
+}
+
 // Manifest is a deserialized runtime bundle manifest.
 type Manifest struct {
 	// Name is the optional human readable runtime name.

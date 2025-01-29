@@ -51,6 +51,11 @@ func (v Version) Cmp(other Version) int {
 	return int(v.Patch) - int(other.Patch)
 }
 
+// Less checks if the version is strictly less than the given version.
+func (v Version) Less(other Version) bool {
+	return v.Cmp(other) < 0
+}
+
 // ToU64 returns the version as platform-dependent uint64.
 func (v Version) ToU64() uint64 {
 	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16) | (uint64(v.Patch))

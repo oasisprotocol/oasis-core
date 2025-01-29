@@ -19,7 +19,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 const (
@@ -37,15 +39,20 @@ const (
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 )
 
-// ManifestStore is an interface that defines methods for storing manifests.
+// ManifestStore is an interface that defines methods for storing exploded manifests.
 type ManifestStore interface {
-	// HasManifest returns true iff the store already contains a manifest
+	// HasManifest returns true iff the store already contains an exploded manifest
 	// with the given hash.
 	HasManifest(hash hash.Hash) bool
 
-	// AddManifest adds the provided manifest, whose components were extracted
-	// to the specified directory, to the store.
-	AddManifest(manifest *Manifest, dir string) error
+	// AddManifest adds the provided exploded manifest to the store.
+	AddManifest(manifest *ExplodedManifest) error
+
+	// RemoveManifest removes an exploded manifest with provided hash.
+	RemoveManifest(hash hash.Hash) bool
+
+	// Manifests returns all known exploded manifests.
+	Manifests() []*ExplodedManifest
 }
 
 // Manager is responsible for managing bundles.
@@ -62,8 +69,9 @@ type Manager struct {
 	runtimeBaseURLs map[common.Namespace][]string
 	globalBaseURLs  []string
 
-	downloadCh    chan struct{}
+	triggerCh     chan struct{}
 	downloadQueue map[common.Namespace][]hash.Hash
+	cleanupQueue  map[common.Namespace]version.Version
 
 	client *http.Client
 	store  ManifestStore
@@ -119,8 +127,9 @@ func NewManager(dataDir string, runtimeIDs []common.Namespace, store ManifestSto
 		runtimeIDs:         runtimes,
 		globalBaseURLs:     globalBaseURLs,
 		runtimeBaseURLs:    runtimeBaseURLs,
-		downloadCh:         make(chan struct{}, 1),
+		triggerCh:          make(chan struct{}, 1),
 		downloadQueue:      make(map[common.Namespace][]hash.Hash),
+		cleanupQueue:       make(map[common.Namespace]version.Version),
 		client:             &client,
 		store:              store,
 		logger:             *logger,
@@ -168,7 +177,7 @@ func (m *Manager) run(ctx context.Context) {
 	}
 
 	// Remove unneeded bundles and update the manifest map accordingly.
-	manifests, err = m.cleanupBundles(manifests, exploded)
+	manifests, err = m.cleanOnStartup(manifests, exploded)
 	if err != nil {
 		m.logger.Error("failed to cleanup bundles",
 			"err", err,
@@ -192,21 +201,22 @@ func (m *Manager) run(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-		case <-m.downloadCh:
+		case <-m.triggerCh:
 		case <-ctx.Done():
 			m.logger.Info("stopping")
 			return
 		}
 
-		m.Download()
+		m.download()
+		m.clean()
 	}
 }
 
-// Queue updates the checksums of bundles pending download for the given runtime.
+// Download updates the checksums of bundles pending download for the given runtime.
 //
 // Any existing checksums in the download queue for the given runtime are removed
 // and replaced with the given ones.
-func (m *Manager) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) {
+func (m *Manager) Download(runtimeID common.Namespace, manifestHashes []hash.Hash) {
 	// Download bundles only for the configured runtimes.
 	if _, ok := m.runtimeIDs[runtimeID]; !ok {
 		return
@@ -236,15 +246,37 @@ func (m *Manager) Queue(runtimeID common.Namespace, manifestHashes []hash.Hash) 
 	}
 	m.downloadQueue[runtimeID] = hashes
 
-	// Trigger immediate download of new bundles.
+	// Trigger immediate download and clean-up of bundles.
 	select {
-	case m.downloadCh <- struct{}{}:
+	case m.triggerCh <- struct{}{}:
 	default:
 	}
 }
 
-// Download tries to download bundles in the queue.
-func (m *Manager) Download() {
+// Cleanup updates the runtime's maximum bundle version for pending clean-up.
+//
+// If the specified runtime already exists in the cleanup queue,
+// its version is updated only if the provided versions is greater.
+//
+// Warning: If clean-up fails it's not retried.
+func (m *Manager) Cleanup(runtimeID common.Namespace, version version.Version) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if v, ok := m.cleanupQueue[runtimeID]; ok && !v.Less(version) {
+		return
+	}
+	m.cleanupQueue[runtimeID] = version
+
+	// Trigger immediate download and clean-up of bundles.
+	select {
+	case m.triggerCh <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) download() {
+	m.logger.Info("downloading bundles")
 	for runtimeID := range m.runtimeIDs {
 		m.downloadBundles(runtimeID)
 	}
@@ -337,7 +369,7 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 	}
 	defer os.Remove(src)
 
-	manifest, dir, err := m.explodeBundle(src, WithManifestHash(manifestHash))
+	manifest, err := m.explodeBundle(src, WithManifestHash(manifestHash))
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,
@@ -346,7 +378,7 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 		return err
 	}
 
-	if err := m.registerManifest(manifest, dir); err != nil {
+	if err := m.registerManifest(manifest); err != nil {
 		m.logger.Error("failed to register manifest",
 			"err", err,
 		)
@@ -437,10 +469,10 @@ func (m *Manager) fetchBundle(url string) (string, error) {
 	return file.Name(), nil
 }
 
-func (m *Manager) loadManifests() (map[string]*Manifest, error) {
+func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 	m.logger.Info("loading manifests")
 
-	manifests := make(map[string]*Manifest)
+	manifests := make([]*ExplodedManifest, 0)
 
 	entries, err := os.ReadDir(m.bundleDir)
 	if err != nil {
@@ -468,13 +500,13 @@ func (m *Manager) loadManifests() (map[string]*Manifest, error) {
 			"hash", manifest.Hash(),
 		)
 
-		manifests[dir] = &manifest
+		manifests = append(manifests, &ExplodedManifest{&manifest, dir})
 	}
 
 	return manifests, nil
 }
 
-func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[string]*Manifest, error) {
+func (m *Manager) cleanOnStartup(manifests, exploded []*ExplodedManifest) ([]*ExplodedManifest, error) {
 	m.logger.Info("cleaning bundles")
 
 	detached := make(map[hash.Hash]struct{})
@@ -484,7 +516,7 @@ func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[
 		}
 	}
 
-	shouldKeep := func(manifest *Manifest) bool {
+	shouldKeep := func(manifest *ExplodedManifest) bool {
 		if _, ok := m.runtimeIDs[manifest.ID]; !ok {
 			return false
 		}
@@ -497,19 +529,82 @@ func (m *Manager) cleanupBundles(manifests, exploded map[string]*Manifest) (map[
 		return true
 	}
 
-	retained := make(map[string]*Manifest)
-	for dir, manifest := range manifests {
+	retained := make([]*ExplodedManifest, 0)
+	for _, manifest := range manifests {
 		if shouldKeep(manifest) {
-			retained[dir] = manifest
+			retained = append(retained, manifest)
 			continue
 		}
 
-		if err := m.removeBundle(dir); err != nil {
+		if err := m.removeBundle(manifest.ExplodedDataDir); err != nil {
 			return nil, err
 		}
 	}
 
 	return retained, nil
+}
+
+func (m *Manager) clean() {
+	m.logger.Info("cleaning bundles")
+	for runtimeID := range m.runtimeIDs {
+		m.cleanBundles(runtimeID)
+	}
+}
+
+func (m *Manager) cleanBundles(runtimeID common.Namespace) {
+	maxVersion, ok := func() (version.Version, bool) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		maxVersion, ok := m.cleanupQueue[runtimeID]
+		if !ok {
+			return version.Version{}, false
+		}
+		delete(m.cleanupQueue, runtimeID)
+		return maxVersion, true
+	}()
+	if !ok {
+		return
+	}
+
+	m.logger.Info("cleaning bundles",
+		"id", runtimeID,
+		"max_version", maxVersion,
+	)
+
+	for _, manifest := range m.store.Manifests() {
+		if manifest.ID != runtimeID {
+			continue
+		}
+
+		if manifest.IsDetached() {
+			continue
+		}
+
+		if ronl := manifest.GetComponentByID(component.ID_RONL); !ronl.Version.Less(maxVersion) {
+			continue
+		}
+
+		m.cleanBundle(manifest)
+	}
+}
+
+func (m *Manager) cleanBundle(manifest *ExplodedManifest) {
+	m.logger.Info("cleaning bundle",
+		"manifest_hash", manifest.Hash(),
+	)
+
+	if ok := m.store.RemoveManifest(manifest.Hash()); !ok {
+		m.logger.Debug("failed to remove manifest from store",
+			"manifest_hash", manifest.Hash(),
+		)
+	}
+
+	if err := m.removeBundle(manifest.ExplodedDataDir); err != nil {
+		m.logger.Error("failed to remove exploded bundle",
+			"err", err,
+		)
+	}
 }
 
 func (m *Manager) removeBundle(dir string) error {
@@ -532,55 +627,55 @@ func (m *Manager) removeBundle(dir string) error {
 	return nil
 }
 
-func (m *Manager) explodeBundles(paths []string) (map[string]*Manifest, error) {
+func (m *Manager) explodeBundles(paths []string) ([]*ExplodedManifest, error) {
 	m.logger.Info("exploding bundles")
 
-	manifests := make(map[string]*Manifest)
+	manifests := make([]*ExplodedManifest, 0)
 	for _, path := range paths {
-		manifest, dir, err := m.explodeBundle(path)
+		manifest, err := m.explodeBundle(path)
 		if err != nil {
 			return nil, err
 		}
-		manifests[dir] = manifest
+		manifests = append(manifests, manifest)
 	}
 
 	return manifests, nil
 }
 
-func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*Manifest, string, error) {
+func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManifest, error) {
 	m.logger.Info("exploding bundle",
 		"path", path,
 	)
 
 	bnd, err := Open(path, opts...)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to open bundle: %w", err)
+		return nil, fmt.Errorf("failed to open bundle: %w", err)
 	}
 	defer bnd.Close()
 
 	dir, err := bnd.WriteExploded(m.dataDir)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to explode bundle: %w", err)
+		return nil, fmt.Errorf("failed to explode bundle: %w", err)
 	}
 
 	m.logger.Info("bundle exploded",
 		"dir", dir,
 	)
 
-	return bnd.Manifest, dir, nil
+	return &ExplodedManifest{bnd.Manifest, dir}, nil
 }
 
-func (m *Manager) registerManifests(manifests map[string]*Manifest) error {
+func (m *Manager) registerManifests(manifests []*ExplodedManifest) error {
 	m.logger.Info("registering manifests")
 
 	// Register detached manifests first to ensure all components
 	// are available before a regular manifest is added.
 	for _, detached := range []bool{true, false} {
-		for dir, manifest := range manifests {
+		for _, manifest := range manifests {
 			if manifest.IsDetached() != detached {
 				continue
 			}
-			if err := m.registerManifest(manifest, dir); err != nil {
+			if err := m.registerManifest(manifest); err != nil {
 				return err
 			}
 		}
@@ -589,13 +684,13 @@ func (m *Manager) registerManifests(manifests map[string]*Manifest) error {
 	return nil
 }
 
-func (m *Manager) registerManifest(manifest *Manifest, dir string) error {
+func (m *Manager) registerManifest(manifest *ExplodedManifest) error {
 	m.logger.Info("registering manifest",
 		"name", manifest.Name,
 		"hash", manifest.Hash(),
 	)
 
-	return m.store.AddManifest(manifest, dir)
+	return m.store.AddManifest(manifest)
 }
 
 func validateAndNormalizeURL(rawURL string) (string, error) {

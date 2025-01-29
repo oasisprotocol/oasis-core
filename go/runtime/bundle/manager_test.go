@@ -23,9 +23,17 @@ func (r *mockStore) HasManifest(hash hash.Hash) bool {
 	return ok
 }
 
-func (r *mockStore) AddManifest(manifest *Manifest, _ string) error {
+func (r *mockStore) AddManifest(manifest *ExplodedManifest) error {
 	r.manifestHashes[manifest.Hash()] = struct{}{}
 	return nil
+}
+
+func (r *mockStore) Manifests() []*ExplodedManifest {
+	panic("not implemented")
+}
+
+func (r *mockStore) RemoveManifest(hash.Hash) bool {
+	panic("not implemented")
 }
 
 func TestRegisterManifest(t *testing.T) {
@@ -33,12 +41,14 @@ func TestRegisterManifest(t *testing.T) {
 	manager, err := NewManager("", nil, store)
 	require.NoError(t, err)
 
-	manifests := map[string]*Manifest{
-		"dir1": {
-			Name: "manifest1",
+	manifests := []*ExplodedManifest{
+		{
+			Manifest:        &Manifest{Name: "manifest1"},
+			ExplodedDataDir: "dir1",
 		},
-		"dir2": {
-			Name: "manifest2",
+		{
+			Manifest:        &Manifest{Name: "manifest2"},
+			ExplodedDataDir: "dir2",
 		},
 	}
 

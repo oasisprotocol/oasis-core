@@ -388,11 +388,26 @@ func (r *runtime) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-epoCh:
+		case epoch := <-epoCh:
 			if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
 				close(r.activeDescriptorCh)
 				activeInitialized = true
 			}
+
+			// Trigger clean-up for bundles less than active version.
+			r.RLock()
+			rt := r.activeDescriptor
+			r.RUnlock()
+			if rt == nil {
+				continue
+			}
+
+			active := rt.ActiveDeployment(epoch)
+			if active == nil {
+				continue
+			}
+
+			r.bundleManager.Cleanup(rt.ID, active.Version)
 		case rt := <-regCh:
 			if !rt.ID.Equal(&r.id) {
 				continue
@@ -446,7 +461,7 @@ func (r *runtime) run(ctx context.Context) {
 				}
 			}
 
-			r.bundleManager.Queue(r.id, manifestHashes)
+			r.bundleManager.Download(r.id, manifestHashes)
 		}
 	}
 }
