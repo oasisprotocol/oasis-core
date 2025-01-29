@@ -29,6 +29,8 @@ const (
 	runtimeExtendedInitTimeout = 120 * time.Second
 	runtimeInterruptTimeout    = 1 * time.Second
 	resetTickerTimeout         = 15 * time.Minute
+	watchdogInterval           = 15 * time.Second
+	watchdogPingTimeout        = 5 * time.Second
 
 	ctrlChannelBufferSize = 16
 )
@@ -477,6 +479,24 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 	return nil
 }
 
+// watchdogPing pings the runtime for liveness and terminates the process in case response is not
+// received in time.
+func (r *sandboxedRuntime) watchdogPing() {
+	ctx, cancel := context.WithTimeout(context.Background(), watchdogPingTimeout)
+	defer cancel()
+
+	// Send a single ping request and expect a response.
+	_, err := r.conn.Call(ctx, &protocol.Body{RuntimePingRequest: &protocol.Empty{}})
+	if err == nil {
+		return // If there is no error, we stop here.
+	}
+
+	r.logger.Warn("watchdog ping failed, terminating runtime", "err", err)
+
+	// Kill the process and trigger a runtime restart.
+	r.process.Kill()
+}
+
 func (r *sandboxedRuntime) manager() {
 	var ticker *backoff.Ticker
 
@@ -507,7 +527,11 @@ func (r *sandboxedRuntime) manager() {
 	evCh, evSub := r.WatchEvents()
 	defer evSub.Close()
 
-	var attempt int
+	var (
+		attempt       int
+		resetTickerCh <-chan time.Time
+		watchdogCh    <-chan time.Time
+	)
 	for {
 		// Make sure to restart the process if terminated.
 		if r.process == nil {
@@ -548,6 +572,10 @@ func (r *sandboxedRuntime) manager() {
 
 				continue
 			}
+
+			// After the process has been (re)started, set up fresh tickers.
+			resetTickerCh = time.After(resetTickerTimeout)
+			watchdogCh = time.Tick(watchdogInterval)
 		}
 
 		// Wait for either the runtime or the runtime manager to terminate.
@@ -582,7 +610,7 @@ func (r *sandboxedRuntime) manager() {
 
 			// Notify subscribers that the runtime has stopped.
 			r.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
-		case <-time.After(resetTickerTimeout):
+		case <-resetTickerCh:
 			// Reset the ticker if things work smoothly. Otherwise, keep on using the old ticker as
 			// it can happen that the runtime constantly terminates after a successful start.
 			if ticker != nil {
@@ -596,6 +624,9 @@ func (r *sandboxedRuntime) manager() {
 				r.capabilityTEE = ue.CapabilityTEE
 				r.Unlock()
 			}
+		case <-watchdogCh:
+			// Check for runtime liveness.
+			r.watchdogPing()
 		}
 	}
 }
