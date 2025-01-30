@@ -111,12 +111,12 @@ func TestBundle(t *testing.T) {
 	})
 
 	t.Run("Explode", func(t *testing.T) {
-		_, err := bundle.WriteExploded(tmpDir)
+		err := bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded")
 
 		// Abuse the fact that we do an integrity check if the bundle
 		// is already exploded.
-		_, err = bundle.WriteExploded(tmpDir)
+		err = bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded(again)")
 	})
 }
@@ -179,12 +179,12 @@ func TestDetachedBundle(t *testing.T) {
 	})
 
 	t.Run("Explode", func(t *testing.T) {
-		_, err := bundle.WriteExploded(tmpDir)
+		err := bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded")
 
 		// Abuse the fact that we do an integrity check if the bundle
 		// is already exploded.
-		_, err = bundle.WriteExploded(tmpDir)
+		err = bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded(again)")
 	})
 }

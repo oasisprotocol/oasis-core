@@ -29,10 +29,8 @@ func TestProvisionerSandbox(t *testing.T) {
 	require.NoError(t, err, "bundle.Open")
 
 	tmpDir := t.TempDir()
-	_, err = bnd.WriteExploded(tmpDir)
+	err = bnd.WriteExploded(tmpDir)
 	require.NoError(t, err, "bnd.WriteExploded")
-
-	explodedDataDir := bnd.ExplodedPath(tmpDir, "")
 
 	cfg := host.Config{
 		Name: bnd.Manifest.Name,
@@ -42,7 +40,7 @@ func TestProvisionerSandbox(t *testing.T) {
 	for _, comp := range bnd.Manifest.Components {
 		cfg.Component = &bundle.ExplodedComponent{
 			Component:       comp,
-			ExplodedDataDir: explodedDataDir,
+			ExplodedDataDir: tmpDir,
 		}
 
 		t.Run(fmt.Sprintf("Naked %s", comp.ID()), func(t *testing.T) {

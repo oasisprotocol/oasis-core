@@ -401,100 +401,92 @@ func ExplodedPath(dataDir string) string {
 	return filepath.Join(dataDir, "runtimes", "bundles")
 }
 
-// ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
-func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
-	return filepath.Join(ExplodedPath(dataDir), bnd.manifestHash.String(), fn)
+// ExplodedPath returns the path under the data directory that contains the exploded bundle assets.
+func (bnd *Bundle) ExplodedPath(dataDir string) string {
+	return filepath.Join(ExplodedPath(dataDir), bnd.manifestHash.String())
 }
 
-// WriteExploded extracts the runtime bundle, writes it to the appropriate
-// data directory, and returns the path to the written location.
-func (bnd *Bundle) WriteExploded(dataDir string) (string, error) {
+// WriteExploded extracts the runtime bundle to the given directory.
+func (bnd *Bundle) WriteExploded(dir string) error {
 	if err := bnd.Validate(); err != nil {
-		return "", fmt.Errorf("runtime/bundle: refusing to explode malformed bundle: %w", err)
+		return fmt.Errorf("runtime/bundle: refusing to explode malformed bundle: %w", err)
 	}
 
-	subDir := bnd.ExplodedPath(dataDir, "")
+	// Create the required directory structure.
+	for _, path := range []string{
+		dir,
+		filepath.Join(dir, manifestPath),
+	} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			return fmt.Errorf("runtime/bundle: failed to create directory '%s': %w", path, err)
+		}
+	}
 
-	// Check to see if we have done this before, and be nice to SSDs by
-	// just verifying extracted data for correctness.
-	switch _, err := os.Stat(subDir); err {
-	case nil:
-		// Validate that the on-disk assets match the bundle contents.
-		//
-		// Note: This ignores extra garbage that may be on disk, but
-		// people that mess with internal directories get what they
-		// deserve.
-		for fn, expected := range bnd.Data {
-			fn = bnd.ExplodedPath(dataDir, fn)
-			h, rdErr := HashAllData(NewFileData(fn))
-			if rdErr != nil {
-				return "", fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
+	// Extract the bundle to disk.
+	for fn, data := range bnd.Data {
+		path := filepath.Join(dir, fn)
+
+		// Check to see if we have done this before, and be nice to SSDs by
+		// just verifying extracted data for correctness.
+		switch _, err := os.Stat(path); err {
+		case nil:
+			// Validate that the on-disk asset matches the bundle contents.
+			h, err := HashAllData(NewFileData(path))
+			if err != nil {
+				return fmt.Errorf("runtime/bundle: failed to hash asset '%s': %w", path, err)
 			}
-
-			he, rdErr := HashAllData(expected)
-			if rdErr != nil {
-				return "", fmt.Errorf("runtime/bundle: failed to re-load asset '%s': %w", fn, rdErr)
+			he, err := HashAllData(data)
+			if err != nil {
+				return fmt.Errorf("runtime/bundle: failed to hash data '%s': %w", path, err)
 			}
-
 			if !h.Equal(&he) {
-				return "", fmt.Errorf("runtime/bundle: corrupt asset: '%s'", fn)
+				return fmt.Errorf("runtime/bundle: corrupted asset: '%s'", path)
 			}
-		}
-	default:
-		// Extract the bundle to disk.
-		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("runtime/bundle: failed to stat asset directory '%s': %w", subDir, err)
-		}
-
-		for _, v := range []string{
-			subDir,
-			bnd.ExplodedPath(dataDir, manifestPath),
-		} {
-			if err = os.MkdirAll(v, 0o700); err != nil {
-				return "", fmt.Errorf("runtime/bundle: failed to create asset sub-dir '%s': %w", v, err)
+		default:
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("runtime/bundle: failed to stat asset '%s': %w", path, err)
 			}
-		}
-		for fn, data := range bnd.Data {
-			fn = bnd.ExplodedPath(dataDir, fn)
 
+			// Extract the asset to disk.
 			err = func() error {
 				var src io.ReadCloser
 				if src, err = data.Open(); err != nil {
-					return fmt.Errorf("runtime/bundle: failed to open source asset '%s': %w", fn, err)
+					return fmt.Errorf("runtime/bundle: failed to open source asset '%s': %w", path, err)
 				}
 				defer src.Close()
 
 				var f *os.File
-				if f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600); err != nil {
-					return fmt.Errorf("runtime/bundle: failed to write asset '%s': %w", fn, err)
+				if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600); err != nil {
+					return fmt.Errorf("runtime/bundle: failed to write asset '%s': %w", path, err)
 				}
 				defer f.Close()
 
 				if _, err = io.Copy(f, src); err != nil {
-					return fmt.Errorf("runtime/bundle: failed to write asset '%s': %w", fn, err)
+					return fmt.Errorf("runtime/bundle: failed to write asset '%s': %w", path, err)
 				}
 
 				return nil
 			}()
 			if err != nil {
-				return "", err
-			}
-		}
-
-		for id, comp := range bnd.Manifest.GetAvailableComponents() {
-			if comp.ELF != nil {
-				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.ELF.Executable), 0o700); err != nil {
-					return "", fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
-				}
-			} else if comp.Executable != "" {
-				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.Executable), 0o700); err != nil {
-					return "", fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
-				}
+				return err
 			}
 		}
 	}
 
-	return subDir, nil
+	// Fix executable permissions.
+	for id, comp := range bnd.Manifest.GetAvailableComponents() {
+		if comp.ELF != nil {
+			if err := os.Chmod(filepath.Join(dir, comp.ELF.Executable), 0o700); err != nil {
+				return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
+			}
+		} else if comp.Executable != "" {
+			if err := os.Chmod(filepath.Join(dir, comp.Executable), 0o700); err != nil {
+				return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // Close closes the bundle, releasing resources.

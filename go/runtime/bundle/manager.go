@@ -674,8 +674,8 @@ func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManif
 	}
 	defer bnd.Close()
 
-	dir, err := bnd.WriteExploded(m.dataDir)
-	if err != nil {
+	dir := bnd.ExplodedPath(m.dataDir)
+	if err = bnd.WriteExploded(dir); err != nil {
 		return nil, fmt.Errorf("failed to explode bundle: %w", err)
 	}
 
