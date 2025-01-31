@@ -29,12 +29,14 @@ const ROOT_CERTS: &str = include_str!("roots.pem");
 /// The ROFL application which fetches a website over HTTPS and submits part of the result into the
 /// runtime via a transaction.
 pub struct App {
+    version: Version,
     notify: Arc<tokio::sync::Notify>,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(version: Version) -> Self {
         Self {
+            version,
             notify: Arc::new(tokio::sync::Notify::new()),
         }
     }
@@ -86,6 +88,19 @@ impl App {
         println!("Received {} bytes via HTTPS.", result.len());
 
         // Submit the result as an on-chain transaction.
+        let key = "rofl_http".to_owned();
+        let value = format!("{} -> {:?}", result.len(), &result[..10]);
+        App::insert(key, value, host).await
+    }
+
+    async fn update_version(version: Version, host: &Arc<dyn host::Host>) -> Result<()> {
+        // Submit the version as an on-chain transaction.
+        let key = "rofl_version".to_owned();
+        let value = format!("{}.{}.{}", version.major, version.minor, version.patch);
+        App::insert(key, value, host).await
+    }
+
+    async fn insert(key: String, value: String, host: &Arc<dyn host::Host>) -> Result<()> {
         #[derive(cbor::Encode)]
         struct Call {
             nonce: u64,
@@ -104,8 +119,8 @@ impl App {
             nonce: OsRng.gen(),
             method: "insert".to_owned(),
             args: cbor::to_value(KeyValue {
-                key: "rofl_http".to_owned(),
-                value: format!("{} -> {:?}", result.len(), &result[..10]),
+                key,
+                value,
                 generation: 0,
             }),
         });
@@ -123,7 +138,6 @@ impl App {
 
         // NOTE: This is not verified.
         println!("Received result: {:?}", result);
-
         Ok(())
     }
 }
@@ -131,9 +145,13 @@ impl App {
 #[async_trait]
 impl app::App for App {
     fn on_init(&mut self, host: Arc<dyn host::Host>) -> Result<()> {
+        let version = self.version;
         let notify = self.notify.clone();
 
         tokio::spawn(async move {
+            // Update the version of the ROFL component.
+            let _ = Self::update_version(version, &host).await;
+
             // Register for block notifications.
             let _ = host
                 .register_notify(host::RegisterNotifyOpts {
@@ -172,7 +190,7 @@ impl app::App for App {
     }
 }
 
-pub fn main() {
+pub(crate) fn main_with_version(version: Version) {
     // Determine test trust root based on build settings.
     #[allow(clippy::option_env_unwrap)]
     let trust_root = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT").map(|height| {
@@ -190,11 +208,20 @@ pub fn main() {
 
     // Start the runtime.
     oasis_core_runtime::start_runtime(
-        app::new(Box::new(App::new())),
+        app::new(Box::new(App::new(version))),
         Config {
-            version: Version::new(0, 0, 0),
+            version,
             trust_root,
             ..Default::default()
         },
     );
+}
+
+#[allow(dead_code)]
+pub fn main() {
+    main_with_version(Version {
+        major: 0,
+        minor: 0,
+        patch: 0,
+    })
 }

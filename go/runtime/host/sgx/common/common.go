@@ -25,27 +25,22 @@ import (
 // not available, return the fallback policy.
 func GetQuotePolicy(
 	ctx context.Context,
-	rtCfg *host.Config,
+	cfg *host.Config,
 	cb consensus.Backend,
 	fallbackPolicy *sgxQuote.Policy,
 ) (*sgxQuote.Policy, error) {
-	comp, err := rtCfg.GetExplodedComponent()
-	if err != nil {
-		return nil, err
-	}
-
-	switch comp.Kind {
+	switch cfg.Component.Kind {
 	case component.RONL:
 		// Load RONL policy from the consensus layer.
 		rt, err := cb.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
 			Height:           consensus.HeightLatest,
-			ID:               rtCfg.ID,
+			ID:               cfg.ID,
 			IncludeSuspended: true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to query runtime descriptor: %w", err)
 		}
-		if d := rt.DeploymentForVersion(comp.Version); d != nil {
+		if d := rt.DeploymentForVersion(cfg.Component.Version); d != nil {
 			var sc node.SGXConstraints
 			if err = cbor.Unmarshal(d.TEE, &sc); err != nil {
 				return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)

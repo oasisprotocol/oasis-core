@@ -92,16 +92,49 @@ type qemuProvisioner struct {
 	logger *logging.Logger
 }
 
+// NewQemuProvisioner creates a new QEMU-based TDX runtime provisioner.
+func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
+	// Use a default RuntimeAttestInterval if none was provided.
+	if cfg.RuntimeAttestInterval == 0 {
+		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
+	}
+
+	sgxCommon.InitMetrics()
+
+	p := &qemuProvisioner{
+		cfg:       cfg,
+		pcs:       cfg.PCS,
+		consensus: cfg.Consensus,
+		identity:  cfg.Identity,
+		nextCid:   defaultStartCid, // TODO: Could also include the local PID.
+		logger:    logging.GetLogger("runtime/host/tdx/qemu"),
+	}
+	sp, err := sandbox.NewProvisioner(sandbox.Config{
+		Connector:         newVsockConnector,
+		GetSandboxConfig:  p.getSandboxConfig,
+		HostInfo:          cfg.HostInfo,
+		HostInitializer:   p.hostInitializer,
+		InsecureNoSandbox: true, // No sandbox is needed for TDX.
+		Logger:            p.logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	p.sandbox = sp
+
+	return p, nil
+}
+
 // Implements host.Provisioner.
-func (q *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
+func (p *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	// Assign CID if not explicitly configured.
 	if cfg.Extra == nil {
-		q.l.Lock()
+		p.l.Lock()
 		cfg.Extra = &QemuExtraConfig{
-			CID: q.nextCid,
+			CID: p.nextCid,
 		}
-		q.nextCid++
-		q.l.Unlock()
+		p.nextCid++
+		p.l.Unlock()
 	}
 
 	// Ensure any extra configuration is of the correct type.
@@ -109,35 +142,31 @@ func (q *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		return nil, fmt.Errorf("invalid provisioner configuration")
 	}
 
-	return q.sandbox.NewRuntime(cfg)
+	return p.sandbox.NewRuntime(cfg)
 }
 
 // Implements host.Provisioner.
-func (q *qemuProvisioner) Name() string {
+func (p *qemuProvisioner) Name() string {
 	return "tdx-qemu"
 }
 
-func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
-	comp, err := rtCfg.GetExplodedComponent()
-	if err != nil {
-		return process.Config{}, err
-	}
-	if comp.TDX == nil {
-		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", comp.ID())
+func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
+	if cfg.Component.TDX == nil {
+		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", cfg.Component.ID())
 	}
 
-	cid := rtCfg.Extra.(*QemuExtraConfig).CID // Ensured above.
-	tdxCfg := comp.TDX
+	cid := cfg.Extra.(*QemuExtraConfig).CID // Ensured above.
+	tdxCfg := cfg.Component.TDX
 	resources := tdxCfg.Resources
-	firmware := comp.ExplodedPath(tdxCfg.Firmware)
+	firmware := cfg.Component.ExplodedPath(tdxCfg.Firmware)
 
-	cfg := process.Config{
+	pcfg := process.Config{
 		Path: defaultQemuSystemPath,
 		Args: []string{
 			"-accel", "kvm",
 			"-m", fmt.Sprintf("%d", resources.Memory),
 			"-smp", fmt.Sprintf("%d", resources.CPUCount),
-			"-name", fmt.Sprintf("oasis-%s-%s", rtCfg.ID, comp.ID()),
+			"-name", fmt.Sprintf("oasis-%s-%s", cfg.ID, cfg.Component.ID()),
 			"-cpu", "host",
 			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
 			"-bios", firmware,
@@ -156,18 +185,18 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 	// Configure kernel when one is available. We can set up TDs that only include the virtual
 	// firmware for special-purpose locked down TDs.
 	if tdxCfg.HasKernel() {
-		kernelImage := comp.ExplodedPath(tdxCfg.Kernel)
+		kernelImage := cfg.Component.ExplodedPath(tdxCfg.Kernel)
 
-		cfg.Args = append(cfg.Args, "-kernel", kernelImage)
+		pcfg.Args = append(pcfg.Args, "-kernel", kernelImage)
 		if tdxCfg.HasInitRD() {
-			initrdImage := comp.ExplodedPath(tdxCfg.InitRD)
+			initrdImage := cfg.Component.ExplodedPath(tdxCfg.InitRD)
 
-			cfg.Args = append(cfg.Args, "-initrd", initrdImage)
+			pcfg.Args = append(pcfg.Args, "-initrd", initrdImage)
 		}
 
 		// Configure stage 2 image.
 		if tdxCfg.HasStage2() {
-			stage2Image := comp.ExplodedPath(tdxCfg.Stage2Image)
+			stage2Image := cfg.Component.ExplodedPath(tdxCfg.Stage2Image)
 			stage2Format := tdxCfg.Stage2Format
 			switch stage2Format {
 			case "":
@@ -182,7 +211,8 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 			// Set up a persistent overlay image when configured to do so.
 			snapshotMode := "on" // Default to ephemeral images.
 			if tdxCfg.Stage2Persist {
-				stage2Image, err = q.createPersistentOverlayImage(rtCfg, comp, stage2Image, stage2Format)
+				var err error
+				stage2Image, err = p.createPersistentOverlayImage(cfg, cfg.Component, stage2Image, stage2Format)
 				if err != nil {
 					return process.Config{}, err
 				}
@@ -190,7 +220,7 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 				snapshotMode = "off"
 			}
 
-			cfg.Args = append(cfg.Args,
+			pcfg.Args = append(pcfg.Args,
 				// Stage 2 drive.
 				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=%s", stage2Format, stage2Image, snapshotMode),
 				"-device", "virtio-blk-pci,drive=drive0",
@@ -199,54 +229,54 @@ func (q *qemuProvisioner) getSandboxConfig(rtCfg host.Config, _ sandbox.Connecto
 
 		// Append any specified extra kernel options.
 		if len(tdxCfg.ExtraKernelOptions) > 0 {
-			cfg.Args = append(cfg.Args,
+			pcfg.Args = append(pcfg.Args,
 				"-append", strings.Join(tdxCfg.ExtraKernelOptions, " "),
 			)
 		}
 	}
 
 	// Configure network access.
-	switch comp.IsNetworkAllowed() {
+	switch cfg.Component.IsNetworkAllowed() {
 	case true:
-		cfg.Args = append(cfg.Args,
+		pcfg.Args = append(pcfg.Args,
 			"-netdev", "user,id=net0",
 		)
-		cfg.AllowNetwork = true
+		pcfg.AllowNetwork = true
 	case false:
-		cfg.Args = append(cfg.Args,
+		pcfg.Args = append(pcfg.Args,
 			"-netdev", "user,id=net0,restrict=y",
 		)
 	}
-	cfg.Args = append(cfg.Args,
+	pcfg.Args = append(pcfg.Args,
 		"-device", "virtio-net-pci,netdev=net0",
 	)
 
 	// Logging.
 	logWrapper := host.NewRuntimeLogWrapper(
-		q.logger,
-		"runtime_id", rtCfg.ID,
-		"runtime_name", rtCfg.Name,
-		"component", comp.ID(),
-		"provisioner", q.Name(),
+		p.logger,
+		"runtime_id", cfg.ID,
+		"runtime_name", cfg.Name,
+		"component", cfg.Component.ID(),
+		"provisioner", p.Name(),
 	)
-	cfg.Stdout = logWrapper
-	cfg.Stderr = logWrapper
+	pcfg.Stdout = logWrapper
+	pcfg.Stderr = logWrapper
 
-	return cfg, nil
+	return pcfg, nil
 }
 
 // createPersistentOverlayImage creates a persistent overlay image for the given backing image and
 // returns the full path to the overlay image. In case the image already exists, it is reused.
 //
 // The format of the resulting image is always qcow2.
-func (q *qemuProvisioner) createPersistentOverlayImage(
+func (p *qemuProvisioner) createPersistentOverlayImage(
 	rtCfg host.Config,
 	comp *bundle.ExplodedComponent,
 	image string,
 	format string,
 ) (string, error) {
 	compID, _ := comp.ID().MarshalText()
-	imageDir := filepath.Join(q.cfg.DataDir, persistentImageDir, rtCfg.ID.String(), string(compID))
+	imageDir := filepath.Join(p.cfg.DataDir, persistentImageDir, rtCfg.ID.String(), string(compID))
 	imageFn := filepath.Join(imageDir, fmt.Sprintf("%s.overlay", filepath.Base(image)))
 	switch _, err := os.Stat(imageFn); {
 	case err == nil:
@@ -294,7 +324,7 @@ func (q *qemuProvisioner) createPersistentOverlayImage(
 	return imageFn, nil
 }
 
-func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (capTEE *node.CapabilityTEE, aerr error) {
+func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (capTEE *node.CapabilityTEE, aerr error) {
 	defer func() {
 		sgxCommon.UpdateAttestationMetrics(hp.Runtime.ID(), component.TEEKindTDX, aerr)
 	}()
@@ -324,7 +354,7 @@ func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 			TDX:                        &pcs.TdxQuotePolicy{},
 		},
 	}
-	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, hp.Config, q.consensus, fallbackPolicy)
+	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, hp.Config, p.consensus, fallbackPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +366,7 @@ func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 	}
 
 	// Resolve the quote and fetch required collateral.
-	quoteBundle, err := q.pcs.ResolveQuote(ctx, rawQuote, quotePolicy.PCS)
+	quoteBundle, err := p.pcs.ResolveQuote(ctx, rawQuote, quotePolicy.PCS)
 	if err != nil {
 		return nil, fmt.Errorf("error while resolving quote: %w", err)
 	}
@@ -354,57 +384,24 @@ func (q *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 	}
 
 	// Endorse TEE capability to support authenticated inter-component EnclaveRPC.
-	sgxCommon.EndorseCapabilityTEE(ctx, q.identity, capabilityTEE, hp.Connection, q.logger)
+	sgxCommon.EndorseCapabilityTEE(ctx, p.identity, capabilityTEE, hp.Connection, p.logger)
 
 	return capabilityTEE, nil
 }
 
-func (q *qemuProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostInitializerParams) (*host.StartedEvent, error) {
-	capabilityTEE, err := q.updateCapabilityTEE(ctx, hp)
+func (p *qemuProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostInitializerParams) (*host.StartedEvent, error) {
+	capabilityTEE, err := p.updateCapabilityTEE(ctx, hp)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start periodic re-attestation worker.
-	go sgxCommon.AttestationWorker(q.cfg.RuntimeAttestInterval, q.logger, hp, q.updateCapabilityTEE)
+	go sgxCommon.AttestationWorker(p.cfg.RuntimeAttestInterval, p.logger, hp, p.updateCapabilityTEE)
 
 	return &host.StartedEvent{
 		Version:       hp.Version,
 		CapabilityTEE: capabilityTEE,
 	}, nil
-}
-
-// NewQemu creates a new QEMU-based TDX runtime provisioner.
-func NewQemu(cfg QemuConfig) (host.Provisioner, error) {
-	// Use a default RuntimeAttestInterval if none was provided.
-	if cfg.RuntimeAttestInterval == 0 {
-		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
-	}
-
-	sgxCommon.InitMetrics()
-
-	q := &qemuProvisioner{
-		cfg:       cfg,
-		pcs:       cfg.PCS,
-		consensus: cfg.Consensus,
-		identity:  cfg.Identity,
-		nextCid:   defaultStartCid, // TODO: Could also include the local PID.
-		logger:    logging.GetLogger("runtime/host/tdx/qemu"),
-	}
-	p, err := sandbox.New(sandbox.Config{
-		Connector:         newVsockConnector,
-		GetSandboxConfig:  q.getSandboxConfig,
-		HostInfo:          cfg.HostInfo,
-		HostInitializer:   q.hostInitializer,
-		InsecureNoSandbox: true, // No sandbox is needed for TDX.
-		Logger:            q.logger,
-	})
-	if err != nil {
-		return nil, err
-	}
-	q.sandbox = p
-
-	return q, nil
 }
 
 // vsockConnector is a VSOCK-based connector.

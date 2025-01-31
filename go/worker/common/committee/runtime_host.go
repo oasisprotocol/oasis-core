@@ -1,8 +1,6 @@
 package committee
 
 import (
-	"fmt"
-
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -15,6 +13,11 @@ import (
 // GetRuntime implements RuntimeHostHandlerFactory.
 func (n *Node) GetRuntime() runtimeRegistry.Runtime {
 	return n.Runtime
+}
+
+// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
+func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
+	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 }
 
 // NewRuntimeHostNotifier implements RuntimeHostHandlerFactory.
@@ -43,18 +46,10 @@ func (env *nodeEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 
 // GetIdentity implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
-	if env.n.LightClient == nil {
-		return nil, fmt.Errorf("no light client available")
-	}
 	return env.n.LightClient, nil
 }
 
 // GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 	return env.n.RuntimeRegistry
-}
-
-// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
-func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
-	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 }

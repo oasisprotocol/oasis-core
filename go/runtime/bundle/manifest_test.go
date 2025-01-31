@@ -151,8 +151,8 @@ func TestManifestHash_LegacyVersionJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that the manifest version is correctly copied to the RONL component.
-	ronl := manifest.GetComponentByID(component.ID_RONL)
-	require.NotNil(t, ronl)
+	ronl, ok := manifest.GetComponentByID(component.ID_RONL)
+	require.True(t, ok)
 	require.Equal(t, manifest.Version, ronl.Version)
 
 	// Ensure that the manifest hash remains unchanged even if the version is copied.

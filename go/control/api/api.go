@@ -62,6 +62,12 @@ type NodeController interface {
 
 	// GetStatus returns the current status overview of the node.
 	GetStatus(ctx context.Context) (*Status, error)
+
+	// AddBundle adds bundle from the given path.
+	//
+	// If the bundle upgrades an existing ROFL component, the latter will
+	// be upgraded to the new version.
+	AddBundle(ctx context.Context, path string) error
 }
 
 // Status is the current status overview.
@@ -86,9 +92,6 @@ type Status struct {
 
 	// Runtimes is the status overview for each runtime supported by the node.
 	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes,omitempty"`
-
-	// Bundles is the status overview of known runtime bundles.
-	Bundles []BundleStatus `json:"bundles,omitempty"`
 
 	// Registration is the node's registration status.
 	Registration *RegistrationStatus `json:"registration,omitempty"`
@@ -191,21 +194,12 @@ type RuntimeStatus struct {
 
 	// Provisioner is the name of the runtime provisioner.
 	Provisioner string `json:"provisioner,omitempty"`
-}
-
-// BundleStatus is the per-runtime bundle status overview.
-type BundleStatus struct {
-	// Name is the optional human readable runtime name.
-	Name string `json:"name,omitempty"`
-
-	// ID is the runtime identifier.
-	ID common.Namespace `json:"id"`
 
 	// Components contains statuses of the runtime components.
 	Components []ComponentStatus `json:"components,omitempty"`
 }
 
-// ComponentStatus is the component status overview.
+// ComponentStatus is the runtime component status overview.
 type ComponentStatus struct {
 	// Kind is the component kind.
 	Kind component.Kind `json:"kind"`

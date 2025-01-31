@@ -375,7 +375,7 @@ func (agg *Aggregate) HasVersion(version version.Version) bool {
 //
 // The provided runtime must be newly provisioned, meaning Start() has not been
 // called yet.
-func (agg *Aggregate) AddVersion(rt host.Runtime, version version.Version) error {
+func (agg *Aggregate) AddVersion(version version.Version, rt host.Runtime) error {
 	agg.l.Lock()
 	defer agg.l.Unlock()
 

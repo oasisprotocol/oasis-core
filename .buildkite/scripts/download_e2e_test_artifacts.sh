@@ -47,3 +47,5 @@ download_artifact simple-keyvalue-upgrade target/default/release 755
 # Test ROFL runtime.
 download_artifact simple-rofl.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
 download_artifact simple-rofl target/default/release 755
+download_artifact simple-rofl-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-rofl-upgrade target/default/release 755

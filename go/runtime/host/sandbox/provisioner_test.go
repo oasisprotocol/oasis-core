@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -39,34 +40,34 @@ func TestProvisionerSandbox(t *testing.T) {
 	}
 
 	for _, comp := range bnd.Manifest.Components {
-		cfg.Components = append(cfg.Components, &bundle.ExplodedComponent{
+		cfg.Component = &bundle.ExplodedComponent{
 			Component:       comp,
 			ExplodedDataDir: explodedDataDir,
+		}
+
+		t.Run(fmt.Sprintf("Naked %s", comp.ID()), func(t *testing.T) {
+			tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
+				return NewProvisioner(Config{
+					HostInfo: &protocol.HostInfo{
+						ConsensusBackend:         cmt.BackendName,
+						ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+					},
+					InsecureNoSandbox: true,
+					SandboxBinaryPath: bwrapPath,
+				})
+			}, nil)
+		})
+
+		t.Run(fmt.Sprintf("Sandboxed %s", comp.ID()), func(t *testing.T) {
+			tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
+				return NewProvisioner(Config{
+					HostInfo: &protocol.HostInfo{
+						ConsensusBackend:         cmt.BackendName,
+						ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+					},
+					SandboxBinaryPath: bwrapPath,
+				})
+			}, nil)
 		})
 	}
-
-	t.Run("Naked", func(t *testing.T) {
-		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return New(Config{
-				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         cmt.BackendName,
-					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
-				},
-				InsecureNoSandbox: true,
-				SandboxBinaryPath: bwrapPath,
-			})
-		}, nil)
-	})
-
-	t.Run("Sandboxed", func(t *testing.T) {
-		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
-			return New(Config{
-				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         cmt.BackendName,
-					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
-				},
-				SandboxBinaryPath: bwrapPath,
-			})
-		}, nil)
-	})
 }

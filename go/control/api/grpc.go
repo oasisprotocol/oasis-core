@@ -29,6 +29,8 @@ var (
 	methodCancelUpgrade = serviceName.NewMethod("CancelUpgrade", nil)
 	// methodGetStatus is the GetStatus method.
 	methodGetStatus = serviceName.NewMethod("GetStatus", nil)
+	// methodAddBundle is the AddBundle method.
+	methodAddBundle = serviceName.NewMethod("AddBundle", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -66,6 +68,10 @@ var (
 			{
 				MethodName: methodGetStatus.ShortName(),
 				Handler:    handlerGetStatus,
+			},
+			{
+				MethodName: methodAddBundle.ShortName(),
+				Handler:    handlerAddBundle,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -236,6 +242,29 @@ func handlerGetStatus(
 	return interceptor(ctx, nil, info, handler)
 }
 
+func handlerAddBundle(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var path string
+	if err := dec(&path); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(NodeController).AddBundle(ctx, path)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodAddBundle.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(NodeController).AddBundle(ctx, *req.(*string))
+	}
+	return interceptor(ctx, &path, info, handler)
+}
+
 // RegisterService registers a new node controller service with the given gRPC server.
 func RegisterService(server *grpc.Server, service NodeController) {
 	server.RegisterService(&serviceDesc, service)
@@ -287,6 +316,14 @@ func (c *nodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *nodeControllerClient) AddBundle(ctx context.Context, path string) error {
+	var rsp Status
+	if err := c.conn.Invoke(ctx, methodAddBundle.FullName(), path, &rsp); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewNodeControllerClient creates a new gRPC node controller client service.

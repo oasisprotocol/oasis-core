@@ -33,6 +33,7 @@ type deploymentCfg struct {
 	components    []ComponentCfg
 	mrEnclave     *sgx.MrEnclave
 	bundle        *bundle.Bundle
+	versionInfo   *registry.VersionInfo
 	excludeBundle bool
 }
 
@@ -148,7 +149,7 @@ func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 	return rt.descriptor
 }
 
-func (rt *Runtime) bundlePath(index int) string {
+func (rt *Runtime) BundlePath(index int) string {
 	return filepath.Join(rt.dir.String(), fmt.Sprintf("bundle-%d%s", index, bundle.FileExtension))
 }
 
@@ -159,37 +160,33 @@ func (rt *Runtime) BundlePaths() []string {
 		if dpl.excludeBundle {
 			continue
 		}
-		paths = append(paths, rt.bundlePath(i))
+		paths = append(paths, rt.BundlePath(i))
 	}
 	return paths
 }
 
 // RefreshRuntimeBundle makes sure the generated runtime bundle is refreshed.
-func (rt *Runtime) RefreshRuntimeBundle(deploymentIndex int) error {
-	if deploymentIndex < 0 || deploymentIndex >= len(rt.cfgSave.deployments) {
-		return fmt.Errorf("invalid deployment index")
-	}
-
-	fn := rt.bundlePath(deploymentIndex)
+func (rt *Runtime) refreshRuntimeBundle(index int, cfg *deploymentCfg) error {
+	fn := rt.BundlePath(index)
 
 	// Remove the generated bundle (if any).
 	if err := os.Remove(fn); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
-	deployCfg := rt.cfgSave.deployments[deploymentIndex]
+	deployCfg := rt.cfgSave.deployments[index]
 	deployCfg.bundle = nil
 	deployCfg.mrEnclave = nil
 
 	// Generate a fresh bundle.
-	_, err := rt.toRuntimeBundle(deploymentIndex)
+	_, err := rt.toRuntimeBundle(index, cfg)
 	return err
 }
 
 // RefreshRuntimeBundles makes sure the generated runtime bundles are refreshed.
 func (rt *Runtime) RefreshRuntimeBundles() error {
-	for i := range rt.cfgSave.deployments {
-		if err := rt.RefreshRuntimeBundle(i); err != nil {
+	for i, cfg := range rt.cfgSave.deployments {
+		if err := rt.refreshRuntimeBundle(i, cfg); err != nil {
 			return err
 		}
 	}
@@ -199,8 +196,8 @@ func (rt *Runtime) RefreshRuntimeBundles() error {
 // ToRuntimeBundles serializes the runtime to disk and returns the bundle.
 func (rt *Runtime) ToRuntimeBundles() ([]*bundle.Bundle, error) {
 	var bundles []*bundle.Bundle
-	for i := range rt.cfgSave.deployments {
-		bd, err := rt.toRuntimeBundle(i)
+	for i, cfg := range rt.cfgSave.deployments {
+		bd, err := rt.toRuntimeBundle(i, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -210,24 +207,30 @@ func (rt *Runtime) ToRuntimeBundles() ([]*bundle.Bundle, error) {
 	return bundles, nil
 }
 
-func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) {
-	if deploymentIndex < 0 || deploymentIndex >= len(rt.cfgSave.deployments) {
-		return nil, fmt.Errorf("invalid deployment index")
-	}
-	deployCfg := rt.cfgSave.deployments[deploymentIndex]
-
+func (rt *Runtime) toRuntimeBundle(index int, cfg *deploymentCfg) (*bundle.Bundle, error) {
 	// Common function for refreshing the TEE identity of the RONL component.
 	refreshRONLIdentity := func() error {
+		if hasRONL := func() bool {
+			for _, comp := range cfg.components {
+				if comp.Kind == component.RONL {
+					return true
+				}
+			}
+			return false
+		}(); !hasRONL {
+			return nil
+		}
+
 		if rt.teeHardware != node.TEEHardwareIntelSGX {
 			return nil
 		}
 
-		mrEnclave, err := deployCfg.bundle.MrEnclave(component.ID_RONL)
+		mrEnclave, err := cfg.bundle.MrEnclave(component.ID_RONL)
 		if err != nil {
 			return fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}
 
-		rt.descriptor.Deployments[deploymentIndex].TEE = cbor.Marshal(node.SGXConstraints{
+		cfg.versionInfo.TEE = cbor.Marshal(node.SGXConstraints{
 			Enclaves: []sgx.EnclaveIdentity{
 				{
 					MrEnclave: *mrEnclave,
@@ -235,17 +238,17 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 				},
 			},
 		})
-		deployCfg.mrEnclave = mrEnclave
+		cfg.mrEnclave = mrEnclave
 		return nil
 	}
 
-	fn := rt.bundlePath(deploymentIndex)
+	fn := rt.BundlePath(index)
 	switch _, err := os.Stat(fn); err {
 	case nil:
 		// Skip re-serializing the bundle, and just open it.
 		// This will happen on tests where the network gets restarted.
-		if deployCfg.bundle == nil {
-			if deployCfg.bundle, err = bundle.Open(fn); err != nil {
+		if cfg.bundle == nil {
+			if cfg.bundle, err = bundle.Open(fn); err != nil {
 				return nil, fmt.Errorf("oasis/runtime: failed to open existing bundle: %w", err)
 			}
 
@@ -254,7 +257,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 			}
 		}
 
-		return deployCfg.bundle, nil
+		return cfg.bundle, nil
 	default:
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("oasis/runtime: failed to stat bundle: %w", err)
@@ -270,7 +273,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	}
 
 	// Add components.
-	for i, compCfg := range deployCfg.components {
+	for i, compCfg := range cfg.components {
 		elfBin := fmt.Sprintf("component-%d-%s.elf", i, compCfg.Kind)
 		sgxBin := fmt.Sprintf("component-%d-%s.sgx", i, compCfg.Kind)
 
@@ -306,7 +309,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	if err := bnd.Write(fn); err != nil {
 		return nil, fmt.Errorf("oasis/runtime: failed to write bundle: %w", err)
 	}
-	deployCfg.bundle = bnd
+	cfg.bundle = bnd
 
 	// Update the on-chain runtime descriptor for RONL component.
 	if err := refreshRONLIdentity(); err != nil {
@@ -315,7 +318,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 
 	// Update bundle's manifest checksum.
 	manifestHash := bnd.Manifest.Hash()
-	rt.descriptor.Deployments[deploymentIndex].BundleChecksum = manifestHash[:]
+	cfg.versionInfo.BundleChecksum = manifestHash[:]
 
 	return bnd, nil
 }
@@ -383,21 +386,30 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		}
 		components = append(components, deployCfg.Components...)
 
-		versionInfo := registry.VersionInfo{
+		versionInfo := &registry.VersionInfo{
 			ValidFrom: deployCfg.ValidFrom,
 		}
-		for _, comp := range components {
-			if comp.Kind == component.RONL {
-				versionInfo.Version = comp.Version
-				break
+		cfg := &deploymentCfg{
+			components:    components,
+			versionInfo:   versionInfo,
+			excludeBundle: deployCfg.ExcludeBundle,
+		}
+		rt.cfgSave.deployments = append(rt.cfgSave.deployments, cfg)
+
+		ronl, ok := func() (*ComponentCfg, bool) {
+			for _, comp := range components {
+				if comp.Kind == component.RONL {
+					return &comp, true
+				}
 			}
+			return nil, false
+		}()
+		if !ok {
+			continue
 		}
 
-		rt.cfgSave.deployments = append(rt.cfgSave.deployments, &deploymentCfg{
-			components:    components,
-			excludeBundle: deployCfg.ExcludeBundle,
-		})
-		rt.descriptor.Deployments = append(rt.descriptor.Deployments, &versionInfo)
+		versionInfo.Version = ronl.Version
+		rt.descriptor.Deployments = append(rt.descriptor.Deployments, versionInfo)
 	}
 
 	if _, err := rt.ToRuntimeBundles(); err != nil {

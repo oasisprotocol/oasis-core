@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -134,17 +133,17 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 }
 
 // Implements host.RuntimeHandler.
-func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, comp *bundle.Component) (host.RuntimeHandler, error) {
-	switch comp.Kind {
+func (h *runtimeHostHandler) NewSubHandler(id component.ID) (host.RuntimeHandler, error) {
+	switch id.Kind {
 	case component.ROFL:
-		return newSubHandlerROFL(h, cr, comp)
+		return newSubHandlerROFL(id, h)
 	default:
-		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", comp.Kind)
+		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", id.Kind)
 	}
 }
 
 // Implements host.RuntimeHandler.
-func (h *runtimeHostHandler) AttachRuntime(host.Runtime) error {
+func (h *runtimeHostHandler) AttachRuntime(component.ID, host.Runtime) error {
 	return nil
 }
 

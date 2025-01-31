@@ -23,7 +23,6 @@ import (
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
@@ -85,75 +84,6 @@ type Config struct {
 	InsecureMock bool
 }
 
-type teeStateImpl interface {
-	// Init initializes the TEE state and returns the QE target info.
-	Init(ctx context.Context, sp *sgxProvisioner, cfg *host.Config) ([]byte, error)
-
-	// Update updates the TEE state and returns a new attestation.
-	Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error)
-}
-
-type teeState struct {
-	cfg          *host.Config
-	insecureMock bool
-
-	impl teeStateImpl
-}
-
-func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error) {
-	if ts.impl != nil {
-		return nil, fmt.Errorf("already initialized")
-	}
-
-	var (
-		targetInfo []byte
-		err        error
-	)
-
-	// When insecure mock SGX is enabled, use mock implementation.
-	if ts.insecureMock {
-		ts.impl = &teeStateMock{}
-		return ts.impl.Init(ctx, sp, ts.cfg)
-	}
-
-	// Try ECDSA first. If it fails, try EPID.
-	implECDSA := &teeStateECDSA{}
-	if targetInfo, err = implECDSA.Init(ctx, sp, ts.cfg); err != nil {
-		sp.logger.Debug("ECDSA attestation initialization failed, trying EPID",
-			"err", err,
-		)
-
-		implEPID := &teeStateEPID{}
-		if targetInfo, err = implEPID.Init(ctx, sp, ts.cfg); err != nil {
-			return nil, err
-		}
-		ts.impl = implEPID
-	} else {
-		ts.impl = implECDSA
-	}
-
-	return targetInfo, nil
-}
-
-func (ts *teeState) updateTargetInfo(ctx context.Context, sp *sgxProvisioner) ([]byte, error) {
-	if ts.impl == nil {
-		return nil, fmt.Errorf("not initialized")
-	}
-	return ts.impl.Init(ctx, sp, ts.cfg)
-}
-
-func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
-	if ts.impl == nil {
-		return nil, fmt.Errorf("not initialized")
-	}
-
-	attestation, err := ts.impl.Update(ctx, sp, conn, report, nonce)
-
-	sgxCommon.UpdateAttestationMetrics(ts.cfg.ID, component.TEEKindSGX, err)
-
-	return attestation, err
-}
-
 type sgxProvisioner struct {
 	sync.Mutex
 
@@ -170,7 +100,56 @@ type sgxProvisioner struct {
 	logger *logging.Logger
 }
 
-func (s *sgxProvisioner) loadEnclaveBinaries(comp *bundle.ExplodedComponent) ([]byte, []byte, error) {
+// NewProvisioner creates a new Intel SGX runtime provisioner.
+func NewProvisioner(cfg Config) (host.Provisioner, error) {
+	// Use a default RuntimeAttestInterval if none was provided.
+	if cfg.RuntimeAttestInterval == 0 {
+		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
+	}
+
+	sgxCommon.InitMetrics()
+
+	p := &sgxProvisioner{
+		cfg:       cfg,
+		ias:       cfg.IAS,
+		pcs:       cfg.PCS,
+		aesm:      aesm.NewClient(aesmdSocketPath),
+		consensus: cfg.Consensus,
+		identity:  cfg.Identity,
+		store:     cfg.CommonStore,
+		logger:    logging.GetLogger("runtime/host/sgx"),
+	}
+	sp, err := sandbox.NewProvisioner(sandbox.Config{
+		GetSandboxConfig:  p.getSandboxConfig,
+		HostInfo:          cfg.HostInfo,
+		HostInitializer:   p.hostInitializer,
+		InsecureNoSandbox: cfg.InsecureNoSandbox,
+		Logger:            p.logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	p.sandbox = sp
+
+	return p, nil
+}
+
+// Implements host.Provisioner.
+func (p *sgxProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
+	// Make sure to return an error early if the SGX runtime loader is not configured.
+	if p.cfg.LoaderPath == "" && !p.cfg.InsecureMock {
+		return nil, fmt.Errorf("SGX loader binary path is not configured")
+	}
+
+	return p.sandbox.NewRuntime(cfg)
+}
+
+// Implements host.Provisioner.
+func (p *sgxProvisioner) Name() string {
+	return "sgx"
+}
+
+func (p *sgxProvisioner) loadEnclaveBinaries(comp *bundle.ExplodedComponent) ([]byte, []byte, error) {
 	if comp.SGX == nil || comp.SGX.Executable == "" {
 		return nil, nil, fmt.Errorf("SGX executable not available in bundle")
 	}
@@ -196,7 +175,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(comp *bundle.ExplodedComponent) ([]
 			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)
 		}
 	} else if cmdFlags.DebugDontBlameOasis() {
-		s.logger.Warn("generating dummy enclave SIGSTRUCT",
+		p.logger.Warn("generating dummy enclave SIGSTRUCT",
 			"enclave_hash", enclaveHash,
 		)
 		if sig, err = sigstruct.UnsafeDebugForEnclave(sgxs); err != nil {
@@ -217,7 +196,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(comp *bundle.ExplodedComponent) ([]
 	return sgxs, sig, nil
 }
 
-func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
+func (p *sgxProvisioner) discoverSGXDevice() (string, error) {
 	// Different versions of Intel SGX drivers provide different names for
 	// the SGX device.  Autodetect which one actually exists.
 	sgxDevices := []string{"/dev/sgx_enclave", "/dev/sgx/enclave", "/dev/sgx", "/dev/isgx"}
@@ -234,12 +213,7 @@ func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 	return "", fmt.Errorf("no SGX device was found on this system")
 }
 
-func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
-	comp, err := rtCfg.GetExplodedComponent()
-	if err != nil {
-		return process.Config{}, err
-	}
-
+func (p *sgxProvisioner) getSandboxConfig(cfg host.Config, conn sandbox.Connector, runtimeDir string) (process.Config, error) {
 	us, ok := conn.(*sandbox.UnixSocketConnector)
 	if !ok {
 		return process.Config{}, fmt.Errorf("UNIX socket connector is required")
@@ -250,23 +224,23 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 	// needs to be loaded into memory anyway, this always injects
 	// (or copies).
 	runtimePath, signaturePath := sandboxMountRuntime, sandboxMountSignature
-	if s.cfg.InsecureNoSandbox {
+	if p.cfg.InsecureNoSandbox {
 		runtimePath = filepath.Join(runtimeDir, runtimePath)
 		signaturePath = filepath.Join(runtimeDir, signaturePath)
 	}
 
-	sgxs, sig, err := s.loadEnclaveBinaries(comp)
+	sgxs, sig, err := p.loadEnclaveBinaries(cfg.Component)
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
 
-	if s.cfg.InsecureMock {
+	if p.cfg.InsecureMock {
 		// In insecure mock mode, we simply use the non-SGX binary.
-		s.logger.Warn("using mock SGX enclaves due to configuration options")
+		p.logger.Warn("using mock SGX enclaves due to configuration options")
 
-		var cfg process.Config
-		gsc := sandbox.DefaultGetSandboxConfig(s.logger, s.cfg.SandboxBinaryPath)
-		cfg, err = gsc(rtCfg, conn, runtimeDir)
+		var pcfg process.Config
+		gsc := sandbox.DefaultGetSandboxConfig(p.logger, p.cfg.SandboxBinaryPath)
+		pcfg, err = gsc(cfg, conn, runtimeDir)
 		if err != nil {
 			return process.Config{}, err
 		}
@@ -276,30 +250,30 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
 			return process.Config{}, err
 		}
-		if cfg.Env == nil {
-			cfg.Env = make(map[string]string)
+		if pcfg.Env == nil {
+			pcfg.Env = make(map[string]string)
 		}
-		cfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
+		pcfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
 
-		return cfg, nil
+		return pcfg, nil
 	}
 
-	if comp.SGX == nil {
-		return process.Config{}, fmt.Errorf("component '%s' is not an SGX component", comp.ID())
+	if cfg.Component.SGX == nil {
+		return process.Config{}, fmt.Errorf("component '%s' is not an SGX component", cfg.Component.ID())
 	}
 
-	sgxDev, err := s.discoverSGXDevice()
+	sgxDev, err := p.discoverSGXDevice()
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: %w", err)
 	}
-	s.logger.Info("found SGX device", "path", sgxDev)
+	p.logger.Info("found SGX device", "path", sgxDev)
 
 	logWrapper := host.NewRuntimeLogWrapper(
-		s.logger,
-		"runtime_id", rtCfg.ID,
-		"runtime_name", rtCfg.Name,
-		"component", comp.ID(),
-		"provisioner", s.Name(),
+		p.logger,
+		"runtime_id", cfg.ID,
+		"runtime_name", cfg.Name,
+		"component", cfg.Component.ID(),
+		"provisioner", p.Name(),
 	)
 
 	args := []string{
@@ -308,12 +282,12 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 		"--signature", signaturePath,
 		runtimePath,
 	}
-	if comp.IsNetworkAllowed() {
+	if cfg.Component.IsNetworkAllowed() {
 		args = append(args, "--allow-network")
 	}
 
 	return process.Config{
-		Path: s.cfg.LoaderPath,
+		Path: p.cfg.LoaderPath,
 		Args: args,
 		BindRW: map[string]string{
 			aesmdSocketPath: "/var/run/aesmd/aesm.socket",
@@ -325,30 +299,30 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, conn sandbox.Connec
 			runtimePath:   bytes.NewReader(sgxs),
 			signaturePath: bytes.NewReader(sig),
 		},
-		SandboxBinaryPath: s.cfg.SandboxBinaryPath,
+		SandboxBinaryPath: p.cfg.SandboxBinaryPath,
 		Stdout:            logWrapper,
 		Stderr:            logWrapper,
-		AllowNetwork:      comp.IsNetworkAllowed(),
+		AllowNetwork:      cfg.Component.IsNetworkAllowed(),
 	}, nil
 }
 
-func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostInitializerParams) (*host.StartedEvent, error) {
+func (p *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostInitializerParams) (*host.StartedEvent, error) {
 	// Initialize TEE.
 	var err error
 	var ts *teeState
-	if ts, err = s.initCapabilityTEE(ctx, hp.Config, hp.Connection); err != nil {
+	if ts, err = p.initCapabilityTEE(ctx, hp.Config, hp.Connection); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
-	if capabilityTEE, err = s.updateCapabilityTEE(ctx, ts, hp.Connection); err != nil {
+	if capabilityTEE, err = p.updateCapabilityTEE(ctx, ts, hp.Connection); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
 	// Start periodic re-attestation worker.
 	updateCapabilityFunc := func(ctx context.Context, hp *sandbox.HostInitializerParams) (*node.CapabilityTEE, error) {
-		return s.updateCapabilityTEE(ctx, ts, hp.Connection)
+		return p.updateCapabilityTEE(ctx, ts, hp.Connection)
 	}
-	go sgxCommon.AttestationWorker(s.cfg.RuntimeAttestInterval, s.logger, hp, updateCapabilityFunc)
+	go sgxCommon.AttestationWorker(p.cfg.RuntimeAttestInterval, p.logger, hp, updateCapabilityFunc)
 
 	return &host.StartedEvent{
 		Version:       hp.Version,
@@ -356,27 +330,27 @@ func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostIn
 	}, nil
 }
 
-func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, cfg *host.Config, conn protocol.Connection) (*teeState, error) {
+func (p *sgxProvisioner) initCapabilityTEE(ctx context.Context, cfg *host.Config, conn protocol.Connection) (*teeState, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
 	ts := teeState{
 		cfg:          cfg,
-		insecureMock: s.cfg.InsecureMock,
+		insecureMock: p.cfg.InsecureMock,
 	}
 
-	targetInfo, err := ts.init(ctx, s)
+	targetInfo, err := ts.init(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing TEE state: %w", err)
 	}
-	if err = s.updateTargetInfo(ctx, targetInfo, conn); err != nil {
+	if err = p.updateTargetInfo(ctx, targetInfo, conn); err != nil {
 		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
 	}
 
 	return &ts, nil
 }
 
-func (s *sgxProvisioner) updateTargetInfo(ctx context.Context, targetInfo []byte, conn protocol.Connection) error {
+func (p *sgxProvisioner) updateTargetInfo(ctx context.Context, targetInfo []byte, conn protocol.Connection) error {
 	_, err := conn.Call(
 		ctx,
 		&protocol.Body{
@@ -388,16 +362,16 @@ func (s *sgxProvisioner) updateTargetInfo(ctx context.Context, targetInfo []byte
 	return err
 }
 
-func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
+func (p *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
 	// Update report target info in case the QE identity has changed (e.g. aesmd upgrade).
-	targetInfo, err := ts.updateTargetInfo(ctx, s)
+	targetInfo, err := ts.updateTargetInfo(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
 	}
-	if err = s.updateTargetInfo(ctx, targetInfo, conn); err != nil {
+	if err = p.updateTargetInfo(ctx, targetInfo, conn); err != nil {
 		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
 	}
 
@@ -415,7 +389,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 	report := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Report
 	nonce := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Nonce
 
-	attestation, err := ts.update(ctx, s, conn, report, nonce)
+	attestation, err := ts.update(ctx, p, conn, report, nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -428,56 +402,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 	}
 
 	// Endorse TEE capability to support authenticated inter-component EnclaveRPC.
-	sgxCommon.EndorseCapabilityTEE(ctx, s.identity, capabilityTEE, conn, s.logger)
+	sgxCommon.EndorseCapabilityTEE(ctx, p.identity, capabilityTEE, conn, p.logger)
 
 	return capabilityTEE, nil
-}
-
-// Implements host.Provisioner.
-func (s *sgxProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	// Make sure to return an error early if the SGX runtime loader is not configured.
-	if s.cfg.LoaderPath == "" && !s.cfg.InsecureMock {
-		return nil, fmt.Errorf("SGX loader binary path is not configured")
-	}
-
-	return s.sandbox.NewRuntime(cfg)
-}
-
-// Implements host.Provisioner.
-func (s *sgxProvisioner) Name() string {
-	return "sgx"
-}
-
-// New creates a new Intel SGX runtime provisioner.
-func New(cfg Config) (host.Provisioner, error) {
-	// Use a default RuntimeAttestInterval if none was provided.
-	if cfg.RuntimeAttestInterval == 0 {
-		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
-	}
-
-	sgxCommon.InitMetrics()
-
-	s := &sgxProvisioner{
-		cfg:       cfg,
-		ias:       cfg.IAS,
-		pcs:       cfg.PCS,
-		aesm:      aesm.NewClient(aesmdSocketPath),
-		consensus: cfg.Consensus,
-		identity:  cfg.Identity,
-		store:     cfg.CommonStore,
-		logger:    logging.GetLogger("runtime/host/sgx"),
-	}
-	p, err := sandbox.New(sandbox.Config{
-		GetSandboxConfig:  s.getSandboxConfig,
-		HostInfo:          cfg.HostInfo,
-		HostInitializer:   s.hostInitializer,
-		InsecureNoSandbox: cfg.InsecureNoSandbox,
-		Logger:            s.logger,
-	})
-	if err != nil {
-		return nil, err
-	}
-	s.sandbox = p
-
-	return s, nil
 }

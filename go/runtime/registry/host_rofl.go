@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmnSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -38,8 +37,9 @@ const (
 // roflHostHandler is a host handler extended for use by ROFL components.
 type roflHostHandler struct {
 	parent *runtimeHostHandler
-	cr     host.CompositeRuntime
-	comp   *bundle.Component
+
+	id    component.ID
+	comps map[component.ID]host.Runtime
 
 	client        runtimeClient.RuntimeClient
 	eventNotifier *roflEventNotifier
@@ -47,7 +47,7 @@ type roflHostHandler struct {
 	logger *logging.Logger
 }
 
-func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime, comp *bundle.Component) (host.RuntimeHandler, error) {
+func newSubHandlerROFL(id component.ID, parent *runtimeHostHandler) (*roflHostHandler, error) {
 	client, err := parent.env.GetRuntimeRegistry().Client()
 	if err != nil {
 		return nil, err
@@ -55,12 +55,12 @@ func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime, com
 
 	logger := logging.GetLogger("runtime/registry/host").
 		With("runtime_id", parent.runtime.ID()).
-		With("component", component.ROFL)
+		With("component_id", id)
 
 	return &roflHostHandler{
 		parent:        parent,
-		cr:            cr,
-		comp:          comp,
+		id:            id,
+		comps:         make(map[component.ID]host.Runtime),
 		client:        client,
 		eventNotifier: newROFLEventNotifier(parent.runtime, client, logger),
 		logger:        logger,
@@ -68,18 +68,22 @@ func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime, com
 }
 
 // Implements host.RuntimeHandler.
-func (rh *roflHostHandler) NewSubHandler(host.CompositeRuntime, *bundle.Component) (host.RuntimeHandler, error) {
+func (rh *roflHostHandler) NewSubHandler(component.ID) (host.RuntimeHandler, error) {
 	return nil, fmt.Errorf("cannot create sub-component for leaf handler")
 }
 
 // Implements host.RuntimeHandler.
-func (rh *roflHostHandler) AttachRuntime(rt host.Runtime) error {
+func (rh *roflHostHandler) AttachRuntime(id component.ID, rt host.Runtime) error {
+	rh.comps[id] = rt
+	if id != rh.id {
+		return nil
+	}
 	return rh.eventNotifier.AttachRuntime(rt)
 }
 
 // getLocalStorageKey returns a properly namespaced version of the local storage key.
 func (rh *roflHostHandler) getLocalStorageKey(key []byte) []byte {
-	result, _ := rh.comp.ID().MarshalText()
+	result, _ := rh.id.MarshalText()
 	result = append(result, roflLocalStorageKeySeparator...)
 	result = append(result, key...)
 	return result
@@ -128,7 +132,7 @@ func (rh *roflHostHandler) handleHostRPCCall(
 	switch rq.HostRPCCallRequest.Endpoint {
 	case rofl.EnclaveRPCEndpointRONL:
 		// Route EnclaveRPC request to RONL component.
-		compRt, ok := rh.cr.Component(component.ID_RONL)
+		ronl, ok := rh.comps[component.ID_RONL]
 		if !ok {
 			return nil, fmt.Errorf("endpoint not supported")
 		}
@@ -139,7 +143,7 @@ func (rh *roflHostHandler) handleHostRPCCall(
 		callCtx, cancel := context.WithTimeout(ctx, ronlEnclaveRPCTimeout)
 		defer cancel()
 
-		rspRaw, err := compRt.Call(callCtx, &protocol.Body{
+		rspRaw, err := ronl.Call(callCtx, &protocol.Body{
 			RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
 				Request: rq.HostRPCCallRequest.Request,
 				Kind:    rq.HostRPCCallRequest.Kind,

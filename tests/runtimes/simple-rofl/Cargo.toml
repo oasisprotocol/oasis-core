@@ -7,6 +7,13 @@ edition = "2018"
 [[bin]]
 name = "simple-rofl"
 
+[[bin]]
+name = "simple-rofl-upgrade"
+bench = false
+test = false
+doc = false
+path = "src/upgraded.rs"
+
 [package.metadata.fortanix-sgx]
 heap-size = 536870912 # 512 MiB
 stack-size = 2097152

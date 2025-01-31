@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -26,7 +25,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -71,6 +69,9 @@ type Registry interface {
 
 	// GetBundleRegistry returns the bundle registry.
 	GetBundleRegistry() *bundle.Registry
+
+	// GetBundleManager returns the bundle manager.
+	GetBundleManager() *bundle.Manager
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -110,19 +111,8 @@ type Runtime interface {
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
 
-	// HostConfig returns the runtime host configuration for the given version
-	// when available. Otherwise returns nil.
-	HostConfig(version version.Version) *runtimeHost.Config
-
 	// HostProvisioner returns the runtime host provisioner when available. Otherwise returns nil.
 	HostProvisioner() runtimeHost.Provisioner
-
-	// HostVersions returns a list of supported runtime versions.
-	HostVersions() []version.Version
-
-	// WatchHostVersions returns a channel that produces a stream of versions
-	// as they are added to the runtime.
-	WatchHostVersions() (<-chan version.Version, *pubsub.Subscription)
 }
 
 type runtime struct { // nolint: maligned
@@ -291,43 +281,9 @@ func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
 }
 
-// HostConfig implements Runtime.
-func (r *runtime) HostConfig(version version.Version) *runtimeHost.Config {
-	name, err := r.bundleRegistry.GetName(r.id, version)
-	if err != nil {
-		return nil
-	}
-
-	components, err := r.bundleRegistry.GetComponents(r.id, version)
-	if err != nil {
-		return nil
-	}
-
-	localConfig := getLocalConfig(r.id)
-
-	return &host.Config{
-		Name:           name,
-		ID:             r.id,
-		Components:     components,
-		Extra:          nil,
-		MessageHandler: nil,
-		LocalConfig:    localConfig,
-	}
-}
-
 // HostProvisioner implements Runtime.
 func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
 	return r.hostProvisioner
-}
-
-// HostVersions implements Runtime.
-func (r *runtime) HostVersions() []version.Version {
-	return r.bundleRegistry.GetVersions(r.id)
-}
-
-// HostVersions implements Runtime.
-func (r *runtime) WatchHostVersions() (<-chan version.Version, *pubsub.Subscription) {
-	return r.bundleRegistry.WatchVersions(r.id)
 }
 
 // start starts the runtime worker.
@@ -647,6 +603,11 @@ func (r *runtimeRegistry) FinishInitialization() error {
 // GetBundleRegistry implements Registry.
 func (r *runtimeRegistry) GetBundleRegistry() *bundle.Registry {
 	return r.bundleRegistry
+}
+
+// GetBundleManager implements Registry.
+func (r *runtimeRegistry) GetBundleManager() *bundle.Manager {
+	return r.bundleManager
 }
 
 // Name implements BackgroundService.

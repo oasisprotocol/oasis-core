@@ -15,7 +15,8 @@ func (n *Node) RegisterNodeRuntime(nd *node.Node) error {
 		return nil
 	}
 
-	for _, version := range n.Runtime.HostVersions() {
+	bundleRegistry := n.RuntimeRegistry.GetBundleRegistry()
+	for _, version := range bundleRegistry.GetVersions(n.Runtime.ID()) {
 		// Skip sending any old versions that will never be active again.
 		if version.ToU64() < activeVersion.ToU64() {
 			continue

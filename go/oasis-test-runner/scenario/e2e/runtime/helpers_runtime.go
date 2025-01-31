@@ -37,6 +37,8 @@ var (
 	KeyManagerRuntimeUpgradeBinary = "simple-keymanager-upgrade"
 	// ROFLComponentBinary is the name of the ROFL runtime component binary.
 	ROFLComponentBinary = "simple-rofl"
+	// ROFLComponentUpgradeBinary is the name of the upgraded ROFL runtime component binary.
+	ROFLComponentUpgradeBinary = "simple-rofl-upgrade"
 
 	// KeyValueRuntimeID is the ID of the simple key/value runtime.
 	KeyValueRuntimeID common.Namespace

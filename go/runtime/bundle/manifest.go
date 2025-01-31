@@ -109,7 +109,8 @@ func (m *Manifest) Validate() error {
 // IsDetached returns true iff the manifest does not include a RONL component. Such bundles require
 // that the RONL component is provided out-of-band (e.g. in a separate bundle).
 func (m *Manifest) IsDetached() bool {
-	return m.GetComponentByID(component.ID_RONL) == nil
+	_, ok := m.GetComponentByID(component.ID_RONL)
+	return !ok
 }
 
 // GetAvailableComponents collects all of the available components into a map.
@@ -120,16 +121,16 @@ func (m *Manifest) GetAvailableComponents() map[component.ID]*Component {
 	}
 	if _, exists := availableComps[component.ID_RONL]; !exists && !m.IsDetached() {
 		// Needed for supporting legacy manifests.
-		availableComps[component.ID_RONL] = m.GetComponentByID(component.ID_RONL)
+		availableComps[component.ID_RONL], _ = m.GetComponentByID(component.ID_RONL)
 	}
 	return availableComps
 }
 
 // GetComponentByID returns the first component with the given kind.
-func (m *Manifest) GetComponentByID(id component.ID) *Component {
+func (m *Manifest) GetComponentByID(id component.ID) (*Component, bool) {
 	for _, c := range m.Components {
 		if c.Matches(id) {
-			return c
+			return c, true
 		}
 	}
 
@@ -142,9 +143,9 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 				Executable: m.Executable,
 			},
 			SGX: m.SGX,
-		}
+		}, true
 	}
-	return nil
+	return nil, false
 }
 
 // UnmarshalJSON customizes the unmarshalling of the manifest.
