@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
@@ -138,22 +139,37 @@ func (n *RuntimeHostNode) SetHostedRuntimeVersion(active *version.Version, next 
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	for id, comp := range n.host.Components() {
-		latest, ok := n.rofls[id]
-		if !ok {
-			comp.SetVersion(active, next)
-			continue
+	pruneVersions := func(comp *multi.Aggregate, lowest version.Version) {
+		for _, v := range comp.Versions() {
+			if !v.Less(lowest) {
+				return
+			}
+			_ = comp.RemoveVersion(v)
 		}
+	}
 
-		// ROFL components should start when the RONL component starts and
-		// should upgrade immediately when a new version becomes available.
-		switch {
-		case active == nil && next == nil:
-			comp.SetVersion(nil, nil)
-		case active == nil && next != nil:
-			comp.SetVersion(nil, &latest)
-		default:
-			comp.SetVersion(&latest, nil)
+	for id, comp := range n.host.Components() {
+		switch latest, ok := n.rofls[id]; ok {
+		case false:
+			// RONL components should honor versioning.
+			comp.SetVersion(active, next)
+
+			if active != nil {
+				pruneVersions(comp, *active)
+			}
+		case true:
+			// ROFL components should start when the RONL component starts and
+			// should upgrade immediately when a new version becomes available.
+			switch {
+			case active == nil && next == nil:
+				comp.SetVersion(nil, nil)
+			case active == nil && next != nil:
+				comp.SetVersion(nil, &latest)
+			default:
+				comp.SetVersion(&latest, nil)
+			}
+
+			pruneVersions(comp, latest)
 		}
 	}
 }
