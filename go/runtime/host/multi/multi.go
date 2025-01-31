@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/cenkalti/backoff/v4"
@@ -343,13 +344,27 @@ func (agg *Aggregate) Component(id component.ID) (host.Runtime, bool) {
 	return nil, false
 }
 
+// Versions returns a sorted list of all versions in the aggregate.
+func (agg *Aggregate) Versions() []version.Version {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	versions := make([]version.Version, 0, len(agg.hosts))
+	for v := range agg.hosts {
+		versions = append(versions, v)
+	}
+
+	slices.SortFunc(versions, version.Version.Cmp)
+	return versions
+}
+
 // GetVersion retrieves the runtime host for the specified version.
 func (agg *Aggregate) GetVersion(version version.Version) (host.Runtime, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
-	host := agg.hosts[version]
-	if host == nil {
+	host, ok := agg.hosts[version]
+	if !ok {
 		return nil, ErrNoSuchVersion
 	}
 	// Only allow fetching either the active or next versions.
@@ -379,9 +394,7 @@ func (agg *Aggregate) AddVersion(version version.Version, rt host.Runtime) error
 	agg.l.Lock()
 	defer agg.l.Unlock()
 
-	agg.logger.Info("adding version",
-		"version", version,
-	)
+	agg.logger.Info("adding version", "version", version)
 
 	if id := rt.ID(); id != agg.id {
 		return fmt.Errorf("runtime/host/multi: runtime mismatch: got '%s', expected '%s'", id, agg.id)
@@ -393,14 +406,38 @@ func (agg *Aggregate) AddVersion(version version.Version, rt host.Runtime) error
 
 	agg.hosts[version] = newAggregateHost(rt, version)
 
-	agg.logger.Info("version added",
-		"version", version,
-	)
+	agg.logger.Info("version added", "version", version)
 
 	if agg.running {
 		agg.startActiveLocked()
 		agg.startNextLocked()
 	}
+
+	return nil
+}
+
+// RemoveVersion removes the specified version from the aggregate.
+//
+// A version cannot be removed if it is currently running, meaning it
+// is marked as the active version or the next version.
+func (agg *Aggregate) RemoveVersion(version version.Version) error {
+	agg.l.Lock()
+	defer agg.l.Unlock()
+
+	agg.logger.Info("removing version", "version", version)
+
+	if _, ok := agg.hosts[version]; !ok {
+		return ErrNoSuchVersion
+	}
+	if agg.activeVersion != nil && version == *agg.activeVersion {
+		return fmt.Errorf("runtime/host/multi: cannot remove active version '%s'", version)
+	}
+	if agg.nextVersion != nil && version == *agg.nextVersion {
+		return fmt.Errorf("runtime/host/multi: cannot remove next version '%s'", version)
+	}
+	delete(agg.hosts, version)
+
+	agg.logger.Info("version removed", "version", version)
 
 	return nil
 }
