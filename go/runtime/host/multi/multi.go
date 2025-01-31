@@ -358,8 +358,8 @@ func (agg *Aggregate) Versions() []version.Version {
 	return versions
 }
 
-// GetVersion retrieves the runtime host for the specified version.
-func (agg *Aggregate) GetVersion(version version.Version) (host.Runtime, error) {
+// Version retrieves the runtime host for the specified version.
+func (agg *Aggregate) Version(version version.Version) (host.Runtime, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 

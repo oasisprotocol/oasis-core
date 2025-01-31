@@ -126,7 +126,7 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEEForVersion(version versio
 	if !ok {
 		return nil, fmt.Errorf("failed to get RONL component runtime host")
 	}
-	rt, err := comp.GetVersion(version)
+	rt, err := comp.Version(version)
 	if err != nil {
 		return nil, err
 	}
