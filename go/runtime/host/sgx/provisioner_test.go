@@ -52,10 +52,8 @@ func TestProvisionerSGX(t *testing.T) {
 	require.NoError(err, "bundle.Open")
 
 	tmpDir := t.TempDir()
-	_, err = bnd.WriteExploded(tmpDir)
+	err = bnd.WriteExploded(tmpDir)
 	require.NoError(err, "bnd.WriteExploded")
-
-	explodedDataDir := bnd.ExplodedPath(tmpDir, "")
 
 	ias, err := iasHttp.New(&iasHttp.Config{
 		SPID:               "9b3085a55a5863f7cc66b380dcad0082",
@@ -79,7 +77,7 @@ func TestProvisionerSGX(t *testing.T) {
 	for _, comp := range bnd.Manifest.Components {
 		cfg.Component = &bundle.ExplodedComponent{
 			Component:       comp,
-			ExplodedDataDir: explodedDataDir,
+			ExplodedDataDir: tmpDir,
 		}
 
 		t.Run(fmt.Sprintf("Naked %s", comp.ID()), func(t *testing.T) {
