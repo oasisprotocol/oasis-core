@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -50,6 +52,9 @@ type ManifestStore interface {
 
 	// RemoveManifest removes an exploded manifest with provided hash.
 	RemoveManifest(hash hash.Hash) bool
+
+	// RemoveManifestsWithLabels removes all manifests matching the provided labels.
+	RemoveManifestsWithLabels(labels map[string]string) bool
 
 	// Manifests returns all known exploded manifests.
 	Manifests() []*ExplodedManifest
@@ -212,9 +217,35 @@ func (m *Manager) run(ctx context.Context) {
 	}
 }
 
+func dynamicComponentRewriter(labels map[string]string) ComponentRewriterFunc {
+	// When no labels are specified, do not perform any rewriting.
+	if len(labels) == 0 {
+		return nil
+	}
+
+	return func(comp *Component) {
+		h := tuplehash.New256(32, []byte("oasis-core/bundle: dynamic component ID"))
+		// Ensure components are isolated by origin.
+		_, _ = h.Write([]byte(labels[LabelOrigin]))
+
+		instanceID := labels[LabelInstanceID]
+		if instanceID == "" {
+			// When instance ID is not available, use the name of the component.
+			instanceID = comp.Name
+		} else {
+			// When instance ID is available, reset the component version.
+			comp.Version = version.Version{}
+		}
+		_, _ = h.Write([]byte(instanceID))
+
+		// Rewrite component name.
+		comp.Name = hex.EncodeToString(h.Sum(nil))
+	}
+}
+
 // Add adds bundle from the given path.
-func (m *Manager) Add(path string) error {
-	manifest, err := m.explodeBundle(path)
+func (m *Manager) Add(path string, labels map[string]string) error {
+	manifest, err := m.explodeBundle(path, WithComponentRewriter(dynamicComponentRewriter(labels)))
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,
@@ -234,6 +265,8 @@ func (m *Manager) Add(path string) error {
 		return fmt.Errorf("not allowed to add key manager bundle")
 	}
 
+	manifest.Labels = labels
+
 	if err := m.registerManifest(manifest); err != nil {
 		m.logger.Error("failed to register manifest",
 			"err", err,
@@ -241,6 +274,14 @@ func (m *Manager) Add(path string) error {
 		return fmt.Errorf("failed to register manifest: %w", err)
 	}
 
+	return nil
+}
+
+// Remove removes bundles matching the given labels.
+func (m *Manager) Remove(labels map[string]string) error {
+	if ok := m.store.RemoveManifestsWithLabels(labels); !ok {
+		return fmt.Errorf("no matching bundles found")
+	}
 	return nil
 }
 
@@ -546,7 +587,10 @@ func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 			"hash", manifest.Hash(),
 		)
 
-		manifests = append(manifests, &ExplodedManifest{&manifest, dir})
+		manifests = append(manifests, &ExplodedManifest{
+			Manifest:        &manifest,
+			ExplodedDataDir: dir,
+		})
 	}
 
 	return manifests, nil
@@ -701,7 +745,10 @@ func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManif
 		"dir", dir,
 	)
 
-	return &ExplodedManifest{bnd.Manifest, dir}, nil
+	return &ExplodedManifest{
+		Manifest:        bnd.Manifest,
+		ExplodedDataDir: dir,
+	}, nil
 }
 
 func (m *Manager) registerManifests(manifests []*ExplodedManifest) error {
