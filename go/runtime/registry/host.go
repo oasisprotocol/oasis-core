@@ -87,6 +87,22 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 	return nil
 }
 
+// RemoveHostedRuntimeComponent removes the given runtime component.
+func (n *RuntimeHostNode) RemoveHostedRuntimeComponent(id component.ID) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if err := n.host.RemoveComponent(id); err != nil {
+		return err
+	}
+
+	if id.Kind == component.ROFL {
+		delete(n.rofls, id)
+	}
+
+	return nil
+}
+
 // GetHostedRuntime returns the hosted runtime.
 func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 	return n.rr

@@ -13,6 +13,7 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
@@ -174,7 +175,9 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 
 // AddBundle implements control.NodeController.
 func (n *Node) AddBundle(_ context.Context, path string) error {
-	return n.RuntimeRegistry.GetBundleManager().Add(path)
+	return n.RuntimeRegistry.GetBundleManager().Add(path, map[string]string{
+		bundle.LabelOrigin: "controller",
+	})
 }
 
 func (n *Node) getIdentityStatus() control.IdentityStatus {
