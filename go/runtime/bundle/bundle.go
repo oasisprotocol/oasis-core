@@ -556,6 +556,20 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 		return nil, fmt.Errorf("runtime/bundle: invalid manifest (got: %s, expected: %s)", manifestHash.Hex(), h.Hex())
 	}
 
+	// Rewrite manifest if requested.
+	if options.manifestRewriter != nil {
+		options.manifestRewriter(&manifest)
+
+		// Recompute the manifest hash and change the underlying serialized manifest.
+		manifestHash = manifest.Hash()
+		var rawManifest []byte
+		rawManifest, err = json.Marshal(manifest)
+		if err != nil {
+			return nil, fmt.Errorf("runtime/bundle: failed to serialize manifest: %w", err)
+		}
+		data[manifestName] = NewBytesData(rawManifest)
+	}
+
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
 		Manifest:     &manifest,
@@ -620,9 +634,13 @@ func HashAllData(d Data) (hash.Hash, error) {
 	return hash.NewFromReader(f)
 }
 
+// ManifestRewriterFunc is a function which is passed the manifest for modification.
+type ManifestRewriterFunc func(*Manifest)
+
 // OpenOptions are options for opening bundle files.
 type OpenOptions struct {
-	manifestHash *hash.Hash
+	manifestHash     *hash.Hash
+	manifestRewriter ManifestRewriterFunc
 }
 
 // NewOpenOptions creates options using default and given values.
@@ -641,5 +659,13 @@ type OpenOption func(o *OpenOptions)
 func WithManifestHash(manifestHash hash.Hash) OpenOption {
 	return func(o *OpenOptions) {
 		o.manifestHash = &manifestHash
+	}
+}
+
+// WithManifestRewriter sets the manifest rewriter function to use to rewrite the manifest. Note
+// that this will modify the manifest hash.
+func WithManifestRewriter(f ManifestRewriterFunc) OpenOption {
+	return func(o *OpenOptions) {
+		o.manifestRewriter = f
 	}
 }
