@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -37,6 +39,11 @@ const (
 	// maxDefaultBundleSizeBytes is the maximum allowed default bundle size
 	// in bytes.
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
+
+	// maxLabelSize is the maximum size of a single label key or value.
+	maxLabelSize = 512
+	// maxLabelCount is the maximum number of labels.
+	maxLabelCount = 1024
 )
 
 // ManifestStore is an interface that defines methods for storing exploded manifests.
@@ -51,6 +58,11 @@ type ManifestStore interface {
 	// RemoveManifest removes an exploded manifest with provided hash.
 	RemoveManifest(hash hash.Hash) bool
 
+	// RemoveManifestsWithLabels removes all manifests matching the provided labels.
+	//
+	// Returns the number of removed manifests.
+	RemoveManifestsWithLabels(labels map[string]string) int
+
 	// Manifests returns all known exploded manifests.
 	Manifests() []*ExplodedManifest
 }
@@ -62,6 +74,8 @@ type Manager struct {
 
 	dataDir            string
 	bundleDir          string
+	tmpBundleDir       string
+	tmpBundleRoot      *os.Root
 	maxBundleSizeBytes int64
 
 	runtimeIDs map[common.Namespace]struct{}
@@ -123,6 +137,7 @@ func NewManager(dataDir string, runtimeIDs []common.Namespace, store ManifestSto
 		startOne:           cmSync.NewOne(),
 		dataDir:            dataDir,
 		bundleDir:          ExplodedPath(dataDir),
+		tmpBundleDir:       TmpBundlePath(dataDir),
 		maxBundleSizeBytes: bundleSize,
 		runtimeIDs:         runtimes,
 		globalBaseURLs:     globalBaseURLs,
@@ -148,6 +163,29 @@ func (m *Manager) Stop() {
 
 func (m *Manager) run(ctx context.Context) {
 	m.logger.Info("starting")
+
+	// Cleanup temporary bundle directory and make sure it exists.
+	if err := os.RemoveAll(m.tmpBundleDir); err != nil {
+		m.logger.Error("failed to remove temporary bundle directory",
+			"err", err,
+		)
+		return
+	}
+	if err := common.Mkdir(m.tmpBundleDir); err != nil {
+		m.logger.Error("failed to create temporary bundle directory",
+			"err", err,
+		)
+		return
+	}
+	tmpBundleRoot, err := os.OpenRoot(m.tmpBundleDir)
+	if err != nil {
+		m.logger.Error("failed to open temporary bundle directory",
+			"err", err,
+		)
+		return
+	}
+	defer tmpBundleRoot.Close()
+	m.tmpBundleRoot = tmpBundleRoot
 
 	// Ensure the bundle directory exists.
 	if err := common.Mkdir(m.bundleDir); err != nil {
@@ -212,9 +250,18 @@ func (m *Manager) run(ctx context.Context) {
 	}
 }
 
-// Add adds bundle from the given path.
-func (m *Manager) Add(path string) error {
-	manifest, err := m.explodeBundle(path)
+// Add adds a bundle from the given path.
+func (m *Manager) Add(path string, manifestHash *hash.Hash, labels map[string]string) error {
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
+	var opts []OpenOption
+	if manifestHash != nil {
+		opts = append(opts, WithManifestHash(*manifestHash))
+	}
+
+	manifest, err := m.explodeBundle(path, labels, opts...)
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,
@@ -242,6 +289,72 @@ func (m *Manager) Add(path string) error {
 	}
 
 	return nil
+}
+
+// AddTemporary adds a bundle from the given temporary bundle file.
+func (m *Manager) AddTemporary(tmpName string, manifestHash *hash.Hash, labels map[string]string) error {
+	root, err := m.openTemporaryBundleRoot(labels)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	fi, err := root.Stat(tmpName)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(m.tmpBundleRoot.Name(), root.Name(), fi.Name())
+
+	if err = m.Add(path, manifestHash, labels); err != nil {
+		return err
+	}
+
+	_ = root.Remove(tmpName) // Cleanup temporary bundle after adding.
+	return nil
+}
+
+// Remove removes bundles matching the given labels.
+func (m *Manager) Remove(labels map[string]string) error {
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
+	m.store.RemoveManifestsWithLabels(labels)
+	return nil
+}
+
+// WriteTemporary writes the given data to a temporary file that can later be referenced as a
+// bundle.
+func (m *Manager) WriteTemporary(tmpName string, labels map[string]string, create bool, data []byte) error {
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
+	root, err := m.openTemporaryBundleRoot(labels)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	var mode int
+	switch create {
+	case true:
+		mode = os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	case false:
+		mode = os.O_APPEND | os.O_WRONLY
+	}
+
+	f, err := root.OpenFile(tmpName, mode, 0o600)
+	if err != nil {
+		m.logger.Error("failed to open temporary bundle",
+			"err", err,
+		)
+		return fmt.Errorf("failed to open temporary bundle")
+	}
+	defer f.Close()
+
+	_, err = f.Write(data)
+	return err
 }
 
 // Download updates the checksums of bundles pending download for the given runtime.
@@ -407,7 +520,7 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 	}
 	defer os.Remove(src)
 
-	manifest, err := m.explodeBundle(src, WithManifestHash(manifestHash))
+	manifest, err := m.explodeBundle(src, nil, WithManifestHash(manifestHash))
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,
@@ -475,8 +588,8 @@ func (m *Manager) fetchBundle(url string) (string, error) {
 		return "", fmt.Errorf("failed to fetch bundle: invalid status code %d", resp.StatusCode)
 	}
 
-	// Copy to a temporary file. as downloaded bundles are unverified.
-	file, err := os.CreateTemp("", fmt.Sprintf("oasis-bundle-*%s", FileExtension))
+	// Copy to a temporary file as downloaded bundles are unverified.
+	file, err := os.CreateTemp(m.tmpBundleDir, fmt.Sprintf("oasis-bundle-*%s", FileExtension))
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %w", err)
 	}
@@ -546,7 +659,10 @@ func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 			"hash", manifest.Hash(),
 		)
 
-		manifests = append(manifests, &ExplodedManifest{&manifest, dir})
+		manifests = append(manifests, &ExplodedManifest{
+			Manifest:        &manifest,
+			ExplodedDataDir: dir,
+		})
 	}
 
 	return manifests, nil
@@ -671,7 +787,7 @@ func (m *Manager) explodeBundles(paths []string) ([]*ExplodedManifest, error) {
 
 	manifests := make([]*ExplodedManifest, 0)
 	for _, path := range paths {
-		manifest, err := m.explodeBundle(path)
+		manifest, err := m.explodeBundle(path, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -681,7 +797,7 @@ func (m *Manager) explodeBundles(paths []string) ([]*ExplodedManifest, error) {
 	return manifests, nil
 }
 
-func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManifest, error) {
+func (m *Manager) explodeBundle(path string, labels map[string]string, opts ...OpenOption) (*ExplodedManifest, error) {
 	m.logger.Info("exploding bundle",
 		"path", path,
 	)
@@ -692,6 +808,16 @@ func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManif
 	}
 	defer bnd.Close()
 
+	// Rewrite manifest and perform additional validation if we have some labels.
+	if labels != nil {
+		err := validateDynamicBundle(bnd)
+		if err != nil {
+			return nil, err
+		}
+
+		bnd.Rewrite(dynamicManifestRewriter(labels))
+	}
+
 	dir := bnd.ExplodedPath(m.dataDir)
 	if err = bnd.WriteExploded(dir); err != nil {
 		return nil, fmt.Errorf("failed to explode bundle: %w", err)
@@ -701,7 +827,11 @@ func (m *Manager) explodeBundle(path string, opts ...OpenOption) (*ExplodedManif
 		"dir", dir,
 	)
 
-	return &ExplodedManifest{bnd.Manifest, dir}, nil
+	return &ExplodedManifest{
+		Manifest:        bnd.Manifest,
+		ExplodedDataDir: dir,
+		Labels:          labels,
+	}, nil
 }
 
 func (m *Manager) registerManifests(manifests []*ExplodedManifest) error {
@@ -732,6 +862,22 @@ func (m *Manager) registerManifest(manifest *ExplodedManifest) error {
 	return m.store.AddManifest(manifest)
 }
 
+func (m *Manager) openTemporaryBundleRoot(labels map[string]string) (*os.Root, error) {
+	if m.tmpBundleRoot == nil {
+		return nil, fmt.Errorf("not yet initialized")
+	}
+
+	// Hash the origin to make sure it doesn't contain any characters that are not fs-friendly.
+	dirName := hash.NewFromBytes([]byte(labels[LabelOrigin])).Hex()
+
+	_ = m.tmpBundleRoot.Mkdir(dirName, 0o700)
+	tmpOriginRoot, err := m.tmpBundleRoot.OpenRoot(dirName)
+	if err != nil {
+		return nil, err
+	}
+	return tmpOriginRoot, nil
+}
+
 func validateAndNormalizeURL(rawURL string) (string, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
@@ -752,4 +898,64 @@ func validateAndNormalizeURLs(rawURLs []string) ([]string, error) {
 	}
 
 	return normalizedURLs, nil
+}
+
+func dynamicManifestRewriter(labels map[string]string) ManifestRewriterFunc {
+	return func(manifest *Manifest) {
+		manifest.Name = ""
+		manifest.Version = version.Version{}
+
+		// Rewrite all components.
+		for _, comp := range manifest.Components {
+			h := tuplehash.New256(32, []byte("oasis-core/bundle: dynamic component ID"))
+			// Ensure components are isolated by origin.
+			_, _ = h.Write([]byte(labels[LabelOrigin]))
+			// Ensure components are isolated by instance.
+			instanceID := labels[LabelInstanceID]
+			_, _ = h.Write([]byte(instanceID))
+			// Ensure separation between multiple components on the same instance.
+			_, _ = h.Write([]byte(comp.Name))
+
+			// Rewrite component name.
+			comp.Name = hex.EncodeToString(h.Sum(nil))
+			// Clear component version to avoid the version interfering with the upgrade process.
+			comp.Version = version.Version{}
+		}
+	}
+}
+
+func validateLabels(labels map[string]string) error {
+	if len(labels) == 0 {
+		return fmt.Errorf("at least one label is required")
+	}
+	if len(labels[LabelOrigin]) == 0 {
+		return fmt.Errorf("at least the origin label is required")
+	}
+	if len(labels) > maxLabelCount {
+		return fmt.Errorf("too many labels")
+	}
+	for key, value := range labels {
+		if len(key) > maxLabelSize || len(value) > maxLabelSize {
+			return fmt.Errorf("label too large")
+		}
+	}
+	return nil
+}
+
+func validateDynamicBundle(bnd *Bundle) error {
+	if bnd.Manifest.Executable != "" || bnd.Manifest.SGX != nil {
+		return fmt.Errorf("legacy bundles are not supported")
+	}
+	for _, comp := range bnd.Manifest.Components {
+		if comp.Kind != component.ROFL {
+			return fmt.Errorf("non-ROFL components are not supported")
+		}
+		if comp.Executable != "" {
+			return fmt.Errorf("legacy bundles are not supported")
+		}
+		if comp.Disabled {
+			return fmt.Errorf("disabled components are not supported")
+		}
+	}
+	return nil
 }
