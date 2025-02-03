@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -168,6 +169,27 @@ func (rh *roflHostHandler) handleHostRPCCall(
 		return &protocol.Body{
 			HostRPCCallResponse: &protocol.HostRPCCallResponse{
 				Response: rsp.Response,
+			},
+		}, nil
+	case rofl.LocalRPCEndpointBundleManager:
+		// Route bundle management requests to handler.
+		if rq.HostRPCCallRequest.Kind != enclaverpc.KindLocalQuery {
+			return nil, fmt.Errorf("endpoint not supported")
+		}
+
+		var rpcRq enclaverpc.Request
+		if err := cbor.Unmarshal(rq.HostRPCCallRequest.Request, &rpcRq); err != nil {
+			return nil, fmt.Errorf("malformed request: %w", err)
+		}
+
+		rsp, err := rh.handleBundleManagement(&rpcRq)
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{
+			HostRPCCallResponse: &protocol.HostRPCCallResponse{
+				Response: cbor.Marshal(rsp),
 			},
 		}, nil
 	default:

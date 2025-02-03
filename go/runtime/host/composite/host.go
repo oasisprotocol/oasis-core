@@ -4,6 +4,7 @@ package composite
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"sync"
 
@@ -214,6 +215,36 @@ func (h *Host) AddVersion(id component.ID, version version.Version, rt host.Runt
 	h.logger.Info("version added",
 		"id", id,
 		"version", version,
+	)
+
+	return nil
+}
+
+// RemoveComponent removes a specific runtime component.
+//
+// Attempting to remove the RONL component will result in an error.
+func (h *Host) RemoveComponent(id component.ID) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if id == component.ID_RONL {
+		return fmt.Errorf("RONL component cannot be removed")
+	}
+
+	h.logger.Info("removing component",
+		"id", id,
+	)
+
+	comp, ok := h.comps[id]
+	if !ok {
+		return nil
+	}
+
+	comp.Stop()
+	delete(h.comps, id)
+
+	h.logger.Info("component removed",
+		"id", id,
 	)
 
 	return nil

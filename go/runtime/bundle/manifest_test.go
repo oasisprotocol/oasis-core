@@ -124,6 +124,41 @@ const testManifestLegacyVersionJSON = `
 }
 `
 
+const testManifestMiniJSON = `
+{
+  "name": "name",
+  "id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "version": {},
+  "components": [
+    {
+      "kind": "ronl",
+      "name": "name",
+      "version": {},
+      "tdx": {
+        "firmware": "firmware",
+        "kernel": "kernel",
+        "extra_kernel_options": ["opt1", "opt2"],
+        "stage2_image": "image",
+        "resources": {
+          "memory": 1,
+          "cpus": 2
+        }
+      },
+      "identity": [
+        {
+          "hypervisor": "hypervisor",
+          "enclave": "AQIDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        }
+      ]
+    }
+  ],
+  "digests": {
+    "a": "0100000000000000000000000000000000000000000000000000000000000000",
+    "b": "0200000000000000000000000000000000000000000000000000000000000000"
+  }
+}
+`
+
 func TestManifestHash_EmptyJSON(t *testing.T) {
 	var manifest Manifest
 	err := json.Unmarshal([]byte(testManifestEmptyJSON), &manifest)
@@ -136,6 +171,13 @@ func TestManifestHash_FullJSON(t *testing.T) {
 	err := json.Unmarshal([]byte(testManifestFullJSON), &manifest)
 	require.NoError(t, err)
 	require.Equal(t, "2ddf81b85d08dbecb24571ba75858ec94871800b674d581cf37214c0d56263c3", manifest.Hash().String())
+}
+
+func TestManifestHash_MiniJSON(t *testing.T) {
+	var manifest Manifest
+	err := json.Unmarshal([]byte(testManifestMiniJSON), &manifest)
+	require.NoError(t, err)
+	require.Equal(t, "07c7b90d8412bf8efa6e96132888ac64dad330b0c1b538458fd05ee7a908617b", manifest.Hash().String())
 }
 
 func TestManifestHash_LegacyJSON(t *testing.T) {

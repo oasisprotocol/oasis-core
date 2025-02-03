@@ -4,18 +4,25 @@ use thiserror::Error;
 
 use crate::{
     common::{crypto::signature::PublicKey, namespace::Namespace},
+    enclave_rpc,
     protocol::Protocol,
     storage::mkvs::sync,
     types::{self, Body},
 };
+
+pub mod bundle_manager;
 
 /// Errors.
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("bad response from host")]
     BadResponse,
+
     #[error("{0}")]
-    Other(#[from] types::Error),
+    Host(#[from] types::Error),
+
+    #[error("{0}")]
+    Decode(#[from] cbor::DecodeError),
 }
 
 /// Transaction submission options.
@@ -63,6 +70,9 @@ pub trait Host: Send + Sync {
 
     /// Register for receiving notifications.
     async fn register_notify(&self, opts: RegisterNotifyOpts) -> Result<(), Error>;
+
+    /// Bundle manager interface.
+    fn bundle_manager(&self) -> &dyn bundle_manager::BundleManager;
 }
 
 #[async_trait]
@@ -124,5 +134,34 @@ impl Host for Protocol {
             Body::Empty {} => Ok(()),
             _ => Err(Error::BadResponse),
         }
+    }
+
+    fn bundle_manager(&self) -> &dyn bundle_manager::BundleManager {
+        self
+    }
+}
+
+/// Wrapper to call the host via local RPC.
+pub(super) async fn host_rpc_call<Rq: cbor::Encode, Rs: cbor::Decode>(
+    protocol: &Protocol,
+    endpoint: &str,
+    method: &str,
+    args: Rq,
+) -> Result<Rs, Error> {
+    match protocol
+        .call_host_async(Body::HostRPCCallRequest {
+            endpoint: endpoint.to_string(),
+            request_id: 0,
+            request: cbor::to_vec(enclave_rpc::types::Request {
+                method: method.to_string(),
+                args: cbor::to_value(args),
+            }),
+            kind: enclave_rpc::types::Kind::LocalQuery,
+            nodes: vec![],
+        })
+        .await?
+    {
+        Body::HostRPCCallResponse { response, .. } => Ok(cbor::from_slice(&response)?),
+        _ => Err(Error::BadResponse),
     }
 }

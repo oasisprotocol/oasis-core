@@ -32,7 +32,15 @@ func (r *mockStore) Manifests() []*ExplodedManifest {
 	panic("not implemented")
 }
 
+func (r *mockStore) ManifestsWithLabels(map[string]string) []*ExplodedManifest {
+	panic("not implemented")
+}
+
 func (r *mockStore) RemoveManifest(hash.Hash) bool {
+	panic("not implemented")
+}
+
+func (r *mockStore) RemoveManifestsWithLabels(map[string]string) int {
 	panic("not implemented")
 }
 

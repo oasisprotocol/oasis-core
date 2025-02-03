@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -251,6 +252,9 @@ type ComponentConfig struct {
 
 	// Networking contains the networking configuration for a component.
 	Networking NetworkingConfig `yaml:"networking,omitempty"`
+
+	// Permissions is the list of permissions for this component.
+	Permissions []ComponentPermission `yaml:"permissions,omitempty"`
 }
 
 // Validate validates the component configuration.
@@ -296,6 +300,24 @@ func (c *ComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 		return value.Decode((*compConfig)(c))
 	}
 }
+
+// HasPermission returns true iff the component has a given permission configured.
+func (c *ComponentConfig) HasPermission(perm ComponentPermission) bool {
+	return slices.Contains(c.Permissions, perm)
+}
+
+// ComponentPermission represents a permission given to a component.
+type ComponentPermission string
+
+const (
+	// PermissionBundleAdd is the permission that grants the component rights to provision other
+	// bundles.
+	PermissionBundleAdd ComponentPermission = "bundle_add"
+
+	// PermissionBundleRemove is the permission that grants the component rights to remove other
+	// bundles that were previously added by it (e.g. it cannot remove unrelated bundles).
+	PermissionBundleRemove ComponentPermission = "bundle_remove"
+)
 
 // NetworkingConfig is the networking configuration.
 type NetworkingConfig struct {
