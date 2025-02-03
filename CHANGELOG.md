@@ -12,6 +12,19 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 24.3.2 (2025-02-03)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- Bump CometBFT to 0.37.15-oasis1
+  ([#6032](https://github.com/oasisprotocol/oasis-core/issues/6032))
+
 ## 24.3.1 (2024-11-29)
 
 | Protocol          | Version   |
