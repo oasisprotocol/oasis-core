@@ -437,13 +437,19 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	)
 
 	for height := lastHeight; height <= currentHeight; height++ {
-		// XXX: could soft-fail first few heights in case more heights were
-		// pruned right after the GetLastRetainedVersion query.
-		round, err := sc.reindexBlock(runtimeID, height)
-		if err != nil {
-			return 0, err
+		select {
+		case <-sc.ctx.Done():
+			logger.Info("context cancelled")
+			return lastRound, nil
+		default:
+			// XXX: could soft-fail first few heights in case more heights were
+			// pruned right after the GetLastRetainedVersion query.
+			round, err := sc.reindexBlock(runtimeID, height)
+			if err != nil {
+				return 0, err
+			}
+			lastRound = round
 		}
-		lastRound = round
 	}
 
 	if lastRound == api.RoundInvalid {
@@ -545,7 +551,7 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
 	switch c := cmd.(type) {
 	case *cmdTrackRuntime:
-		sc.handleTrackRuntime(ctx, height, c.runtimeID, c.blockHistory)
+		go sc.handleTrackRuntime(ctx, height, c.runtimeID, c.blockHistory)
 	default:
 		return fmt.Errorf("roothash: unknown command: %T", cmd)
 	}
@@ -574,7 +580,12 @@ func (sc *serviceClient) handleTrackRuntime(ctx context.Context, height int64, r
 	}
 	sc.trackedRuntime[runtimeID] = tr
 	// Request subscription to events for this runtime.
-	sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
+	// This has to be done only after history reindex is done, so that we don't
+	// receive events we are currently reindexing.
+	// Finally, this has to be done always, so that tracking request is not lost.
+	defer func() {
+		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
+	}()
 
 	// Resolve the correct block finalization height to use for the latest block at the current
 	// height as the current height may not correspond to the latest block finalization height.
