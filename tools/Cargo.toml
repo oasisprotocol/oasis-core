@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-thiserror = "1.0"
-serde = { version = "1.0.210", features = ["derive"] }
+thiserror = "2.0"
+serde = { version = "1.0.217", features = ["derive"] }
 toml = "0.8.19"
-clap = "4.5.20"
+clap = "4.5.28"
 ansi_term = "0.12.1"
 
 [[bin]]
