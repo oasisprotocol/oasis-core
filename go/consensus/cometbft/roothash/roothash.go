@@ -437,74 +437,13 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	)
 
 	for height := lastHeight; height <= currentHeight; height++ {
-		var results *cmtrpctypes.ResultBlockResults
-		results, err = sc.backend.GetBlockResults(sc.ctx, height)
+		// XXX: could soft-fail first few heights in case more heights were
+		// pruned right after the GetLastRetainedVersion query.
+		round, err := sc.reindexBlock(runtimeID, height)
 		if err != nil {
-			// XXX: could soft-fail first few heights in case more heights were
-			// pruned right after the GetLastRetainedVersion query.
-			logger.Error("failed to get cometbft block results",
-				"err", err,
-				"height", height,
-			)
-			return lastRound, fmt.Errorf("failed to get cometbft block results: %w", err)
+			return 0, err
 		}
-
-		// Index block.
-		tmEvents := results.BeginBlockEvents
-		for _, txResults := range results.TxsResults {
-			tmEvents = append(tmEvents, txResults.Events...)
-		}
-		tmEvents = append(tmEvents, results.EndBlockEvents...)
-		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != app.EventType {
-				continue
-			}
-
-			var evRtID *common.Namespace
-			var ev *api.FinalizedEvent
-			for _, pair := range tmEv.GetAttributes() {
-				key := pair.GetKey()
-				val := pair.GetValue()
-
-				switch {
-				case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-					if evRtID != nil {
-						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
-					}
-
-					var rtAttribute api.RuntimeIDAttribute
-					if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
-					}
-					evRtID = &rtAttribute.ID
-
-				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
-					var e api.FinalizedEvent
-					if err = eventsAPI.DecodeValue(val, &e); err != nil {
-						logger.Error("failed to unmarshal finalized event",
-							"err", err,
-							"height", height,
-						)
-						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
-					}
-					ev = &e
-				default:
-				}
-			}
-
-			// Only process finalized events.
-			if ev == nil {
-				continue
-			}
-			// Only process events for the given runtime.
-			if !evRtID.Equal(&runtimeID) {
-				continue
-			}
-			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
-				return 0, fmt.Errorf("failed to process finalized event: %w", err)
-			}
-			lastRound = ev.Round
-		}
+		lastRound = round
 	}
 
 	if lastRound == api.RoundInvalid {
@@ -522,6 +461,78 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		"last_round", lastRound,
 	)
 
+	return lastRound, nil
+}
+
+func (sc *serviceClient) reindexBlock(runtimeID common.Namespace, height int64) (uint64, error) {
+	logger := sc.logger.With("runtime_id", runtimeID)
+	var results *cmtrpctypes.ResultBlockResults
+	results, err := sc.backend.GetBlockResults(sc.ctx, height)
+	if err != nil {
+		logger.Error("failed to get cometbft block results",
+			"err", err,
+			"height", height,
+		)
+		return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
+	}
+
+	// Index block.
+	tmEvents := results.BeginBlockEvents
+	for _, txResults := range results.TxsResults {
+		tmEvents = append(tmEvents, txResults.Events...)
+	}
+	tmEvents = append(tmEvents, results.EndBlockEvents...)
+	var lastRound uint64
+	for _, tmEv := range tmEvents {
+		if tmEv.GetType() != app.EventType {
+			continue
+		}
+
+		var evRtID *common.Namespace
+		var ev *api.FinalizedEvent
+		for _, pair := range tmEv.GetAttributes() {
+			key := pair.GetKey()
+			val := pair.GetValue()
+
+			switch {
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
+				if evRtID != nil {
+					return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
+				}
+
+				var rtAttribute api.RuntimeIDAttribute
+				if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
+					return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
+				}
+				evRtID = &rtAttribute.ID
+
+			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
+				var e api.FinalizedEvent
+				if err = eventsAPI.DecodeValue(val, &e); err != nil {
+					logger.Error("failed to unmarshal finalized event",
+						"err", err,
+						"height", height,
+					)
+					return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
+				}
+				ev = &e
+			default:
+			}
+		}
+
+		// Only process finalized events.
+		if ev == nil {
+			continue
+		}
+		// Only process events for the given runtime.
+		if !evRtID.Equal(&runtimeID) {
+			continue
+		}
+		if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
+			return 0, fmt.Errorf("failed to process finalized event: %w", err)
+		}
+		lastRound = ev.Round
+	}
 	return lastRound, nil
 }
 
