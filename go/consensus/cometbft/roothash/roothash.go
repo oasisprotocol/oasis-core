@@ -545,58 +545,62 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
 	switch c := cmd.(type) {
 	case *cmdTrackRuntime:
-		// Request to track a new runtime.
-		etr := sc.trackedRuntime[c.runtimeID]
-		if etr != nil {
-			// Ignore duplicate runtime tracking requests unless this updates the block history.
-			if etr.blockHistory != nil || c.blockHistory == nil {
-				break
-			}
-		} else {
-			sc.logger.Debug("tracking new runtime",
-				"runtime_id", c.runtimeID,
-				"height", height,
-			)
-		}
-
-		// We need to start watching a new block history.
-		tr := &trackedRuntime{
-			runtimeID:    c.runtimeID,
-			blockHistory: c.blockHistory,
-		}
-		sc.trackedRuntime[c.runtimeID] = tr
-		// Request subscription to events for this runtime.
-		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
-
-		// Resolve the correct block finalization height to use for the latest block at the current
-		// height as the current height may not correspond to the latest block finalization height.
-		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
-			RuntimeID: tr.runtimeID,
-			Height:    height,
-		})
-		if err != nil {
-			sc.logger.Warn("failed to get runtime state for latest block",
-				"err",
-				"runtime_id", tr.runtimeID,
-				"height", height,
-			)
-			return nil
-		}
-
-		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
-			sc.logger.Warn("failed to emit latest block",
-				"err", err,
-				"runtime_id", tr.runtimeID,
-				"height", height,
-			)
-		}
-		// Make sure we reindex again when receiving the first event.
-		tr.reindexDone = false
+		sc.handleTrackRuntime(ctx, height, c.runtimeID, c.blockHistory)
 	default:
 		return fmt.Errorf("roothash: unknown command: %T", cmd)
 	}
 	return nil
+}
+
+func (sc *serviceClient) handleTrackRuntime(ctx context.Context, height int64, runtimeID common.Namespace, history api.BlockHistory) {
+	// Request to track a new runtime.
+	etr := sc.trackedRuntime[runtimeID]
+	if etr != nil {
+		// Ignore duplicate runtime tracking requests unless this updates the block history.
+		if etr.blockHistory != nil || history == nil {
+			return
+		}
+	} else {
+		sc.logger.Debug("tracking new runtime",
+			"runtime_id", runtimeID,
+			"height", height,
+		)
+	}
+
+	// We need to start watching a new block history.
+	tr := &trackedRuntime{
+		runtimeID:    runtimeID,
+		blockHistory: history,
+	}
+	sc.trackedRuntime[runtimeID] = tr
+	// Request subscription to events for this runtime.
+	sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
+
+	// Resolve the correct block finalization height to use for the latest block at the current
+	// height as the current height may not correspond to the latest block finalization height.
+	rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
+		RuntimeID: tr.runtimeID,
+		Height:    height,
+	})
+	if err != nil {
+		sc.logger.Warn("failed to get runtime state for latest block",
+			"err",
+			"runtime_id", tr.runtimeID,
+			"height", height,
+		)
+		return
+	}
+
+	// Emit latest block.
+	if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
+		sc.logger.Warn("failed to emit latest block",
+			"err", err,
+			"runtime_id", tr.runtimeID,
+			"height", height,
+		)
+	}
+	// Make sure we reindex again when receiving the first event.
+	tr.reindexDone = false
 }
 
 // Implements api.ServiceClient.
