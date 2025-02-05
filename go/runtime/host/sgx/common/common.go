@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
+
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -155,18 +157,34 @@ func AttestationWorker(
 	t := time.NewTicker(interval)
 	defer t.Stop()
 
+	var retryTicker *backoff.Ticker
+	defer func() {
+		if retryTicker == nil {
+			return
+		}
+		retryTicker.Stop()
+		retryTicker = nil
+	}()
+
 	logger = logger.With("runtime_id", hp.Runtime.ID())
 
 	// Get the event emitter.
 	eventEmitter, _ := hp.Runtime.(host.RuntimeEventEmitter)
 
 	for {
+		var retryCh <-chan time.Time
+		if retryTicker != nil {
+			retryCh = retryTicker.C
+		}
+
 		select {
 		case <-hp.Process.Wait():
 			// Process has terminated.
 			return
 		case <-t.C:
 			// Re-attest based on the configured interval.
+		case <-retryCh:
+			// Re-attest based on retry ticker after failure.
 		case <-hp.NotifyUpdateCapabilityTEE:
 			// Re-attest when explicitly requested. Also reset the periodic ticker to make sure we
 			// don't needlessly re-attest too often.
@@ -181,7 +199,22 @@ func AttestationWorker(
 			logger.Error("failed to regenerate CapabilityTEE",
 				"err", err,
 			)
+
+			// Setup a retry ticker so we retry attestation faster than the configured interval.
+			if retryTicker == nil {
+				expBackoff := backoff.NewExponentialBackOff(
+					backoff.WithMaxElapsedTime(0), // Never stop.
+				)
+				retryTicker = backoff.NewTicker(expBackoff)
+			}
+
 			continue
+		}
+
+		// Clear retry ticker after successful attestation.
+		if retryTicker != nil {
+			retryTicker.Stop()
+			retryTicker = nil
 		}
 
 		// Emit event about the updated CapabilityTEE.
