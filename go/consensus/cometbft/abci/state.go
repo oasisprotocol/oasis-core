@@ -283,17 +283,25 @@ func (s *applicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTim
 	if blockHeight == 0 {
 		return beacon.EpochInvalid, nil
 	}
+
+	latestHeight := blockHeight
+	if abciCtx := api.FromCtx(ctx); abciCtx != nil {
+		// If request was made from an ABCI application context, then use blockHeight + 1, to fetch
+		// the epoch at current (future) height. See cometbft/api.NewImmutableState for details.
+		latestHeight++
+	}
+
 	// Check if there is an epoch transition scheduled for the current height. This should be taken
 	// into account when GetCurrentEpoch is called before the time keeping app does the transition.
-	future, err := s.timeSource.GetFutureEpoch(ctx, blockHeight+1)
+	future, err := s.timeSource.GetFutureEpoch(ctx, latestHeight)
 	if err != nil {
-		return beacon.EpochInvalid, fmt.Errorf("failed to get future epoch for height %d: %w", blockHeight+1, err)
+		return beacon.EpochInvalid, fmt.Errorf("failed to get future epoch for height %d: %w", latestHeight, err)
 	}
 	if future != nil && future.Height == blockHeight+1 {
 		return future.Epoch, nil
 	}
 
-	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
+	currentEpoch, err := s.timeSource.GetEpoch(ctx, latestHeight)
 	if err != nil {
 		return beacon.EpochInvalid, fmt.Errorf("failed to get epoch for height %d: %w", blockHeight+1, err)
 	}
@@ -305,8 +313,14 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTim
 	if blockHeight == 0 {
 		return false, beacon.EpochInvalid
 	}
+	latestHeight := blockHeight
+	if abciCtx := api.FromCtx(ctx); abciCtx != nil {
+		// If request was made from an ABCI application context, then use blockHeight + 1, to fetch
+		// the epoch at current (future) height. See cometbft/api.NewImmutableState for details.
+		latestHeight++
+	}
 
-	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
+	currentEpoch, err := s.timeSource.GetEpoch(ctx, latestHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
@@ -320,7 +334,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTim
 		return false, currentEpoch
 	}
 
-	previousEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight)
+	previousEpoch, err := s.timeSource.GetEpoch(ctx, latestHeight-1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
