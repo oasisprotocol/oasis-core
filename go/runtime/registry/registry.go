@@ -358,6 +358,12 @@ func (r *runtime) run(ctx context.Context) {
 				continue
 			}
 
+			// Support cleanup of runtime bundles only for compute nodes.
+			// Key managers are allowed to run obsolete runtime versions.
+			if !rt.IsCompute() {
+				continue
+			}
+
 			active := rt.ActiveDeployment(epoch)
 			if active == nil {
 				continue
@@ -386,14 +392,20 @@ func (r *runtime) run(ctx context.Context) {
 
 			// If this is a compute runtime and the active descriptor is not
 			// initialized, update the active descriptor.
-			if !activeInitialized && rt.Kind == registry.KindCompute {
+			if !activeInitialized && rt.IsCompute() {
 				if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
 					close(r.activeDescriptorCh)
 					activeInitialized = true
 				}
 			}
 
-			// Download bundles for the active and future versions.
+			// Support hot-loading of runtime bundles only for compute nodes.
+			// Key managers must configure the bundle statically to prevent
+			// running different versions of the runtime.
+			if !rt.IsCompute() {
+				continue
+			}
+
 			now, err := r.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
 			if err != nil {
 				r.logger.Error("failed to get current epoch",
