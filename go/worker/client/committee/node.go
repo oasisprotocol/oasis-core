@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 type pendingTx struct {
@@ -35,7 +36,8 @@ type wantTx struct {
 
 // Node is a client node.
 type Node struct {
-	commonNode *committee.Node
+	commonNode   *committee.Node
+	roleProvider registration.RoleProvider
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
@@ -89,8 +91,18 @@ func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
-func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
-	// Nothing to do here.
+func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
+	if n.roleProvider == nil {
+		return
+	}
+
+	switch {
+	case ev.Started != nil:
+		n.roleProvider.SetAvailable(n.commonNode.RegisterNodeRuntime)
+	case ev.FailedToStart != nil, ev.Stopped != nil:
+		n.roleProvider.SetUnavailable()
+	default:
+	}
 }
 
 // SubmitTxSubscription is a subscription to a transaction submission result.
@@ -366,14 +378,15 @@ func (n *Node) worker() {
 }
 
 // NewNode creates a new client node.
-func NewNode(commonNode *committee.Node) (*Node, error) {
+func NewNode(commonNode *committee.Node, roleProvider registration.RoleProvider) (*Node, error) {
 	n := &Node{
-		commonNode: commonNode,
-		stopCh:     make(chan struct{}),
-		quitCh:     make(chan struct{}),
-		initCh:     make(chan struct{}),
-		txCh:       channels.NewInfiniteChannel(),
-		logger:     logging.GetLogger("worker/client/committee").With("runtime_id", commonNode.Runtime.ID()),
+		commonNode:   commonNode,
+		roleProvider: roleProvider,
+		stopCh:       make(chan struct{}),
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		txCh:         channels.NewInfiniteChannel(),
+		logger:       logging.GetLogger("worker/client/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 	return n, nil
 }

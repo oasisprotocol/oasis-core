@@ -129,21 +129,31 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
+	var (
+		err error
+		rp  registration.RoleProvider
+	)
+
 	switch config.GlobalConfig.Mode {
 	case config.ModeClient, config.ModeStatelessClient:
-		// When a node is a client node and it has an entity configured, we register it with the
-		// observer role as this may be needed for confidential runtimes.
-		rp, err := w.registration.NewRuntimeRoleProvider(node.RoleObserver, id)
+		// When a node is a client node and it has an entity configured,
+		// we register it with the observer role as this may be needed
+		// for confidential runtimes.
+		rp, err = w.registration.NewRuntimeRoleProvider(node.RoleObserver, id)
 		if err != nil {
 			return fmt.Errorf("failed to create role provider: %w", err)
 		}
 
-		rp.SetAvailable(commonNode.RegisterNodeRuntime)
+		// The role provider is set as unavailable by default and we want to
+		// leave it like that before initialization starts, so the registration
+		// is blocked until the runtime finishes initializing.
+		// The availability of the role provider is changed in
+		// HandleRuntimeHostEventLocked in worker/client/committee/node.go.
 	default:
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode)
+	node, err := committee.NewNode(commonNode, rp)
 	if err != nil {
 		return err
 	}
