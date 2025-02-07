@@ -12,6 +12,176 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.0 (2025-02-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- go/runtime: Support hot-loading of runtime bundles
+  ([#5962](https://github.com/oasisprotocol/oasis-core/issues/5962))
+
+  The node can now fetch and verify runtime bundles from remote repositories
+  and automatically update to new versions.
+
+  The following configuration option has been removed:
+
+  - `runtime.components`
+
+  The following configuration option has been deprecated:
+
+  - `runtime.config`
+
+  The following configuration options have been added:
+
+  - `runtime.runtimes.id` is the runtime identifier,
+
+  - `runtime.runtimes.components` is the list of components to configure,
+
+  - `runtime.runtimes.config` is the runtime local configuration,
+
+  - `runtime.runtimes.registries` is the list of runtime specific URLs
+     used to fetch runtime bundle metadata,
+
+  - `runtime.registries` is the list of global URLs used to fetch
+     runtime bundle metadata,
+
+  - `runtime.max_bundle_size` is the maximum allowed bundle size.
+
+- go/runtime/config: Support selection of TEE kind
+  ([#5975](https://github.com/oasisprotocol/oasis-core/issues/5975))
+
+  The node operator can now specify the kind of Trusted Execution Environment
+  (TEE) in which the runtime component should run. If no TEE is specified,
+  it is automatically selected, with TDX and SGX taking precedence over ELF.
+
+  The following configuration option has been deprecated:
+
+  - `runtime.environment`
+
+  The following configuration options have been added:
+
+  - `runtime.debug_mock_tee` to enable TEE mocking for testing,
+
+  - `runtime.runtimes.components.tee` to specify the TEE for a component.
+
+  These changes affect the configuration of the client node if the runtime
+  bundle contains both TEE and non-TEE binaries. In such cases, the node
+  operator must explicitly configure the runtime to avoid running in a TEE
+  environment.
+
+  Configuring non-TEE Paratime Client Node:
+
+  ```yaml
+  mode: client
+  # ... sections not relevant are omitted ...
+  runtime:
+    paths:
+      - {{ runtime_orc_path }}
+    runtimes:
+    - id: {{ runtime_id }}
+      components:
+      - id: ronl
+        tee: none # Don't run in SGX or TDX!
+  ```
+
+  Configuring TEE Paratime Client Node:
+
+  ```yaml
+  mode: client
+  # ... sections not relevant are omitted ...
+  runtime:
+    paths:
+      - {{ runtime_orc_path }}
+    sgx_loader: /node/bin/oasis-core-runtime-loader
+    # environment: sgx # Deprecated, can be removed.
+  ```
+
+### Features
+
+- go/runtime/bundle: Cleanup bundles on a runtime upgrade
+  ([#5737](https://github.com/oasisprotocol/oasis-core/issues/5737))
+
+- runtime: Add accessor for runtime state
+  ([#5915](https://github.com/oasisprotocol/oasis-core/issues/5915))
+
+- go/runtime/bundle: Add expected enclave identity to manifest
+  ([#5931](https://github.com/oasisprotocol/oasis-core/issues/5931))
+
+- go/runtime/host/tdx: Add support for RW drives and formats
+  ([#5981](https://github.com/oasisprotocol/oasis-core/issues/5981))
+
+- go/runtime/bundle: Cleanup bundles on startup
+  ([#6003](https://github.com/oasisprotocol/oasis-core/issues/6003))
+
+- go/runtime/host/tdx: Add support for persistent image overlay
+  ([#6005](https://github.com/oasisprotocol/oasis-core/issues/6005))
+
+- go/runtime/host: Support individual component upgrades
+  ([#6012](https://github.com/oasisprotocol/oasis-core/issues/6012))
+
+  A new field `components` has been added to the `oasis-node control status`
+  output under the runtime status section. This field displays the statuses
+  of runtime components, including their kind, name, version, and whether
+  they are detached or disabled by default.
+
+- go/oasis-node/cmd: Support ROFL upgrades
+  ([#6012](https://github.com/oasisprotocol/oasis-core/issues/6012))
+
+  To upgrade ROFL runtime components, you can use the newly added
+  `oasis-node control add-bundle <path>` command, where `<path>`
+  is the location of the bundle containing the latest version
+  of the components you want to upgrade.
+
+### Bug Fixes
+
+- runtime: Do not persist updated trusted state for TDX
+  ([#5909](https://github.com/oasisprotocol/oasis-core/issues/5909))
+
+- runtime/src/enclave_rpc/client: Fix panic on drop in async context
+  ([#5917](https://github.com/oasisprotocol/oasis-core/issues/5917))
+
+  The graceful shutdown of active sessions was removed, as they should
+  not be closed when the RPC client is dropped. Instead, we should
+  explicitly invoke the appropriate functions.
+
+- Bump CometBFT to 0.37.15-oasis1
+  ([#6032](https://github.com/oasisprotocol/oasis-core/issues/6032))
+
+- go/worker/client: Fix observer role registration
+  ([#6037](https://github.com/oasisprotocol/oasis-core/issues/6037))
+
+### Internal Changes
+
+- Bump Go to 1.23.2 and golangci-lint to 1.63.4
+  ([#5854](https://github.com/oasisprotocol/oasis-core/issues/5854),
+   [#6011](https://github.com/oasisprotocol/oasis-core/issues/6011))
+
+- go/oasis-test-runner: Generalize OASIS_UNSAFE_MOCK_SGX flag
+  ([#5975](https://github.com/oasisprotocol/oasis-core/issues/5975))
+
+  Flag OASIS_UNSAFE_MOCK_SGX was renamed to OASIS_UNSAFE_MOCK_TEE.
+
+- go/runtime/bundle: Add initial GPU-related resources
+  ([#5995](https://github.com/oasisprotocol/oasis-core/issues/5995))
+
+- go/runtime/host: Introduce a runtime watchdog
+  ([#6024](https://github.com/oasisprotocol/oasis-core/issues/6024))
+
+- go: Bump github.com/dgraph-io/badger to v4.5.1
+  ([#6046](https://github.com/oasisprotocol/oasis-core/issues/6046))
+
+- go: Bump github.com/libp2p/go-libp2p to v0.39.0
+  ([#5951](https://github.com/oasisprotocol/oasis-core/issues/5951),
+   [#6046](https://github.com/oasisprotocol/oasis-core/issues/6046))
+
+- docs: Improve SVG image transparency in dark mode
+  ([#5973](https://github.com/oasisprotocol/oasis-core/issues/5973))
+
 ## 24.3 (2024-10-14)
 
 | Protocol          | Version   |
