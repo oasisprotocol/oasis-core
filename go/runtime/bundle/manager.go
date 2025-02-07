@@ -508,12 +508,20 @@ func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 
 		b, err := os.ReadFile(filepath.Join(dir, manifestName))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read manifest: %w", err)
+			m.logger.Warn("skipping unreadable manifest",
+				"path", dir,
+				"err", err,
+			)
+			continue
 		}
 
 		var manifest Manifest
 		if err = json.Unmarshal(b, &manifest); err != nil {
-			return nil, fmt.Errorf("failed to parse manifest: %w", err)
+			m.logger.Warn("skipping malformed manifest",
+				"path", dir,
+				"err", err,
+			)
+			continue
 		}
 
 		m.logger.Info("manifest loaded",
