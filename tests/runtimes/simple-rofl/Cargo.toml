@@ -25,13 +25,13 @@ oasis-core-runtime = { path = "../../../runtime" }
 oasis-core-keymanager = { path = "../../../keymanager" }
 
 anyhow = "1.0"
-async-trait = "0.1.83"
-mbedtls = { version = "0.12.3", features = ["x509"] }
-rand = "0.8.5"
-rustls = { version = "0.23.18", default-features = false }
+async-trait = "0.1.86"
+mbedtls = { version = "0.13.0", features = ["x509"] }
+rand = "0.9.0"
+rustls = { version = "0.23.22", default-features = false }
 rustls-mbedcrypto-provider = { version = "0.1.0" }
 rustls-mbedpki-provider = { version = "0.2.0" }
-tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "sync"] }
 
 [features]
 debug-mock-sgx = [
