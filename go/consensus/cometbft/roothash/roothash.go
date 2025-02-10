@@ -402,7 +402,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		sc.logger.Error("failed to get last indexed height",
 			"err", err,
 		)
-		return lastRound, fmt.Errorf("failed to get last indexed height: %w", err)
+		return 0, fmt.Errorf("failed to get last indexed height: %w", err)
 	}
 	// +1 since we want the last non-seen height.
 	lastHeight++
@@ -410,7 +410,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	// Take prune strategy into account.
 	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(sc.ctx)
 	if err != nil {
-		return lastRound, fmt.Errorf("failed to get last retained height: %w", err)
+		return 0, fmt.Errorf("failed to get last retained height: %w", err)
 	}
 	if lastHeight < lastRetainedHeight {
 		logger.Debug("last height pruned, skipping until last retained",
@@ -423,7 +423,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	// Take initial genesis height into account.
 	genesisDoc, err := sc.backend.GetGenesisDocument(sc.ctx)
 	if err != nil {
-		return lastRound, fmt.Errorf("failed to get genesis document: %w", err)
+		return 0, fmt.Errorf("failed to get genesis document: %w", err)
 	}
 	if lastHeight < genesisDoc.Height {
 		lastHeight = genesisDoc.Height
@@ -446,7 +446,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 				"err", err,
 				"height", height,
 			)
-			return lastRound, fmt.Errorf("failed to get cometbft block results: %w", err)
+			return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
 		}
 
 		// Index block.
