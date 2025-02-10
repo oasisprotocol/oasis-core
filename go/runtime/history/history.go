@@ -54,6 +54,10 @@ func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bo
 	return errNopHistory
 }
 
+func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults) error {
+	return errNopHistory
+}
+
 func (h *nopHistory) ConsensusCheckpoint(int64) error {
 	return errNopHistory
 }
@@ -155,6 +159,10 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 	h.blocksNotifier.Broadcast(blk)
 
 	return nil
+}
+
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, roundResults []*roothash.RoundResults) error {
+	return h.db.commitBatch(blks, roundResults)
 }
 
 func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {

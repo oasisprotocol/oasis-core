@@ -25,6 +25,13 @@ type BlockHistory interface {
 	// Must be called in order, sorted by round.
 	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
 
+	// CommitBatch commits annotated blocks and corresponding round results,
+	// into runtime history.
+	//
+	// Watcher will not be notified about new blocks since this method is only
+	// meant to be used during reindex.
+	CommitBatch(blks []*AnnotatedBlock, roundResults []*RoundResults) error
+
 	// ConsensusCheckpoint records the last consensus height which was processed
 	// by the roothash backend.
 	//

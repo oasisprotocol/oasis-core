@@ -214,6 +214,59 @@ func (d *DB) commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundRe
 	})
 }
 
+func (d *DB) commitBatch(blks []*roothash.AnnotatedBlock, roundResults []*roothash.RoundResults) error {
+	if len(blks) != len(roundResults) {
+		return fmt.Errorf("runtime/history: got %d annotated blocks and %d roundResults, but should be equal", len(blks), len(roundResults))
+	}
+	if len(blks) == 0 {
+		return nil
+	}
+
+	return d.db.Update(func(tx *badger.Txn) error {
+		meta, err := d.queryGetMetadata(tx)
+		if err != nil {
+			return err
+		}
+
+		for i, blk := range blks {
+			rtID := blk.Block.Header.Namespace
+			if !rtID.Equal(&meta.RuntimeID) {
+				return fmt.Errorf("runtime/history: runtime mismatch (expected: %s got: %s)",
+					meta.RuntimeID,
+					rtID,
+				)
+			}
+
+			if blk.Height < meta.LastConsensusHeight {
+				return fmt.Errorf("runtime/history: commit at lower consensus height (current: %d wanted: %d)",
+					meta.LastConsensusHeight,
+					blk.Height,
+				)
+			}
+
+			if blk.Block.Header.Round <= meta.LastRound && meta.LastConsensusHeight != 0 {
+				return fmt.Errorf("runtime/history: commit at lower round (current: %d wanted: %d)",
+					meta.LastRound,
+					blk.Block.Header.Round,
+				)
+			}
+
+			if err := tx.Set(blockKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(blk)); err != nil {
+				return err
+			}
+
+			if err := tx.Set(roundResultsKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(roundResults[i])); err != nil {
+				return err
+			}
+			meta.LastRound = blk.Block.Header.Round
+			if blk.Height > meta.LastConsensusHeight {
+				meta.LastConsensusHeight = blk.Height
+			}
+		}
+		return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
+	})
+}
+
 func (d *DB) getBlock(round uint64) (*roothash.AnnotatedBlock, error) {
 	var blk roothash.AnnotatedBlock
 	txErr := d.db.View(func(tx *badger.Txn) error {

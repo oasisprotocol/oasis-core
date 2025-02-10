@@ -29,7 +29,10 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
-const crashPointBlockBeforeIndex = "roothash.before_index"
+const (
+	crashPointBlockBeforeIndex = "roothash.before_index"
+	batchSize                  = 1000
+)
 
 // ServiceClient is the roothash service client interface.
 type ServiceClient interface {
@@ -436,13 +439,61 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 		logging.LogEvent, api.LogEventHistoryReindexing,
 	)
 
-	for height := lastHeight; height <= currentHeight; height++ {
+	for height := lastHeight; height <= currentHeight; height += batchSize {
+		end := height + batchSize - 1
+		if end > currentHeight {
+			end = currentHeight
+		}
+		last, err := sc.reindexBatch(ctx, runtimeID, bh, height, end)
+		if err != nil {
+			return 0, fmt.Errorf("failed to commit batch to history keeper: %w", err)
+		}
+		if last != api.RoundInvalid && last > lastRound {
+			lastRound = last
+		}
+	}
+
+	if lastRound == api.RoundInvalid {
+		sc.logger.Debug("no new round reindexed, return latest known round")
+		switch blk, err := bh.GetCommittedBlock(sc.ctx, api.RoundLatest); err {
+		case api.ErrNotFound:
+		case nil:
+			lastRound = blk.Header.Round
+		default:
+			return lastRound, fmt.Errorf("failed to get latest block: %w", err)
+		}
+	}
+
+	sc.logger.Debug("block reindex complete",
+		"last_round", lastRound,
+	)
+
+	return lastRound, nil
+}
+
+func (sc *serviceClient) reindexBatch(
+	ctx context.Context,
+	runtimeID common.Namespace,
+	bh api.BlockHistory,
+	start int64,
+	end int64,
+) (uint64, error) {
+	sc.logger.Debug("reindexing batch",
+		"runtime_id", runtimeID,
+		"batch_start", start,
+		"batch_end", end,
+	)
+
+	lastRound := api.RoundInvalid
+	var blocks []*api.AnnotatedBlock
+	var roundResults []*api.RoundResults
+	for height := start; height <= end; height++ {
 		var results *cmtrpctypes.ResultBlockResults
-		results, err = sc.backend.GetBlockResults(sc.ctx, height)
+		results, err := sc.backend.GetBlockResults(sc.ctx, height)
 		if err != nil {
 			// XXX: could soft-fail first few heights in case more heights were
 			// pruned right after the GetLastRetainedVersion query.
-			logger.Error("failed to get cometbft block results",
+			sc.logger.Error("failed to get cometbft block results",
 				"err", err,
 				"height", height,
 			)
@@ -481,7 +532,7 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
 					var e api.FinalizedEvent
 					if err = eventsAPI.DecodeValue(val, &e); err != nil {
-						logger.Error("failed to unmarshal finalized event",
+						sc.logger.Error("failed to unmarshal finalized event",
 							"err", err,
 							"height", height,
 						)
@@ -501,40 +552,27 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 				continue
 			}
 
-			annBlk, roundResults, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
+			annBlk, rr, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
 			if err != nil {
 				return 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 			}
-			err = bh.Commit(annBlk, roundResults, false)
-			if err != nil {
-				sc.logger.Error("failed to commit block to history keeper",
-					"err", err,
-					"runtime_id", runtimeID,
-					"height", height,
-					"round", annBlk.Block.Header.Round,
-				)
-				return 0, fmt.Errorf("failed to commit block to history keeper: %w", err)
-			}
+			blocks = append(blocks, annBlk)
+			roundResults = append(roundResults, rr)
 
 			lastRound = ev.Round
 		}
 	}
 
-	if lastRound == api.RoundInvalid {
-		sc.logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetCommittedBlock(sc.ctx, api.RoundLatest); err {
-		case api.ErrNotFound:
-		case nil:
-			lastRound = blk.Header.Round
-		default:
-			return lastRound, fmt.Errorf("failed to get latest block: %w", err)
-		}
+	err := bh.CommitBatch(blocks, roundResults)
+	if err != nil {
+		sc.logger.Error("failed to commit batch to history keeper",
+			"err", err,
+			"runtime_id", runtimeID,
+			"batch_start", start,
+			"batch_end", end,
+		)
+		return 0, err
 	}
-
-	sc.logger.Debug("block reindex complete",
-		"last_round", lastRound,
-	)
-
 	return lastRound, nil
 }
 
