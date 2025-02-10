@@ -294,7 +294,10 @@ func NewImmutableState(ctx context.Context, state ApplicationQueryState, version
 	if state.BlockHeight() == 0 {
 		return nil, consensus.ErrNoCommittedBlocks
 	}
-	if version <= 0 || version > state.BlockHeight() {
+	if version > state.BlockHeight() {
+		return nil, consensus.ErrVersionNotFound
+	}
+	if version <= 0 {
 		version = state.BlockHeight()
 	}
 

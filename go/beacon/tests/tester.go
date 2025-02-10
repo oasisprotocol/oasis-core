@@ -35,6 +35,10 @@ func BeaconImplementationTests(t *testing.T, backend api.SetableBackend) {
 	latestEpoch, err := backend.GetEpoch(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
+	// Querying epoch for a non-existing height should fail.
+	_, err = backend.GetEpoch(context.Background(), 100000000000)
+	require.ErrorIs(err, consensus.ErrVersionNotFound, "GetEpoch should fail for non-existing height")
+
 	var lastHeight int64
 	for epoch := api.EpochTime(0); epoch <= latestEpoch; epoch++ {
 		height, err := backend.GetEpochBlock(context.Background(), epoch)

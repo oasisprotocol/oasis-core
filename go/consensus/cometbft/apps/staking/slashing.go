@@ -69,7 +69,9 @@ func onEvidenceByzantineConsensus(
 	// validator from being scheduled in the next epoch.
 	if penalty.FreezeInterval > 0 {
 		var epoch beacon.EpochTime
-		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.BlockHeight()+1)
+		// XXX: This should maybe use abciCtx and ctx.BlockHeight() + 1, but was
+		// kept like this to avoid potential consensus breaking changes at this time.
+		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.BlockHeight())
 		if err != nil {
 			return err
 		}
