@@ -577,7 +577,7 @@ func (agg *Aggregate) stopActiveLocked() {
 
 	// Close off the subscription, invalidate the old sub-host.
 	agg.active.sub.Close()
-	agg.hosts[agg.active.version] = nil
+	delete(agg.hosts, agg.active.version)
 	agg.active = nil
 }
 
@@ -649,7 +649,7 @@ func (agg *Aggregate) stopNextLocked() {
 
 	// Close off the subscription, invalidate the old sub-host.
 	agg.next.sub.Close()
-	agg.hosts[agg.next.version] = nil
+	delete(agg.hosts, agg.next.version)
 	agg.next = nil
 
 	// Notify subscribers that configuration has changed.
