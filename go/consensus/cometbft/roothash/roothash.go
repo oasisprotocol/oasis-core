@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
@@ -32,6 +33,9 @@ import (
 const (
 	crashPointBlockBeforeIndex = "roothash.before_index"
 	batchSize                  = 1000
+	// consensuIntervals is number intervals we split initial history reindex,
+	// for parallel reindex.
+	consensusIntervals = 1
 )
 
 // ServiceClient is the roothash service client interface.
@@ -391,6 +395,7 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 }
 
 func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64, bh api.BlockHistory) (uint64, error) {
+	start := time.Now()
 	lastRound := api.RoundInvalid
 	if currentHeight <= 0 {
 		return lastRound, nil
@@ -432,25 +437,112 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 		lastHeight = genesisDoc.Height
 	}
 
+	interval := (currentHeight - lastHeight) + 1
+	workerInterval := interval/int64(consensusIntervals) + 1
+	var wg sync.WaitGroup
+	errCh := make(chan error, consensusIntervals)
+	lastRoundCh := make(chan uint64, consensusIntervals)
+	readGetBlocksCh := make(chan time.Duration, consensusIntervals)
+	readLatestBlockCh := make(chan time.Duration, consensusIntervals)
+	readLastRoundsCh := make(chan time.Duration, consensusIntervals)
+	writeBatchCh := make(chan time.Duration, consensusIntervals)
+
+	var readGetBlocks, readLatestBlock, readLastRounds, writeBatch time.Duration
+
 	// Scan all blocks between last indexed height and current height.
-	logger.Debug("reindexing blocks",
+	logger.Info("history reindex0: reindexing blocks",
 		"last_indexed_height", lastHeight,
 		"current_height", currentHeight,
-		logging.LogEvent, api.LogEventHistoryReindexing,
+		"interval", interval,
+		"workerInterval", workerInterval,
 	)
 
-	for height := lastHeight; height <= currentHeight; height += batchSize {
-		end := height + batchSize - 1
+	for start := lastHeight; start <= currentHeight; start += workerInterval {
+		end := start + workerInterval - 1
 		if end > currentHeight {
 			end = currentHeight
 		}
-		last, err := sc.reindexBatch(ctx, runtimeID, bh, height, end)
-		if err != nil {
-			return 0, fmt.Errorf("failed to commit batch to history keeper: %w", err)
-		}
+
+		wg.Add(1)
+		go func(workerStart, workerEnd int64) {
+			defer wg.Done()
+
+			var readGetBlocks, readLatestBlock, readLastRounds time.Duration
+
+			// var errCount, emptyCount int64
+			var lastRound = api.RoundInvalid
+
+			// var read, write int64
+			sc.logger.Info("history reindex0: worker starting worker interval reindex",
+				"start", workerStart,
+				"end", workerEnd,
+			)
+			for batchStart := workerStart; batchStart <= workerEnd; batchStart += batchSize {
+				batchEnd := batchStart + batchSize - 1
+				if batchEnd > workerEnd {
+					batchEnd = workerEnd
+				}
+				readGBlocks, readLBlock, readLRounds, wBatch, last, err := sc.reindexBatch(ctx, runtimeID, bh, batchStart, batchEnd)
+				readGetBlocks += readGBlocks
+				readLatestBlock += readLBlock
+				readLastRounds += readLRounds
+				writeBatch += wBatch
+
+				if err != nil {
+					errCh <- fmt.Errorf("failed to reindex batch [%v-%v], for worker [%v-%v]: %w",
+						batchStart,
+						batchEnd,
+						workerStart,
+						workerEnd,
+						err,
+					)
+				}
+				if last != api.RoundInvalid && (lastRound == api.RoundInvalid || last > lastRound) {
+					lastRound = last
+				}
+			}
+			sc.logger.Info("history reindex0: worker interval reindex completed successfully",
+				"start", workerStart,
+				"end", workerEnd,
+				"lastRound", lastRound)
+			lastRoundCh <- lastRound
+			readGetBlocksCh <- readGetBlocks
+			readLatestBlockCh <- readLatestBlock
+			readLastRoundsCh <- readLastRounds
+
+		}(start, end)
+
+	}
+	wg.Wait()
+	close(errCh)
+	close(lastRoundCh)
+	close(readGetBlocksCh)
+	close(readLatestBlockCh)
+	close(readLastRoundsCh)
+	close(writeBatchCh)
+
+	for err := range errCh {
+		sc.logger.Error("history reindex0: error during worker reindexing",
+			"err", err,
+		)
+		panic(err)
+	}
+	for last := range lastRoundCh {
 		if last != api.RoundInvalid && (lastRound == api.RoundInvalid || last > lastRound) {
 			lastRound = last
 		}
+	}
+	for v := range readGetBlocksCh {
+		readGetBlocks += v
+	}
+	for v := range readLatestBlockCh {
+		readLatestBlock += v
+	}
+	for v := range readLastRoundsCh {
+		readLastRounds += v
+	}
+	for v := range writeBatchCh {
+		writeBatch += v
 	}
 
 	if lastRound == api.RoundInvalid {
@@ -464,9 +556,21 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 		}
 	}
 
-	sc.logger.Debug("block reindex complete",
+	duration := time.Since(start).Seconds()
+	speed := interval / int64(duration)
+	sc.logger.Info("history reindex0: block reindex complete",
 		"last_round", lastRound,
+		"duration", duration,
+		"interval", interval,
+		"speed", speed,
+		"threads", consensusIntervals,
+		"read_get_blocks", readGetBlocks.Seconds(),
+		"read_latest_block", readLatestBlock.Seconds(),
+		"read_last_rounds", readLastRounds.Seconds(),
+		"read_total", readGetBlocks.Seconds()+readLatestBlock.Seconds()+readLastRounds.Seconds(),
+		"write_batch", writeBatch.Seconds(),
 	)
+	panic("history reindex0 finished")
 
 	return lastRound, nil
 }
@@ -477,19 +581,22 @@ func (sc *serviceClient) reindexBatch(
 	bh api.BlockHistory,
 	start int64,
 	end int64,
-) (uint64, error) {
+) (time.Duration, time.Duration, time.Duration, time.Duration, uint64, error) {
 	sc.logger.Debug("reindexing batch",
 		"runtime_id", runtimeID,
 		"batch_start", start,
 		"batch_end", end,
 	)
+	var readGetBlocks, readLatestBlock, readLastRounds, writeBatch time.Duration
 
 	lastRound := api.RoundInvalid
 	var blocks []*api.AnnotatedBlock
 	var roundResults []*api.RoundResults
 	for height := start; height <= end; height++ {
 		var results *cmtrpctypes.ResultBlockResults
+		begin := time.Now()
 		results, err := sc.backend.GetBlockResults(sc.ctx, height)
+		readGetBlocks += time.Since(begin)
 		if err != nil {
 			// XXX: could soft-fail first few heights in case more heights were
 			// pruned right after the GetLastRetainedVersion query.
@@ -497,7 +604,7 @@ func (sc *serviceClient) reindexBatch(
 				"err", err,
 				"height", height,
 			)
-			return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
+			return 0, 0, 0, 0, 0, fmt.Errorf("failed to get cometbft block results: %w", err)
 		}
 
 		// Index block.
@@ -520,12 +627,12 @@ func (sc *serviceClient) reindexBatch(
 				switch {
 				case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
 					if evRtID != nil {
-						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
+						return 0, 0, 0, 0, 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
 					}
 
 					var rtAttribute api.RuntimeIDAttribute
 					if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
+						return 0, 0, 0, 0, 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
 					}
 					evRtID = &rtAttribute.ID
 
@@ -536,7 +643,7 @@ func (sc *serviceClient) reindexBatch(
 							"err", err,
 							"height", height,
 						)
-						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
+						return 0, 0, 0, 0, 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
 					ev = &e
 				default:
@@ -552,10 +659,12 @@ func (sc *serviceClient) reindexBatch(
 				continue
 			}
 
-			annBlk, rr, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
+			readLBlock, readLRound, annBlk, rr, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
 			if err != nil {
-				return 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
+				return 0, 0, 0, 0, 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 			}
+			readLatestBlock += readLBlock
+			readLastRounds += readLRound
 			blocks = append(blocks, annBlk)
 			roundResults = append(roundResults, rr)
 
@@ -563,7 +672,9 @@ func (sc *serviceClient) reindexBatch(
 		}
 	}
 
+	begin := time.Now()
 	err := bh.CommitBatch(blocks, roundResults)
+	writeBatch = time.Since(begin)
 	if err != nil {
 		sc.logger.Error("failed to commit batch to history keeper",
 			"err", err,
@@ -571,9 +682,9 @@ func (sc *serviceClient) reindexBatch(
 			"batch_start", start,
 			"batch_end", end,
 		)
-		return 0, err
+		return 0, 0, 0, 0, 0, err
 	}
-	return lastRound, nil
+	return readGetBlocks, readLatestBlock, readLastRounds, writeBatch, lastRound, nil
 }
 
 // Implements api.ServiceClient.
@@ -700,7 +811,7 @@ func (sc *serviceClient) processFinalizedEvent(
 	}
 
 	// Process finalized event.
-	annBlk, roundResults, err := sc.fetchFinalizedRound(ctx, height, runtimeID, round)
+	_, _, annBlk, roundResults, err := sc.fetchFinalizedRound(ctx, height, runtimeID, round)
 	if err != nil {
 		return fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 	}
@@ -766,42 +877,47 @@ func (sc *serviceClient) fetchFinalizedRound(
 	height int64,
 	runtimeID common.Namespace,
 	round *uint64,
-) (*api.AnnotatedBlock, *api.RoundResults, error) {
+) (time.Duration, time.Duration, *api.AnnotatedBlock, *api.RoundResults, error) {
+	var readLatestBlock, readLastRounds time.Duration
+	start := time.Now()
 	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
+	readLatestBlock = time.Since(start)
 	if err != nil {
 		sc.logger.Error("failed to fetch latest block",
 			"err", err,
 			"height", height,
 			"runtime_id", runtimeID,
 		)
-		return nil, nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
+		return 0, 0, nil, nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
 	}
 	if round != nil && blk.Header.Round != *round {
 		sc.logger.Error("finalized event/query round mismatch",
 			"block_round", blk.Header.Round,
 			"event_round", *round,
 		)
-		return nil, nil, fmt.Errorf("roothash: finalized event/query round mismatch")
+		return 0, 0, nil, nil, fmt.Errorf("roothash: finalized event/query round mismatch")
 	}
+	start = time.Now()
 
 	roundResults, err := sc.GetLastRoundResults(ctx, &api.RuntimeRequest{
 		RuntimeID: runtimeID,
 		Height:    height,
 	})
+	readLastRounds = time.Since(start)
 	if err != nil {
 		sc.logger.Error("failed to fetch round results",
 			"err", err,
 			"height", height,
 			"runtime_id", runtimeID,
 		)
-		return nil, nil, fmt.Errorf("roothash: failed to fetch round results: %w", err)
+		return 0, 0, nil, nil, fmt.Errorf("roothash: failed to fetch round results: %w", err)
 	}
 
 	annBlk := &api.AnnotatedBlock{
 		Height: height,
 		Block:  blk,
 	}
-	return annBlk, roundResults, nil
+	return readLatestBlock, readLastRounds, annBlk, roundResults, nil
 }
 
 // EventsFromCometBFT extracts staking events from CometBFT events.
