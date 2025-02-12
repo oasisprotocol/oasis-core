@@ -92,6 +92,10 @@ pub trait Dispatcher: Send + Sync {
 }
 
 impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
+    fn is_supported(&self) -> bool {
+        T::is_supported(&**self)
+    }
+
     fn execute_batch(
         &self,
         ctx: Context,
@@ -132,6 +136,10 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
 }
 
 impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
+    fn is_supported(&self) -> bool {
+        T::is_supported(&**self)
+    }
+
     fn execute_batch(
         &self,
         ctx: Context,
