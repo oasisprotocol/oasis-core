@@ -448,7 +448,7 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 		if err != nil {
 			return 0, fmt.Errorf("failed to commit batch to history keeper: %w", err)
 		}
-		if last != api.RoundInvalid && last > lastRound {
+		if last != api.RoundInvalid && (lastRound == api.RoundInvalid || last > lastRound) {
 			lastRound = last
 		}
 	}
