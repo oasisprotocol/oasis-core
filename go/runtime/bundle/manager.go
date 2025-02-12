@@ -223,6 +223,17 @@ func (m *Manager) Add(path string) error {
 		return err
 	}
 
+	if manifest.ID.IsKeyManager() {
+		if err = m.removeBundle(manifest.ExplodedDataDir); err != nil {
+			m.logger.Error("failed to remove bundle",
+				"err", err,
+				"path", path,
+			)
+		}
+		m.logger.Warn("not allowed to add key manager bundle")
+		return fmt.Errorf("not allowed to add key manager bundle")
+	}
+
 	if err := m.registerManifest(manifest); err != nil {
 		m.logger.Error("failed to register manifest",
 			"err", err,
@@ -240,6 +251,12 @@ func (m *Manager) Add(path string) error {
 func (m *Manager) Download(runtimeID common.Namespace, manifestHashes []hash.Hash) {
 	// Download bundles only for the configured runtimes.
 	if _, ok := m.runtimeIDs[runtimeID]; !ok {
+		return
+	}
+
+	// Key managers must configure the bundle statically to prevent
+	// running different versions of the runtime.
+	if runtimeID.IsKeyManager() {
 		return
 	}
 
@@ -281,6 +298,11 @@ func (m *Manager) Download(runtimeID common.Namespace, manifestHashes []hash.Has
 //
 // Warning: If clean-up fails it's not retried.
 func (m *Manager) Cleanup(runtimeID common.Namespace, version version.Version) {
+	// Key managers are allowed to run obsolete runtime versions.
+	if runtimeID.IsKeyManager() {
+		return
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -538,23 +560,20 @@ func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 func (m *Manager) cleanOnStartup(manifests, exploded []*ExplodedManifest) ([]*ExplodedManifest, error) {
 	m.logger.Info("cleaning bundles")
 
-	detached := make(map[hash.Hash]struct{})
+	explodedHashes := make(map[hash.Hash]struct{})
 	for _, manifest := range exploded {
-		if manifest.IsDetached() {
-			detached[manifest.Hash()] = struct{}{}
-		}
+		explodedHashes[manifest.Hash()] = struct{}{}
 	}
 
 	shouldKeep := func(manifest *ExplodedManifest) bool {
 		if _, ok := m.runtimeIDs[manifest.ID]; !ok {
 			return false
 		}
-		if manifest.IsDetached() {
-			if _, ok := detached[manifest.Hash()]; !ok {
+		if manifest.IsDetached() || manifest.ID.IsKeyManager() {
+			if _, ok := explodedHashes[manifest.Hash()]; !ok {
 				return false
 			}
 		}
-
 		return true
 	}
 
@@ -566,7 +585,7 @@ func (m *Manager) cleanOnStartup(manifests, exploded []*ExplodedManifest) ([]*Ex
 		}
 
 		if err := m.removeBundle(manifest.ExplodedDataDir); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to remove bundle: %w", err)
 		}
 	}
 
@@ -624,13 +643,13 @@ func (m *Manager) cleanBundle(manifest *ExplodedManifest) {
 	)
 
 	if ok := m.store.RemoveManifest(manifest.Hash()); !ok {
-		m.logger.Debug("failed to remove manifest from store",
+		m.logger.Warn("failed to remove manifest from store",
 			"manifest_hash", manifest.Hash(),
 		)
 	}
 
 	if err := m.removeBundle(manifest.ExplodedDataDir); err != nil {
-		m.logger.Error("failed to remove exploded bundle",
+		m.logger.Error("failed to remove bundle",
 			"err", err,
 		)
 	}
@@ -642,11 +661,7 @@ func (m *Manager) removeBundle(dir string) error {
 	)
 
 	if err := os.RemoveAll(dir); err != nil {
-		m.logger.Info("failed to remove bundle",
-			"err", err,
-			"path", dir,
-		)
-		return fmt.Errorf("failed to remove bundle: %w", err)
+		return err
 	}
 
 	m.logger.Info("bundle removed",

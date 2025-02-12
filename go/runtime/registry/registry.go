@@ -358,12 +358,7 @@ func (r *runtime) run(ctx context.Context) {
 				continue
 			}
 
-			// Support cleanup of runtime bundles only for compute nodes.
-			// Key managers are allowed to run obsolete runtime versions.
-			if !rt.IsCompute() {
-				continue
-			}
-
+			// Cleanup runtime bundles.
 			active := rt.ActiveDeployment(epoch)
 			if active == nil {
 				continue
@@ -399,13 +394,7 @@ func (r *runtime) run(ctx context.Context) {
 				}
 			}
 
-			// Support hot-loading of runtime bundles only for compute nodes.
-			// Key managers must configure the bundle statically to prevent
-			// running different versions of the runtime.
-			if !rt.IsCompute() {
-				continue
-			}
-
+			// Hot-load runtime bundles.
 			now, err := r.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
 			if err != nil {
 				r.logger.Error("failed to get current epoch",
