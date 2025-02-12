@@ -560,23 +560,20 @@ func (m *Manager) loadManifests() ([]*ExplodedManifest, error) {
 func (m *Manager) cleanOnStartup(manifests, exploded []*ExplodedManifest) ([]*ExplodedManifest, error) {
 	m.logger.Info("cleaning bundles")
 
-	detached := make(map[hash.Hash]struct{})
+	explodedHashes := make(map[hash.Hash]struct{})
 	for _, manifest := range exploded {
-		if manifest.IsDetached() {
-			detached[manifest.Hash()] = struct{}{}
-		}
+		explodedHashes[manifest.Hash()] = struct{}{}
 	}
 
 	shouldKeep := func(manifest *ExplodedManifest) bool {
 		if _, ok := m.runtimeIDs[manifest.ID]; !ok {
 			return false
 		}
-		if manifest.IsDetached() {
-			if _, ok := detached[manifest.Hash()]; !ok {
+		if manifest.IsDetached() || manifest.ID.IsKeyManager() {
+			if _, ok := explodedHashes[manifest.Hash()]; !ok {
 				return false
 			}
 		}
-
 		return true
 	}
 
