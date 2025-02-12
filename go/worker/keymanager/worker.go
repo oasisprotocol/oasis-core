@@ -417,7 +417,7 @@ func (w *Worker) worker() {
 		case 1:
 			comp = comps[0]
 		default:
-			w.logger.Error("expected a single runtime component (got %d)", numComps)
+			w.logger.Error("expected one runtime component", "total", numComps)
 			return false
 		}
 
@@ -431,18 +431,18 @@ func (w *Worker) worker() {
 		return
 	}
 	if !comp.ID().IsRONL() {
-		w.logger.Error("expected a RONL key manager runtime component (got %d)", comp.ID())
+		w.logger.Error("expected RONL runtime component", "id", comp.ID())
 		return
 	}
 
 	// Provision the specified runtime component.
-	w.logger.Info("provisioning key manager runtime component",
+	w.logger.Info("provisioning runtime component",
 		"id", comp.ID(),
 		"version", comp.Version,
 	)
 
 	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
-		w.logger.Error("failed to provision key manager runtime component",
+		w.logger.Error("failed to provision runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,
@@ -468,7 +468,7 @@ func (w *Worker) worker() {
 
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
-		w.logger.Error("failed to activate key manager runtime component",
+		w.logger.Error("failed to activate runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,

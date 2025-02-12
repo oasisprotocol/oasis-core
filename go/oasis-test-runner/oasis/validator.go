@@ -80,6 +80,7 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 }
 
 func (val *Validator) ModifyConfig() error {
+	val.Config.Mode = config.ModeValidator
 	val.Config.Consensus.Validator = true
 
 	val.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(val.consensusPort))

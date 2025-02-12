@@ -58,6 +58,14 @@ func (b *fdPipeBuilder) close() {
 
 // NewBubbleWrap creates a Bubblewrap-based sandbox.
 func NewBubbleWrap(cfg Config) (Process, error) {
+	// Make sure the sandbox binary exists.
+	if _, err := os.Stat(cfg.SandboxBinaryPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("sandbox binary not found")
+		}
+		return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
+	}
+
 	var fdPipes fdPipeBuilder
 	// Make sure the sandbox starts in the given time.
 	fdPipes.deadline = time.Now().Add(sandboxStartTimeout)
