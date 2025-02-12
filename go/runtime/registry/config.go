@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -158,11 +157,6 @@ func createProvisioner(
 		fallthrough
 	case rtConfig.RuntimeProvisionerSandboxed:
 		// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
-		if !insecureNoSandbox {
-			if _, err = os.Stat(sandboxBinary); err != nil {
-				return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
-			}
-		}
 
 		// Configure the non-TEE provisioner.
 		provisioners[component.TEEKindNone], err = hostSandbox.NewProvisioner(hostSandbox.Config{
