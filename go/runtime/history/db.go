@@ -223,33 +223,33 @@ func (d *DB) commitBatch(blks []*roothash.AnnotatedBlock, roundResults []*rootha
 	}
 
 	return d.db.Update(func(tx *badger.Txn) error {
-		meta, err := d.queryGetMetadata(tx)
-		if err != nil {
-			return err
-		}
+		// meta, err := d.queryGetMetadata(tx)
+		// if err != nil {
+		// 	return err
+		// }
 
 		for i, blk := range blks {
-			rtID := blk.Block.Header.Namespace
-			if !rtID.Equal(&meta.RuntimeID) {
-				return fmt.Errorf("runtime/history: runtime mismatch (expected: %s got: %s)",
-					meta.RuntimeID,
-					rtID,
-				)
-			}
+			// rtID := blk.Block.Header.Namespace
+			// if !rtID.Equal(&meta.RuntimeID) {
+			// 	return fmt.Errorf("runtime/history: runtime mismatch (expected: %s got: %s)",
+			// 		meta.RuntimeID,
+			// 		rtID,
+			// 	)
+			// }
 
-			if blk.Height < meta.LastConsensusHeight {
-				return fmt.Errorf("runtime/history: commit at lower consensus height (current: %d wanted: %d)",
-					meta.LastConsensusHeight,
-					blk.Height,
-				)
-			}
+			// if blk.Height < meta.LastConsensusHeight {
+			// 	return fmt.Errorf("runtime/history: commit at lower consensus height (current: %d wanted: %d)",
+			// 		meta.LastConsensusHeight,
+			// 		blk.Height,
+			// 	)
+			// }
 
-			if blk.Block.Header.Round <= meta.LastRound && meta.LastConsensusHeight != 0 {
-				return fmt.Errorf("runtime/history: commit at lower round (current: %d wanted: %d)",
-					meta.LastRound,
-					blk.Block.Header.Round,
-				)
-			}
+			// if blk.Block.Header.Round <= meta.LastRound && meta.LastConsensusHeight != 0 {
+			// 	return fmt.Errorf("runtime/history: commit at lower round (current: %d wanted: %d)",
+			// 		meta.LastRound,
+			// 		blk.Block.Header.Round,
+			// 	)
+			// }
 
 			if err := tx.Set(blockKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(blk)); err != nil {
 				return err
@@ -258,12 +258,13 @@ func (d *DB) commitBatch(blks []*roothash.AnnotatedBlock, roundResults []*rootha
 			if err := tx.Set(roundResultsKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(roundResults[i])); err != nil {
 				return err
 			}
-			meta.LastRound = blk.Block.Header.Round
-			if blk.Height > meta.LastConsensusHeight {
-				meta.LastConsensusHeight = blk.Height
-			}
+			// meta.LastRound = blk.Block.Header.Round
+			// if blk.Height > meta.LastConsensusHeight {
+			// 	meta.LastConsensusHeight = blk.Height
+			// }
 		}
-		return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
+		// return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
+		return nil
 	})
 }
 
