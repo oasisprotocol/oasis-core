@@ -38,13 +38,13 @@ The format is inspired by [Keep a Changelog].
 
   The following configuration options have been added:
 
-  - `runtime.runtimes.id` is the runtime identifier,
+  - `runtime.runtimes[].id` is the runtime identifier,
 
-  - `runtime.runtimes.components` is the list of components to configure,
+  - `runtime.runtimes[].components` is the list of components to configure,
 
-  - `runtime.runtimes.config` is the runtime local configuration,
+  - `runtime.runtimes[].config` is the runtime local configuration,
 
-  - `runtime.runtimes.registries` is the list of runtime specific URLs
+  - `runtime.runtimes[].registries` is the list of runtime specific URLs
      used to fetch runtime bundle metadata,
 
   - `runtime.registries` is the list of global URLs used to fetch
@@ -67,7 +67,7 @@ The format is inspired by [Keep a Changelog].
 
   - `runtime.debug_mock_tee` to enable TEE mocking for testing,
 
-  - `runtime.runtimes.components.tee` to specify the TEE for a component.
+  - `runtime.runtimes[].components[].tee` to specify the TEE for a component.
 
   These changes affect the configuration of the client node if the runtime
   bundle contains both TEE and non-TEE binaries. In such cases, the node
