@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
@@ -23,7 +22,6 @@ type RuntimeHostNode struct {
 	rr   host.RichRuntime
 
 	runtime     Runtime
-	notifier    protocol.Notifier
 	handler     host.RuntimeHandler
 	provisioner host.Provisioner
 
@@ -36,7 +34,6 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 	h := composite.NewHost(runtime.ID())
 	rr := host.NewRichRuntime(h)
 
-	notifier := factory.NewRuntimeHostNotifier(h)
 	handler := factory.NewRuntimeHostHandler()
 	provisioner := runtime.HostProvisioner()
 
@@ -44,7 +41,6 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 		host:        h,
 		rr:          rr,
 		runtime:     runtime,
-		notifier:    notifier,
 		handler:     handler,
 		provisioner: provisioner,
 		rofls:       make(map[component.ID]version.Version),
@@ -98,11 +94,6 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 // GetHostedRuntime returns the hosted runtime.
 func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 	return n.rr
-}
-
-// GetRuntimeHostNotifier returns the runtime host notifier.
-func (n *RuntimeHostNode) GetRuntimeHostNotifier() protocol.Notifier {
-	return n.notifier
 }
 
 // GetHostedRuntimeActiveVersion returns the version of the active runtime.

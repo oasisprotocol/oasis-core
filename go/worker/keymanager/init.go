@@ -76,6 +76,9 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
 
+	// Prepare the runtime host notifier.
+	w.notifier = runtimeRegistry.NewRuntimeHostNotifier(w.runtime, w.RuntimeHostNode.GetHostedRuntime(), commonWorker.Consensus)
+
 	// Prepare watchers.
 	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)

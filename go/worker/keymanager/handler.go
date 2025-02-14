@@ -6,7 +6,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
@@ -28,11 +27,6 @@ func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
 		w:     w,
 		kmCli: kmCli,
 	}, w.runtime, w.commonWorker.Consensus)
-}
-
-// NewRuntimeHostNotifier implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier {
-	return runtimeRegistry.NewRuntimeHostNotifier(w.runtime, host, w.commonWorker.Consensus)
 }
 
 type workerEnvironment struct {
