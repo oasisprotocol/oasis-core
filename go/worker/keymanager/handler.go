@@ -5,34 +5,18 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
-
-// NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
-	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
-	runtimeID := w.runtime.ID()
-	kmCli.SetKeyManagerID(&runtimeID)
-
-	return runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{
-		w:     w,
-		kmCli: kmCli,
-	}, w.runtime, w.commonWorker.Consensus)
-}
 
 type workerEnvironment struct {
 	w *Worker
-
-	kmCli *committeeCommon.KeyManagerClientWrapper
 }
 
 // GetKeyManagerClient implements RuntimeHostHandlerEnvironment.
 func (env *workerEnvironment) GetKeyManagerClient() (runtimeKeymanager.Client, error) {
-	return env.kmCli, nil
+	return env.w.keyManagerClient, nil
 }
 
 // GetTxPool implements RuntimeHostHandlerEnvironment.

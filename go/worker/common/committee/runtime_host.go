@@ -3,16 +3,10 @@ package committee
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
-
-// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
-func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
-	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
-}
 
 type nodeEnvironment struct {
 	n *Node

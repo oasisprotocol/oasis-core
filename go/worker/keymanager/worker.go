@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -73,10 +74,11 @@ type Worker struct { // nolint: maligned
 	peerMap    *PeerMap
 	accessList *AccessList
 
-	commonWorker *workerCommon.Worker
-	roleProvider registration.RoleProvider
-	backend      api.Backend
-	notifier     protocol.Notifier
+	commonWorker     *workerCommon.Worker
+	roleProvider     registration.RoleProvider
+	backend          api.Backend
+	notifier         protocol.Notifier
+	keyManagerClient *commonCommittee.KeyManagerClientWrapper
 
 	enabled bool
 }

@@ -905,8 +905,11 @@ func NewNode(
 	// Prepare the key manager client wrapper.
 	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
 
+	// Prepare the runtime host handler.
+	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
+
 	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, n)
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, handler)
 	if err != nil {
 		return nil, err
 	}

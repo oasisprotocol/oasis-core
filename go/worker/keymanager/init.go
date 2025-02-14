@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -70,8 +71,15 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to get runtime: %w", err)
 	}
 
+	// Prepare key manager client.
+	w.keyManagerClient = committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
+	w.keyManagerClient.SetKeyManagerID(&w.runtimeID)
+
+	// Prepare the runtime host handler.
+	handler := runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{w}, w.runtime, w.commonWorker.Consensus)
+
 	// Prepare the runtime host node helpers.
-	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, w)
+	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, handler)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
