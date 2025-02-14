@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+
+	cmnSyscall "github.com/oasisprotocol/oasis-core/go/common/syscall"
 )
 
 type naked struct {
@@ -77,6 +79,7 @@ func NewNaked(cfg Config) (Process, error) {
 	}
 	cmd.Stderr = cfg.Stderr
 	cmd.ExtraFiles = cfg.extraFiles
+	cmd.SysProcAttr = cmnSyscall.CmdAttrs
 
 	// Write any bound data to respective files.
 	for path, reader := range cfg.BindData {
