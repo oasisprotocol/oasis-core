@@ -437,73 +437,18 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	)
 
 	for height := lastHeight; height <= currentHeight; height++ {
-		var results *cmtrpctypes.ResultBlockResults
-		results, err = sc.backend.GetBlockResults(sc.ctx, height)
-		if err != nil {
+		select {
+		case <-sc.ctx.Done():
+			logger.Info("context cancelled")
+			return lastRound, nil
+		default:
 			// XXX: could soft-fail first few heights in case more heights were
 			// pruned right after the GetLastRetainedVersion query.
-			logger.Error("failed to get cometbft block results",
-				"err", err,
-				"height", height,
-			)
-			return lastRound, fmt.Errorf("failed to get cometbft block results: %w", err)
-		}
-
-		// Index block.
-		tmEvents := results.BeginBlockEvents
-		for _, txResults := range results.TxsResults {
-			tmEvents = append(tmEvents, txResults.Events...)
-		}
-		tmEvents = append(tmEvents, results.EndBlockEvents...)
-		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != app.EventType {
-				continue
+			round, err := sc.reindexBlock(runtimeID, height)
+			if err != nil {
+				return 0, err
 			}
-
-			var evRtID *common.Namespace
-			var ev *api.FinalizedEvent
-			for _, pair := range tmEv.GetAttributes() {
-				key := pair.GetKey()
-				val := pair.GetValue()
-
-				switch {
-				case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-					if evRtID != nil {
-						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
-					}
-
-					var rtAttribute api.RuntimeIDAttribute
-					if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
-					}
-					evRtID = &rtAttribute.ID
-
-				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
-					var e api.FinalizedEvent
-					if err = eventsAPI.DecodeValue(val, &e); err != nil {
-						logger.Error("failed to unmarshal finalized event",
-							"err", err,
-							"height", height,
-						)
-						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
-					}
-					ev = &e
-				default:
-				}
-			}
-
-			// Only process finalized events.
-			if ev == nil {
-				continue
-			}
-			// Only process events for the given runtime.
-			if !evRtID.Equal(&runtimeID) {
-				continue
-			}
-			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
-				return 0, fmt.Errorf("failed to process finalized event: %w", err)
-			}
-			lastRound = ev.Round
+			lastRound = round
 		}
 	}
 
@@ -525,6 +470,78 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	return lastRound, nil
 }
 
+func (sc *serviceClient) reindexBlock(runtimeID common.Namespace, height int64) (uint64, error) {
+	logger := sc.logger.With("runtime_id", runtimeID)
+	var results *cmtrpctypes.ResultBlockResults
+	results, err := sc.backend.GetBlockResults(sc.ctx, height)
+	if err != nil {
+		logger.Error("failed to get cometbft block results",
+			"err", err,
+			"height", height,
+		)
+		return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
+	}
+
+	// Index block.
+	tmEvents := results.BeginBlockEvents
+	for _, txResults := range results.TxsResults {
+		tmEvents = append(tmEvents, txResults.Events...)
+	}
+	tmEvents = append(tmEvents, results.EndBlockEvents...)
+	var lastRound uint64
+	for _, tmEv := range tmEvents {
+		if tmEv.GetType() != app.EventType {
+			continue
+		}
+
+		var evRtID *common.Namespace
+		var ev *api.FinalizedEvent
+		for _, pair := range tmEv.GetAttributes() {
+			key := pair.GetKey()
+			val := pair.GetValue()
+
+			switch {
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
+				if evRtID != nil {
+					return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
+				}
+
+				var rtAttribute api.RuntimeIDAttribute
+				if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
+					return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
+				}
+				evRtID = &rtAttribute.ID
+
+			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
+				var e api.FinalizedEvent
+				if err = eventsAPI.DecodeValue(val, &e); err != nil {
+					logger.Error("failed to unmarshal finalized event",
+						"err", err,
+						"height", height,
+					)
+					return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
+				}
+				ev = &e
+			default:
+			}
+		}
+
+		// Only process finalized events.
+		if ev == nil {
+			continue
+		}
+		// Only process events for the given runtime.
+		if !evRtID.Equal(&runtimeID) {
+			continue
+		}
+		if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
+			return 0, fmt.Errorf("failed to process finalized event: %w", err)
+		}
+		lastRound = ev.Round
+	}
+	return lastRound, nil
+}
+
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh, sc.cmdCh)
@@ -534,58 +551,67 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
 	switch c := cmd.(type) {
 	case *cmdTrackRuntime:
-		// Request to track a new runtime.
-		etr := sc.trackedRuntime[c.runtimeID]
-		if etr != nil {
-			// Ignore duplicate runtime tracking requests unless this updates the block history.
-			if etr.blockHistory != nil || c.blockHistory == nil {
-				break
-			}
-		} else {
-			sc.logger.Debug("tracking new runtime",
-				"runtime_id", c.runtimeID,
-				"height", height,
-			)
-		}
-
-		// We need to start watching a new block history.
-		tr := &trackedRuntime{
-			runtimeID:    c.runtimeID,
-			blockHistory: c.blockHistory,
-		}
-		sc.trackedRuntime[c.runtimeID] = tr
-		// Request subscription to events for this runtime.
-		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
-
-		// Resolve the correct block finalization height to use for the latest block at the current
-		// height as the current height may not correspond to the latest block finalization height.
-		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
-			RuntimeID: tr.runtimeID,
-			Height:    height,
-		})
-		if err != nil {
-			sc.logger.Warn("failed to get runtime state for latest block",
-				"err",
-				"runtime_id", tr.runtimeID,
-				"height", height,
-			)
-			return nil
-		}
-
-		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
-			sc.logger.Warn("failed to emit latest block",
-				"err", err,
-				"runtime_id", tr.runtimeID,
-				"height", height,
-			)
-		}
-		// Make sure we reindex again when receiving the first event.
-		tr.reindexDone = false
+		go sc.handleTrackRuntime(ctx, height, c.runtimeID, c.blockHistory)
 	default:
 		return fmt.Errorf("roothash: unknown command: %T", cmd)
 	}
 	return nil
+}
+
+func (sc *serviceClient) handleTrackRuntime(ctx context.Context, height int64, runtimeID common.Namespace, history api.BlockHistory) {
+	// Request to track a new runtime.
+	etr := sc.trackedRuntime[runtimeID]
+	if etr != nil {
+		// Ignore duplicate runtime tracking requests unless this updates the block history.
+		if etr.blockHistory != nil || history == nil {
+			return
+		}
+	} else {
+		sc.logger.Debug("tracking new runtime",
+			"runtime_id", runtimeID,
+			"height", height,
+		)
+	}
+
+	// We need to start watching a new block history.
+	tr := &trackedRuntime{
+		runtimeID:    runtimeID,
+		blockHistory: history,
+	}
+	sc.trackedRuntime[runtimeID] = tr
+	// Request subscription to events for this runtime.
+	// This has to be done only after history reindex is done, so that we don't
+	// receive events we are currently reindexing.
+	// Finally, this has to be done always, so that tracking request is not lost.
+	defer func() {
+		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
+	}()
+
+	// Resolve the correct block finalization height to use for the latest block at the current
+	// height as the current height may not correspond to the latest block finalization height.
+	rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
+		RuntimeID: tr.runtimeID,
+		Height:    height,
+	})
+	if err != nil {
+		sc.logger.Warn("failed to get runtime state for latest block",
+			"err",
+			"runtime_id", tr.runtimeID,
+			"height", height,
+		)
+		return
+	}
+
+	// Emit latest block.
+	if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
+		sc.logger.Warn("failed to emit latest block",
+			"err", err,
+			"runtime_id", tr.runtimeID,
+			"height", height,
+		)
+	}
+	// Make sure we reindex again when receiving the first event.
+	tr.reindexDone = false
 }
 
 // Implements api.ServiceClient.
