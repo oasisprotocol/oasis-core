@@ -12,11 +12,6 @@ import (
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
-// GetRuntime implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
-	return w.runtime
-}
-
 // NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
 	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)

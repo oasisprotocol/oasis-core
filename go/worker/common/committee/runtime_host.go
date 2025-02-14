@@ -9,11 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
 
-// GetRuntime implements RuntimeHostHandlerFactory.
-func (n *Node) GetRuntime() runtimeRegistry.Runtime {
-	return n.Runtime
-}
-
 // NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
 	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)

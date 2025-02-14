@@ -44,9 +44,6 @@ type RuntimeHostHandlerEnvironment interface {
 // RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and
 // notifiers when provisioning hosted runtimes.
 type RuntimeHostHandlerFactory interface {
-	// GetRuntime returns the registered runtime for which a runtime host handler is to be created.
-	GetRuntime() Runtime
-
 	// NewRuntimeHostHandler creates a new runtime host handler.
 	NewRuntimeHostHandler() host.RuntimeHandler
 }

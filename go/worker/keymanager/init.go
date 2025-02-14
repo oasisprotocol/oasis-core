@@ -71,7 +71,7 @@ func New(
 	}
 
 	// Prepare the runtime host node helpers.
-	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
+	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, w)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}

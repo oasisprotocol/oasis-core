@@ -29,8 +29,7 @@ type RuntimeHostNode struct {
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
-	runtime := factory.GetRuntime()
+func NewRuntimeHostNode(runtime Runtime, factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
 	h := composite.NewHost(runtime.ID())
 	rr := host.NewRichRuntime(h)
 
