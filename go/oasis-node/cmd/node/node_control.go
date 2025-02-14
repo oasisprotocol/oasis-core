@@ -341,6 +341,30 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			}
 		}
 
+		// Fetch block history status.
+		var historyStatus control.HistoryStatus
+		cBlk, err := rt.History().GetCommittedBlock(ctx, roothash.RoundLatest)
+		switch err {
+		case nil:
+			historyStatus.LastRound = cBlk.Header.Round
+		default:
+			n.logger.Error("failed to fetch block history latest block",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+		height, err := rt.History().LastConsensusHeight()
+		switch err {
+		case nil:
+			historyStatus.LastHeight = height
+		default:
+			n.logger.Error("failed to fetch block history latest height",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+		status.History = &historyStatus
+
 		// Fetch provisioner type.
 		status.Provisioner = "none"
 		if provisioner := rt.HostProvisioner(); provisioner != nil {

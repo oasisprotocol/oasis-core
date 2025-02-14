@@ -48,6 +48,8 @@ type BlockHistory interface {
 
 	// LastConsensusHeight returns the last consensus height which was seen
 	// by block history.
+	//
+	// This method can return height for block not yet synced to storage.
 	LastConsensusHeight() (int64, error)
 
 	// GetCommittedBlock returns the committed block at a specific round.
@@ -57,6 +59,7 @@ type BlockHistory interface {
 	GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error)
 
 	// GetBlock returns the block at a specific round.
+	//
 	// Passing the special value `RoundLatest` will return the latest block.
 	//
 	// This method returns blocks that are both committed and synced to storage.
@@ -65,13 +68,19 @@ type BlockHistory interface {
 	// GetAnnotatedBlock returns the annotated block at a specific round.
 	//
 	// Passing the special value `RoundLatest` will return the latest annotated block.
+	//
+	// This method returns blocks that are both committed and synced to storage.
 	GetAnnotatedBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
 
 	// GetEarliestBlock returns the earliest known block.
+	//
+	// This method can return blocks not yet synced to storage.
 	GetEarliestBlock(ctx context.Context) (*block.Block, error)
 
 	// GetRoundResults returns the round results for the given round.
 	//
 	// Passing the special value `RoundLatest` will return results for the latest round.
+	//
+	// This method can return round results for block not yet synced to storage.
 	GetRoundResults(ctx context.Context, round uint64) (*RoundResults, error)
 }
