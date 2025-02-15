@@ -1,10 +1,8 @@
 package registry
 
 import (
-	"context"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -12,25 +10,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
-	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
-	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
-	hostComposite "github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
-	hostLoadBalance "github.com/oasisprotocol/oasis-core/go/runtime/host/loadbalance"
-	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
-	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
-	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
-	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
 )
 
 func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
@@ -93,149 +76,6 @@ func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 	}
 
 	return slices.Collect(maps.Keys(runtimes)), nil
-}
-
-func createHostInfo(consensus consensus.Backend) (*hostProtocol.HostInfo, error) {
-	cs, err := consensus.GetStatus(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
-	}
-
-	chainCtx, err := consensus.GetChainContext(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chain context: %w", err)
-	}
-
-	return &hostProtocol.HostInfo{
-		ConsensusBackend:         cs.Backend,
-		ConsensusProtocolVersion: cs.Version,
-		ConsensusChainContext:    chainCtx,
-	}, nil
-}
-
-func createProvisioner(
-	dataDir string,
-	commonStore *persistent.CommonStore,
-	identity *identity.Identity,
-	consensus consensus.Backend,
-	hostInfo *hostProtocol.HostInfo,
-	ias []ias.Endpoint,
-	qs pcs.QuoteService,
-) (runtimeHost.Provisioner, error) {
-	var err error
-	var insecureNoSandbox bool
-
-	attestInterval := config.GlobalConfig.Runtime.AttestInterval
-	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
-	sgxLoader := config.GlobalConfig.Runtime.SGXLoader
-	insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
-
-	// Support legacy configuration where the runtime environment determines
-	// whether the TEE should be mocked.
-	if config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentSGXMock {
-		insecureMock = true
-	}
-
-	// Register provisioners based on the configured provisioner.
-	provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
-	switch p := config.GlobalConfig.Runtime.Provisioner; p {
-	case rtConfig.RuntimeProvisionerMock:
-		// Mock provisioner, only supported when the runtime requires no TEE hardware.
-		if !cmdFlags.DebugDontBlameOasis() {
-			return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
-		}
-
-		provisioners[component.TEEKindNone] = hostMock.NewProvisioner()
-	case rtConfig.RuntimeProvisionerUnconfined:
-		// Unconfined provisioner, can be used with no TEE or with Intel SGX.
-		if !cmdFlags.DebugDontBlameOasis() {
-			return nil, fmt.Errorf("unconfined provisioner requires use of unsafe debug flags")
-		}
-
-		insecureNoSandbox = true
-
-		fallthrough
-	case rtConfig.RuntimeProvisionerSandboxed:
-		// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
-
-		// Configure the non-TEE provisioner.
-		provisioners[component.TEEKindNone], err = hostSandbox.NewProvisioner(hostSandbox.Config{
-			HostInfo:          hostInfo,
-			InsecureNoSandbox: insecureNoSandbox,
-			SandboxBinaryPath: sandboxBinary,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
-		}
-
-		// Configure the Intel SGX provisioner.
-		if insecureMock && !cmdFlags.DebugDontBlameOasis() {
-			return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
-		}
-
-		if !insecureMock && sgxLoader == "" {
-			// SGX may be needed, but we don't have a loader configured.
-			break
-		}
-
-		provisioners[component.TEEKindSGX], err = hostSgx.NewProvisioner(hostSgx.Config{
-			HostInfo:              hostInfo,
-			CommonStore:           commonStore,
-			LoaderPath:            sgxLoader,
-			IAS:                   ias,
-			PCS:                   qs,
-			Consensus:             consensus,
-			Identity:              identity,
-			SandboxBinaryPath:     sandboxBinary,
-			InsecureNoSandbox:     insecureNoSandbox,
-			InsecureMock:          insecureMock,
-			RuntimeAttestInterval: attestInterval,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
-	}
-
-	// Configure TDX provisioner.
-	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
-	provisioners[component.TEEKindTDX], err = hostTdx.NewQemuProvisioner(hostTdx.QemuConfig{
-		DataDir:               filepath.Join(dataDir, RuntimesDir),
-		HostInfo:              hostInfo,
-		CommonStore:           commonStore,
-		PCS:                   qs,
-		Consensus:             consensus,
-		Identity:              identity,
-		RuntimeAttestInterval: attestInterval,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TDX runtime provisioner: %w", err)
-	}
-
-	// Configure optional load balancing.
-	for tee, rp := range provisioners {
-		numInstances := int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances)
-		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, numInstances)
-	}
-
-	// Create a composite provisioner to provision the individual components.
-	provisioner := hostComposite.NewProvisioner(provisioners)
-
-	return provisioner, nil
-}
-
-func createCachingQuoteService(commonStore *persistent.CommonStore) (pcs.QuoteService, error) {
-	pc, err := pcs.NewHTTPClient(&pcs.HTTPClientConfig{
-		// TODO: Support configuring the API key.
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
-	}
-
-	qs := pcs.NewCachingQuoteService(pc, commonStore)
-
-	return qs, nil
 }
 
 func createHistoryFactory() (history.Factory, error) {

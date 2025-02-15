@@ -22,18 +22,16 @@ type RuntimeHostNode struct {
 	rr   host.RichRuntime
 
 	runtime     Runtime
-	handler     host.RuntimeHandler
 	provisioner host.Provisioner
+	handler     host.RuntimeHandler
 
 	rofls map[component.ID]version.Version
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(runtime Runtime, handler host.RuntimeHandler) (*RuntimeHostNode, error) {
+func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler host.RuntimeHandler) (*RuntimeHostNode, error) {
 	h := composite.NewHost(runtime.ID())
 	rr := host.NewRichRuntime(h)
-
-	provisioner := runtime.HostProvisioner()
 
 	return &RuntimeHostNode{
 		host:        h,

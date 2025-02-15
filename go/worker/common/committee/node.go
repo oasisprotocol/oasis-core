@@ -859,6 +859,7 @@ func NewNode(
 	chainContext string,
 	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
+	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
@@ -909,7 +910,7 @@ func NewNode(
 	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 
 	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, handler)
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler)
 	if err != nil {
 		return nil, err
 	}

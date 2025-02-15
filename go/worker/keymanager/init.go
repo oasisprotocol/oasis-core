@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -22,6 +23,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	r *registration.Worker,
 	backend api.Backend,
+	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
@@ -79,7 +81,7 @@ func New(
 	handler := runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{w}, w.runtime, w.commonWorker.Consensus)
 
 	// Prepare the runtime host node helpers.
-	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, handler)
+	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, provisioner, handler)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
