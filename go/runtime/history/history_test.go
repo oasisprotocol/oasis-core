@@ -82,6 +82,8 @@ func TestHistory(t *testing.T) {
 	}
 	err = history.Commit(&blk2, roundResults, true)
 	require.Error(err, "Commit should fail for lower consensus height")
+	blk2.Height = 50
+	require.Error(err, "Commit should fail for equal consensus height")
 
 	putBlk := *blk.Block
 	err = history.Commit(&blk, roundResults, true)

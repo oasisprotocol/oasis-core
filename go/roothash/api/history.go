@@ -23,6 +23,9 @@ type BlockHistory interface {
 	// doing reindexing.
 	//
 	// Must be called in order, sorted by round.
+	//
+	// Returns an error if we have already committed a block at a given
+	// height and or round.
 	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
 
 	// StorageSyncCheckpoint records the last storage round which was synced

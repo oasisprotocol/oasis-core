@@ -164,15 +164,15 @@ func (d *DB) commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundRe
 			)
 		}
 
-		if blk.Height < meta.LastConsensusHeight {
-			return fmt.Errorf("runtime/history: commit at lower consensus height (current: %d wanted: %d)",
+		if blk.Height <= meta.LastConsensusHeight && meta.LastConsensusHeight != 0 {
+			return fmt.Errorf("runtime/history: commit at lower or equal consensus height (current: %d wanted: %d)",
 				meta.LastConsensusHeight,
 				blk.Height,
 			)
 		}
 
 		if blk.Block.Header.Round <= meta.LastRound && meta.LastConsensusHeight != 0 {
-			return fmt.Errorf("runtime/history: commit at lower round (current: %d wanted: %d)",
+			return fmt.Errorf("runtime/history: commit at lower or equal round (current: %d wanted: %d)",
 				meta.LastRound,
 				blk.Block.Header.Round,
 			)
@@ -187,9 +187,7 @@ func (d *DB) commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundRe
 		}
 
 		meta.LastRound = blk.Block.Header.Round
-		if blk.Height > meta.LastConsensusHeight {
-			meta.LastConsensusHeight = blk.Height
-		}
+		meta.LastConsensusHeight = blk.Height
 
 		return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
 	})
