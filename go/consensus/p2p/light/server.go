@@ -38,18 +38,12 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 		if err := cbor.Unmarshal(body, &rq); err != nil {
 			return nil, rpc.ErrBadRequest
 		}
-
-		lb, err := s.consensus.GetParameters(ctx, rq)
-		if err != nil {
-			return nil, err
-		}
-		return lb, nil
+		return s.consensus.GetParameters(ctx, rq)
 	case MethodSubmitEvidence:
 		var rq consensus.Evidence
 		if err := cbor.Unmarshal(body, &rq); err != nil {
 			return nil, rpc.ErrBadRequest
 		}
-
 		return nil, s.consensus.SubmitEvidence(ctx, &rq)
 	default:
 		return nil, rpc.ErrMethodNotSupported

@@ -859,13 +859,13 @@ func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
-		Version:  version.ConsensusProtocol,
-		Backend:  api.BackendName,
-		Features: n.SupportedFeatures(),
+		Version:       version.ConsensusProtocol,
+		Backend:       api.BackendName,
+		Features:      n.SupportedFeatures(),
+		ChainContext:  n.chainContext,
+		GenesisHeight: n.genesisHeight,
 	}
 
-	status.ChainContext = n.chainContext
-	status.GenesisHeight = n.genesisHeight
 	if n.started() {
 		// Only attempt to fetch blocks in case the consensus service has started as otherwise
 		// requests will block.
