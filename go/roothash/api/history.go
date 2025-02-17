@@ -25,13 +25,6 @@ type BlockHistory interface {
 	// Must be called in order, sorted by round.
 	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
 
-	// ConsensusCheckpoint records the last consensus height which was processed
-	// by the roothash backend.
-	//
-	// This method can only be called once all roothash blocks for consensus
-	// heights <= height have been committed using Commit.
-	ConsensusCheckpoint(height int64) error
-
 	// StorageSyncCheckpoint records the last storage round which was synced
 	// to runtime storage.
 	StorageSyncCheckpoint(round uint64) error

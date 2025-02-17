@@ -149,25 +149,6 @@ func (d *DB) metadata() (*dbMetadata, error) {
 	return meta, nil
 }
 
-func (d *DB) consensusCheckpoint(height int64) error {
-	return d.db.Update(func(tx *badger.Txn) error {
-		meta, err := d.queryGetMetadata(tx)
-		if err != nil {
-			return err
-		}
-
-		if height < meta.LastConsensusHeight {
-			return fmt.Errorf("runtime/history: consensus checkpoint at lower height (current: %d wanted: %d)",
-				meta.LastConsensusHeight,
-				height,
-			)
-		}
-
-		meta.LastConsensusHeight = height
-		return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
-	})
-}
-
 func (d *DB) commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
 	return d.db.Update(func(tx *badger.Txn) error {
 		meta, err := d.queryGetMetadata(tx)
