@@ -13,31 +13,31 @@ slog = "2.7.0"
 slog-json = "2.6.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = { version = "1.0.128", features = ["raw_value"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = { version = "1.0.138", features = ["raw_value"] }
 lazy_static = "1.3.0"
 crossbeam = "0.8.4"
 byteorder = "1.4.3"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 sgx-isa = { version = "0.4.1", features = ["sgxstd"] }
-mbedtls = { version = "0.12.3", features = ["x509"] }
+mbedtls = { version = "0.13.0", features = ["x509"] }
 yasna = { version = "0.5.0", features = ["num-bigint"] }
 bincode = "1.3.3"
-bitflags = "2.6.0"
+bitflags = "2.8.0"
 snow = "0.9.6"
 percent-encoding = "2.2.0"
-chrono = "0.4.19"
+chrono = "0.4.39"
 base64 = "0.22.1"
 rustc-hex = "2.0.1"
-rand = "0.8.5"
+rand = "0.9.0"
 futures = "0.3.31"
-tokio = { version = "1.40", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.43", features = ["rt", "rt-multi-thread", "sync", "time"] }
 tokio-retry = "0.3.0"
-tendermint = "0.39.1"
-tendermint-proto = "0.39.1"
-tendermint-light-client = { version = "0.39.1", features = ["rust-crypto"], default-features = false }
-tendermint-rpc = { version = "0.39.1", default-features = false }
+tendermint = "0.40.1"
+tendermint-proto = "0.40.1"
+tendermint-light-client = { version = "0.40.1", features = ["rust-crypto"], default-features = false }
+tendermint-rpc = { version = "0.40.1", default-features = false }
 curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core", "digest"] }
@@ -49,18 +49,18 @@ intrusive-collections = "0.9.7"
 sha2 = { version = "0.10.7", features = ["oid"] }
 hmac = "0.12.1"
 honggfuzz = "0.5.55"
-arbitrary = { version = "1.2.0", features = ["derive"] }
+arbitrary = { version = "1.4.1", features = ["derive"] }
 num-bigint = "0.4"
 num-traits = "0.2.19"
 num-derive = "0.4.2"
 bech32 = "0.11.0"
-impl-trait-for-tuples = "0.2.1"
-x509-parser = "0.16.0"
-oid-registry = "0.7.1"
-rsa = "0.9.6"
+impl-trait-for-tuples = "0.2.3"
+x509-parser = "0.17.0"
+oid-registry = "0.8.1"
+rsa = "0.9.7"
 base64-serde = "0.8.0"
-lru = "0.12.5"
-async-trait = "0.1.83"
+lru = "0.13.0"
+async-trait = "0.1.86"
 cfg-if = "1.0"
 
 # TDX dependencies.
@@ -69,14 +69,14 @@ nix = { version = "0.29.0", features = ["mount", "signal"], optional = true }
 vsock = { version = "0.5.1", optional = true }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
-version = "1.40.0"
+version = "1.43.0"
 features = ["full"]
 
 [dev-dependencies]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.18.0", features = ["simple_uds"] }
-tempfile = "3.13.0"
-tendermint-testgen = "0.39.1"
+tempfile = "3.17.0"
+tendermint-testgen = "0.40.1"
 
 [features]
 default = []
