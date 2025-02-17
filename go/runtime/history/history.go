@@ -54,6 +54,10 @@ func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bo
 	return errNopHistory
 }
 
+func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults, bool) error {
+	return errNopHistory
+}
+
 func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
 	return errNopHistory
 }
@@ -134,21 +138,31 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
-	err := h.db.commit(blk, roundResults)
-	if err != nil {
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, result *roothash.RoundResults, notify bool) error {
+	return h.CommitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{result}, notify)
+}
+
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
+	if len(blks) == 0 && len(results) == 0 {
+		return nil
+	}
+
+	if err := h.db.commit(blks, results); err != nil {
 		return err
 	}
 
 	// Notify the pruner what the new round is.
-	h.pruneCh.In() <- blk.Block.Header.Round
+	lastBlk := blks[len(blks)-1]
+	h.pruneCh.In() <- lastBlk.Block.Header.Round
 
-	// If no local storage worker, notify the block watcher that new block is committed,
+	// If no local storage worker, notify the block watcher about new blocks,
 	// otherwise the storage-sync-checkpoint will do the notification.
 	if h.hasLocalStorage || !notify {
 		return nil
 	}
-	h.blocksNotifier.Broadcast(blk)
+	for _, blk := range blks {
+		h.blocksNotifier.Broadcast(blk)
+	}
 
 	return nil
 }
