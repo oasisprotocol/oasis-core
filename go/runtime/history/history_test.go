@@ -55,17 +55,8 @@ func TestHistory(t *testing.T) {
 	require.Error(err, "GetBlock(RoundLatest) should fail for no indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
-	err = history.ConsensusCheckpoint(42)
-	require.NoError(err, "ConsensusCheckpoint")
-	err = history.ConsensusCheckpoint(40)
-	require.Error(err, "ConsensusCheckpoint should fail for lower height")
-
-	lastHeight, err = history.LastConsensusHeight()
-	require.NoError(err, "LastConsensusHeight")
-	require.EqualValues(42, lastHeight)
-
 	blk := roothash.AnnotatedBlock{
-		Height: 40,
+		Height: 50,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
 	blk.Block.Header.Round = 10
@@ -77,10 +68,6 @@ func TestHistory(t *testing.T) {
 		},
 	}
 
-	err = history.Commit(&blk, roundResults, true)
-	require.Error(err, "Commit should fail for lower consensus height")
-
-	blk.Height = 50
 	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
 	err = history.Commit(&blk, roundResults, true)
 	require.Error(err, "Commit should fail for different runtime")
@@ -88,6 +75,14 @@ func TestHistory(t *testing.T) {
 	copy(blk.Block.Header.Namespace[:], runtimeID[:])
 	err = history.Commit(&blk, roundResults, true)
 	require.NoError(err, "Commit")
+
+	blk2 := roothash.AnnotatedBlock{
+		Height: 40,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	err = history.Commit(&blk2, roundResults, true)
+	require.Error(err, "Commit should fail for lower consensus height")
+
 	putBlk := *blk.Block
 	err = history.Commit(&blk, roundResults, true)
 	require.Error(err, "Commit should fail for the same round")
@@ -218,8 +213,6 @@ func TestWatchBlocks(t *testing.T) {
 	testWatchBlocks(t, history, 0)
 
 	// Commit a block.
-	err = history.ConsensusCheckpoint(40)
-	require.NoError(err, "ConsensusCheckpoint")
 	blk := roothash.AnnotatedBlock{
 		Height: 40,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
@@ -254,8 +247,6 @@ func TestWatchBlocks(t *testing.T) {
 	testWatchBlocks(t, history, 0)
 
 	// Commit a block.
-	err = history.ConsensusCheckpoint(40)
-	require.NoError(err, "ConsensusCheckpoint")
 	err = history.Commit(&blk, roundResults, true)
 	require.NoError(err, "Commit should work")
 

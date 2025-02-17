@@ -54,10 +54,6 @@ func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bo
 	return errNopHistory
 }
 
-func (h *nopHistory) ConsensusCheckpoint(int64) error {
-	return errNopHistory
-}
-
 func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
 	return errNopHistory
 }
@@ -155,10 +151,6 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 	h.blocksNotifier.Broadcast(blk)
 
 	return nil
-}
-
-func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
-	return h.db.consensusCheckpoint(height)
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
