@@ -18,15 +18,31 @@ type BlockHistory interface {
 	// RuntimeID returns the runtime ID of the runtime this block history is for.
 	RuntimeID() common.Namespace
 
-	// Commit commits an annotated block into history. If notify is set to true,
-	// the watchers will be notified about the new block. Disable notify when
-	// doing reindexing.
+	// Commit commits an annotated block with corresponding round results
+	// into block history.
 	//
-	// Must be called in order, sorted by round.
+	// If notify is set to true, the watchers will be notified about the new block,
+	// provided node has no local storage.
 	//
-	// Returns an error if we have already committed a block at a given
-	// height and or round.
+	// Must be called in order, sorted by round. Any sequence of Commit and
+	// CommitBatch calls is valid as long as order is respected.
+	//
+	// Returns an error if we have already committed a block at higher or equal
+	// round (and or height).
 	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
+
+	// CommitBatch commits an annotated block with corresponding round results
+	// into block history.
+	//
+	// If notify is set to true, the watchers will be notified about the latest
+	// block in batch, provided node has no local storage.
+	//
+	// Within a batch, blocks should be sorted by round. Any sequence of Commit
+	// and CommitBatch is valid as long as order is respected.
+	//
+	// Returns an error if we have already committed block at higher or equal
+	// round (and or height) than the first item in a batch.
+	CommitBatch(blks []*AnnotatedBlock, roundResults []*RoundResults, notify bool) error
 
 	// StorageSyncCheckpoint records the last storage round which was synced
 	// to runtime storage.

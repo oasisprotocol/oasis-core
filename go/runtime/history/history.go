@@ -54,6 +54,10 @@ func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bo
 	return errNopHistory
 }
 
+func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults, bool) error {
+	return errNopHistory
+}
+
 func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
 	return errNopHistory
 }
@@ -134,22 +138,42 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
-	err := h.db.commit(blk, roundResults)
-	if err != nil {
-		return err
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
+	// Return early if empty batch.
+	if len(blks) == 0 && len(results) == 0 {
+		return nil
 	}
 
+	err := h.db.commitBatch(blks, results)
+	if err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
+	}
+
+	// commitBatch already handled validation, so we can access directly.
+	lastBlk := blks[len(blks)-1]
+
 	// Notify the pruner what the new round is.
-	h.pruneCh.In() <- blk.Block.Header.Round
+	h.pruneCh.In() <- lastBlk.Block.Header.Round
 
 	// If no local storage worker, notify the block watcher that new block is committed,
 	// otherwise the storage-sync-checkpoint will do the notification.
 	if h.hasLocalStorage || !notify {
 		return nil
 	}
-	h.blocksNotifier.Broadcast(blk)
+	h.blocksNotifier.Broadcast(lastBlk)
 
+	return nil
+}
+
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
+	err := h.CommitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{roundResults}, notify)
+	if err != nil {
+		return fmt.Errorf("failed to Commit at height %d, and round %d: %w",
+			blk.Height,
+			blk.Block.Header.Round,
+			err,
+		)
+	}
 	return nil
 }
 
