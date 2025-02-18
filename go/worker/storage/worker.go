@@ -56,6 +56,7 @@ func New(
 	registration *registration.Worker,
 	genesis genesis.Provider,
 	commonStore *persistent.CommonStore,
+	isArchive bool,
 ) (*Worker, error) {
 	s := &Worker{
 		enabled:      viper.GetBool(CfgWorkerEnabled),
@@ -95,7 +96,7 @@ func New(
 
 		// Start storage node for every runtime.
 		for _, rt := range s.commonWorker.GetRuntimes() {
-			if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
+			if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg, isArchive); err != nil {
 				return nil, err
 			}
 		}
@@ -107,7 +108,7 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
+func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig, isArchive bool) error {
 	id := commonNode.Runtime.ID()
 	s.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -128,6 +129,10 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
 	commonNode.Runtime.RegisterStorage(localStorage)
+
+	if isArchive {
+		return nil
+	}
 
 	node, err := committee.NewNode(
 		commonNode,

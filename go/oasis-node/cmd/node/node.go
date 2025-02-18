@@ -348,6 +348,27 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.RegistrationWorker)
 
+	// Initialize the key manager worker.
+	n.KeymanagerWorker, err = workerKeymanager.New(
+		dataDir,
+		n.CommonWorker,
+		n.IAS,
+		n.RegistrationWorker,
+		n.Consensus.KeyManager(),
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.KeymanagerWorker)
+
+	tmMode, err := tendermint.Mode()
+	if err != nil {
+		logger.Error("invalid tendermint mode",
+			"err", err,
+		)
+		return err
+	}
+
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
 		n.grpcInternal,
@@ -355,6 +376,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.RegistrationWorker,
 		n.Genesis,
 		n.commonStore,
+		tmMode == consensusAPI.ModeArchive,
 	)
 	if err != nil {
 		return err
@@ -584,20 +606,30 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 		)
 		return nil, err
 	}
-
-	// Initialize upgrader backend and check if we can even launch.
-	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir())
+	// Initialize upgrader backend.
+	tmMode, err := tendermint.Mode()
+	if err != nil {
+		logger.Error("invalid tendermint mode",
+			"err", err,
+		)
+		return nil, err
+	}
+	isArchive := tmMode == consensusAPI.ModeArchive
+	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir(), !isArchive)
 	if err != nil {
 		logger.Error("failed to initialize upgrade backend",
 			"err", err,
 		)
 		return nil, err
 	}
-	if err = node.Upgrader.StartupUpgrade(); err != nil {
-		logger.Error("error occurred during startup upgrade",
-			"err", err,
-		)
-		return nil, err
+	// If not an archive mode, check if we can even launch.
+	if !isArchive {
+		if err = node.Upgrader.StartupUpgrade(); err != nil {
+			logger.Error("error occurred during startup upgrade",
+				"err", err,
+			)
+			return nil, err
+		}
 	}
 
 	// Generate/Load the node identity.

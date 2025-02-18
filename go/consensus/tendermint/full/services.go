@@ -34,7 +34,13 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 	})
 	queries = append(queries, nil)
 	// General query for new block headers.
-	newBlockCh, newBlockSub := t.WatchTendermintBlocks()
+	newBlockCh, newBlockSub, err := t.WatchTendermintBlocks()
+	if err != nil {
+		logger.Error("failed to watch tendermint blocks",
+			"err", err,
+		)
+		return
+	}
 	defer newBlockSub.Close()
 
 	const indexNewBlock = 1

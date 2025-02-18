@@ -23,6 +23,9 @@ var (
 	// ErrInvalidNonce is the error returned when a nonce is invalid.
 	ErrInvalidNonce = errors.New(moduleName, 1, "transaction: invalid nonce")
 
+	// ErrMethodNotSupported is the error returned if transaction method is not supported.
+	ErrMethodNotSupported = errors.New(moduleName, 5, "transaction: method not supported")
+
 	// SignatureContext is the context used for signing transactions.
 	SignatureContext = signature.NewContext("oasis-core/consensus: tx", signature.WithChainSeparation())
 

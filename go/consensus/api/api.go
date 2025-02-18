@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -33,6 +34,61 @@ const (
 	// HeightLatest is the height that represents the most recent block height.
 	HeightLatest int64 = 0
 )
+
+// Mode is the consensus node mode.
+type Mode string
+
+const (
+	// ModeFull is the name of the full node consensus mode.
+	ModeFull Mode = "full"
+	// ModeSeed is the name of the seed-only node consensus mode.
+	ModeSeed Mode = "seed"
+	// ModeArchive is the name of the archive node consensus mode.
+	ModeArchive Mode = "archive"
+)
+
+// MarshalText encodes a Mode into text form.
+func (m Mode) MarshalText() ([]byte, error) {
+	switch m {
+	case ModeFull:
+		return []byte(ModeFull.String()), nil
+	case ModeSeed:
+		return []byte(ModeSeed.String()), nil
+	case ModeArchive:
+		return []byte(ModeArchive.String()), nil
+	default:
+		return nil, fmt.Errorf("invalid mode: %s", string(m))
+	}
+}
+
+// UnmarshalText decodes a text marshaled consensus mode.
+func (m *Mode) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case ModeFull.String():
+		*m = ModeFull
+	case ModeSeed.String():
+		*m = ModeSeed
+	case ModeArchive.String():
+		*m = ModeArchive
+	default:
+		return fmt.Errorf("invalid consensus mode: %s", string(text))
+	}
+	return nil
+}
+
+// String returns a string representation of the mode.
+func (m Mode) String() string {
+	switch m {
+	case ModeFull:
+		return string(ModeFull)
+	case ModeSeed:
+		return string(ModeSeed)
+	case ModeArchive:
+		return string(ModeArchive)
+	default:
+		return fmt.Sprintf("[unknown consensus mode: %s]", string(m))
+	}
+}
 
 var (
 	// ErrNoCommittedBlocks is the error returned when there are no committed
