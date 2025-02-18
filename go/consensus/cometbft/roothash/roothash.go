@@ -353,7 +353,7 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory) (uint64, error) {
+func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64, bh api.BlockHistory) (uint64, error) {
 	lastRound := api.RoundInvalid
 	if currentHeight <= 0 {
 		return lastRound, nil
@@ -374,7 +374,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	lastHeight++
 
 	// Take prune strategy into account.
-	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(sc.ctx)
+	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(ctx)
 	if err != nil {
 		return lastRound, fmt.Errorf("failed to get last retained height: %w", err)
 	}
@@ -387,7 +387,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	}
 
 	// Take initial genesis height into account.
-	genesisDoc, err := sc.backend.GetGenesisDocument(sc.ctx)
+	genesisDoc, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return lastRound, fmt.Errorf("failed to get genesis document: %w", err)
 	}
@@ -404,7 +404,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 
 	for height := lastHeight; height <= currentHeight; height++ {
 		var results *cmtrpctypes.ResultBlockResults
-		results, err = sc.backend.GetBlockResults(sc.ctx, height)
+		results, err = sc.backend.GetBlockResults(ctx, height)
 		if err != nil {
 			// XXX: could soft-fail first few heights in case more heights were
 			// pruned right after the GetLastRetainedVersion query.
@@ -466,7 +466,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 			if !evRtID.Equal(&runtimeID) {
 				continue
 			}
-			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
+			if err = sc.processFinalizedEvent(ctx, height, *evRtID, &ev.Round, true); err != nil {
 				return 0, fmt.Errorf("failed to process finalized event: %w", err)
 			}
 			lastRound = ev.Round
@@ -475,7 +475,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 
 	if lastRound == api.RoundInvalid {
 		sc.logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetCommittedBlock(sc.ctx, api.RoundLatest); err {
+		switch blk, err := bh.GetCommittedBlock(ctx, api.RoundLatest); err {
 		case api.ErrNotFound:
 		case nil:
 			lastRound = blk.Header.Round
@@ -660,7 +660,7 @@ func (sc *serviceClient) processFinalizedEvent(
 		if !isReindex && !tr.reindexDone {
 			// Note that we need to reindex up to the previous height as the current height is
 			// already being processed right now.
-			if lastRound, err = sc.reindexBlocks(height-1, tr.blockHistory); err != nil {
+			if lastRound, err = sc.reindexBlocks(ctx, height-1, tr.blockHistory); err != nil {
 				sc.logger.Error("failed to reindex blocks",
 					"err", err,
 					"runtime_id", runtimeID,
