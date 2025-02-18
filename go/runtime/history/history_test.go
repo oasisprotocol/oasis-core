@@ -171,6 +171,7 @@ func TestHistory(t *testing.T) {
 }
 
 func testWatchBlocks(t *testing.T, history History, expectedRound uint64) {
+	t.Helper()
 	require := require.New(t)
 
 	ch, sub, err := history.WatchBlocks()
@@ -205,37 +206,56 @@ func TestWatchBlocks(t *testing.T) {
 
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history test ns 1"), 0)
 
+	// Sample data
+	blk1 := roothash.AnnotatedBlock{
+		Height: 40,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	blk1.Block.Header.Round = 10
+	results1 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 0, Index: 0},
+			{Module: "", Code: 0, Index: 1},
+		},
+	}
+	blk2 := roothash.AnnotatedBlock{
+		Height: 41,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	blk2.Block.Header.Round = 11
+	results2 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 1, Index: 0},
+		},
+	}
+
 	// Test history with local storage.
 	prunerFactory := NewNonePrunerFactory()
 	history, err := New(runtimeID, dataDir, prunerFactory, true)
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
 	// Commit a block.
-	blk := roothash.AnnotatedBlock{
-		Height: 40,
-		Block:  block.NewGenesisBlock(runtimeID, 0),
-	}
-	blk.Block.Header.Round = 10
-	roundResults := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 0, Index: 0},
-			{Module: "", Code: 0, Index: 1},
-		},
-	}
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk1, results1, true) // notify=true
 	require.NoError(err, "Commit")
-
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
 	// Commit storage checkpoint.
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
-
 	// Block should be received.
 	testWatchBlocks(t, history, 10)
+	// Commit a block without notifying.
+	err = history.Commit(&blk2, results2, false)
+	require.NoError(err, "Commit")
+	err = history.StorageSyncCheckpoint(11)
+	require.NoError(err, "StorageSyncCheckpoint")
+	// Wait synced round so that notifier processes it.
+	_, err = history.WaitRoundSynced(ctx, 11)
+	require.NoError(err, "WaitRoundSynced")
+	// In case of a local storage, we broadcast blocks when
+	// StorageSyncCheckpoint is called, regardless of notify flag.
+	testWatchBlocks(t, history, 11)
 
 	// Test history without local storage.
 	dataDir2, err := os.MkdirTemp("", "oasis-runtime-history-test_")
@@ -245,21 +265,23 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
-	// Commit a block.
-	err = history.Commit(&blk, roundResults, true)
+	// Commit a block without notifying.
+	err = history.Commit(&blk1, results1, false)
 	require.NoError(err, "Commit should work")
-
+	// No blocks should be received since commit didn't notify and
+	// history has no local storage.
+	testWatchBlocks(t, history, 0)
+	// Commit a block and also notify.
+	err = history.Commit(&blk2, results2, true)
+	require.NoError(err, "Commit should work")
 	// Block should be received.
-	testWatchBlocks(t, history, 10)
-
+	testWatchBlocks(t, history, 11)
 	// Wait round sync should return correct round.
-	r, err := history.WaitRoundSynced(ctx, 10)
+	r, err := history.WaitRoundSynced(ctx, 11)
 	require.NoError(err, "WaitRoundSynced")
-	require.EqualValues(10, r, "WaitRoundSynced")
-
+	require.EqualValues(11, r, "WaitRoundSynced")
 	// Committing storage checkpoint should panic.
-	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(10) }, "StorageSyncCheckpoint should panic")
+	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(11) }, "StorageSyncCheckpoint should panic")
 }
 
 type testPruneHandler struct {
