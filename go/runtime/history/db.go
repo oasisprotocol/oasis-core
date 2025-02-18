@@ -153,50 +153,92 @@ func (d *DB) commitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.Ro
 	if len(blks) != len(results) {
 		return fmt.Errorf("%d blocks != %d round results", len(blks), len(results))
 	}
-	if len(blks) == 0 {
+
+	batchSize := len(blks)
+	if batchSize == 0 {
 		return nil
 	}
 
+	// Transaction should be fast, therefore we pre-process encoding and validation.
+	blkKeys := make([][]byte, batchSize)
+	blkVals := make([][]byte, batchSize)
+	resKeys := make([][]byte, batchSize)
+	resVals := make([][]byte, batchSize)
+
+	// Preprocess first block.
+	first := blks[0]
+	runtimeID := first.Block.Header.Namespace
+	firstHeight := first.Height
+	firstRound := first.Block.Header.Round
+	lastHeight := firstHeight
+	lastRound := firstRound
+	blkKeys[0], blkVals[0] = blockKeyFmt.Encode(firstRound), cbor.Marshal(first)
+	resKeys[0], resVals[0] = roundResultsKeyFmt.Encode(firstRound), cbor.Marshal(results[0])
+
+	// Preprocess remaining blocks, ensuring they are in increasing order.
+	for i := 1; i < batchSize; i++ {
+		blk := blks[i]
+		rtID := blk.Block.Header.Namespace
+		if !runtimeID.Equal(&rtID) {
+			return fmt.Errorf("runtime mismatch, want %s, got %s)", runtimeID, rtID)
+		}
+
+		if blk.Height <= lastHeight {
+			return fmt.Errorf("out-of-order block (height: %d came after %d)", blk.Height, lastHeight)
+		}
+
+		round := blk.Block.Header.Round
+		if round <= lastRound {
+			return fmt.Errorf("out-of-order block (round: %d came after %d)", round, lastRound)
+		}
+
+		lastHeight = blk.Height
+		lastRound = round
+
+		blkKeys[i], blkVals[i] = blockKeyFmt.Encode(round), cbor.Marshal(blk)
+		resKeys[i], resVals[i] = roundResultsKeyFmt.Encode(round), cbor.Marshal(results[i])
+	}
+
+	// Commit batch transaction.
 	return d.db.Update(func(tx *badger.Txn) error {
 		meta, err := d.queryGetMetadata(tx)
 		if err != nil {
 			return err
 		}
 
-		for i, blk := range blks {
-			rtID := blk.Block.Header.Namespace
-			if !rtID.Equal(&meta.RuntimeID) {
-				return fmt.Errorf("runtime mismatch (expected: %s got: %s)",
-					meta.RuntimeID,
-					rtID,
-				)
-			}
-
-			if blk.Height <= meta.LastConsensusHeight && meta.LastConsensusHeight != 0 {
-				return fmt.Errorf("commit at lower or equal consensus height (current: %d wanted: %d)",
-					meta.LastConsensusHeight,
-					blk.Height,
-				)
-			}
-
-			if blk.Block.Header.Round <= meta.LastRound && meta.LastConsensusHeight != 0 {
-				return fmt.Errorf("commit at lower or equal round (current: %d wanted: %d)",
-					meta.LastRound,
-					blk.Block.Header.Round,
-				)
-			}
-
-			if err := tx.Set(blockKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(blk)); err != nil {
-				return err
-			}
-
-			if err := tx.Set(roundResultsKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(results[i])); err != nil {
-				return err
-			}
-
-			meta.LastRound = blk.Block.Header.Round
-			meta.LastConsensusHeight = blk.Height
+		if !runtimeID.Equal(&meta.RuntimeID) {
+			return fmt.Errorf("runtime mismatch (expected: %s got: %s)",
+				meta.RuntimeID,
+				runtimeID,
+			)
 		}
+
+		if firstHeight <= meta.LastConsensusHeight && meta.LastConsensusHeight != 0 {
+			return fmt.Errorf("commit at lower or equal consensus height (current: %d wanted: %d)",
+				meta.LastConsensusHeight,
+				firstHeight,
+			)
+		}
+
+		if firstRound <= meta.LastRound && meta.LastConsensusHeight != 0 {
+			return fmt.Errorf("commit at lower or equal round (current: %d wanted: %d)",
+				meta.LastRound,
+				firstRound,
+			)
+		}
+
+		for i := 0; i < batchSize; i++ {
+			if err = tx.Set(blkKeys[i], blkVals[i]); err != nil {
+				return err
+			}
+			if err = tx.Set(resKeys[i], resVals[i]); err != nil {
+				return err
+			}
+		}
+
+		meta.LastRound = lastRound
+		meta.LastConsensusHeight = lastHeight
+
 		return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(meta))
 	})
 }
