@@ -50,11 +50,11 @@ func (h *nopHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bool) error {
+func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults) error {
 	return errNopHistory
 }
 
-func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults, bool) error {
+func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults) error {
 	return errNopHistory
 }
 
@@ -138,7 +138,23 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
+	err := h.commitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{roundResults}, true)
+	if err != nil {
+		return fmt.Errorf("failed to Commit at height %d, and round %d: %w",
+			blk.Height,
+			blk.Block.Header.Round,
+			err,
+		)
+	}
+	return nil
+}
+
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults) error {
+	return h.commitBatch(blks, results, false)
+}
+
+func (h *runtimeHistory) commitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
 	// Return early if empty batch.
 	if len(blks) == 0 && len(results) == 0 {
 		return nil
@@ -162,18 +178,6 @@ func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []
 	}
 	h.blocksNotifier.Broadcast(lastBlk)
 
-	return nil
-}
-
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
-	err := h.CommitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{roundResults}, notify)
-	if err != nil {
-		return fmt.Errorf("failed to Commit at height %d, and round %d: %w",
-			blk.Height,
-			blk.Block.Header.Round,
-			err,
-		)
-	}
 	return nil
 }
 

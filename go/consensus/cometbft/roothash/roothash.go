@@ -505,7 +505,8 @@ func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64,
 			if err != nil {
 				return 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 			}
-			err = bh.Commit(annBlk, roundResults, false)
+			// Do not notify watchers during history reindex.
+			err = bh.CommitBatch([]*api.AnnotatedBlock{annBlk}, []*api.RoundResults{roundResults})
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
@@ -696,7 +697,7 @@ func (sc *serviceClient) processFinalizedEvent(
 				"round", annBlk.Block.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, roundResults, true)
+			err = tr.blockHistory.Commit(annBlk, roundResults)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,

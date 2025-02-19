@@ -70,27 +70,27 @@ func TestHistory(t *testing.T) {
 	}
 
 	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, roundResults)
 	require.Error(err, "Commit should fail for different runtime")
 
 	copy(blk.Block.Header.Namespace[:], runtimeID[:])
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, roundResults)
 	require.NoError(err, "Commit")
 
 	blk2 := roothash.AnnotatedBlock{
 		Height: 40,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
-	err = history.Commit(&blk2, roundResults, true)
+	err = history.Commit(&blk2, roundResults)
 	require.Error(err, "Commit should fail for lower consensus height")
 	blk2.Height = 50
 	require.Error(err, "Commit should fail for equal consensus height")
 
 	putBlk := *blk.Block
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, roundResults)
 	require.Error(err, "Commit should fail for the same round")
 	blk.Block.Header.Round = 5
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, roundResults)
 	require.Error(err, "Commit should fail for a lower round")
 	blk.Block.Header.Round = 10
 
@@ -212,18 +212,16 @@ func TestCommitBatch(t *testing.T) {
 		},
 	}
 
-	err = history.CommitBatch(nil, nil, true)
+	err = history.CommitBatch(nil, nil)
 	require.NoError(err, "CommitBatch should succeed for empty batch")
 
 	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
 		[]*roothash.RoundResults{results1},
-		true,
 	)
 	require.Error(err, "CommitBatch should fail when slices don't have equal size")
 
 	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
 		[]*roothash.RoundResults{results1, results2},
-		true,
 	)
 	require.Error(err, "CommitBatch should fail when different runtimes IDs")
 
@@ -232,14 +230,12 @@ func TestCommitBatch(t *testing.T) {
 	// Commit batch in wrong order: round 1 and 0 at consenus height 3 and 1.
 	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk2, &blk1},
 		[]*roothash.RoundResults{results2, results1},
-		true,
 	)
 	require.Error(err, "CommitBatch should fail for unordered batch")
 
 	// Commit batch round 0 and 1 at consenus height 1 and 3.
 	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
 		[]*roothash.RoundResults{results1, results2},
-		true,
 	)
 	require.NoError(err, "CommitBatch")
 
@@ -256,17 +252,17 @@ func TestCommitBatch(t *testing.T) {
 	require.Equal(blk2.Block, gotBlock, "GetCommittedBlock should return the correct block")
 
 	// Commit for the latest height and round should fail
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, nil)
 	require.Error(err, "Commit should fail for same consensus height")
 
 	// Commit for the latest round should fail.
 	blk2.Height = 4
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, nil)
 	require.Error(err, "Commit should fail for same round")
 
 	// Commit after batch commit should succeed when round and height increases.
 	blk2.Block.Header.Round = 2
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, nil)
 	require.NoError(err, "Commit")
 
 	err = history.StorageSyncCheckpoint(2)
@@ -283,7 +279,6 @@ func TestCommitBatch(t *testing.T) {
 	blk2.Block.Header.Round = 6
 	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
 		[]*roothash.RoundResults{nil, nil},
-		false,
 	)
 	require.NoError(err, "CommitBatch")
 }
@@ -356,25 +351,23 @@ func TestWatchBlocks(t *testing.T) {
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
 	// Commit a block.
-	err = history.Commit(&blk1, results1, true) // notify=true
+	err = history.Commit(&blk1, results1)
 	require.NoError(err, "Commit")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-	// Commit storage checkpoint.
+	// If local storage, blocks should be observed after storage sync.
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
 	// Block should be received.
 	testWatchBlocks(t, history, 10)
-	// Commit a block, with notify set to false.
-	err = history.Commit(&blk2, results2, false) // notify=false
+	// Commit another block.
+	err = history.Commit(&blk2, results2)
 	require.NoError(err, "Commit")
 	err = history.StorageSyncCheckpoint(11)
 	require.NoError(err, "StorageSyncCheckpoint")
 	// Wait synced round so that notifier processes it.
 	_, err = history.WaitRoundSynced(ctx, 11)
 	require.NoError(err, "WaitRoundSynced")
-	// In case of a local storage, we broadcast blocks when
-	// StorageSyncCheckpoint is called, regardless of notify flag.
 	testWatchBlocks(t, history, 11)
 
 	// Test history without local storage.
@@ -385,13 +378,7 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-	// Commit a block.
-	err = history.Commit(&blk1, results1, false) // notify=false
-	require.NoError(err, "Commit should work")
-	// No blocks should be received since notify=false and !hasLocalStorage.
-	testWatchBlocks(t, history, 0)
-	// Commit a block.
-	err = history.Commit(&blk2, results2, true) // notify=true
+	err = history.Commit(&blk2, results2)
 	require.NoError(err, "Commit should work")
 	// Block should be received.
 	testWatchBlocks(t, history, 11)
@@ -409,11 +396,11 @@ func TestWatchBlocks(t *testing.T) {
 	history, err = New(runtimeID, dataDir3, prunerFactory, true)
 	require.NoError(err, "New")
 	testWatchBlocks(t, history, 0)
-	err = history.CommitBatch(blocks, results, false) // notify=false
+	err = history.CommitBatch(blocks, results)
 	require.NoError(err, "CommitBatch")
-	// In case of a local storage, we broadcast blocks when
-	// StorageSyncCheckpoint is called, regardless of notify flag.
+	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
+	// If local storage, blocks should be observed after storage sync.
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
 	testWatchBlocks(t, history, 10)
@@ -431,9 +418,9 @@ func TestWatchBlocks(t *testing.T) {
 	history, err = New(runtimeID, dataDir4, prunerFactory, false)
 	require.NoError(err, "New")
 	testWatchBlocks(t, history, 0)
-	err = history.CommitBatch(blocks, results, false) // set notify to false
+	err = history.CommitBatch(blocks, results)
 	require.NoError(err, "CommitBatch")
-	// No block should be received since we set notify to false.
+	// No blocks should be received if without local storage.
 	testWatchBlocks(t, history, 0)
 }
 
@@ -510,16 +497,16 @@ func TestHistoryPrune(t *testing.T) {
 	}
 
 	// Commit first 30 blocks in a batch of 10.
-	err = history.CommitBatch(blks[:10], results[:10], false)
+	err = history.CommitBatch(blks[:10], results[:10])
 	require.NoError(err, "Commit")
-	err = history.CommitBatch(blks[10:20], results[10:20], false)
+	err = history.CommitBatch(blks[10:20], results[10:20])
 	require.NoError(err, "Commit")
-	err = history.CommitBatch(blks[20:30], results[20:30], false)
+	err = history.CommitBatch(blks[20:30], results[20:30])
 	require.NoError(err, "Commit")
 
 	// Commit remaining 20 blocks one by one.
 	for i := 30; i < n; i++ {
-		err = history.Commit(blks[i], results[i], true)
+		err = history.Commit(blks[i], results[i])
 		require.NoError(err, "Commit")
 	}
 	// Simulate storage syncing.
@@ -612,7 +599,7 @@ func TestHistoryPruneError(t *testing.T) {
 		}
 		blk.Block.Header.Round = uint64(i)
 
-		err = history.Commit(&blk, nil, true)
+		err = history.Commit(&blk, nil)
 		require.NoError(err, "Commit")
 
 		err = history.StorageSyncCheckpoint(blk.Block.Header.Round)
