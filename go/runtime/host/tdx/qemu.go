@@ -2,6 +2,7 @@ package tdx
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -284,6 +285,25 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 		// changing (e.g. due to an upgrade).
 		cmd := exec.Command(
 			defaultQemuImgPath,
+			"info",
+			"--output", "json",
+			image,
+		)
+		var out strings.Builder
+		cmd.Stderr = &out
+		cmd.Stdout = &out
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to query base image: %s\n%w", out.String(), err)
+		}
+		var info struct {
+			VirtualSize int `json:"virtual-size"`
+		}
+		if err := json.Unmarshal([]byte(out.String()), &info); err != nil {
+			return "", fmt.Errorf("malformed base image metadata: %w", err)
+		}
+
+		cmd = exec.Command(
+			defaultQemuImgPath,
 			"rebase",
 			"-u",
 			"-f", "qcow2",
@@ -291,11 +311,25 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 			"-F", format,
 			imageFn,
 		)
-		var out strings.Builder
+		out.Reset()
 		cmd.Stderr = &out
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("failed to rebase persistent overlay image: %s\n%w", out.String(), err)
+		}
+
+		// Perform a resize if needed.
+		cmd = exec.Command(
+			defaultQemuImgPath,
+			"resize",
+			imageFn,
+			fmt.Sprintf("%d", info.VirtualSize),
+		)
+		out.Reset()
+		cmd.Stderr = &out
+		cmd.Stdout = &out
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to resize persistent overlay image: %s\n%w", out.String(), err)
 		}
 	case errors.Is(err, os.ErrNotExist):
 		// Create image directory if it doesn't yet exist.
