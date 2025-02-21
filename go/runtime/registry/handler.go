@@ -41,19 +41,6 @@ type RuntimeHostHandlerEnvironment interface {
 	GetRuntimeRegistry() Registry
 }
 
-// RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and
-// notifiers when provisioning hosted runtimes.
-type RuntimeHostHandlerFactory interface {
-	// GetRuntime returns the registered runtime for which a runtime host handler is to be created.
-	GetRuntime() Runtime
-
-	// NewRuntimeHostHandler creates a new runtime host handler.
-	NewRuntimeHostHandler() host.RuntimeHandler
-
-	// NewRuntimeHostNotifier creates a new runtime host notifier.
-	NewRuntimeHostNotifier(host host.Runtime) protocol.Notifier
-}
-
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
 // required set of methods for interacting with the outside world.
 type runtimeHostHandler struct {

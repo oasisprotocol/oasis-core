@@ -11,21 +11,17 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
-	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -110,9 +106,6 @@ type Runtime interface {
 
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
-
-	// HostProvisioner returns the runtime host provisioner when available. Otherwise returns nil.
-	HostProvisioner() runtimeHost.Provisioner
 }
 
 type runtime struct { // nolint: maligned
@@ -137,8 +130,6 @@ type runtime struct { // nolint: maligned
 	activeDescriptorCh         chan struct{}
 	activeDescriptorNotifier   *pubsub.Broker
 
-	hostProvisioner runtimeHost.Provisioner
-
 	bundleRegistry *bundle.Registry
 	bundleManager  *bundle.Manager
 
@@ -150,7 +141,6 @@ func newRuntime(
 	managed bool,
 	dataDir string,
 	consensus consensus.Backend,
-	provisioner runtimeHost.Provisioner,
 	bundleRegistry *bundle.Registry,
 	bundleManager *bundle.Manager,
 ) (*runtime, error) {
@@ -179,7 +169,6 @@ func newRuntime(
 		registryDescriptorNotifier: pubsub.NewBroker(true),
 		activeDescriptorCh:         make(chan struct{}),
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
-		hostProvisioner:            provisioner,
 		bundleRegistry:             bundleRegistry,
 		bundleManager:              bundleManager,
 		logger:                     logger,
@@ -279,11 +268,6 @@ func (r *runtime) Storage() storageAPI.Backend {
 // LocalStorage implements Runtime.
 func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
-}
-
-// HostProvisioner implements Runtime.
-func (r *runtime) HostProvisioner() runtimeHost.Provisioner {
-	return r.hostProvisioner
 }
 
 // start starts the runtime worker.
@@ -485,7 +469,6 @@ type runtimeRegistry struct {
 
 	runtimes map[common.Namespace]*runtime
 
-	provisioner    runtimeHost.Provisioner
 	historyFactory history.Factory
 
 	bundleRegistry *bundle.Registry
@@ -534,7 +517,7 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 		return nil, fmt.Errorf("runtime/registry: runtime already registered: %s", runtimeID)
 	}
 
-	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.provisioner, r.bundleRegistry, r.bundleManager)
+	rt, err := newRuntime(runtimeID, managed, r.dataDir, r.consensus, r.bundleRegistry, r.bundleManager)
 	if err != nil {
 		return nil, err
 	}
@@ -665,10 +648,7 @@ func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespac
 func New(
 	ctx context.Context,
 	dataDir string,
-	commonStore *persistent.CommonStore,
-	identity *identity.Identity,
 	consensus consensus.Backend,
-	ias []ias.Endpoint,
 ) (Registry, error) {
 	// Get configured runtime IDs.
 	runtimeIDs, err := getConfiguredRuntimeIDs()
@@ -689,24 +669,6 @@ func New(
 		return nil, err
 	}
 
-	// Configure host environment information.
-	hostInfo, err := createHostInfo(consensus)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the PCS client and quote service.
-	qs, err := createCachingQuoteService(commonStore)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create runtime provisioner.
-	provisioner, err := createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create runtime registry.
 	r := &runtimeRegistry{
 		logger:         logging.GetLogger("runtime/registry"),
@@ -714,7 +676,6 @@ func New(
 		dataDir:        dataDir,
 		consensus:      consensus,
 		runtimes:       make(map[common.Namespace]*runtime),
-		provisioner:    provisioner,
 		historyFactory: historyFactory,
 		bundleRegistry: bundleRegistry,
 		bundleManager:  bundleManager,

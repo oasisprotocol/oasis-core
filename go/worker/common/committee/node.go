@@ -20,12 +20,13 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
+	p2pProtocol "github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
@@ -158,6 +159,7 @@ type Node struct {
 	Group            *Group
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
+	notifier         protocol.Notifier
 
 	txTopic string
 
@@ -704,18 +706,17 @@ func (n *Node) worker() {
 	n.updateHostedRuntimeVersionLocked()
 	n.CrossNode.Unlock()
 
-	// Start the runtime and its notifier.
+	// Start the runtime.
 	hrt := n.GetHostedRuntime()
-	hrtNotifier := n.GetRuntimeHostNotifier()
-
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
 
 	hrt.Start()
 	defer hrt.Stop()
 
-	hrtNotifier.Start()
-	defer hrtNotifier.Stop()
+	// Start the runtime's notifier.
+	n.notifier.Start()
+	defer n.notifier.Stop()
 
 	// Enter the main processing loop.
 	initialized := false
@@ -858,6 +859,7 @@ func NewNode(
 	chainContext string,
 	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
+	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
@@ -879,7 +881,7 @@ func NewNode(
 		return nil, err
 	}
 
-	txTopic := protocol.NewTopicKindTxID(chainContext, runtime.ID())
+	txTopic := p2pProtocol.NewTopicKindTxID(chainContext, runtime.ID())
 
 	n := &Node{
 		ChainContext:    chainContext,
@@ -904,12 +906,18 @@ func NewNode(
 	// Prepare the key manager client wrapper.
 	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
 
+	// Prepare the runtime host handler.
+	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
+
 	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(n)
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler)
 	if err != nil {
 		return nil, err
 	}
 	n.RuntimeHostNode = rhn
+
+	// Prepare the runtime host notifier.
+	n.notifier = runtimeRegistry.NewRuntimeHostNotifier(runtime, rhn.GetHostedRuntime(), consensus)
 
 	// Prepare transaction pool.
 	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)

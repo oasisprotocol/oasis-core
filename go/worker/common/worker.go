@@ -12,6 +12,7 @@ import (
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
@@ -30,6 +31,7 @@ type Worker struct {
 	P2P             p2p.Service
 	KeyManager      keymanagerApi.Backend
 	RuntimeRegistry runtimeRegistry.Registry
+	Provisioner     host.Provisioner
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -161,6 +163,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.ChainContext,
 		w.HostNode,
 		runtime,
+		w.Provisioner,
 		w.RuntimeRegistry,
 		w.Identity,
 		w.KeyManager,
@@ -192,6 +195,7 @@ func New(
 	p2p p2p.Service,
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
+	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
@@ -223,6 +227,7 @@ func New(
 		P2P:             p2p,
 		KeyManager:      keyManager,
 		RuntimeRegistry: runtimeRegistry,
+		Provisioner:     provisioner,
 		runtimes:        make(map[common.Namespace]*committee.Node),
 		ctx:             ctx,
 		cancelCtx:       cancelCtx,

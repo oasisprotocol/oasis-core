@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -73,9 +74,11 @@ type Worker struct { // nolint: maligned
 	peerMap    *PeerMap
 	accessList *AccessList
 
-	commonWorker *workerCommon.Worker
-	roleProvider registration.RoleProvider
-	backend      api.Backend
+	commonWorker     *workerCommon.Worker
+	roleProvider     registration.RoleProvider
+	backend          api.Backend
+	notifier         protocol.Notifier
+	keyManagerClient *commonCommittee.KeyManagerClientWrapper
 
 	enabled bool
 }
@@ -453,18 +456,17 @@ func (w *Worker) worker() {
 	// Set the runtime to the specified version.
 	w.SetHostedRuntimeVersion(&comp.Version, nil)
 
-	// Start the runtime and its notifier.
+	// Start the runtime.
 	hrt := w.GetHostedRuntime()
-	hrtNotifier := w.GetRuntimeHostNotifier()
-
 	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
 
 	hrt.Start()
 	defer hrt.Stop()
 
-	hrtNotifier.Start()
-	defer hrtNotifier.Stop()
+	// Start the runtime host notifier.
+	w.notifier.Start()
+	defer w.notifier.Stop()
 
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {

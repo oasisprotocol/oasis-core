@@ -9,8 +9,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -21,6 +23,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	r *registration.Worker,
 	backend api.Backend,
+	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
@@ -70,11 +73,21 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to get runtime: %w", err)
 	}
 
+	// Prepare key manager client.
+	w.keyManagerClient = committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
+	w.keyManagerClient.SetKeyManagerID(&w.runtimeID)
+
+	// Prepare the runtime host handler.
+	handler := runtimeRegistry.NewRuntimeHostHandler(&workerEnvironment{w}, w.runtime, w.commonWorker.Consensus)
+
 	// Prepare the runtime host node helpers.
-	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
+	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w.runtime, provisioner, handler)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
+
+	// Prepare the runtime host notifier.
+	w.notifier = runtimeRegistry.NewRuntimeHostNotifier(w.runtime, w.RuntimeHostNode.GetHostedRuntime(), commonWorker.Consensus)
 
 	// Prepare watchers.
 	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())

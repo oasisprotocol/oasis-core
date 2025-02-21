@@ -342,10 +342,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Fetch provisioner type.
-		status.Provisioner = "none"
-		if provisioner := rt.HostProvisioner(); provisioner != nil {
-			status.Provisioner = provisioner.Name()
-		}
+		status.Provisioner = n.Provisioner.Name()
 
 		// Fetch the status of all components associated with the runtime.
 		for _, comp := range n.RuntimeRegistry.GetBundleRegistry().Components(rt.ID()) {

@@ -22,8 +22,6 @@ import (
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
-	"github.com/oasisprotocol/oasis-core/go/ias"
-	iasAPI "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
@@ -33,6 +31,8 @@ import (
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/provisioner"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/sentry"
@@ -76,9 +76,9 @@ type Node struct {
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
 	Sentry   sentryAPI.Backend
-	IAS      []iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
+	Provisioner     host.Provisioner
 
 	CommonWorker       *workerCommon.Worker
 	ExecutorWorker     *executor.Worker
@@ -218,17 +218,14 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 
-	// Initialize the IAS proxy client.
-	n.IAS, err = ias.New(n.Identity)
+	// Initialize runtime provisioner.
+	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus)
 	if err != nil {
-		n.logger.Error("failed to initialize IAS proxy client",
-			"err", err,
-		)
 		return err
 	}
 
 	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.commonStore, n.Identity, n.Consensus, n.IAS)
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.Consensus)
 	if err != nil {
 		return err
 	}
@@ -245,6 +242,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.P2P,
 		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
+		n.Provisioner,
 	)
 	if err != nil {
 		n.logger.Error("failed to initialize common worker",
@@ -306,6 +304,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.CommonWorker,
 		n.RegistrationWorker,
 		n.Consensus.KeyManager(),
+		n.Provisioner,
 	)
 	if err != nil {
 		return err
