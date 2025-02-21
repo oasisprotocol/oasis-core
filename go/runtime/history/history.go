@@ -50,11 +50,11 @@ func (h *nopHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bool) error {
+func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults) error {
 	return errNopHistory
 }
 
-func (h *nopHistory) ConsensusCheckpoint(int64) error {
+func (h *nopHistory) CommitBatch([]*roothash.AnnotatedBlock, []*roothash.RoundResults) error {
 	return errNopHistory
 }
 
@@ -138,27 +138,47 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
-	err := h.db.commit(blk, roundResults)
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
+	err := h.commitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{roundResults}, true)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to Commit at height %d, and round %d: %w",
+			blk.Height,
+			blk.Block.Header.Round,
+			err,
+		)
+	}
+	return nil
+}
+
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults) error {
+	return h.commitBatch(blks, results, false)
+}
+
+func (h *runtimeHistory) commitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
+	// Return early if empty batch.
+	if len(blks) == 0 && len(results) == 0 {
+		return nil
 	}
 
+	err := h.db.commitBatch(blks, results)
+	if err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
+	}
+
+	// commitBatch already handled validation, so we can access directly.
+	lastBlk := blks[len(blks)-1]
+
 	// Notify the pruner what the new round is.
-	h.pruneCh.In() <- blk.Block.Header.Round
+	h.pruneCh.In() <- lastBlk.Block.Header.Round
 
 	// If no local storage worker, notify the block watcher that new block is committed,
 	// otherwise the storage-sync-checkpoint will do the notification.
 	if h.hasLocalStorage || !notify {
 		return nil
 	}
-	h.blocksNotifier.Broadcast(blk)
+	h.blocksNotifier.Broadcast(lastBlk)
 
 	return nil
-}
-
-func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
-	return h.db.consensusCheckpoint(height)
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
