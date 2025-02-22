@@ -196,7 +196,7 @@ type Backend interface {
 	// containing the key manager statuses as it changes over time.
 	//
 	// Upon subscription the current status is sent immediately.
-	WatchStatuses() (<-chan *Status, *pubsub.Subscription)
+	WatchStatuses(context.Context) (<-chan *Status, pubsub.ClosableSubscription, error)
 
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)
@@ -205,13 +205,13 @@ type Backend interface {
 	GetMasterSecret(context.Context, *registry.NamespaceQuery) (*SignedEncryptedMasterSecret, error)
 
 	// WatchMasterSecrets returns a channel that produces a stream of master secrets.
-	WatchMasterSecrets() (<-chan *SignedEncryptedMasterSecret, *pubsub.Subscription)
+	WatchMasterSecrets(context.Context) (<-chan *SignedEncryptedMasterSecret, pubsub.ClosableSubscription, error)
 
 	// GetEphemeralSecret returns the key manager ephemeral secret.
 	GetEphemeralSecret(context.Context, *registry.NamespaceQuery) (*SignedEncryptedEphemeralSecret, error)
 
 	// WatchEphemeralSecrets returns a channel that produces a stream of ephemeral secrets.
-	WatchEphemeralSecrets() (<-chan *SignedEncryptedEphemeralSecret, *pubsub.Subscription)
+	WatchEphemeralSecrets(context.Context) (<-chan *SignedEncryptedEphemeralSecret, pubsub.ClosableSubscription, error)
 }
 
 // NewUpdatePolicyTx creates a new policy update transaction.

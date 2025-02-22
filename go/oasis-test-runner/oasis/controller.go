@@ -33,7 +33,7 @@ type Controller struct {
 	Roothash      roothash.Backend
 	RuntimeClient runtimeClient.RuntimeClient
 	Storage       storage.Backend
-	Keymanager    *keymanager.KeymanagerClient
+	Keymanager    keymanager.Backend
 	Vault         vault.Backend
 
 	StorageWorker workerStorage.StorageWorker
