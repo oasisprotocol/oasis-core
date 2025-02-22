@@ -647,11 +647,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type stakingClient struct {
+// Client is a gRPC staking client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *stakingClient) TokenSymbol(ctx context.Context, height int64) (string, error) {
+// NewClient creates a new gRPC staking client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) TokenSymbol(ctx context.Context, height int64) (string, error) {
 	var rsp string
 	if err := c.conn.Invoke(ctx, methodTokenSymbol.FullName(), height, &rsp); err != nil {
 		return "", err
@@ -659,7 +667,7 @@ func (c *stakingClient) TokenSymbol(ctx context.Context, height int64) (string, 
 	return rsp, nil
 }
 
-func (c *stakingClient) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
+func (c *Client) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
 	var rsp uint8
 	if err := c.conn.Invoke(ctx, methodTokenValueExponent.FullName(), height, &rsp); err != nil {
 		return 0, err
@@ -667,7 +675,7 @@ func (c *stakingClient) TokenValueExponent(ctx context.Context, height int64) (u
 	return rsp, nil
 }
 
-func (c *stakingClient) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (c *Client) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodTotalSupply.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -675,7 +683,7 @@ func (c *stakingClient) TotalSupply(ctx context.Context, height int64) (*quantit
 	return &rsp, nil
 }
 
-func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (c *Client) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodCommonPool.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -683,7 +691,7 @@ func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity
 	return &rsp, nil
 }
 
-func (c *stakingClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (c *Client) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodLastBlockFees.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -691,7 +699,7 @@ func (c *stakingClient) LastBlockFees(ctx context.Context, height int64) (*quant
 	return &rsp, nil
 }
 
-func (c *stakingClient) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (c *Client) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodGovernanceDeposits.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -699,7 +707,7 @@ func (c *stakingClient) GovernanceDeposits(ctx context.Context, height int64) (*
 	return &rsp, nil
 }
 
-func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error) {
+func (c *Client) Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodThreshold.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -707,7 +715,7 @@ func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*
 	return &rsp, nil
 }
 
-func (c *stakingClient) Addresses(ctx context.Context, height int64) ([]Address, error) {
+func (c *Client) Addresses(ctx context.Context, height int64) ([]Address, error) {
 	var rsp []Address
 	if err := c.conn.Invoke(ctx, methodAddresses.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -715,7 +723,7 @@ func (c *stakingClient) Addresses(ctx context.Context, height int64) ([]Address,
 	return rsp, nil
 }
 
-func (c *stakingClient) CommissionScheduleAddresses(ctx context.Context, height int64) ([]Address, error) {
+func (c *Client) CommissionScheduleAddresses(ctx context.Context, height int64) ([]Address, error) {
 	var rsp []Address
 	if err := c.conn.Invoke(ctx, methodCommissionScheduleAddresses.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -723,7 +731,7 @@ func (c *stakingClient) CommissionScheduleAddresses(ctx context.Context, height 
 	return rsp, nil
 }
 
-func (c *stakingClient) Account(ctx context.Context, query *OwnerQuery) (*Account, error) {
+func (c *Client) Account(ctx context.Context, query *OwnerQuery) (*Account, error) {
 	var rsp Account
 	if err := c.conn.Invoke(ctx, methodAccount.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -731,7 +739,7 @@ func (c *stakingClient) Account(ctx context.Context, query *OwnerQuery) (*Accoun
 	return &rsp, nil
 }
 
-func (c *stakingClient) DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
+func (c *Client) DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
 	var rsp map[Address]*Delegation
 	if err := c.conn.Invoke(ctx, methodDelegationsFor.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -739,7 +747,7 @@ func (c *stakingClient) DelegationsFor(ctx context.Context, query *OwnerQuery) (
 	return rsp, nil
 }
 
-func (c *stakingClient) DelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address]*DelegationInfo, error) {
+func (c *Client) DelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address]*DelegationInfo, error) {
 	var rsp map[Address]*DelegationInfo
 	if err := c.conn.Invoke(ctx, methodDelegationInfosFor.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -747,7 +755,7 @@ func (c *stakingClient) DelegationInfosFor(ctx context.Context, query *OwnerQuer
 	return rsp, nil
 }
 
-func (c *stakingClient) DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
+func (c *Client) DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
 	var rsp map[Address]*Delegation
 	if err := c.conn.Invoke(ctx, methodDelegationsTo.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -755,7 +763,7 @@ func (c *stakingClient) DelegationsTo(ctx context.Context, query *OwnerQuery) (m
 	return rsp, nil
 }
 
-func (c *stakingClient) DebondingDelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
+func (c *Client) DebondingDelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
 	var rsp map[Address][]*DebondingDelegation
 	if err := c.conn.Invoke(ctx, methodDebondingDelegationsFor.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -763,7 +771,7 @@ func (c *stakingClient) DebondingDelegationsFor(ctx context.Context, query *Owne
 	return rsp, nil
 }
 
-func (c *stakingClient) DebondingDelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegationInfo, error) {
+func (c *Client) DebondingDelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegationInfo, error) {
 	var rsp map[Address][]*DebondingDelegationInfo
 	if err := c.conn.Invoke(ctx, methodDebondingDelegationInfosFor.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -771,7 +779,7 @@ func (c *stakingClient) DebondingDelegationInfosFor(ctx context.Context, query *
 	return rsp, nil
 }
 
-func (c *stakingClient) DebondingDelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
+func (c *Client) DebondingDelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
 	var rsp map[Address][]*DebondingDelegation
 	if err := c.conn.Invoke(ctx, methodDebondingDelegationsTo.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -779,7 +787,7 @@ func (c *stakingClient) DebondingDelegationsTo(ctx context.Context, query *Owner
 	return rsp, nil
 }
 
-func (c *stakingClient) Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error) {
+func (c *Client) Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodAllowance.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -787,7 +795,7 @@ func (c *stakingClient) Allowance(ctx context.Context, query *AllowanceQuery) (*
 	return &rsp, nil
 }
 
-func (c *stakingClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -795,7 +803,7 @@ func (c *stakingClient) StateToGenesis(ctx context.Context, height int64) (*Gene
 	return &rsp, nil
 }
 
-func (c *stakingClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -803,7 +811,7 @@ func (c *stakingClient) ConsensusParameters(ctx context.Context, height int64) (
 	return &rsp, nil
 }
 
-func (c *stakingClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -811,7 +819,7 @@ func (c *stakingClient) GetEvents(ctx context.Context, height int64) ([]*Event, 
 	return rsp, nil
 }
 
-func (c *stakingClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
@@ -846,10 +854,5 @@ func (c *stakingClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.
 	return ch, sub, nil
 }
 
-func (c *stakingClient) Cleanup() {
-}
-
-// NewStakingClient creates a new gRPC staking client service.
-func NewStakingClient(c *grpc.ClientConn) Backend {
-	return &stakingClient{c}
+func (c *Client) Cleanup() {
 }

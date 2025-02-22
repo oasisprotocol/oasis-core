@@ -87,19 +87,22 @@ func RegisterDebugService(server *grpc.Server, service DebugController) {
 	server.RegisterService(&debugServiceDesc, service)
 }
 
-type debugControllerClient struct {
+// DebugControllerClient is a gRPC debug controller client.
+type DebugControllerClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *debugControllerClient) SetEpoch(ctx context.Context, epoch beacon.EpochTime) error {
+// NewDebugControllerClient creates a new gRPC debug controller client.
+func NewDebugControllerClient(c *grpc.ClientConn) *DebugControllerClient {
+	return &DebugControllerClient{
+		conn: c,
+	}
+}
+
+func (c *DebugControllerClient) SetEpoch(ctx context.Context, epoch beacon.EpochTime) error {
 	return c.conn.Invoke(ctx, methodSetEpoch.FullName(), epoch, nil)
 }
 
-func (c *debugControllerClient) WaitNodesRegistered(ctx context.Context, count int) error {
+func (c *DebugControllerClient) WaitNodesRegistered(ctx context.Context, count int) error {
 	return c.conn.Invoke(ctx, methodWaitNodesRegistered.FullName(), count, nil)
-}
-
-// NewDebugControllerClient creates a new gRPC debug controller client service.
-func NewDebugControllerClient(c *grpc.ClientConn) DebugController {
-	return &debugControllerClient{c}
 }
