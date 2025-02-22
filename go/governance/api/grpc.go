@@ -298,11 +298,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type governanceClient struct {
+// Client is a gRPC governance client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *governanceClient) ActiveProposals(ctx context.Context, height int64) ([]*Proposal, error) {
+// NewClient creates a new gRPC governance client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) ActiveProposals(ctx context.Context, height int64) ([]*Proposal, error) {
 	var rsp []*Proposal
 	if err := c.conn.Invoke(ctx, methodActiveProposals.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -310,7 +318,7 @@ func (c *governanceClient) ActiveProposals(ctx context.Context, height int64) ([
 	return rsp, nil
 }
 
-func (c *governanceClient) Proposals(ctx context.Context, height int64) ([]*Proposal, error) {
+func (c *Client) Proposals(ctx context.Context, height int64) ([]*Proposal, error) {
 	var rsp []*Proposal
 	if err := c.conn.Invoke(ctx, methodProposals.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -318,7 +326,7 @@ func (c *governanceClient) Proposals(ctx context.Context, height int64) ([]*Prop
 	return rsp, nil
 }
 
-func (c *governanceClient) Proposal(ctx context.Context, request *ProposalQuery) (*Proposal, error) {
+func (c *Client) Proposal(ctx context.Context, request *ProposalQuery) (*Proposal, error) {
 	var rsp Proposal
 	if err := c.conn.Invoke(ctx, methodProposal.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -326,7 +334,7 @@ func (c *governanceClient) Proposal(ctx context.Context, request *ProposalQuery)
 	return &rsp, nil
 }
 
-func (c *governanceClient) Votes(ctx context.Context, request *ProposalQuery) ([]*VoteEntry, error) {
+func (c *Client) Votes(ctx context.Context, request *ProposalQuery) ([]*VoteEntry, error) {
 	var rsp []*VoteEntry
 	if err := c.conn.Invoke(ctx, methodVotes.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -334,7 +342,7 @@ func (c *governanceClient) Votes(ctx context.Context, request *ProposalQuery) ([
 	return rsp, nil
 }
 
-func (c *governanceClient) PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error) {
+func (c *Client) PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error) {
 	var rsp []*upgrade.Descriptor
 	if err := c.conn.Invoke(ctx, methodPendingUpgrades.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -342,7 +350,7 @@ func (c *governanceClient) PendingUpgrades(ctx context.Context, height int64) ([
 	return rsp, nil
 }
 
-func (c *governanceClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -350,7 +358,7 @@ func (c *governanceClient) StateToGenesis(ctx context.Context, height int64) (*G
 	return &rsp, nil
 }
 
-func (c *governanceClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -358,7 +366,7 @@ func (c *governanceClient) ConsensusParameters(ctx context.Context, height int64
 	return &rsp, nil
 }
 
-func (c *governanceClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -366,7 +374,7 @@ func (c *governanceClient) GetEvents(ctx context.Context, height int64) ([]*Even
 	return rsp, nil
 }
 
-func (c *governanceClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
@@ -401,10 +409,5 @@ func (c *governanceClient) WatchEvents(ctx context.Context) (<-chan *Event, pubs
 	return ch, sub, nil
 }
 
-func (c *governanceClient) Cleanup() {
-}
-
-// NewGovernanceClient creates a new gRPC governance client service.
-func NewGovernanceClient(c *grpc.ClientConn) Backend {
-	return &governanceClient{c}
+func (c *Client) Cleanup() {
 }

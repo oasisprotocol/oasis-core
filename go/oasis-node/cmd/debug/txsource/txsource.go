@@ -102,7 +102,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 	defer conn.Close()
 
 	// Set up the consensus client and submission manager.
-	cnsc := consensus.NewConsensusClient(conn)
+	cnsc := consensus.NewClient(conn)
 	pd, err := pricediscovery.NewStatic(viper.GetUint64(CfgGasPrice))
 	if err != nil {
 		return fmt.Errorf("failed to create submission manager: %w", err)

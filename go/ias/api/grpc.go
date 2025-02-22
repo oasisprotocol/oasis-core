@@ -112,11 +112,19 @@ func RegisterService(server *grpc.Server, service Endpoint) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type endpointClient struct {
+// Client is a gRPC IAS endpoint client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *endpointClient) VerifyEvidence(ctx context.Context, evidence *Evidence) (*ias.AVRBundle, error) {
+// NewClient creates a new gRPC IAS endpoint client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) VerifyEvidence(ctx context.Context, evidence *Evidence) (*ias.AVRBundle, error) {
 	var rsp ias.AVRBundle
 	if err := c.conn.Invoke(ctx, methodVerifyEvidence.FullName(), evidence, &rsp); err != nil {
 		return nil, err
@@ -124,7 +132,7 @@ func (c *endpointClient) VerifyEvidence(ctx context.Context, evidence *Evidence)
 	return &rsp, nil
 }
 
-func (c *endpointClient) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
+func (c *Client) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
 	var rsp SPIDInfo
 	if err := c.conn.Invoke(ctx, methodGetSPIDInfo.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -132,7 +140,7 @@ func (c *endpointClient) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
 	return &rsp, nil
 }
 
-func (c *endpointClient) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+func (c *Client) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
 	var rsp []byte
 	if err := c.conn.Invoke(ctx, methodGetSigRL.FullName(), epidGID, &rsp); err != nil {
 		return nil, err
@@ -140,10 +148,5 @@ func (c *endpointClient) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, 
 	return rsp, nil
 }
 
-func (c *endpointClient) Cleanup() {
-}
-
-// NewEndpointClient creates a new gRPC IAS endpoint client service.
-func NewEndpointClient(c *grpc.ClientConn) Endpoint {
-	return &endpointClient{c}
+func (c *Client) Cleanup() {
 }

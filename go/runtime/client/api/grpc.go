@@ -544,11 +544,19 @@ func RegisterService(server *grpc.Server, service RuntimeClient) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type runtimeClient struct {
+// Client is a gRPC runtime client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error) {
+// NewClient creates a new gRPC runtime client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error) {
 	var rsp []byte
 	if err := c.conn.Invoke(ctx, methodSubmitTx.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -556,7 +564,7 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) 
 	return rsp, nil
 }
 
-func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *SubmitTxRequest) (*SubmitTxMetaResponse, error) {
+func (c *Client) SubmitTxMeta(ctx context.Context, request *SubmitTxRequest) (*SubmitTxMetaResponse, error) {
 	var rsp SubmitTxMetaResponse
 	if err := c.conn.Invoke(ctx, methodSubmitTxMeta.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -564,15 +572,15 @@ func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *SubmitTxReque
 	return &rsp, nil
 }
 
-func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error {
+func (c *Client) SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error {
 	return c.conn.Invoke(ctx, methodSubmitTxNoWait.FullName(), request, nil)
 }
 
-func (c *runtimeClient) CheckTx(ctx context.Context, request *CheckTxRequest) error {
+func (c *Client) CheckTx(ctx context.Context, request *CheckTxRequest) error {
 	return c.conn.Invoke(ctx, methodCheckTx.FullName(), request, nil)
 }
 
-func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+func (c *Client) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetGenesisBlock.FullName(), runtimeID, &rsp); err != nil {
 		return nil, err
@@ -580,7 +588,7 @@ func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Na
 	return &rsp, nil
 }
 
-func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error) {
+func (c *Client) GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetBlock.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -588,7 +596,7 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) 
 	return &rsp, nil
 }
 
-func (c *runtimeClient) GetLastRetainedBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+func (c *Client) GetLastRetainedBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetLastRetainedBlock.FullName(), runtimeID, &rsp); err != nil {
 		return nil, err
@@ -596,7 +604,7 @@ func (c *runtimeClient) GetLastRetainedBlock(ctx context.Context, runtimeID comm
 	return &rsp, nil
 }
 
-func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error) {
+func (c *Client) GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetTransactions.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -604,7 +612,7 @@ func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransac
 	return rsp, nil
 }
 
-func (c *runtimeClient) GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error) {
+func (c *Client) GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error) {
 	var rsp []*TransactionWithResults
 	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -612,7 +620,7 @@ func (c *runtimeClient) GetTransactionsWithResults(ctx context.Context, request 
 	return rsp, nil
 }
 
-func (c *runtimeClient) GetUnconfirmedTransactions(ctx context.Context, runtimeID common.Namespace) ([][]byte, error) {
+func (c *Client) GetUnconfirmedTransactions(ctx context.Context, runtimeID common.Namespace) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetUnconfirmedTransactions.FullName(), runtimeID, &rsp); err != nil {
 		return nil, err
@@ -620,7 +628,7 @@ func (c *runtimeClient) GetUnconfirmedTransactions(ctx context.Context, runtimeI
 	return rsp, nil
 }
 
-func (c *runtimeClient) GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -628,7 +636,7 @@ func (c *runtimeClient) GetEvents(ctx context.Context, request *GetEventsRequest
 	return rsp, nil
 }
 
-func (c *runtimeClient) Query(ctx context.Context, request *QueryRequest) (*QueryResponse, error) {
+func (c *Client) Query(ctx context.Context, request *QueryRequest) (*QueryResponse, error) {
 	var rsp QueryResponse
 	if err := c.conn.Invoke(ctx, methodQuery.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -637,7 +645,7 @@ func (c *runtimeClient) Query(ctx context.Context, request *QueryRequest) (*Quer
 }
 
 type stateReadSync struct {
-	c *runtimeClient
+	c *Client
 }
 
 // Implements syncer.ReadSyncer.
@@ -667,11 +675,11 @@ func (rs *stateReadSync) SyncIterate(ctx context.Context, request *syncer.Iterat
 	return &rsp, nil
 }
 
-func (c *runtimeClient) State() syncer.ReadSyncer {
+func (c *Client) State() syncer.ReadSyncer {
 	return &stateReadSync{c}
 }
 
-func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchBlocks.FullName())
@@ -704,11 +712,4 @@ func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namesp
 	}()
 
 	return ch, sub, nil
-}
-
-// NewRuntimeClient creates a new gRPC runtime client service.
-func NewRuntimeClient(c *grpc.ClientConn) RuntimeClient {
-	return &runtimeClient{
-		conn: c,
-	}
 }

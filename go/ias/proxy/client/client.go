@@ -122,7 +122,7 @@ func New(identity *identity.Identity, addresses []string) ([]api.Endpoint, error
 
 		clients = append(clients, &proxyClient{
 			conn:     conn,
-			endpoint: api.NewEndpointClient(conn),
+			endpoint: api.NewClient(conn),
 			logger:   logger,
 		})
 	}

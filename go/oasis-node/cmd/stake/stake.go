@@ -70,7 +70,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 		os.Exit(1)
 	}
 
-	client := api.NewStakingClient(conn)
+	client := api.NewClient(conn)
 	return conn, client
 }
 

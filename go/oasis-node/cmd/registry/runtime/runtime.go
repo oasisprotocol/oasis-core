@@ -67,7 +67,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
 		os.Exit(1)
 	}
 
-	client := registry.NewRegistryClient(conn)
+	client := registry.NewClient(conn)
 	return conn, client
 }
 

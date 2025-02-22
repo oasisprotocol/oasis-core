@@ -97,7 +97,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, governance.Backend) {
 		os.Exit(1)
 	}
 
-	client := governance.NewGovernanceClient(conn)
+	client := governance.NewClient(conn)
 	return conn, client
 }
 

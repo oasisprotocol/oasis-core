@@ -61,13 +61,13 @@ func RegisterService(server *grpc.Server, service Backend) {
 	churp.RegisterService(server, service.Churp())
 }
 
-// Client is a gRPC keymanager client.
+// Client is a gRPC key manager client.
 type Client struct {
 	conn *grpc.ClientConn
 }
 
-// NewKeymanagerClient creates a new gRPC keymanager client.
-func NewKeymanagerClient(c *grpc.ClientConn) Backend {
+// NewClient creates a new gRPC key manager client.
+func NewClient(c *grpc.ClientConn) *Client {
 	return &Client{
 		conn: c,
 	}

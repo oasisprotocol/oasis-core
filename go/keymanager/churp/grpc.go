@@ -212,12 +212,12 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-// Client is a gRPC keymanager CHURP client.
+// Client is a gRPC key manager CHURP client.
 type Client struct {
 	conn *grpc.ClientConn
 }
 
-// NewClient creates a new gRPC keymanager CHURP client.
+// NewClient creates a new gRPC key manager CHURP client.
 func NewClient(c *grpc.ClientConn) *Client {
 	return &Client{c}
 }

@@ -162,7 +162,7 @@ func doAccountInfo(cmd *cobra.Command, _ []string) {
 
 	height := viper.GetInt64(CfgHeight)
 
-	consensusClient := consensus.NewConsensusClient(conn)
+	consensusClient := consensus.NewClient(conn)
 
 	// If height is latest height, take height from latest block.
 	if height == consensus.HeightLatest {
