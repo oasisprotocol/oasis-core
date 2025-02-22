@@ -282,12 +282,12 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-// Client is a gRPC keymanager secrets client.
+// Client is a gRPC key manager secrets client.
 type Client struct {
 	conn *grpc.ClientConn
 }
 
-// NewClient creates a new gRPC keymanager secrets client.
+// NewClient creates a new gRPC key manager secrets client.
 func NewClient(c *grpc.ClientConn) *Client {
 	return &Client{c}
 }

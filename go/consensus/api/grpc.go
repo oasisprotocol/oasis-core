@@ -692,19 +692,27 @@ func RegisterService(server *grpc.Server, service ClientBackend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type consensusClient struct {
+// Client is a gRPC consensus client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *consensusClient) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
+// NewClient creates a new gRPC consensus client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return c.conn.Invoke(ctx, methodSubmitTx.FullName(), tx, nil)
 }
 
-func (c *consensusClient) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+func (c *Client) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return c.conn.Invoke(ctx, methodSubmitTxNoWait.FullName(), tx, nil)
 }
 
-func (c *consensusClient) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+func (c *Client) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
 	var proof transaction.Proof
 	if err := c.conn.Invoke(ctx, methodSubmitTxWithProof.FullName(), tx, &proof); err != nil {
 		return nil, err
@@ -712,7 +720,7 @@ func (c *consensusClient) SubmitTxWithProof(ctx context.Context, tx *transaction
 	return &proof, nil
 }
 
-func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {
 	var rsp genesis.Document
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -720,7 +728,7 @@ func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*ge
 	return &rsp, nil
 }
 
-func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error) {
+func (c *Client) EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error) {
 	var gas transaction.Gas
 	if err := c.conn.Invoke(ctx, methodEstimateGas.FullName(), req, &gas); err != nil {
 		return transaction.Gas(0), err
@@ -728,7 +736,7 @@ func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasReque
 	return gas, nil
 }
 
-func (c *consensusClient) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
+func (c *Client) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodMinGasPrice.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -736,7 +744,7 @@ func (c *consensusClient) MinGasPrice(ctx context.Context) (*quantity.Quantity, 
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {
+func (c *Client) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {
 	var nonce uint64
 	if err := c.conn.Invoke(ctx, methodGetSignerNonce.FullName(), req, &nonce); err != nil {
 		return nonce, err
@@ -744,7 +752,7 @@ func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonc
 	return nonce, nil
 }
 
-func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, error) {
+func (c *Client) GetBlock(ctx context.Context, height int64) (*Block, error) {
 	var rsp Block
 	if err := c.conn.Invoke(ctx, methodGetBlock.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -752,7 +760,7 @@ func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, e
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
+func (c *Client) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
 	var rsp LightBlock
 	if err := c.conn.Invoke(ctx, methodGetLightBlock.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -760,7 +768,7 @@ func (c *consensusClient) GetLightBlock(ctx context.Context, height int64) (*Lig
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
+func (c *Client) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetTransactions.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -768,7 +776,7 @@ func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([]
 	return rsp, nil
 }
 
-func (c *consensusClient) GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error) {
+func (c *Client) GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error) {
 	var rsp TransactionsWithResults
 	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -776,7 +784,7 @@ func (c *consensusClient) GetTransactionsWithResults(ctx context.Context, height
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetTransactionsWithProofs(ctx context.Context, height int64) (*TransactionsWithProofs, error) {
+func (c *Client) GetTransactionsWithProofs(ctx context.Context, height int64) (*TransactionsWithProofs, error) {
 	var rsp TransactionsWithProofs
 	if err := c.conn.Invoke(ctx, methodGetTransactionsWithProofs.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -784,7 +792,7 @@ func (c *consensusClient) GetTransactionsWithProofs(ctx context.Context, height 
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+func (c *Client) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetUnconfirmedTransactions.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -793,7 +801,7 @@ func (c *consensusClient) GetUnconfirmedTransactions(ctx context.Context) ([][]b
 }
 
 type stateReadSync struct {
-	c *consensusClient
+	c *Client
 }
 
 // Implements syncer.ReadSyncer.
@@ -823,11 +831,11 @@ func (rs *stateReadSync) SyncIterate(ctx context.Context, request *syncer.Iterat
 	return &rsp, nil
 }
 
-func (c *consensusClient) State() syncer.ReadSyncer {
+func (c *Client) State() syncer.ReadSyncer {
 	return &stateReadSync{c}
 }
 
-func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
+func (c *Client) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
 	var rsp genesis.Document
 	if err := c.conn.Invoke(ctx, methodGetGenesisDocument.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -835,7 +843,7 @@ func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Docu
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetChainContext(ctx context.Context) (string, error) {
+func (c *Client) GetChainContext(ctx context.Context) (string, error) {
 	var rsp string
 	if err := c.conn.Invoke(ctx, methodGetChainContext.FullName(), nil, &rsp); err != nil {
 		return "", err
@@ -843,7 +851,7 @@ func (c *consensusClient) GetChainContext(ctx context.Context) (string, error) {
 	return rsp, nil
 }
 
-func (c *consensusClient) GetStatus(ctx context.Context) (*Status, error) {
+func (c *Client) GetStatus(ctx context.Context) (*Status, error) {
 	var rsp Status
 	if err := c.conn.Invoke(ctx, methodGetStatus.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -851,7 +859,7 @@ func (c *consensusClient) GetStatus(ctx context.Context) (*Status, error) {
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetNextBlockState(ctx context.Context) (*NextBlockState, error) {
+func (c *Client) GetNextBlockState(ctx context.Context) (*NextBlockState, error) {
 	var rsp NextBlockState
 	if err := c.conn.Invoke(ctx, methodGetNextBlockState.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -859,7 +867,7 @@ func (c *consensusClient) GetNextBlockState(ctx context.Context) (*NextBlockStat
 	return &rsp, nil
 }
 
-func (c *consensusClient) GetParameters(ctx context.Context, height int64) (*Parameters, error) {
+func (c *Client) GetParameters(ctx context.Context, height int64) (*Parameters, error) {
 	var rsp Parameters
 	if err := c.conn.Invoke(ctx, methodGetParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -867,11 +875,11 @@ func (c *consensusClient) GetParameters(ctx context.Context, height int64) (*Par
 	return &rsp, nil
 }
 
-func (c *consensusClient) SubmitEvidence(ctx context.Context, evidence *Evidence) error {
+func (c *Client) SubmitEvidence(ctx context.Context, evidence *Evidence) error {
 	return c.conn.Invoke(ctx, methodSubmitEvidence.FullName(), evidence, nil)
 }
 
-func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchBlocks.FullName())
@@ -906,41 +914,34 @@ func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsu
 	return ch, sub, nil
 }
 
-func (c *consensusClient) Beacon() beacon.Backend {
-	return beacon.NewBeaconClient(c.conn)
+func (c *Client) Beacon() beacon.Backend {
+	return beacon.NewClient(c.conn)
 }
 
-func (c *consensusClient) Registry() registry.Backend {
-	return registry.NewRegistryClient(c.conn)
+func (c *Client) Registry() registry.Backend {
+	return registry.NewClient(c.conn)
 }
 
-func (c *consensusClient) Staking() staking.Backend {
-	return staking.NewStakingClient(c.conn)
+func (c *Client) Staking() staking.Backend {
+	return staking.NewClient(c.conn)
 }
 
-func (c *consensusClient) Scheduler() scheduler.Backend {
-	return scheduler.NewSchedulerClient(c.conn)
+func (c *Client) Scheduler() scheduler.Backend {
+	return scheduler.NewClient(c.conn)
 }
 
-func (c *consensusClient) Governance() governance.Backend {
-	return governance.NewGovernanceClient(c.conn)
+func (c *Client) Governance() governance.Backend {
+	return governance.NewClient(c.conn)
 }
 
-func (c *consensusClient) RootHash() roothash.Backend {
-	return roothash.NewRootHashClient(c.conn)
+func (c *Client) RootHash() roothash.Backend {
+	return roothash.NewClient(c.conn)
 }
 
-func (c *consensusClient) Vault() vault.Backend {
-	return vault.NewVaultClient(c.conn)
+func (c *Client) Vault() vault.Backend {
+	return vault.NewClient(c.conn)
 }
 
-func (c *consensusClient) KeyManager() keymanager.Backend {
-	return keymanager.NewKeymanagerClient(c.conn)
-}
-
-// NewConsensusClient creates a new gRPC consensus client service.
-func NewConsensusClient(c *grpc.ClientConn) ClientBackend {
-	return &consensusClient{
-		conn: c,
-	}
+func (c *Client) KeyManager() keymanager.Backend {
+	return keymanager.NewClient(c.conn)
 }

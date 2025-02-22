@@ -219,7 +219,7 @@ func (d *delegation) Run(
 		}
 	}
 
-	stakingClient := staking.NewStakingClient(conn)
+	stakingClient := staking.NewClient(conn)
 
 	for {
 		switch rng.Intn(2) {

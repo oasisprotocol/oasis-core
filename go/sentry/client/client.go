@@ -59,7 +59,7 @@ func (c *Client) createConnection() error {
 		return err
 	}
 	c.conn = conn
-	c.Backend = api.NewSentryClient(conn)
+	c.Backend = api.NewClient(conn)
 
 	return nil
 }

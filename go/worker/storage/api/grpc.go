@@ -86,11 +86,19 @@ func RegisterService(server *grpc.Server, service StorageWorker) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type storageWorkerClient struct {
+// Client is a gRPC worker storage client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *storageWorkerClient) GetLastSyncedRound(ctx context.Context, req *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error) {
+// NewClient creates a new gRPC worker storage client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) GetLastSyncedRound(ctx context.Context, req *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error) {
 	var rsp GetLastSyncedRoundResponse
 	if err := c.conn.Invoke(ctx, methodGetLastSyncedRound.FullName(), req, &rsp); err != nil {
 		return nil, err
@@ -98,12 +106,6 @@ func (c *storageWorkerClient) GetLastSyncedRound(ctx context.Context, req *GetLa
 	return &rsp, nil
 }
 
-func (c *storageWorkerClient) PauseCheckpointer(ctx context.Context, req *PauseCheckpointerRequest) error {
+func (c *Client) PauseCheckpointer(ctx context.Context, req *PauseCheckpointerRequest) error {
 	return c.conn.Invoke(ctx, methodPauseCheckpointer.FullName(), req, nil)
-}
-
-// NewStorageWorkerClient creates a new gRPC transaction scheduler
-// client service.
-func NewStorageWorkerClient(c *grpc.ClientConn) StorageWorker {
-	return &storageWorkerClient{c}
 }
