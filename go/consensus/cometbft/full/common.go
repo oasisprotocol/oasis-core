@@ -339,11 +339,6 @@ func (n *commonNode) Cleanup() {
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) ConsensusKey() signature.PublicKey {
-	return n.identity.ConsensusSigner.Public()
-}
-
-// Implements consensusAPI.Backend.
 func (n *commonNode) GetAddresses() ([]node.ConsensusAddress, error) {
 	u, err := common.GetExternalAddress()
 	if err != nil {

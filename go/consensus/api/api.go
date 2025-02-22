@@ -378,9 +378,6 @@ type Backend interface {
 	// complete.
 	Synced() <-chan struct{}
 
-	// ConsensusKey returns the consensus signing key.
-	ConsensusKey() signature.PublicKey
-
 	// GetAddresses returns the consensus backend addresses.
 	GetAddresses() ([]node.ConsensusAddress, error)
 
