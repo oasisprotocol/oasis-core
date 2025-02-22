@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -931,6 +932,10 @@ func (c *consensusClient) RootHash() roothash.Backend {
 
 func (c *consensusClient) Vault() vault.Backend {
 	return vault.NewVaultClient(c.conn)
+}
+
+func (c *consensusClient) KeyManager() keymanager.Backend {
+	return keymanager.NewKeymanagerClient(c.conn)
 }
 
 // NewConsensusClient creates a new gRPC consensus client service.

@@ -206,6 +206,9 @@ type ClientBackend interface {
 
 	// Vault returns the vault backend.
 	Vault() vault.Backend
+
+	// KeyManager returns the keymanager backend.
+	KeyManager() keymanager.Backend
 }
 
 // Block is a consensus block.
@@ -402,9 +405,6 @@ type ServicesBackend interface {
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
-
-	// KeyManager returns the keymanager backend.
-	KeyManager() keymanager.Backend
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication
