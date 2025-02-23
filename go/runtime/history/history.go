@@ -3,7 +3,6 @@ package history
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -22,11 +21,7 @@ import (
 // DbFilename is the filename of the history database.
 const DbFilename = "history.db"
 
-var (
-	errNopHistory = errors.New("runtime/history: not supported")
-
-	_ History = (*runtimeHistory)(nil)
-)
+var _ History = (*runtimeHistory)(nil)
 
 // Factory is the runtime history factory interface.
 type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
@@ -40,71 +35,6 @@ type History interface {
 
 	// Close closes the history keeper.
 	Close()
-}
-
-type nopHistory struct {
-	runtimeID common.Namespace
-}
-
-func (h *nopHistory) RuntimeID() common.Namespace {
-	return h.runtimeID
-}
-
-func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bool) error {
-	return errNopHistory
-}
-
-func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
-	return errNopHistory
-}
-
-func (h *nopHistory) LastStorageSyncedRound() (uint64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return nil, nil, errNopHistory
-}
-
-func (h *nopHistory) WaitRoundSynced(context.Context, uint64) (uint64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) LastConsensusHeight() (int64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) GetCommittedBlock(context.Context, uint64) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetBlock(context.Context, uint64) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetAnnotatedBlock(context.Context, uint64) (*roothash.AnnotatedBlock, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetEarliestBlock(context.Context) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetRoundResults(context.Context, uint64) (*roothash.RoundResults, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) Pruner() Pruner {
-	pruner, _ := NewNonePrunerFactory()(h.runtimeID, nil)
-	return pruner
-}
-
-func (h *nopHistory) Close() {
-}
-
-// NewNop creates a new no-op runtime history keeper.
-func NewNop(runtimeID common.Namespace) History {
-	return &nopHistory{runtimeID: runtimeID}
 }
 
 type runtimeHistory struct {
