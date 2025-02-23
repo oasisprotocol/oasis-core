@@ -30,6 +30,39 @@ type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
 type History interface {
 	roothash.BlockHistory
 
+	// StorageSyncCheckpoint records the last storage round which was synced
+	// to runtime storage.
+	StorageSyncCheckpoint(round uint64) error
+
+	// LastStorageSyncedRound returns the last runtime round which was synced to storage.
+	LastStorageSyncedRound() (uint64, error)
+
+	// WatchBlocks returns a channel watching block rounds as they are committed.
+	// If node has local storage this includes waiting for the round to be synced into storage.
+	WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// WaitRoundSynced waits for the specified round to be synced to storage.
+	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)
+
+	// GetBlock returns the block at a specific round.
+	// Passing the special value `RoundLatest` will return the latest block.
+	//
+	// This method returns blocks that are both committed and synced to storage.
+	GetBlock(ctx context.Context, round uint64) (*block.Block, error)
+
+	// GetAnnotatedBlock returns the annotated block at a specific round.
+	//
+	// Passing the special value `RoundLatest` will return the latest annotated block.
+	GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error)
+
+	// GetEarliestBlock returns the earliest known block.
+	GetEarliestBlock(ctx context.Context) (*block.Block, error)
+
+	// GetRoundResults returns the round results for the given round.
+	//
+	// Passing the special value `RoundLatest` will return results for the latest round.
+	GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error)
+
 	// Pruner returns the history pruner.
 	Pruner() Pruner
 
