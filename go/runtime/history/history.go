@@ -38,7 +38,11 @@ type History interface {
 	LastStorageSyncedRound() (uint64, error)
 
 	// WatchBlocks returns a channel watching block rounds as they are committed.
+	//
 	// If node has local storage this includes waiting for the round to be synced into storage.
+	//
+	// If node has no local storage, we only notify blocks that were committed
+	// after ReindexFinished was called.
 	WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
 
 	// WaitRoundSynced waits for the specified round to be synced to storage.
@@ -81,6 +85,9 @@ type runtimeHistory struct {
 	db             *DB
 	blocksNotifier *pubsub.Broker
 
+	syncReindexDone sync.RWMutex
+	reindexDone     bool
+
 	// Last storage synced round as reported by the storage backend (if enabled).
 	syncRoundLock          sync.RWMutex
 	lastStorageSyncedRound uint64
@@ -97,7 +104,7 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
 	err := h.db.commit(blk, roundResults)
 	if err != nil {
 		return err
@@ -106,14 +113,21 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 	// Notify the pruner what the new round is.
 	h.pruneCh.In() <- blk.Block.Header.Round
 
-	// If no local storage worker, notify the block watcher that new block is committed,
-	// otherwise the storage-sync-checkpoint will do the notification.
-	if h.hasLocalStorage || !notify {
+	// If no local storage worker, and not during initial history reindex,
+	// notify the block watcher that new block is committed.
+	// Otherwise the storage-sync-checkpoint will do the notification.
+	if h.hasLocalStorage || !h.reindexDone {
 		return nil
 	}
 	h.blocksNotifier.Broadcast(blk)
 
 	return nil
+}
+
+func (h *runtimeHistory) ReindexFinished() {
+	h.syncReindexDone.Lock()
+	defer h.syncReindexDone.Unlock()
+	h.reindexDone = true
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {

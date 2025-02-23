@@ -17,12 +17,10 @@ type BlockHistory interface {
 	// RuntimeID returns the runtime ID of the runtime this block history is for.
 	RuntimeID() common.Namespace
 
-	// Commit commits an annotated block into history. If notify is set to true,
-	// the watchers will be notified about the new block. Disable notify when
-	// doing reindexing.
+	// Commit commits an annotated block into history.
 	//
 	// Must be called in order, sorted by round.
-	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
+	Commit(blk *AnnotatedBlock, roundResults *RoundResults) error
 
 	// LastConsensusHeight returns the last consensus height which was seen
 	// by block history.
@@ -33,4 +31,9 @@ type BlockHistory interface {
 	//
 	// This method can return blocks not yet synced to storage.
 	GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error)
+
+	// ReindexFinished marks an initial history reindex has finished.
+	//
+	// Calling this methods more then once has no additional side effect.
+	ReindexFinished()
 }

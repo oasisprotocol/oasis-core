@@ -51,9 +51,10 @@ type runtimeBrokers struct {
 type trackedRuntime struct {
 	runtimeID common.Namespace
 
-	height       int64
-	blockHistory api.BlockHistory
-	reindexDone  bool
+	height             int64
+	blockHistory       api.BlockHistory
+	reindexDone        bool
+	initialReindexDone bool
 }
 
 type cmdTrackRuntime struct {
@@ -702,6 +703,10 @@ func (sc *serviceClient) processFinalizedEvent(
 				return fmt.Errorf("failed to reindex blocks: %w", err)
 			}
 			tr.reindexDone = true
+			if !tr.initialReindexDone {
+				tr.initialReindexDone = true
+				tr.blockHistory.ReindexFinished()
+			}
 		}
 
 		// Only commit the block in case it was not already committed during reindex. Note that even
@@ -714,7 +719,7 @@ func (sc *serviceClient) processFinalizedEvent(
 				"round", blk.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, roundResults, !isReindex)
+			err = tr.blockHistory.Commit(annBlk, roundResults)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
