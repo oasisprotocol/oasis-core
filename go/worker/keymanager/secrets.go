@@ -307,15 +307,33 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.RichRuntime) {
 	defer hrtSub.Close()
 
 	// Subscribe to key manager status updates.
-	statusCh, statusSub := w.backend.Secrets().WatchStatuses()
+	statusCh, statusSub, err := w.backend.Secrets().WatchStatuses(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch statuses",
+			"err", err,
+		)
+		return
+	}
 	defer statusSub.Close()
 
 	// Subscribe to key manager master secret publications.
-	mstCh, mstSub := w.backend.Secrets().WatchMasterSecrets()
+	mstCh, mstSub, err := w.backend.Secrets().WatchMasterSecrets(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch master secrets",
+			"err", err,
+		)
+		return
+	}
 	defer mstSub.Close()
 
 	// Subscribe to key manager ephemeral secret publications.
-	ephCh, ephSub := w.backend.Secrets().WatchEphemeralSecrets()
+	ephCh, ephSub, err := w.backend.Secrets().WatchEphemeralSecrets(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch ephemeral secrets",
+			"err", err,
+		)
+		return
+	}
 	defer ephSub.Close()
 
 	// Subscribe to epoch transitions in order to know when we need to choose

@@ -144,7 +144,13 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	n.logger.Debug("watching key manager policy updates", "keymanager", kmRtID)
 
 	// Subscribe to key manager status updates (policy might change).
-	stCh, stSub := n.consensus.KeyManager().Secrets().WatchStatuses()
+	stCh, stSub, err := n.consensus.KeyManager().Secrets().WatchStatuses(ctx)
+	if err != nil {
+		n.logger.Error("failed to watch key manager secrets statuses",
+			"err", err,
+		)
+		return
+	}
 	defer stSub.Close()
 
 	// Subscribe to epoch transitions (quote policy might change).

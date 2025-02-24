@@ -657,7 +657,7 @@ func doDumpGenesis(cmd *cobra.Command, _ []string) {
 	}
 	defer conn.Close()
 
-	client := consensus.NewConsensusClient(conn)
+	client := consensus.NewClient(conn)
 
 	height, err := cmd.Flags().GetInt64(cfgBlockHeight)
 	if err != nil {

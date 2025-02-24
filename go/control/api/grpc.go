@@ -270,19 +270,27 @@ func RegisterService(server *grpc.Server, service NodeController) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type nodeControllerClient struct {
+// NodeControllerClient is a gRPC node controller client.
+type NodeControllerClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *nodeControllerClient) RequestShutdown(ctx context.Context, wait bool) error {
+// NewNodeControllerClient creates a new gRPC node controller client.
+func NewNodeControllerClient(c *grpc.ClientConn) *NodeControllerClient {
+	return &NodeControllerClient{
+		conn: c,
+	}
+}
+
+func (c *NodeControllerClient) RequestShutdown(ctx context.Context, wait bool) error {
 	return c.conn.Invoke(ctx, methodRequestShutdown.FullName(), wait, nil)
 }
 
-func (c *nodeControllerClient) WaitSync(ctx context.Context) error {
+func (c *NodeControllerClient) WaitSync(ctx context.Context) error {
 	return c.conn.Invoke(ctx, methodWaitSync.FullName(), nil, nil)
 }
 
-func (c *nodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
+func (c *NodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
 	var rsp bool
 	if err := c.conn.Invoke(ctx, methodIsSynced.FullName(), nil, &rsp); err != nil {
 		return false, err
@@ -290,11 +298,11 @@ func (c *nodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
 	return rsp, nil
 }
 
-func (c *nodeControllerClient) WaitReady(ctx context.Context) error {
+func (c *NodeControllerClient) WaitReady(ctx context.Context) error {
 	return c.conn.Invoke(ctx, methodWaitReady.FullName(), nil, nil)
 }
 
-func (c *nodeControllerClient) IsReady(ctx context.Context) (bool, error) {
+func (c *NodeControllerClient) IsReady(ctx context.Context) (bool, error) {
 	var rsp bool
 	if err := c.conn.Invoke(ctx, methodIsReady.FullName(), nil, &rsp); err != nil {
 		return false, err
@@ -302,15 +310,15 @@ func (c *nodeControllerClient) IsReady(ctx context.Context) (bool, error) {
 	return rsp, nil
 }
 
-func (c *nodeControllerClient) UpgradeBinary(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
+func (c *NodeControllerClient) UpgradeBinary(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
 	return c.conn.Invoke(ctx, methodUpgradeBinary.FullName(), descriptor, nil)
 }
 
-func (c *nodeControllerClient) CancelUpgrade(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
+func (c *NodeControllerClient) CancelUpgrade(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
 	return c.conn.Invoke(ctx, methodCancelUpgrade.FullName(), descriptor, nil)
 }
 
-func (c *nodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {
+func (c *NodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {
 	var rsp Status
 	if err := c.conn.Invoke(ctx, methodGetStatus.FullName(), nil, &rsp); err != nil {
 		return nil, err
@@ -318,15 +326,10 @@ func (c *nodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {
 	return &rsp, nil
 }
 
-func (c *nodeControllerClient) AddBundle(ctx context.Context, path string) error {
+func (c *NodeControllerClient) AddBundle(ctx context.Context, path string) error {
 	var rsp Status
 	if err := c.conn.Invoke(ctx, methodAddBundle.FullName(), path, &rsp); err != nil {
 		return err
 	}
 	return nil
-}
-
-// NewNodeControllerClient creates a new gRPC node controller client service.
-func NewNodeControllerClient(c *grpc.ClientConn) NodeController {
-	return &nodeControllerClient{c}
 }
