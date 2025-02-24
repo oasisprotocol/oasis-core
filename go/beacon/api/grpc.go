@@ -295,11 +295,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type beaconClient struct {
+// Client is a gRPC beacon client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *beaconClient) GetBaseEpoch(ctx context.Context) (EpochTime, error) {
+// NewClient creates a new gRPC beacon client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) GetBaseEpoch(ctx context.Context) (EpochTime, error) {
 	var rsp EpochTime
 	if err := c.conn.Invoke(ctx, methodGetBaseEpoch.FullName(), nil, &rsp); err != nil {
 		return 0, err
@@ -307,7 +315,7 @@ func (c *beaconClient) GetBaseEpoch(ctx context.Context) (EpochTime, error) {
 	return rsp, nil
 }
 
-func (c *beaconClient) GetEpoch(ctx context.Context, height int64) (EpochTime, error) {
+func (c *Client) GetEpoch(ctx context.Context, height int64) (EpochTime, error) {
 	var rsp EpochTime
 	if err := c.conn.Invoke(ctx, methodGetEpoch.FullName(), height, &rsp); err != nil {
 		return 0, err
@@ -315,7 +323,7 @@ func (c *beaconClient) GetEpoch(ctx context.Context, height int64) (EpochTime, e
 	return rsp, nil
 }
 
-func (c *beaconClient) GetFutureEpoch(ctx context.Context, height int64) (*EpochTimeState, error) {
+func (c *Client) GetFutureEpoch(ctx context.Context, height int64) (*EpochTimeState, error) {
 	var rsp EpochTimeState
 	if err := c.conn.Invoke(ctx, methodGetFutureEpoch.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -323,7 +331,7 @@ func (c *beaconClient) GetFutureEpoch(ctx context.Context, height int64) (*Epoch
 	return &rsp, nil
 }
 
-func (c *beaconClient) GetEpochBlock(ctx context.Context, epoch EpochTime) (int64, error) {
+func (c *Client) GetEpochBlock(ctx context.Context, epoch EpochTime) (int64, error) {
 	var rsp int64
 	if err := c.conn.Invoke(ctx, methodGetEpochBlock.FullName(), epoch, &rsp); err != nil {
 		return 0, err
@@ -331,11 +339,11 @@ func (c *beaconClient) GetEpochBlock(ctx context.Context, epoch EpochTime) (int6
 	return rsp, nil
 }
 
-func (c *beaconClient) WaitEpoch(ctx context.Context, epoch EpochTime) error {
+func (c *Client) WaitEpoch(ctx context.Context, epoch EpochTime) error {
 	return c.conn.Invoke(ctx, methodWaitEpoch.FullName(), epoch, nil)
 }
 
-func (c *beaconClient) WatchEpochs(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEpochs(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEpochs.FullName())
@@ -370,13 +378,13 @@ func (c *beaconClient) WatchEpochs(ctx context.Context) (<-chan EpochTime, pubsu
 	return ch, sub, nil
 }
 
-func (c *beaconClient) WatchLatestEpoch(context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchLatestEpoch(context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
 	// The only thing that uses this is the registration worker, and it
 	// is not over gRPC.
 	return nil, nil, fmt.Errorf("beacon: gRPC method not implemented")
 }
 
-func (c *beaconClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+func (c *Client) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
 	var rsp []byte
 	if err := c.conn.Invoke(ctx, methodGetBeacon.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -384,7 +392,7 @@ func (c *beaconClient) GetBeacon(ctx context.Context, height int64) ([]byte, err
 	return rsp, nil
 }
 
-func (c *beaconClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -392,7 +400,7 @@ func (c *beaconClient) StateToGenesis(ctx context.Context, height int64) (*Genes
 	return &rsp, nil
 }
 
-func (c *beaconClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -400,10 +408,5 @@ func (c *beaconClient) ConsensusParameters(ctx context.Context, height int64) (*
 	return &rsp, nil
 }
 
-func (c *beaconClient) Cleanup() {
-}
-
-// NewBeaconClient creates a new gRPC scheduler client service.
-func NewBeaconClient(c *grpc.ClientConn) Backend {
-	return &beaconClient{c}
+func (c *Client) Cleanup() {
 }

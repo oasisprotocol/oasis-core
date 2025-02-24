@@ -12,7 +12,7 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
@@ -31,9 +31,9 @@ type Controller struct {
 	Governance    governance.Backend
 	Registry      registry.Backend
 	Roothash      roothash.Backend
-	RuntimeClient runtimeClient.RuntimeClient
+	RuntimeClient runtime.RuntimeClient
 	Storage       storage.Backend
-	Keymanager    *keymanager.KeymanagerClient
+	Keymanager    keymanager.Backend
 	Vault         vault.Backend
 
 	StorageWorker workerStorage.StorageWorker
@@ -61,18 +61,18 @@ func NewController(socketPath string) (*Controller, error) {
 	return &Controller{
 		DebugController: control.NewDebugControllerClient(conn),
 		NodeController:  control.NewNodeControllerClient(conn),
-		Beacon:          beacon.NewBeaconClient(conn),
-		Consensus:       consensus.NewConsensusClient(conn),
-		Staking:         staking.NewStakingClient(conn),
-		Governance:      governance.NewGovernanceClient(conn),
-		Registry:        registry.NewRegistryClient(conn),
-		Roothash:        roothash.NewRootHashClient(conn),
-		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
-		Storage:         storage.NewStorageClient(conn),
-		Keymanager:      keymanager.NewKeymanagerClient(conn),
-		Vault:           vault.NewVaultClient(conn),
+		Beacon:          beacon.NewClient(conn),
+		Consensus:       consensus.NewClient(conn),
+		Staking:         staking.NewClient(conn),
+		Governance:      governance.NewClient(conn),
+		Registry:        registry.NewClient(conn),
+		Roothash:        roothash.NewClient(conn),
+		RuntimeClient:   runtime.NewClient(conn),
+		Storage:         storage.NewClient(conn),
+		Keymanager:      keymanager.NewClient(conn),
+		Vault:           vault.NewClient(conn),
 
-		StorageWorker: workerStorage.NewStorageWorkerClient(conn),
+		StorageWorker: workerStorage.NewClient(conn),
 
 		conn: conn,
 	}, nil

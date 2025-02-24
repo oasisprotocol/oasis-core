@@ -188,7 +188,7 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 
 	// Connect to the node
 	conn, _ := doConnectOnly(cmd)
-	consensus := consensusAPI.NewConsensusClient(conn)
+	consensus := consensusAPI.NewClient(conn)
 
 	// Fixup the start/end heights if they were not specified (or are 0)
 	if startHeight == 0 {
@@ -239,8 +239,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 		roundDiscrepancy bool
 	)
 
-	roothash := roothashAPI.NewRootHashClient(conn)
-	reg := registryAPI.NewRegistryClient(conn)
+	roothash := roothashAPI.NewClient(conn)
+	reg := registryAPI.NewClient(conn)
 	nodeToEntity := make(map[signature.PublicKey]signature.PublicKey)
 
 	for height := int64(startHeight); height < int64(endHeight); height++ {

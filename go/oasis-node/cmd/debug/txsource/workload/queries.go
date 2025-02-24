@@ -886,13 +886,13 @@ func (q *queries) Run(
 
 	q.control = control.NewNodeControllerClient(conn)
 	q.consensus = cnsc
-	q.beacon = beacon.NewBeaconClient(conn)
-	q.registry = registry.NewRegistryClient(conn)
-	q.runtime = runtimeClient.NewRuntimeClient(conn)
-	q.scheduler = scheduler.NewSchedulerClient(conn)
-	q.governance = governance.NewGovernanceClient(conn)
-	q.staking = staking.NewStakingClient(conn)
-	q.roothash = roothash.NewRootHashClient(conn)
+	q.beacon = beacon.NewClient(conn)
+	q.registry = registry.NewClient(conn)
+	q.runtime = runtimeClient.NewClient(conn)
+	q.scheduler = scheduler.NewClient(conn)
+	q.governance = governance.NewClient(conn)
+	q.staking = staking.NewClient(conn)
+	q.roothash = roothash.NewClient(conn)
 
 	q.stakingParams, err = q.staking.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
