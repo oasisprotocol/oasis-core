@@ -3,7 +3,6 @@ package history
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -22,11 +21,7 @@ import (
 // DbFilename is the filename of the history database.
 const DbFilename = "history.db"
 
-var (
-	errNopHistory = errors.New("runtime/history: not supported")
-
-	_ History = (*runtimeHistory)(nil)
-)
+var _ History = (*runtimeHistory)(nil)
 
 // Factory is the runtime history factory interface.
 type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
@@ -35,80 +30,48 @@ type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
 type History interface {
 	roothash.BlockHistory
 
+	// StorageSyncCheckpoint records the last storage round which was synced
+	// to runtime storage.
+	StorageSyncCheckpoint(round uint64) error
+
+	// LastStorageSyncedRound returns the last runtime round which was synced to storage.
+	LastStorageSyncedRound() (uint64, error)
+
+	// WatchBlocks returns a channel watching block rounds as they are committed.
+	//
+	// If node has local storage this includes waiting for the round to be synced into storage.
+	//
+	// If node has no local storage, we only notify blocks that were committed
+	// after ReindexFinished was called.
+	WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// WaitRoundSynced waits for the specified round to be synced to storage.
+	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)
+
+	// GetBlock returns the block at a specific round.
+	// Passing the special value `RoundLatest` will return the latest block.
+	//
+	// This method returns blocks that are both committed and synced to storage.
+	GetBlock(ctx context.Context, round uint64) (*block.Block, error)
+
+	// GetAnnotatedBlock returns the annotated block at a specific round.
+	//
+	// Passing the special value `RoundLatest` will return the latest annotated block.
+	GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error)
+
+	// GetEarliestBlock returns the earliest known block.
+	GetEarliestBlock(ctx context.Context) (*block.Block, error)
+
+	// GetRoundResults returns the round results for the given round.
+	//
+	// Passing the special value `RoundLatest` will return results for the latest round.
+	GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error)
+
 	// Pruner returns the history pruner.
 	Pruner() Pruner
 
 	// Close closes the history keeper.
 	Close()
-}
-
-type nopHistory struct {
-	runtimeID common.Namespace
-}
-
-func (h *nopHistory) RuntimeID() common.Namespace {
-	return h.runtimeID
-}
-
-func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bool) error {
-	return errNopHistory
-}
-
-func (h *nopHistory) ConsensusCheckpoint(int64) error {
-	return errNopHistory
-}
-
-func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
-	return errNopHistory
-}
-
-func (h *nopHistory) LastStorageSyncedRound() (uint64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return nil, nil, errNopHistory
-}
-
-func (h *nopHistory) WaitRoundSynced(context.Context, uint64) (uint64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) LastConsensusHeight() (int64, error) {
-	return 0, errNopHistory
-}
-
-func (h *nopHistory) GetCommittedBlock(context.Context, uint64) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetBlock(context.Context, uint64) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetAnnotatedBlock(context.Context, uint64) (*roothash.AnnotatedBlock, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetEarliestBlock(context.Context) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) GetRoundResults(context.Context, uint64) (*roothash.RoundResults, error) {
-	return nil, errNopHistory
-}
-
-func (h *nopHistory) Pruner() Pruner {
-	pruner, _ := NewNonePrunerFactory()(h.runtimeID, nil)
-	return pruner
-}
-
-func (h *nopHistory) Close() {
-}
-
-// NewNop creates a new no-op runtime history keeper.
-func NewNop(runtimeID common.Namespace) History {
-	return &nopHistory{runtimeID: runtimeID}
 }
 
 type runtimeHistory struct {
@@ -121,6 +84,9 @@ type runtimeHistory struct {
 
 	db             *DB
 	blocksNotifier *pubsub.Broker
+
+	syncReindexDone sync.RWMutex
+	reindexDone     bool
 
 	// Last storage synced round as reported by the storage backend (if enabled).
 	syncRoundLock          sync.RWMutex
@@ -138,7 +104,7 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
 	err := h.db.commit(blk, roundResults)
 	if err != nil {
 		return err
@@ -147,9 +113,10 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 	// Notify the pruner what the new round is.
 	h.pruneCh.In() <- blk.Block.Header.Round
 
-	// If no local storage worker, notify the block watcher that new block is committed,
-	// otherwise the storage-sync-checkpoint will do the notification.
-	if h.hasLocalStorage || !notify {
+	// If no local storage worker, and not during initial history reindex,
+	// notify the block watcher that new block is committed.
+	// Otherwise the storage-sync-checkpoint will do the notification.
+	if h.hasLocalStorage || !h.reindexDone {
 		return nil
 	}
 	h.blocksNotifier.Broadcast(blk)
@@ -157,8 +124,10 @@ func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *root
 	return nil
 }
 
-func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
-	return h.db.consensusCheckpoint(height)
+func (h *runtimeHistory) ReindexFinished() {
+	h.syncReindexDone.Lock()
+	defer h.syncReindexDone.Unlock()
+	h.reindexDone = true
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
