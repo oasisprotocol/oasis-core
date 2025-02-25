@@ -363,7 +363,7 @@ func (c *commission) Run(
 	}
 	c.address = staking.NewAddress(c.signer.Public())
 
-	stakingClient := staking.NewStakingClient(conn)
+	stakingClient := staking.NewClient(conn)
 
 	params, err := stakingClient.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {

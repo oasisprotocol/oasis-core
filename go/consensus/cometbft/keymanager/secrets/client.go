@@ -44,12 +44,12 @@ func (sc *ServiceClient) GetStatuses(ctx context.Context, height int64) ([]*secr
 	return q.Secrets().Statuses(ctx)
 }
 
-func (sc *ServiceClient) WatchStatuses() (<-chan *secrets.Status, *pubsub.Subscription) {
+func (sc *ServiceClient) WatchStatuses(context.Context) (<-chan *secrets.Status, pubsub.ClosableSubscription, error) {
 	sub := sc.statusNotifier.Subscribe()
 	ch := make(chan *secrets.Status)
 	sub.Unwrap(ch)
 
-	return ch, sub
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*secrets.Genesis, error) {
@@ -79,20 +79,20 @@ func (sc *ServiceClient) GetEphemeralSecret(ctx context.Context, query *registry
 	return q.Secrets().EphemeralSecret(ctx, query.ID)
 }
 
-func (sc *ServiceClient) WatchMasterSecrets() (<-chan *secrets.SignedEncryptedMasterSecret, *pubsub.Subscription) {
+func (sc *ServiceClient) WatchMasterSecrets(context.Context) (<-chan *secrets.SignedEncryptedMasterSecret, pubsub.ClosableSubscription, error) {
 	sub := sc.mstSecretNotifier.Subscribe()
 	ch := make(chan *secrets.SignedEncryptedMasterSecret)
 	sub.Unwrap(ch)
 
-	return ch, sub
+	return ch, sub, nil
 }
 
-func (sc *ServiceClient) WatchEphemeralSecrets() (<-chan *secrets.SignedEncryptedEphemeralSecret, *pubsub.Subscription) {
+func (sc *ServiceClient) WatchEphemeralSecrets(context.Context) (<-chan *secrets.SignedEncryptedEphemeralSecret, pubsub.ClosableSubscription, error) {
 	sub := sc.ephSecretNotifier.Subscribe()
 	ch := make(chan *secrets.SignedEncryptedEphemeralSecret)
 	sub.Unwrap(ch)
 
-	return ch, sub
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {

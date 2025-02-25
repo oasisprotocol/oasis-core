@@ -53,19 +53,22 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type sentryClient struct {
+// Client is a gRPC sentry client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *sentryClient) GetAddresses(ctx context.Context) (*SentryAddresses, error) {
+// NewClient creates a new gRPC sentry client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) GetAddresses(ctx context.Context) (*SentryAddresses, error) {
 	var rsp SentryAddresses
 	if err := c.conn.Invoke(ctx, methodGetAddresses.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
-}
-
-// NewSentryClient creates a new gRPC sentry client service.
-func NewSentryClient(c *grpc.ClientConn) Backend {
-	return &sentryClient{c}
 }
