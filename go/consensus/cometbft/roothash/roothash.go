@@ -5,14 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
@@ -38,14 +36,9 @@ type ServiceClient interface {
 }
 
 type runtimeBrokers struct {
-	sync.Mutex
-
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
 	ecNotifier    *pubsub.Broker
-
-	lastBlockHeight int64
-	lastBlock       *block.Block
 }
 
 type trackedRuntime struct {
@@ -186,42 +179,9 @@ func (sc *serviceClient) GetIncomingMessageQueue(ctx context.Context, request *a
 // Implements api.Backend.
 func (sc *serviceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
-
-	sub := notifiers.blockNotifier.SubscribeEx(-1, func(ch channels.Channel) {
-		// Replay the latest block if it exists.
-		notifiers.Lock()
-		defer notifiers.Unlock()
-		if notifiers.lastBlock != nil {
-			ch.In() <- &api.AnnotatedBlock{
-				Height: notifiers.lastBlockHeight,
-				Block:  notifiers.lastBlock,
-			}
-		}
-	})
+	sub := notifiers.blockNotifier.Subscribe()
 	ch := make(chan *api.AnnotatedBlock)
 	sub.Unwrap(ch)
-
-	// Make sure that we only ever emit monotonically increasing blocks. Without
-	// special handling this can happen for the first received block due to
-	// replaying the latest block (see above).
-	invalidRound := uint64(math.MaxUint64)
-	lastRound := invalidRound
-	monotonicCh := make(chan *api.AnnotatedBlock)
-	go func() {
-		defer close(monotonicCh)
-
-		for {
-			blk, ok := <-ch
-			if !ok {
-				return
-			}
-			if lastRound != invalidRound && blk.Block.Header.Round <= lastRound {
-				continue
-			}
-			lastRound = blk.Block.Header.Round
-			monotonicCh <- blk
-		}
-	}()
 
 	// Start tracking this runtime if we are not tracking it yet.
 	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
@@ -229,7 +189,7 @@ func (sc *serviceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-
 		return nil, nil, err
 	}
 
-	return monotonicCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *serviceClient) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
@@ -262,6 +222,12 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 	sub := notifiers.ecNotifier.Subscribe()
 	ch := make(chan *commitment.ExecutorCommitment)
 	sub.Unwrap(ch)
+
+	// Start tracking this runtime if we are not tracking it yet.
+	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
+		sub.Close()
+		return nil, nil, err
+	}
 
 	return ch, sub, nil
 }
@@ -377,7 +343,7 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	notifiers := sc.runtimeNotifiers[id]
 	if notifiers == nil {
 		notifiers = &runtimeBrokers{
-			blockNotifier: pubsub.NewBroker(false),
+			blockNotifier: pubsub.NewBroker(true),
 			eventNotifier: pubsub.NewBroker(false),
 			ecNotifier:    pubsub.NewBroker(false),
 		}
@@ -733,14 +699,9 @@ func (sc *serviceClient) processFinalizedEvent(
 	}
 
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
-	// Ensure latest block is set.
-	notifiers.Lock()
-	notifiers.lastBlock = blk
-	notifiers.lastBlockHeight = height
-	notifiers.Unlock()
-
-	sc.allBlockNotifier.Broadcast(blk)
 	notifiers.blockNotifier.Broadcast(annBlk)
+	sc.allBlockNotifier.Broadcast(blk)
+
 	tr.height = height
 
 	return nil
