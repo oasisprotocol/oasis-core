@@ -263,6 +263,12 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 	ch := make(chan *commitment.ExecutorCommitment)
 	sub.Unwrap(ch)
 
+	// Start tracking this runtime if we are not tracking it yet.
+	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
+		sub.Close()
+		return nil, nil, err
+	}
+
 	return ch, sub, nil
 }
 
