@@ -11,12 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = time.Second
 
 func TestHistory(t *testing.T) {
 	require := require.New(t)
@@ -208,7 +207,7 @@ func TestCommitBatch(t *testing.T) {
 	require.NoError(err, "GetCommittedBlock(0)")
 	require.Equal(blk1.Block, gotBlock, "GetCommittedBlock should return the correct block")
 
-	gotBlock, err = history.GetCommittedBlock(ctx, api.RoundLatest)
+	gotBlock, err = history.GetCommittedBlock(ctx, roothash.RoundLatest)
 	require.NoError(err, "GetCommittedBlock(RoundLatest)")
 	require.Equal(blk2.Block, gotBlock, "GetCommittedBlock should return the correct block")
 

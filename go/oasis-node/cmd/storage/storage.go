@@ -117,7 +117,7 @@ type migrateHelper struct {
 	displayHelper
 
 	ctx     context.Context
-	history history.History
+	history roothash.BlockHistory
 	roots   map[hash.Hash]node.RootType
 }
 
