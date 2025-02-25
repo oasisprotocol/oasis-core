@@ -146,8 +146,7 @@ type Node struct { // nolint: maligned
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	quitCh       chan struct{}
-	workerQuitCh chan struct{}
+	quitCh chan struct{}
 
 	initCh chan struct{}
 }
@@ -188,9 +187,8 @@ func NewNode(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		quitCh:       make(chan struct{}),
-		workerQuitCh: make(chan struct{}),
-		initCh:       make(chan struct{}),
+		quitCh: make(chan struct{}),
+		initCh: make(chan struct{}),
 	}
 
 	// Validate checkpoint sync configuration.
@@ -282,7 +280,6 @@ func (n *Node) Name() string {
 
 // Start causes the worker to start responding to CometBFT new block events.
 func (n *Node) Start() error {
-	go n.watchQuit()
 	go n.worker()
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		go n.consensusCheckpointSyncer()
@@ -588,12 +585,6 @@ func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
 	return n.syncedState.Round, nil
 }
 
-func (n *Node) watchQuit() {
-	// Close quit channel on any worker quitting.
-	<-n.workerQuitCh
-	close(n.quitCh)
-}
-
 func (n *Node) consensusCheckpointSyncer() {
 	// Make sure we always create a checkpoint when the consensus layer creates a checkpoint. The
 	// reason why we do this is to make it faster for storage nodes that use consensus state sync
@@ -756,7 +747,7 @@ func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
 }
 
 func (n *Node) worker() { // nolint: gocyclo
-	defer close(n.workerQuitCh)
+	defer close(n.quitCh)
 	defer close(n.diffCh)
 
 	// Wait for the common node to be initialized.
