@@ -587,7 +587,7 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 		})
 		if err != nil {
 			sc.logger.Warn("failed to get runtime state for latest block",
-				"err",
+				"err", err,
 				"runtime_id", tr.runtimeID,
 				"height", height,
 			)
@@ -824,7 +824,7 @@ EventLoop:
 				// An executor commit has been processed.
 				var e api.ExecutorCommittedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorCommitted event: %w", err))
 					continue EventLoop
 				}
 
