@@ -141,6 +141,9 @@ type ClientBackend interface {
 	// client verification.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
 
+	// GetLastRetainedHeight returns the height of the oldest retained consensus block.
+	GetLastRetainedHeight(ctx context.Context) (int64, error)
+
 	// State returns a MKVS read syncer that can be used to read consensus state from a remote node
 	// and verify it against the trusted local root.
 	State() syncer.ReadSyncer

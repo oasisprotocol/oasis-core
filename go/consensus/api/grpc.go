@@ -43,6 +43,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
+	// methodGetLastRetainedHeight is the GetLastRetainedHeight method.
+	methodGetLastRetainedHeight = serviceName.NewMethod("GetLastRetainedHeight", nil)
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
@@ -113,6 +115,10 @@ var (
 			{
 				MethodName: methodGetLightBlock.ShortName(),
 				Handler:    handlerGetLightBlock,
+			},
+			{
+				MethodName: methodGetLastRetainedHeight.ShortName(),
+				Handler:    handlerGetLastRetainedHeight,
 			},
 			{
 				MethodName: methodGetTransactions.ShortName(),
@@ -378,6 +384,25 @@ func handlerGetLightBlock(
 		return srv.(ClientBackend).GetLightBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetLastRetainedHeight(
+	srv interface{},
+	ctx context.Context,
+	_ func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetLastRetainedHeight.FullName(),
+	}
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetTransactions(
@@ -766,6 +791,14 @@ func (c *Client) GetLightBlock(ctx context.Context, height int64) (*LightBlock, 
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *Client) GetLastRetainedHeight(ctx context.Context) (int64, error) {
+	var height int64
+	if err := c.conn.Invoke(ctx, methodGetLastRetainedHeight.FullName(), nil, &height); err != nil {
+		return 0, err
+	}
+	return height, nil
 }
 
 func (c *Client) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
