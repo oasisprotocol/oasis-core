@@ -657,6 +657,17 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) GetLastRetainedHeight(ctx context.Context) (int64, error) {
+	height, err := n.GetLastRetainedVersion(ctx)
+	if err != nil {
+		return 0, err
+	}
+	// Some pruning configurations return 0 instead of a valid block height.
+	// Clamp those to the genesis height.
+	return max(height, n.genesis.Height), nil
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
 	blk, err := n.GetCometBFTBlock(ctx, height)
 	if err != nil {
@@ -855,13 +866,9 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			// We may not be able to fetch the genesis block in case it has been pruned.
 		}
 
-		lastRetainedHeight, err := n.GetLastRetainedVersion(ctx)
+		lastRetainedHeight, err := n.GetLastRetainedHeight(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get last retained height: %w", err)
-		}
-		// Some pruning configurations return 0 instead of a valid block height. Clamp those to the genesis height.
-		if lastRetainedHeight < n.genesis.Height {
-			lastRetainedHeight = n.genesis.Height
 		}
 		status.LastRetainedHeight = lastRetainedHeight
 		lastRetainedBlock, err := n.GetBlock(ctx, lastRetainedHeight)
