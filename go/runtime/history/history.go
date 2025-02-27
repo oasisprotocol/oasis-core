@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 // DbFilename is the filename of the history database.
@@ -49,8 +48,9 @@ type runtimeHistory struct {
 	blocksNotifier *pubsub.Broker
 
 	// Last storage synced round as reported by the storage backend (if enabled).
-	syncRoundLock          sync.RWMutex
-	lastStorageSyncedRound uint64
+	syncRoundLock    sync.RWMutex
+	firstSyncedRound uint64
+	lastSyncedRound  uint64
 
 	hasLocalStorage bool
 
@@ -93,42 +93,49 @@ func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []
 	return nil
 }
 
-func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
-	if config.GlobalConfig.Mode == config.ModeArchive {
-		// If we are in archive mode, ignore storage sync checkpoints.
-		return nil
-	}
-
-	if !h.hasLocalStorage {
-		panic("received storage sync checkpoint when local storage worker is disabled")
-	}
-
-	h.syncRoundLock.Lock()
-	defer h.syncRoundLock.Unlock()
-	switch {
-	case round < h.lastStorageSyncedRound:
-		return fmt.Errorf("runtime/history: storage sync checkpoint at lower height (current: %d wanted: %d)", h.lastStorageSyncedRound, round)
-	case round == h.lastStorageSyncedRound:
-		// Nothing to do.
-		return nil
-	default:
-		// Continue below.
-	}
-
-	annBlk, err := h.db.getBlock(round)
+func (h *runtimeHistory) GetBlock(_ context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
+	resolvedRound, err := h.resolveRound(round)
 	if err != nil {
-		return fmt.Errorf("runtime/history: storage sync block not found in history: %w", err)
+		return nil, err
 	}
-	h.lastStorageSyncedRound = round
-	h.blocksNotifier.Broadcast(annBlk)
-
-	return nil
+	return h.db.getBlock(resolvedRound)
 }
 
-func (h *runtimeHistory) LastStorageSyncedRound() (uint64, error) {
-	h.syncRoundLock.RLock()
-	defer h.syncRoundLock.RUnlock()
-	return h.lastStorageSyncedRound, nil
+func (h *runtimeHistory) GetEarliestBlock(context.Context) (*roothash.AnnotatedBlock, error) {
+	return h.db.getEarliestBlock()
+}
+
+func (h *runtimeHistory) GetSyncedBlock(_ context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
+	resolvedRound, err := h.resolveSyncedRound(round)
+	if err != nil {
+		return nil, err
+	}
+	return h.db.getBlock(resolvedRound)
+}
+
+func (h *runtimeHistory) GetEarliestSyncedBlock(_ context.Context) (*roothash.AnnotatedBlock, error) {
+	h.syncRoundLock.Lock()
+	firstSyncedRound := h.firstSyncedRound
+	h.syncRoundLock.Unlock()
+	if firstSyncedRound == roothash.RoundInvalid {
+		return nil, roothash.ErrNotFound
+	}
+	blk, err := h.db.getEarliestBlock()
+	if err != nil {
+		return nil, err
+	}
+	if blk.Block.Header.Round >= firstSyncedRound {
+		return blk, nil
+	}
+	return h.db.getBlock(firstSyncedRound)
+}
+
+func (h *runtimeHistory) GetRoundResults(_ context.Context, round uint64) (*roothash.RoundResults, error) {
+	resolvedRound, err := h.resolveRound(round)
+	if err != nil {
+		return nil, err
+	}
+	return h.db.getRoundResults(resolvedRound)
 }
 
 func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
@@ -139,8 +146,29 @@ func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.
 	return typedCh, sub, nil
 }
 
+func (h *runtimeHistory) WatchSyncedBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *roothash.AnnotatedBlock)
+	sub := h.blocksNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
+}
+
+func (h *runtimeHistory) WaitRound(ctx context.Context, round uint64) (uint64, error) {
+	return h.waitRound(ctx, round, false)
+}
+
 func (h *runtimeHistory) WaitRoundSynced(ctx context.Context, round uint64) (uint64, error) {
-	blkCh, sub, err := h.WatchBlocks()
+	return h.waitRound(ctx, round, true)
+}
+
+func (h *runtimeHistory) waitRound(ctx context.Context, round uint64, synced bool) (uint64, error) {
+	watchBlocks := h.WatchBlocks
+	if synced {
+		watchBlocks = h.WatchSyncedBlocks
+	}
+
+	blkCh, sub, err := watchBlocks()
 	if err != nil {
 		return 0, fmt.Errorf("runtime/history: watch blocks failure: %w", err)
 	}
@@ -161,95 +189,54 @@ func (h *runtimeHistory) WaitRoundSynced(ctx context.Context, round uint64) (uin
 	}
 }
 
+func (h *runtimeHistory) LastRound() (uint64, error) {
+	return h.resolveRound(roothash.RoundLatest)
+}
+
+func (h *runtimeHistory) LastSyncedRound() (uint64, error) {
+	return h.resolveSyncedRound(roothash.RoundLatest)
+}
+
 func (h *runtimeHistory) LastConsensusHeight() (int64, error) {
 	meta, err := h.db.metadata()
 	if err != nil {
 		return 0, err
 	}
-
 	return meta.LastConsensusHeight, nil
 }
 
-func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64, error) {
-	switch round {
-	case roothash.RoundLatest:
-		// Determine the last round in case RoundLatest has been passed.
-		meta, err := h.db.metadata()
-		if err != nil {
-			return 0, err
-		}
-		h.syncRoundLock.RLock()
-		defer h.syncRoundLock.RUnlock()
-		// Also take storage sync state into account.
-		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < meta.LastRound {
-			return h.lastStorageSyncedRound, nil
-		}
-		return meta.LastRound, nil
+func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
+	if config.GlobalConfig.Mode == config.ModeArchive {
+		// If we are in archive mode, ignore storage sync checkpoints.
+		return nil
+	}
+
+	if !h.hasLocalStorage {
+		panic("received storage sync checkpoint when local storage worker is disabled")
+	}
+
+	h.syncRoundLock.Lock()
+	defer h.syncRoundLock.Unlock()
+	switch {
+	case h.lastSyncedRound == roothash.RoundInvalid:
+	case h.lastSyncedRound == round:
+		return nil
+	case h.lastSyncedRound > round:
+		return fmt.Errorf("runtime/history: storage sync checkpoint at lower height (current: %d wanted: %d)", h.lastSyncedRound, round)
 	default:
-		h.syncRoundLock.RLock()
-		defer h.syncRoundLock.RUnlock()
-		// Ensure round exists.
-		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < round {
-			return 0, roothash.ErrNotFound
-		}
-		return round, nil
 	}
-}
 
-func (h *runtimeHistory) GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	resolvedRound, err := h.resolveRound(round, false)
+	blk, err := h.db.getBlock(round)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("runtime/history: storage sync block not found in history: %w", err)
 	}
-	annBlk, err := h.db.getBlock(resolvedRound)
-	if err != nil {
-		return nil, err
+	if h.firstSyncedRound == roothash.RoundInvalid {
+		h.firstSyncedRound = round
 	}
-	return annBlk.Block, nil
-}
+	h.lastSyncedRound = round
+	h.blocksNotifier.Broadcast(blk)
 
-func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
-	annBlk, err := h.GetAnnotatedBlock(ctx, round)
-	if err != nil {
-		return nil, err
-	}
-	return annBlk.Block, nil
-}
-
-func (h *runtimeHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	resolvedRound, err := h.resolveRound(round, true)
-	if err != nil {
-		return nil, err
-	}
-	return h.db.getBlock(resolvedRound)
-}
-
-func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	annBlk, err := h.db.getEarliestBlock()
-	if err != nil {
-		return nil, err
-	}
-	return annBlk.Block, nil
-}
-
-func (h *runtimeHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	resolvedRound, err := h.resolveRound(round, true)
-	if err != nil {
-		return nil, err
-	}
-	return h.db.getRoundResults(resolvedRound)
+	return nil
 }
 
 func (h *runtimeHistory) Pruner() Pruner {
@@ -299,6 +286,39 @@ func (h *runtimeHistory) pruneWorker() {
 	}
 }
 
+func (h *runtimeHistory) resolveRound(round uint64) (uint64, error) {
+	if round == roothash.RoundLatest {
+		meta, err := h.db.metadata()
+		if err != nil {
+			return 0, err
+		}
+		return meta.LastRound, nil
+	}
+	return round, nil
+}
+
+func (h *runtimeHistory) resolveSyncedRound(round uint64) (uint64, error) {
+	h.syncRoundLock.RLock()
+	firstSyncedRound := h.firstSyncedRound
+	lastSyncedRound := h.lastSyncedRound
+	h.syncRoundLock.RUnlock()
+
+	if lastSyncedRound == roothash.RoundInvalid {
+		return 0, roothash.ErrNotFound
+	}
+	if round == roothash.RoundLatest {
+		meta, err := h.db.metadata()
+		if err != nil {
+			return 0, err
+		}
+		round = min(meta.LastRound, lastSyncedRound)
+	}
+	if round > lastSyncedRound || round < firstSyncedRound {
+		return 0, roothash.ErrNotFound
+	}
+	return round, nil
+}
+
 // New creates a new runtime history keeper.
 func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, hasLocalStorage bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
@@ -314,17 +334,19 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	h := &runtimeHistory{
-		runtimeID:       runtimeID,
-		logger:          logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		db:              db,
-		hasLocalStorage: hasLocalStorage,
-		blocksNotifier:  pubsub.NewBroker(true),
-		pruner:          pruner,
-		pruneCh:         channels.NewRingChannel(1),
-		stopCh:          make(chan struct{}),
-		quitCh:          make(chan struct{}),
+		runtimeID:        runtimeID,
+		logger:           logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
+		ctx:              ctx,
+		cancelCtx:        cancelCtx,
+		db:               db,
+		hasLocalStorage:  hasLocalStorage,
+		blocksNotifier:   pubsub.NewBroker(true),
+		firstSyncedRound: roothash.RoundInvalid,
+		lastSyncedRound:  roothash.RoundInvalid,
+		pruner:           pruner,
+		pruneCh:          channels.NewRingChannel(1),
+		stopCh:           make(chan struct{}),
+		quitCh:           make(chan struct{}),
 	}
 
 	go h.pruneWorker()

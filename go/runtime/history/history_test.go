@@ -39,27 +39,27 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "LastConsensusHeight")
 	require.EqualValues(0, lastHeight)
 
-	lastRound, err := history.LastStorageSyncedRound()
-	require.NoError(err, "LastStorageSyncedRound")
-	require.EqualValues(0, lastRound)
+	_, err = history.LastSyncedRound()
+	require.Error(err, "LastSyncedRound")
+	require.Equal(roothash.ErrNotFound, err)
 
-	_, err = history.GetBlock(ctx, 10)
+	_, err = history.GetSyncedBlock(ctx, 10)
+	require.Error(err, "GetSyncedBlock should fail for non-indexed block")
+	require.Equal(roothash.ErrNotFound, err)
+
+	_, err = history.GetSyncedBlock(ctx, 10)
 	require.Error(err, "GetBlock should fail for non-indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
-	_, err = history.GetAnnotatedBlock(ctx, 10)
-	require.Error(err, "GetAnnotatedBlock should fail for non-indexed block")
+	_, err = history.GetSyncedBlock(ctx, roothash.RoundLatest)
+	require.Error(err, "GetSyncedBlock(RoundLatest) should fail for no indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
-	_, err = history.GetBlock(ctx, roothash.RoundLatest)
-	require.Error(err, "GetBlock(RoundLatest) should fail for no indexed block")
-	require.Equal(roothash.ErrNotFound, err)
-
-	blk := roothash.AnnotatedBlock{
+	blk1 := &roothash.AnnotatedBlock{
 		Height: 50,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
-	blk.Block.Header.Round = 10
+	blk1.Block.Header.Round = 10
 
 	roundResults := &roothash.RoundResults{
 		Messages: []*roothash.MessageEvent{
@@ -68,28 +68,27 @@ func TestHistory(t *testing.T) {
 		},
 	}
 
-	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
-	err = history.Commit(&blk, roundResults, true)
+	copy(blk1.Block.Header.Namespace[:], runtimeID2[:])
+	err = history.Commit(blk1, roundResults, true)
 	require.Error(err, "Commit should fail for different runtime")
 
-	copy(blk.Block.Header.Namespace[:], runtimeID[:])
-	err = history.Commit(&blk, roundResults, true)
+	copy(blk1.Block.Header.Namespace[:], runtimeID[:])
+	err = history.Commit(blk1, roundResults, true)
 	require.NoError(err, "Commit")
 
-	blk2 := roothash.AnnotatedBlock{
+	blk2 := &roothash.AnnotatedBlock{
 		Height: 40,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
-	err = history.Commit(&blk2, roundResults, true)
+	err = history.Commit(blk2, roundResults, true)
 	require.Error(err, "Commit should fail for lower consensus height")
 
-	putBlk := *blk.Block
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(blk1, roundResults, true)
 	require.Error(err, "Commit should fail for the same round")
-	blk.Block.Header.Round = 5
-	err = history.Commit(&blk, roundResults, true)
+	blk1.Block.Header.Round = 5
+	err = history.Commit(blk1, roundResults, true)
 	require.Error(err, "Commit should fail for a lower round")
-	blk.Block.Header.Round = 10
+	blk1.Block.Header.Round = 10
 
 	lastHeight, err = history.LastConsensusHeight()
 	require.NoError(err, "LastConsensusHeight")
@@ -102,17 +101,17 @@ func TestHistory(t *testing.T) {
 	err = history.StorageSyncCheckpoint(5)
 	require.Error(err, "StorageSyncCheckpoint should fail for lower height")
 
-	lastRound, err = history.LastStorageSyncedRound()
-	require.NoError(err, "LastStorageSyncedRound")
+	lastRound, err := history.LastSyncedRound()
+	require.NoError(err, "LastSyncedRound")
 	require.EqualValues(10, lastRound)
 
-	gotBlk, err := history.GetBlock(ctx, 10)
-	require.NoError(err, "GetBlock")
-	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
+	gotBlk, err := history.GetSyncedBlock(ctx, 10)
+	require.NoError(err, "GetSyncedBlock")
+	require.Equal(blk1, gotBlk, "GetSyncedBlock should return the correct block")
 
-	gotAnnBlk, err := history.GetAnnotatedBlock(ctx, 10)
-	require.NoError(err, "GetAnnotatedBlock")
-	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
+	gotAnnBlk, err := history.GetSyncedBlock(ctx, 10)
+	require.NoError(err, "GetBlock")
+	require.Equal(blk1, gotAnnBlk, "GetBlock should return the correct block")
 
 	ch, sub, err := history.WatchBlocks()
 	require.NoError(err)
@@ -124,9 +123,9 @@ func TestHistory(t *testing.T) {
 		t.Fatalf("failed to receive storage synced round")
 	}
 
-	gotLatestBlk, err := history.GetBlock(ctx, 10)
-	require.NoError(err, "GetBlock(RoundLatest)")
-	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
+	gotLatestBlk, err := history.GetSyncedBlock(ctx, 10)
+	require.NoError(err, "GetSyncedBlock(RoundLatest)")
+	require.Equal(blk1, gotLatestBlk, "GetSyncedBlock(RoundLatest) should return the correct block")
 
 	gotResults, err := history.GetRoundResults(ctx, 10)
 	require.NoError(err, "GetRoundResults")
@@ -153,17 +152,17 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "LastConsensusHeight")
 	require.EqualValues(50, lastHeight)
 
-	gotBlk, err = history.GetBlock(ctx, 10)
+	gotBlk, err = history.GetSyncedBlock(ctx, 10)
+	require.NoError(err, "GetSyncedBlock")
+	require.Equal(blk1, gotBlk, "GetSyncedBlock should return the correct block")
+
+	gotAnnBlk, err = history.GetSyncedBlock(ctx, 10)
 	require.NoError(err, "GetBlock")
-	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
+	require.Equal(blk1, gotAnnBlk, "GetBlock should return the correct block")
 
-	gotAnnBlk, err = history.GetAnnotatedBlock(ctx, 10)
-	require.NoError(err, "GetAnnotatedBlock")
-	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
-
-	gotLatestBlk, err = history.GetBlock(ctx, roothash.RoundLatest)
-	require.NoError(err, "GetBlock(RoundLatest)")
-	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
+	gotLatestBlk, err = history.GetSyncedBlock(ctx, roothash.RoundLatest)
+	require.NoError(err, "GetSyncedBlock(RoundLatest)")
+	require.Equal(blk1, gotLatestBlk, "GetSyncedBlock(RoundLatest) should return the correct block")
 
 	gotResults, err = history.GetRoundResults(ctx, 10)
 	require.NoError(err, "GetRoundResults")
@@ -188,11 +187,11 @@ func TestCommitBatch(t *testing.T) {
 	require.Equal(runtimeID1, history.RuntimeID())
 
 	// Sample data.
-	blk1 := roothash.AnnotatedBlock{
+	blk1 := &roothash.AnnotatedBlock{
 		Height: 1,
 		Block:  block.NewGenesisBlock(runtimeID1, 0),
 	}
-	blk2 := roothash.AnnotatedBlock{
+	blk2 := &roothash.AnnotatedBlock{
 		Height: 3,
 		Block:  block.NewGenesisBlock(runtimeID2, 0),
 	}
@@ -212,13 +211,13 @@ func TestCommitBatch(t *testing.T) {
 	err = history.CommitBatch(nil, nil, true)
 	require.NoError(err, "CommitBatch should succeed for empty batch")
 
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{blk1, blk2},
 		[]*roothash.RoundResults{results1},
 		true,
 	)
 	require.Error(err, "CommitBatch should fail when slices don't have equal size")
 
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{blk1, blk2},
 		[]*roothash.RoundResults{results1, results2},
 		true,
 	)
@@ -227,14 +226,14 @@ func TestCommitBatch(t *testing.T) {
 	copy(blk2.Block.Header.Namespace[:], blk1.Block.Header.Namespace[:])
 
 	// Commit batch in wrong order: round 1 and 0 at consenus height 3 and 1.
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk2, &blk1},
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{blk2, blk1},
 		[]*roothash.RoundResults{results2, results1},
 		true,
 	)
 	require.Error(err, "CommitBatch should fail for unordered batch")
 
 	// Commit batch round 0 and 1 at consenus height 1 and 3.
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{blk1, blk2},
 		[]*roothash.RoundResults{results1, results2},
 		true,
 	)
@@ -244,41 +243,41 @@ func TestCommitBatch(t *testing.T) {
 	require.NoError(err, "LastConsensusHeight")
 	require.EqualValues(3, lastHeight)
 
-	gotBlock, err := history.GetCommittedBlock(ctx, 0)
-	require.NoError(err, "GetCommittedBlock(0)")
-	require.Equal(blk1.Block, gotBlock, "GetCommittedBlock should return the correct block")
+	gotBlock, err := history.GetBlock(ctx, 0)
+	require.NoError(err, "GetBlock(0)")
+	require.Equal(blk1, gotBlock, "GetBlock should return the correct block")
 
-	gotBlock, err = history.GetCommittedBlock(ctx, roothash.RoundLatest)
-	require.NoError(err, "GetCommittedBlock(RoundLatest)")
-	require.Equal(blk2.Block, gotBlock, "GetCommittedBlock should return the correct block")
+	gotBlock, err = history.GetBlock(ctx, roothash.RoundLatest)
+	require.NoError(err, "GetBlock(RoundLatest)")
+	require.Equal(blk2, gotBlock, "GetBlock should return the correct block")
 
 	// Commit for the latest height and round should fail
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(blk2, nil, true)
 	require.Error(err, "Commit should fail for same consensus height")
 
 	// Commit for the latest round should fail.
 	blk2.Height = 4
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(blk2, nil, true)
 	require.Error(err, "Commit should fail for same round")
 
 	// Commit after batch commit should succeed when round and height increases.
 	blk2.Block.Header.Round = 2
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(blk2, nil, true)
 	require.NoError(err, "Commit")
 
 	err = history.StorageSyncCheckpoint(2)
 	require.NoError(err, "StorageSyncCheckpoint should work")
 
-	gotAnnBlk, err := history.GetAnnotatedBlock(ctx, 2)
-	require.NoError(err, "GetAnnotatedBlock")
-	require.Equal(&blk2, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
+	gotAnnBlk, err := history.GetSyncedBlock(ctx, 2)
+	require.NoError(err, "GetBlock")
+	require.Equal(blk2, gotAnnBlk, "GetBlock should return the correct block")
 
 	// Try committing another batch after a single commit.
 	blk1.Height = 5
 	blk2.Height = 7
 	blk1.Block.Header.Round = 5
 	blk2.Block.Header.Round = 6
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{blk1, blk2},
 		[]*roothash.RoundResults{nil, nil},
 		false,
 	)
@@ -541,25 +540,25 @@ func TestHistoryPrune(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, recvTimeout)
 	defer cancel()
 	for {
-		_, err = history.GetBlock(ctx, 0)
+		_, err = history.GetSyncedBlock(ctx, 0)
 		if err == nil {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
-		require.Error(err, "GetBlock should fail for pruned block 0")
+		require.Error(err, "GetSyncedBlock should fail for pruned block 0")
 		require.Equal(roothash.ErrNotFound, err)
 		break
 	}
 
 	// Ensure we can only lookup the last 10 blocks.
 	for i := 0; i < n; i++ {
-		_, err = history.GetBlock(ctx, uint64(i))
+		_, err = history.GetSyncedBlock(ctx, uint64(i))
 		if i <= 40 {
-			require.Error(err, "GetBlock should fail for pruned block %d", i)
+			require.Error(err, "GetSyncedBlock should fail for pruned block %d", i)
 			require.Equal(roothash.ErrNotFound, err)
 		} else {
-			require.NoError(err, "GetBlock(%d)", i)
+			require.NoError(err, "GetSyncedBlock(%d)", i)
 		}
 
 		roundResults, err := history.GetRoundResults(ctx, uint64(i))
@@ -624,7 +623,7 @@ func TestHistoryPruneError(t *testing.T) {
 
 	// Ensure nothing was pruned.
 	for i := 0; i <= 50; i++ {
-		_, err = history.GetBlock(ctx, uint64(i))
-		require.NoError(err, "GetBlock(%d)", i)
+		_, err = history.GetSyncedBlock(ctx, uint64(i))
+		require.NoError(err, "GetSyncedBlock(%d)", i)
 	}
 }

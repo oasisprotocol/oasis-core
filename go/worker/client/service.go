@@ -130,7 +130,11 @@ func (s *service) GetBlock(ctx context.Context, request *api.GetBlockRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	return rt.History().GetBlock(ctx, request.Round)
+	blk, err := rt.History().GetSyncedBlock(ctx, request.Round)
+	if err != nil {
+		return nil, err
+	}
+	return blk.Block, nil
 }
 
 // Implements api.RuntimeClient.
@@ -150,14 +154,14 @@ func (s *service) GetLastRetainedBlock(ctx context.Context, runtimeID common.Nam
 	if lsb, ok := rt.Storage().(storage.LocalBackend); ok {
 		version := lsb.NodeDB().GetEarliestVersion()
 
-		if version > blk.Header.Round {
-			blk, err = rt.History().GetBlock(ctx, version)
+		if version > blk.Block.Header.Round {
+			blk, err = rt.History().GetSyncedBlock(ctx, version)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	return blk, nil
+	return blk.Block, nil
 }
 
 func (s *service) getTxnTree(backend storage.Backend, blk *block.Block) *transaction.Tree {

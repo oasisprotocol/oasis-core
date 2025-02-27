@@ -122,7 +122,7 @@ type migrateHelper struct {
 }
 
 func (mh *migrateHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.Root, error) {
-	block, err := mh.history.GetBlock(mh.ctx, version)
+	block, err := mh.history.GetSyncedBlock(mh.ctx, version)
 	if err != nil {
 		if errors.Is(err, roothash.ErrNotFound) {
 			return nil, badger.ErrVersionNotFound
@@ -131,7 +131,7 @@ func (mh *migrateHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.
 	}
 
 	var roots []node.Root
-	for _, blockRoot := range block.Header.StorageRoots() {
+	for _, blockRoot := range block.Block.Header.StorageRoots() {
 		if blockRoot.Hash.Equal(&root) {
 			roots = append(roots, blockRoot)
 		}
