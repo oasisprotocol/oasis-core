@@ -27,8 +27,10 @@ const (
 	// ModuleName is a unique module name for the roothash module.
 	ModuleName = "roothash"
 
+	// RoundLatest is a special round number always referring to the latest round.
+	RoundLatest uint64 = math.MaxUint64
 	// RoundInvalid is a special round number that refers to an invalid round.
-	RoundInvalid uint64 = math.MaxUint64
+	RoundInvalid uint64 = math.MaxUint64 - 1
 	// TimeoutNever is the timeout value that never expires.
 	TimeoutNever int64 = 0
 
