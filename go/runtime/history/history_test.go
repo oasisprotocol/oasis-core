@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
@@ -55,17 +56,8 @@ func TestHistory(t *testing.T) {
 	require.Error(err, "GetBlock(RoundLatest) should fail for no indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
-	err = history.ConsensusCheckpoint(42)
-	require.NoError(err, "ConsensusCheckpoint")
-	err = history.ConsensusCheckpoint(40)
-	require.Error(err, "ConsensusCheckpoint should fail for lower height")
-
-	lastHeight, err = history.LastConsensusHeight()
-	require.NoError(err, "LastConsensusHeight")
-	require.EqualValues(42, lastHeight)
-
 	blk := roothash.AnnotatedBlock{
-		Height: 40,
+		Height: 50,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
 	blk.Block.Header.Round = 10
@@ -77,10 +69,6 @@ func TestHistory(t *testing.T) {
 		},
 	}
 
-	err = history.Commit(&blk, roundResults, true)
-	require.Error(err, "Commit should fail for lower consensus height")
-
-	blk.Height = 50
 	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
 	err = history.Commit(&blk, roundResults, true)
 	require.Error(err, "Commit should fail for different runtime")
@@ -88,6 +76,14 @@ func TestHistory(t *testing.T) {
 	copy(blk.Block.Header.Namespace[:], runtimeID[:])
 	err = history.Commit(&blk, roundResults, true)
 	require.NoError(err, "Commit")
+
+	blk2 := roothash.AnnotatedBlock{
+		Height: 40,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	err = history.Commit(&blk2, roundResults, true)
+	require.Error(err, "Commit should fail for lower consensus height")
+
 	putBlk := *blk.Block
 	err = history.Commit(&blk, roundResults, true)
 	require.Error(err, "Commit should fail for the same round")
@@ -175,7 +171,123 @@ func TestHistory(t *testing.T) {
 	require.Equal(roundResults, gotResults, "GetRoundResults should return the correct results")
 }
 
+func TestCommitBatch(t *testing.T) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dataDir)
+
+	runtimeID1 := common.NewTestNamespaceFromSeed([]byte("history test ns 1"), 0)
+	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"), 0)
+
+	prunerFactory := NewNonePrunerFactory()
+	history, err := New(runtimeID1, dataDir, prunerFactory, true)
+	require.NoError(err, "New")
+
+	require.Equal(runtimeID1, history.RuntimeID())
+
+	// Sample data.
+	blk1 := roothash.AnnotatedBlock{
+		Height: 1,
+		Block:  block.NewGenesisBlock(runtimeID1, 0),
+	}
+	blk2 := roothash.AnnotatedBlock{
+		Height: 3,
+		Block:  block.NewGenesisBlock(runtimeID2, 0),
+	}
+	blk2.Block.Header.Round = 1
+	results1 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 0, Index: 0},
+			{Module: "", Code: 0, Index: 1},
+		},
+	}
+	results2 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 1, Index: 0},
+		},
+	}
+
+	err = history.CommitBatch(nil, nil, true)
+	require.NoError(err, "CommitBatch should succeed for empty batch")
+
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+		[]*roothash.RoundResults{results1},
+		true,
+	)
+	require.Error(err, "CommitBatch should fail when slices don't have equal size")
+
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+		[]*roothash.RoundResults{results1, results2},
+		true,
+	)
+	require.Error(err, "CommitBatch should fail when different runtimes IDs")
+
+	copy(blk2.Block.Header.Namespace[:], blk1.Block.Header.Namespace[:])
+
+	// Commit batch in wrong order: round 1 and 0 at consenus height 3 and 1.
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk2, &blk1},
+		[]*roothash.RoundResults{results2, results1},
+		true,
+	)
+	require.Error(err, "CommitBatch should fail for unordered batch")
+
+	// Commit batch round 0 and 1 at consenus height 1 and 3.
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+		[]*roothash.RoundResults{results1, results2},
+		true,
+	)
+	require.NoError(err, "CommitBatch")
+
+	lastHeight, err := history.LastConsensusHeight()
+	require.NoError(err, "LastConsensusHeight")
+	require.EqualValues(3, lastHeight)
+
+	gotBlock, err := history.GetCommittedBlock(ctx, 0)
+	require.NoError(err, "GetCommittedBlock(0)")
+	require.Equal(blk1.Block, gotBlock, "GetCommittedBlock should return the correct block")
+
+	gotBlock, err = history.GetCommittedBlock(ctx, api.RoundLatest)
+	require.NoError(err, "GetCommittedBlock(RoundLatest)")
+	require.Equal(blk2.Block, gotBlock, "GetCommittedBlock should return the correct block")
+
+	// Commit for the latest height and round should fail
+	err = history.Commit(&blk2, nil, true)
+	require.Error(err, "Commit should fail for same consensus height")
+
+	// Commit for the latest round should fail.
+	blk2.Height = 4
+	err = history.Commit(&blk2, nil, true)
+	require.Error(err, "Commit should fail for same round")
+
+	// Commit after batch commit should succeed when round and height increases.
+	blk2.Block.Header.Round = 2
+	err = history.Commit(&blk2, nil, true)
+	require.NoError(err, "Commit")
+
+	err = history.StorageSyncCheckpoint(2)
+	require.NoError(err, "StorageSyncCheckpoint should work")
+
+	gotAnnBlk, err := history.GetAnnotatedBlock(ctx, 2)
+	require.NoError(err, "GetAnnotatedBlock")
+	require.Equal(&blk2, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
+
+	// Try committing another batch after a single commit.
+	blk1.Height = 5
+	blk2.Height = 7
+	blk1.Block.Header.Round = 5
+	blk2.Block.Header.Round = 6
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
+		[]*roothash.RoundResults{nil, nil},
+		false,
+	)
+	require.NoError(err, "CommitBatch")
+}
+
 func testWatchBlocks(t *testing.T, history History, expectedRound uint64) {
+	t.Helper()
 	require := require.New(t)
 
 	ch, sub, err := history.WatchBlocks()
@@ -210,39 +322,58 @@ func TestWatchBlocks(t *testing.T) {
 
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history test ns 1"), 0)
 
+	// Sample data
+	blk1 := roothash.AnnotatedBlock{
+		Height: 40,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	blk1.Block.Header.Round = 10
+	results1 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 0, Index: 0},
+			{Module: "", Code: 0, Index: 1},
+		},
+	}
+	blk2 := roothash.AnnotatedBlock{
+		Height: 41,
+		Block:  block.NewGenesisBlock(runtimeID, 0),
+	}
+	blk2.Block.Header.Round = 11
+	results2 := &roothash.RoundResults{
+		Messages: []*roothash.MessageEvent{
+			{Module: "", Code: 1, Index: 0},
+		},
+	}
+	blocks := []*roothash.AnnotatedBlock{&blk1, &blk2}
+	results := []*roothash.RoundResults{results1, nil}
+
 	// Test history with local storage.
 	prunerFactory := NewNonePrunerFactory()
 	history, err := New(runtimeID, dataDir, prunerFactory, true)
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
-	// Commit a block.
-	err = history.ConsensusCheckpoint(40)
-	require.NoError(err, "ConsensusCheckpoint")
-	blk := roothash.AnnotatedBlock{
-		Height: 40,
-		Block:  block.NewGenesisBlock(runtimeID, 0),
-	}
-	blk.Block.Header.Round = 10
-	roundResults := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 0, Index: 0},
-			{Module: "", Code: 0, Index: 1},
-		},
-	}
-	err = history.Commit(&blk, roundResults, true)
+	// Commit a block and notify.
+	err = history.Commit(&blk1, results1, true)
 	require.NoError(err, "Commit")
-
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
 	// Commit storage checkpoint.
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
-
 	// Block should be received.
 	testWatchBlocks(t, history, 10)
+	// Commit a block without notifying.
+	err = history.Commit(&blk2, results2, false)
+	require.NoError(err, "Commit")
+	err = history.StorageSyncCheckpoint(11)
+	require.NoError(err, "StorageSyncCheckpoint")
+	// Wait synced round so that notifier processes it.
+	_, err = history.WaitRoundSynced(ctx, 11)
+	require.NoError(err, "WaitRoundSynced")
+	// In case of a local storage, we broadcast blocks when
+	// StorageSyncCheckpoint is called, regardless of notify flag.
+	testWatchBlocks(t, history, 11)
 
 	// Test history without local storage.
 	dataDir2, err := os.MkdirTemp("", "oasis-runtime-history-test_")
@@ -252,23 +383,59 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "New")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
-
-	// Commit a block.
-	err = history.ConsensusCheckpoint(40)
-	require.NoError(err, "ConsensusCheckpoint")
-	err = history.Commit(&blk, roundResults, true)
+	// Commit a block without notifying.
+	err = history.Commit(&blk1, results1, false)
 	require.NoError(err, "Commit should work")
-
+	// No blocks should be received since commit didn't notify and
+	// history has no local storage.
+	testWatchBlocks(t, history, 0)
+	// Commit a block and also notify.
+	err = history.Commit(&blk2, results2, true)
+	require.NoError(err, "Commit should work")
 	// Block should be received.
-	testWatchBlocks(t, history, 10)
-
+	testWatchBlocks(t, history, 11)
 	// Wait round sync should return correct round.
-	r, err := history.WaitRoundSynced(ctx, 10)
+	r, err := history.WaitRoundSynced(ctx, 11)
 	require.NoError(err, "WaitRoundSynced")
-	require.EqualValues(10, r, "WaitRoundSynced")
-
+	require.EqualValues(11, r, "WaitRoundSynced")
 	// Committing storage checkpoint should panic.
 	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(10) }, "StorageSyncCheckpoint should panic")
+
+	// Test history with local storage and batching.
+	dataDir3, err := os.MkdirTemp("", "oasis-runtime-history-test_")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dataDir3)
+	history, err = New(runtimeID, dataDir3, prunerFactory, true)
+	require.NoError(err, "New")
+	testWatchBlocks(t, history, 0)
+	// Commit batch without notifying.
+	err = history.CommitBatch(blocks, results, false)
+	require.NoError(err, "CommitBatch")
+	// In case of a local storage, we broadcast blocks when
+	// StorageSyncCheckpoint is called, regardless of notify flag.
+	testWatchBlocks(t, history, 0)
+	err = history.StorageSyncCheckpoint(10)
+	require.NoError(err, "StorageSyncCheckpoint")
+	testWatchBlocks(t, history, 10)
+	err = history.StorageSyncCheckpoint(11)
+	require.NoError(err, "StorageSyncCheckpoint")
+	// Wait synced round so that notifier processes it.
+	_, err = history.WaitRoundSynced(ctx, 11)
+	require.NoError(err, "WaitRoundSynced")
+	testWatchBlocks(t, history, 11)
+
+	// Test history without local storage and with batching.
+	dataDir4, err := os.MkdirTemp("", "oasis-runtime-history-test_")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dataDir4)
+	history, err = New(runtimeID, dataDir4, prunerFactory, false)
+	require.NoError(err, "New")
+	testWatchBlocks(t, history, 0)
+	// Commit batch without notifying.
+	err = history.CommitBatch(blocks, results, false)
+	require.NoError(err, "CommitBatch")
+	// No block should be received since we set notify to false.
+	testWatchBlocks(t, history, 0)
 }
 
 type testPruneHandler struct {
@@ -318,8 +485,11 @@ func TestHistoryPrune(t *testing.T) {
 	}
 	history.Pruner().RegisterHandler(&ph)
 
-	// Create some blocks.
-	for i := 0; i <= 50; i++ {
+	const n = 51
+
+	blks := make([]*roothash.AnnotatedBlock, n)
+	results := make([]*roothash.RoundResults, n)
+	for i := 0; i < n; i++ {
 		blk := roothash.AnnotatedBlock{
 			Height: int64(i),
 			Block:  block.NewGenesisBlock(runtimeID, 0),
@@ -333,18 +503,31 @@ func TestHistoryPrune(t *testing.T) {
 				{Module: "", Code: 0, Index: 1},
 			}
 		}
-
 		roundResults := &roothash.RoundResults{
 			Messages: msgResults,
 		}
-
-		err = history.Commit(&blk, roundResults, true)
-		require.NoError(err, "Commit")
-
-		err = history.StorageSyncCheckpoint(blk.Block.Header.Round)
-		require.NoError(err, "StorageSyncCheckpoint")
+		blks[i] = &blk
+		results[i] = roundResults
 	}
 
+	// Commit first 30 blocks in a batch of 10.
+	err = history.CommitBatch(blks[:10], results[:10], false)
+	require.NoError(err, "Commit")
+	err = history.CommitBatch(blks[10:20], results[10:20], false)
+	require.NoError(err, "Commit")
+	err = history.CommitBatch(blks[20:30], results[20:30], false)
+	require.NoError(err, "Commit")
+
+	// Commit remaining 20 blocks one by one.
+	for i := 30; i < n; i++ {
+		err = history.Commit(blks[i], results[i], true)
+		require.NoError(err, "Commit")
+	}
+	// Simulate storage syncing.
+	for i := 0; i < n; i++ {
+		err = history.StorageSyncCheckpoint(blks[i].Block.Header.Round)
+		require.NoError(err, "StorageSyncCheckpoint")
+	}
 	// No more blocks after this point.
 
 	// Wait for pruning to complete.
@@ -371,7 +554,7 @@ func TestHistoryPrune(t *testing.T) {
 	}
 
 	// Ensure we can only lookup the last 10 blocks.
-	for i := 0; i <= 50; i++ {
+	for i := 0; i < n; i++ {
 		_, err = history.GetBlock(ctx, uint64(i))
 		if i <= 40 {
 			require.Error(err, "GetBlock should fail for pruned block %d", i)

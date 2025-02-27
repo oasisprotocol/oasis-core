@@ -27,7 +27,10 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
-const crashPointBlockBeforeIndex = "roothash.before_index"
+const (
+	crashPointBlockBeforeIndex = "roothash.before_index"
+	reindexWriteBatchSize      = 1000
+)
 
 // ServiceClient is the roothash service client interface.
 type ServiceClient interface {
@@ -353,7 +356,7 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory) (uint64, error) {
+func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64, bh api.BlockHistory) (uint64, error) {
 	lastRound := api.RoundInvalid
 	if currentHeight <= 0 {
 		return lastRound, nil
@@ -365,18 +368,18 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	var err error
 	var lastHeight int64
 	if lastHeight, err = bh.LastConsensusHeight(); err != nil {
-		sc.logger.Error("failed to get last indexed height",
+		logger.Error("failed to get last indexed height",
 			"err", err,
 		)
-		return lastRound, fmt.Errorf("failed to get last indexed height: %w", err)
+		return 0, fmt.Errorf("failed to get last indexed height: %w", err)
 	}
 	// +1 since we want the last non-seen height.
 	lastHeight++
 
 	// Take prune strategy into account.
-	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(sc.ctx)
+	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(ctx)
 	if err != nil {
-		return lastRound, fmt.Errorf("failed to get last retained height: %w", err)
+		return 0, fmt.Errorf("failed to get last retained height: %w", err)
 	}
 	if lastHeight < lastRetainedHeight {
 		logger.Debug("last height pruned, skipping until last retained",
@@ -387,24 +390,73 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	}
 
 	// Take initial genesis height into account.
-	genesisDoc, err := sc.backend.GetGenesisDocument(sc.ctx)
+	genesisDoc, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
-		return lastRound, fmt.Errorf("failed to get genesis document: %w", err)
+		return 0, fmt.Errorf("failed to get genesis document: %w", err)
 	}
 	if lastHeight < genesisDoc.Height {
 		lastHeight = genesisDoc.Height
 	}
 
 	// Scan all blocks between last indexed height and current height.
-	logger.Debug("reindexing blocks",
-		"last_indexed_height", lastHeight,
+	logger.Info("reindexing blocks",
+		"last_height", lastHeight,
 		"current_height", currentHeight,
 		logging.LogEvent, api.LogEventHistoryReindexing,
 	)
 
-	for height := lastHeight; height <= currentHeight; height++ {
-		var results *cmtrpctypes.ResultBlockResults
-		results, err = sc.backend.GetBlockResults(sc.ctx, height)
+	for height := lastHeight; height <= currentHeight; height += reindexWriteBatchSize {
+		end := height + reindexWriteBatchSize - 1
+		if end > currentHeight {
+			end = currentHeight
+		}
+		last, err := sc.reindexBatch(ctx, runtimeID, bh, height, end)
+		if err != nil {
+			return 0, fmt.Errorf("failed to reindex batch: %w", err)
+		}
+		if last != api.RoundInvalid {
+			// New rounds indexed.
+			lastRound = last
+		}
+	}
+
+	if lastRound == api.RoundInvalid {
+		logger.Debug("no new round reindexed, return latest known round")
+		switch blk, err := bh.GetCommittedBlock(ctx, api.RoundLatest); err {
+		case api.ErrNotFound:
+		case nil:
+			lastRound = blk.Header.Round
+		default:
+			return lastRound, fmt.Errorf("failed to get latest block: %w", err)
+		}
+	}
+
+	logger.Info("block reindex complete",
+		"last_round", lastRound,
+	)
+
+	return lastRound, nil
+}
+
+func (sc *serviceClient) reindexBatch(
+	ctx context.Context,
+	runtimeID common.Namespace,
+	bh api.BlockHistory,
+	start int64,
+	end int64,
+) (uint64, error) {
+	logger := sc.logger.With("runtime_id", runtimeID)
+
+	logger.Debug("reindexing batch",
+		"start", start,
+		"end", end,
+	)
+
+	lastRound := api.RoundInvalid
+	var blocks []*api.AnnotatedBlock
+	var roundResults []*api.RoundResults
+	for height := start; height <= end; height++ {
+		results, err := sc.backend.GetBlockResults(ctx, height)
 		if err != nil {
 			// XXX: could soft-fail first few heights in case more heights were
 			// pruned right after the GetLastRetainedVersion query.
@@ -412,7 +464,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 				"err", err,
 				"height", height,
 			)
-			return lastRound, fmt.Errorf("failed to get cometbft block results: %w", err)
+			return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
 		}
 
 		// Index block.
@@ -466,28 +518,32 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 			if !evRtID.Equal(&runtimeID) {
 				continue
 			}
-			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
-				return 0, fmt.Errorf("failed to process finalized event: %w", err)
+
+			annBlk, rr, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
+			if err != nil {
+				return 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 			}
+			blocks = append(blocks, annBlk)
+			roundResults = append(roundResults, rr)
+			logger.Debug("block added to batch",
+				"height", height,
+				"round", annBlk.Block.Header.Round,
+			)
+
 			lastRound = ev.Round
 		}
 	}
 
-	if lastRound == api.RoundInvalid {
-		sc.logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetCommittedBlock(sc.ctx, api.RoundLatest); err {
-		case api.ErrNotFound:
-		case nil:
-			lastRound = blk.Header.Round
-		default:
-			return lastRound, fmt.Errorf("failed to get latest block: %w", err)
-		}
+	// Do not notify watchers during history reindex.
+	err := bh.CommitBatch(blocks, roundResults, false)
+	if err != nil {
+		logger.Error("failed to commit batch",
+			"err", err,
+			"start", start,
+			"end", end,
+		)
+		return 0, fmt.Errorf("failed to commit batch: %w", err)
 	}
-
-	sc.logger.Debug("block reindex complete",
-		"last_round", lastRound,
-	)
-
 	return lastRound, nil
 }
 
@@ -539,7 +595,7 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 		}
 
 		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
+		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
 				"runtime_id", tr.runtimeID,
@@ -573,7 +629,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 		if sc.trackedRuntime[ev.RuntimeID] == nil {
 			continue
 		}
-		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, false); err != nil { //nolint:gosec
+		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round); err != nil { //nolint:gosec
 			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
 		}
 	}
@@ -592,7 +648,6 @@ func (sc *serviceClient) processFinalizedEvent(
 	height int64,
 	runtimeID common.Namespace,
 	round *uint64,
-	isReindex bool,
 ) (err error) {
 	tr := sc.trackedRuntime[runtimeID]
 	if tr == nil {
@@ -616,39 +671,9 @@ func (sc *serviceClient) processFinalizedEvent(
 	}
 
 	// Process finalized event.
-	var blk *block.Block
-	if blk, err = sc.getLatestBlockAt(ctx, runtimeID, height); err != nil {
-		sc.logger.Error("failed to fetch latest block",
-			"err", err,
-			"height", height,
-			"runtime_id", runtimeID,
-		)
-		return fmt.Errorf("roothash: failed to fetch latest block: %w", err)
-	}
-	if round != nil && blk.Header.Round != *round {
-		sc.logger.Error("finalized event/query round mismatch",
-			"block_round", blk.Header.Round,
-			"event_round", *round,
-		)
-		return fmt.Errorf("roothash: finalized event/query round mismatch")
-	}
-
-	roundResults, err := sc.GetLastRoundResults(ctx, &api.RuntimeRequest{
-		RuntimeID: runtimeID,
-		Height:    height,
-	})
+	annBlk, roundResults, err := sc.fetchFinalizedRound(ctx, height, runtimeID, round)
 	if err != nil {
-		sc.logger.Error("failed to fetch round results",
-			"err", err,
-			"height", height,
-			"runtime_id", runtimeID,
-		)
-		return fmt.Errorf("roothash: failed to fetch round results: %w", err)
-	}
-
-	annBlk := &api.AnnotatedBlock{
-		Height: height,
-		Block:  blk,
+		return fmt.Errorf("failed to fetch roothash finalized round: %w", err)
 	}
 
 	// Commit the block to history if needed.
@@ -657,10 +682,10 @@ func (sc *serviceClient) processFinalizedEvent(
 
 		// Perform reindex if required.
 		lastRound := api.RoundInvalid
-		if !isReindex && !tr.reindexDone {
+		if !tr.reindexDone {
 			// Note that we need to reindex up to the previous height as the current height is
 			// already being processed right now.
-			if lastRound, err = sc.reindexBlocks(height-1, tr.blockHistory); err != nil {
+			if lastRound, err = sc.reindexBlocks(ctx, height-1, tr.blockHistory); err != nil {
 				sc.logger.Error("failed to reindex blocks",
 					"err", err,
 					"runtime_id", runtimeID,
@@ -673,38 +698,76 @@ func (sc *serviceClient) processFinalizedEvent(
 		// Only commit the block in case it was not already committed during reindex. Note that even
 		// in case we only reindex up to height-1 this can still happen on the first emitted block
 		// since that height is not guaranteed to be the one that contains a round finalized event.
-		if lastRound == api.RoundInvalid || blk.Header.Round > lastRound {
+		if lastRound == api.RoundInvalid || annBlk.Block.Header.Round > lastRound {
 			sc.logger.Debug("commit block",
 				"runtime_id", runtimeID,
 				"height", height,
-				"round", blk.Header.Round,
+				"round", annBlk.Block.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, roundResults, !isReindex)
+			err = tr.blockHistory.Commit(annBlk, roundResults, true)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
 					"runtime_id", runtimeID,
 					"height", height,
-					"round", blk.Header.Round,
+					"round", annBlk.Block.Header.Round,
 				)
 				return fmt.Errorf("failed to commit block to history keeper: %w", err)
 			}
 		}
 	}
 
-	// Skip emitting events if we are reindexing.
-	if isReindex {
-		return nil
-	}
-
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.blockNotifier.Broadcast(annBlk)
-	sc.allBlockNotifier.Broadcast(blk)
+	sc.allBlockNotifier.Broadcast(annBlk.Block)
 
 	tr.height = height
 
 	return nil
+}
+
+func (sc *serviceClient) fetchFinalizedRound(
+	ctx context.Context,
+	height int64,
+	runtimeID common.Namespace,
+	round *uint64,
+) (*api.AnnotatedBlock, *api.RoundResults, error) {
+	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
+	if err != nil {
+		sc.logger.Error("failed to fetch latest block",
+			"err", err,
+			"height", height,
+			"runtime_id", runtimeID,
+		)
+		return nil, nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
+	}
+	if round != nil && blk.Header.Round != *round {
+		sc.logger.Error("finalized event/query round mismatch",
+			"block_round", blk.Header.Round,
+			"event_round", *round,
+		)
+		return nil, nil, fmt.Errorf("roothash: finalized event/query round mismatch")
+	}
+
+	roundResults, err := sc.GetLastRoundResults(ctx, &api.RuntimeRequest{
+		RuntimeID: runtimeID,
+		Height:    height,
+	})
+	if err != nil {
+		sc.logger.Error("failed to fetch round results",
+			"err", err,
+			"height", height,
+			"runtime_id", runtimeID,
+		)
+		return nil, nil, fmt.Errorf("roothash: failed to fetch round results: %w", err)
+	}
+
+	annBlk := &api.AnnotatedBlock{
+		Height: height,
+		Block:  blk,
+	}
+	return annBlk, roundResults, nil
 }
 
 // EventsFromCometBFT extracts staking events from CometBFT events.

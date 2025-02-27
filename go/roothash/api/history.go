@@ -18,19 +18,27 @@ type BlockHistory interface {
 	// RuntimeID returns the runtime ID of the runtime this block history is for.
 	RuntimeID() common.Namespace
 
-	// Commit commits an annotated block into history. If notify is set to true,
-	// the watchers will be notified about the new block. Disable notify when
-	// doing reindexing.
+	// Commit commits an annotated block with corresponding round results.
 	//
-	// Must be called in order, sorted by round.
-	Commit(blk *AnnotatedBlock, roundResults *RoundResults, notify bool) error
+	// If notify is set to true, the watchers will be notified about the new block.
+	//
+	// Any sequence of Commit and CommitBatch calls is valid as long as as blocks
+	// are sorted by round.
+	//
+	// Returns an error if a block at higher or equal round was already committed.
+	Commit(blk *AnnotatedBlock, result *RoundResults, notify bool) error
 
-	// ConsensusCheckpoint records the last consensus height which was processed
-	// by the roothash backend.
+	// CommitBatch commits annotated blocks with corresponding round results.
 	//
-	// This method can only be called once all roothash blocks for consensus
-	// heights <= height have been committed using Commit.
-	ConsensusCheckpoint(height int64) error
+	// If notify is set to true, the watchers will be notified about all
+	// blocks in batch.
+	//
+	// Within a batch, blocks should be sorted by round. Any sequence of Commit
+	// and CommitBatch calls is valid as long as blocks are sorted by round.
+	//
+	// Returns an error if a block at higher or equal round than the first item
+	// in a batch was already committed.
+	CommitBatch(blks []*AnnotatedBlock, results []*RoundResults, notify bool) error
 
 	// StorageSyncCheckpoint records the last storage round which was synced
 	// to runtime storage.
