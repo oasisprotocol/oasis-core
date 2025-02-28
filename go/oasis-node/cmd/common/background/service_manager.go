@@ -29,12 +29,15 @@ type ServiceManager struct {
 }
 
 // Register registers a background service.
-func (m *ServiceManager) Register(srv service.BackgroundService) {
-	m.services = append(m.services, srv)
+func (m *ServiceManager) Register(svc service.BackgroundService) {
+	m.services = append(m.services, svc)
 	go func() {
-		<-srv.Quit()
+		<-svc.Quit()
 		select {
-		case m.termCh <- srv:
+		case m.termCh <- svc:
+			m.logger.Info("background task terminated",
+				"svc", svc.Name(),
+			)
 		default:
 		}
 	}()
@@ -53,7 +56,7 @@ func (m *ServiceManager) Wait() {
 
 	select {
 	case <-m.stopCh:
-		m.logger.Info("programatic termination requested")
+		m.logger.Info("programmatic termination requested")
 	case m.termSvc = <-m.termCh:
 		m.logger.Info("background task terminated, propagating")
 	case <-sigCh:
@@ -119,7 +122,7 @@ func NewServiceManager(logger *logging.Logger) *ServiceManager {
 		Ctx:      ctx,
 		cancelFn: cancelFn,
 		logger:   logger,
-		termCh:   make(chan service.BackgroundService),
+		termCh:   make(chan service.BackgroundService, 1),
 		stopCh:   make(chan struct{}),
 	}
 }
