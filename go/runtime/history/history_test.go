@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -30,7 +29,7 @@ func TestHistory(t *testing.T) {
 	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"), 0)
 
 	prunerFactory := NewNonePrunerFactory()
-	history, err := New(runtimeID, dataDir, prunerFactory, true)
+	history, err := New(runtimeID, dataDir, prunerFactory)
 	require.NoError(err, "New")
 
 	require.Equal(runtimeID, history.RuntimeID())
@@ -136,10 +135,10 @@ func TestHistory(t *testing.T) {
 
 	// Try to manually load the block index database with incorrect runtime ID.
 	// Use path from the first runtime.
-	_, err = New(runtimeID2, dataDir, prunerFactory, true)
+	_, err = New(runtimeID2, dataDir, prunerFactory)
 	require.Error(err, "New should return an error on runtime mismatch")
 
-	history, err = New(runtimeID, dataDir, prunerFactory, true)
+	history, err = New(runtimeID, dataDir, prunerFactory)
 	require.NoError(err, "New")
 
 	require.Equal(runtimeID, history.RuntimeID())
@@ -181,7 +180,7 @@ func TestCommitBatch(t *testing.T) {
 	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"), 0)
 
 	prunerFactory := NewNonePrunerFactory()
-	history, err := New(runtimeID1, dataDir, prunerFactory, true)
+	history, err := New(runtimeID1, dataDir, prunerFactory)
 	require.NoError(err, "New")
 
 	require.Equal(runtimeID1, history.RuntimeID())
@@ -284,19 +283,32 @@ func TestCommitBatch(t *testing.T) {
 	require.NoError(err, "CommitBatch")
 }
 
-func testWatchBlocks(t *testing.T, history History, expectedRound uint64) {
+func testWatchBlocks(t *testing.T, history History, expectedRound uint64) error {
+	return watchBlocks(t, history, expectedRound, false)
+}
+
+func testWatchSyncedBlocks(t *testing.T, history History, expectedRound uint64) error {
+	return watchBlocks(t, history, expectedRound, true)
+}
+
+func watchBlocks(t *testing.T, history History, expectedRound uint64, synced bool) error {
 	t.Helper()
 	require := require.New(t)
 
-	ch, sub, err := history.WatchBlocks()
+	watchBlocks := history.WatchBlocks
+	if synced {
+		watchBlocks = history.WatchSyncedBlocks
+	}
+
+	ch, sub, err := watchBlocks()
 	require.NoError(err)
 	defer sub.Close()
 	switch expectedRound {
 	case 0:
 		// No rounds should be received.
 		select {
-		case <-ch:
-			t.Fatalf("received unexpected round")
+		case blk := <-ch:
+			return fmt.Errorf("received unexpected round: %d", blk.Block.Header.Round)
 		case <-time.After(recvTimeout):
 		}
 	default:
@@ -304,9 +316,11 @@ func testWatchBlocks(t *testing.T, history History, expectedRound uint64) {
 		case blk := <-ch:
 			require.EqualValues(blk.Block.Header.Round, expectedRound)
 		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive storage synced round")
+			return fmt.Errorf("failed to receive storage synced round")
 		}
 	}
+
+	return nil
 }
 
 func TestWatchBlocks(t *testing.T) {
@@ -347,20 +361,23 @@ func TestWatchBlocks(t *testing.T) {
 
 	// Test history with local storage.
 	prunerFactory := NewNonePrunerFactory()
-	history, err := New(runtimeID, dataDir, prunerFactory, true)
+	history, err := New(runtimeID, dataDir, prunerFactory)
 	require.NoError(err, "New")
 	// No blocks should be received.
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 	// Commit a block and notify.
 	err = history.Commit(&blk1, results1, true)
 	require.NoError(err, "Commit")
 	// No blocks should be received.
-	testWatchBlocks(t, history, 0)
+	err = testWatchSyncedBlocks(t, history, 0)
+	require.NoError(err, "testWatchSyncedBlocks")
 	// Commit storage checkpoint.
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
 	// Block should be received.
-	testWatchBlocks(t, history, 10)
+	err = testWatchSyncedBlocks(t, history, 10)
+	require.NoError(err, "testWatchSyncedBlocks")
 	// Commit a block without notifying.
 	err = history.Commit(&blk2, results2, false)
 	require.NoError(err, "Commit")
@@ -371,69 +388,77 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "WaitRoundSynced")
 	// In case of a local storage, we broadcast blocks when
 	// StorageSyncCheckpoint is called, regardless of notify flag.
-	testWatchBlocks(t, history, 11)
+	err = testWatchSyncedBlocks(t, history, 11)
+	require.NoError(err, "testWatchSyncedBlocks")
 
 	// Test history without local storage.
 	dataDir2, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir2)
-	history, err = New(runtimeID, dataDir2, prunerFactory, false)
+	history, err = New(runtimeID, dataDir2, prunerFactory)
 	require.NoError(err, "New")
 	// No blocks should be received.
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchSyncedBlocks")
 	// Commit a block without notifying.
 	err = history.Commit(&blk1, results1, false)
 	require.NoError(err, "Commit should work")
 	// No blocks should be received since commit didn't notify and
 	// history has no local storage.
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 	// Commit a block and also notify.
 	err = history.Commit(&blk2, results2, true)
 	require.NoError(err, "Commit should work")
 	// Block should be received.
-	testWatchBlocks(t, history, 11)
+	err = testWatchBlocks(t, history, 11)
+	require.NoError(err, "testWatchBlocks")
 	// Wait round sync should return correct round.
-	r, err := history.WaitRoundSynced(ctx, 11)
-	require.NoError(err, "WaitRoundSynced")
-	require.EqualValues(11, r, "WaitRoundSynced")
-	// Committing storage checkpoint should panic.
-	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(10) }, "StorageSyncCheckpoint should panic")
+	r, err := history.WaitRound(ctx, 11)
+	require.NoError(err, "WaitRound")
+	require.EqualValues(11, r, "WaitRound")
 
 	// Test history with local storage and batching.
 	dataDir3, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir3)
-	history, err = New(runtimeID, dataDir3, prunerFactory, true)
+	history, err = New(runtimeID, dataDir3, prunerFactory)
 	require.NoError(err, "New")
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 	// Commit batch without notifying.
 	err = history.CommitBatch(blocks, results, false)
 	require.NoError(err, "CommitBatch")
 	// In case of a local storage, we broadcast blocks when
 	// StorageSyncCheckpoint is called, regardless of notify flag.
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
-	testWatchBlocks(t, history, 10)
+	err = testWatchSyncedBlocks(t, history, 10)
+	require.NoError(err, "testWatchSyncedBlocks")
 	err = history.StorageSyncCheckpoint(11)
 	require.NoError(err, "StorageSyncCheckpoint")
 	// Wait synced round so that notifier processes it.
 	_, err = history.WaitRoundSynced(ctx, 11)
 	require.NoError(err, "WaitRoundSynced")
-	testWatchBlocks(t, history, 11)
+	err = testWatchSyncedBlocks(t, history, 11)
+	require.NoError(err, "testWatchSyncedBlocks")
 
 	// Test history without local storage and with batching.
 	dataDir4, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir4)
-	history, err = New(runtimeID, dataDir4, prunerFactory, false)
+	history, err = New(runtimeID, dataDir4, prunerFactory)
 	require.NoError(err, "New")
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 	// Commit batch without notifying.
 	err = history.CommitBatch(blocks, results, false)
 	require.NoError(err, "CommitBatch")
 	// No block should be received since we set notify to false.
-	testWatchBlocks(t, history, 0)
+	err = testWatchBlocks(t, history, 0)
+	require.NoError(err, "testWatchBlocks")
 }
 
 type testPruneHandler struct {
@@ -473,7 +498,7 @@ func TestHistoryPrune(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune test ns"), 0)
 
 	pruneFactory := NewKeepLastPrunerFactory(10, 100*time.Millisecond)
-	history, err := New(runtimeID, dataDir, pruneFactory, true)
+	history, err := New(runtimeID, dataDir, pruneFactory)
 	require.NoError(err, "New")
 	defer history.Close()
 
@@ -596,7 +621,7 @@ func TestHistoryPruneError(t *testing.T) {
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune error test ns"), 0)
 
 	pruneFactory := NewKeepLastPrunerFactory(10, 100*time.Millisecond)
-	history, err := New(runtimeID, dataDir, pruneFactory, true)
+	history, err := New(runtimeID, dataDir, pruneFactory)
 	require.NoError(err, "New")
 	defer history.Close()
 

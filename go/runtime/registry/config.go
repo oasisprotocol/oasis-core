@@ -92,12 +92,6 @@ func createHistoryFactory() (history.Factory, error) {
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
 
-	// Archive node won't commit any new blocks, so disable waiting for storage
-	// sync commits.
-	mode := config.GlobalConfig.Mode
-	hasLocalStorage := mode.HasLocalStorage() && !mode.IsArchive()
-
-	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
-
+	historyFactory := history.NewFactory(pruneFactory)
 	return historyFactory, nil
 }

@@ -578,8 +578,12 @@ func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
 	defer n.syncedLock.Unlock()
 
 	n.syncedState = *summary
-	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
-		return 0, err
+
+	// If we are in archive mode, ignore storage sync checkpoints.
+	if config.GlobalConfig.Mode != config.ModeArchive {
+		if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
+			return 0, err
+		}
 	}
 
 	return n.syncedState.Round, nil

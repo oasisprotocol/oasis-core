@@ -8,12 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eapache/channels"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/config"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
@@ -44,18 +41,17 @@ type runtimeHistory struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
-	db             *DB
-	blocksNotifier *pubsub.Broker
+	db                      *DB
+	committedBlocksNotifier *pubsub.Broker
+	syncedBlocksNotifier    *pubsub.Broker
 
 	// Last storage synced round as reported by the storage backend (if enabled).
 	syncRoundLock    sync.RWMutex
 	firstSyncedRound uint64
 	lastSyncedRound  uint64
 
-	hasLocalStorage bool
-
 	pruner  Pruner
-	pruneCh *channels.RingChannel
+	pruneCh chan uint64
 	stopCh  chan struct{}
 	quitCh  chan struct{}
 }
@@ -78,18 +74,15 @@ func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []
 	}
 
 	// Notify the pruner what the new round is.
-	lastBlk := blks[len(blks)-1]
-	h.pruneCh.In() <- lastBlk.Block.Header.Round
+	sendToChannel(h.pruneCh, blks[len(blks)-1].Block.Header.Round)
 
-	// If no local storage worker, notify the block watcher about new blocks,
-	// otherwise the storage-sync-checkpoint will do the notification.
-	if h.hasLocalStorage || !notify {
+	// Notify the watchers about new blocks.
+	if !notify {
 		return nil
 	}
 	for _, blk := range blks {
-		h.blocksNotifier.Broadcast(blk)
+		h.committedBlocksNotifier.Broadcast(blk)
 	}
-
 	return nil
 }
 
@@ -140,7 +133,7 @@ func (h *runtimeHistory) GetRoundResults(_ context.Context, round uint64) (*root
 
 func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *roothash.AnnotatedBlock)
-	sub := h.blocksNotifier.Subscribe()
+	sub := h.committedBlocksNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -148,7 +141,7 @@ func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.
 
 func (h *runtimeHistory) WatchSyncedBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *roothash.AnnotatedBlock)
-	sub := h.blocksNotifier.Subscribe()
+	sub := h.syncedBlocksNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -168,11 +161,11 @@ func (h *runtimeHistory) waitRound(ctx context.Context, round uint64, synced boo
 		watchBlocks = h.WatchSyncedBlocks
 	}
 
-	blkCh, sub, err := watchBlocks()
+	blkCh, blkSub, err := watchBlocks()
 	if err != nil {
 		return 0, fmt.Errorf("runtime/history: watch blocks failure: %w", err)
 	}
-	defer sub.Close()
+	defer blkSub.Close()
 	for {
 		select {
 		case annBlk, ok := <-blkCh:
@@ -206,17 +199,9 @@ func (h *runtimeHistory) LastConsensusHeight() (int64, error) {
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
-	if config.GlobalConfig.Mode == config.ModeArchive {
-		// If we are in archive mode, ignore storage sync checkpoints.
-		return nil
-	}
-
-	if !h.hasLocalStorage {
-		panic("received storage sync checkpoint when local storage worker is disabled")
-	}
-
 	h.syncRoundLock.Lock()
 	defer h.syncRoundLock.Unlock()
+
 	switch {
 	case h.lastSyncedRound == roothash.RoundInvalid:
 	case h.lastSyncedRound == round:
@@ -234,7 +219,7 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 		h.firstSyncedRound = round
 	}
 	h.lastSyncedRound = round
-	h.blocksNotifier.Broadcast(blk)
+	h.syncedBlocksNotifier.Broadcast(blk)
 
 	return nil
 }
@@ -258,22 +243,22 @@ func (h *runtimeHistory) pruneWorker() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	var round uint64
 	for {
 		select {
 		case <-ticker.C:
-			var round interface{}
 			select {
-			case round = <-h.pruneCh.Out():
+			case round = <-h.pruneCh:
 			case <-h.stopCh:
 				h.logger.Debug("prune worker is terminating")
 				return
 			}
 
 			h.logger.Debug("pruning runtime history",
-				"round", round.(uint64),
+				"round", round,
 			)
 
-			if err := h.pruner.Prune(round.(uint64)); err != nil {
+			if err := h.pruner.Prune(round); err != nil {
 				h.logger.Error("failed to prune",
 					"err", err,
 				)
@@ -320,7 +305,7 @@ func (h *runtimeHistory) resolveSyncedRound(round uint64) (uint64, error) {
 }
 
 // New creates a new runtime history keeper.
-func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, hasLocalStorage bool) (History, error) {
+func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
@@ -334,19 +319,19 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	h := &runtimeHistory{
-		runtimeID:        runtimeID,
-		logger:           logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
-		ctx:              ctx,
-		cancelCtx:        cancelCtx,
-		db:               db,
-		hasLocalStorage:  hasLocalStorage,
-		blocksNotifier:   pubsub.NewBroker(true),
-		firstSyncedRound: roothash.RoundInvalid,
-		lastSyncedRound:  roothash.RoundInvalid,
-		pruner:           pruner,
-		pruneCh:          channels.NewRingChannel(1),
-		stopCh:           make(chan struct{}),
-		quitCh:           make(chan struct{}),
+		runtimeID:               runtimeID,
+		logger:                  logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
+		ctx:                     ctx,
+		cancelCtx:               cancelCtx,
+		db:                      db,
+		committedBlocksNotifier: pubsub.NewBroker(true),
+		syncedBlocksNotifier:    pubsub.NewBroker(true),
+		firstSyncedRound:        roothash.RoundInvalid,
+		lastSyncedRound:         roothash.RoundInvalid,
+		pruner:                  pruner,
+		pruneCh:                 make(chan uint64, 1),
+		stopCh:                  make(chan struct{}),
+		quitCh:                  make(chan struct{}),
 	}
 
 	go h.pruneWorker()
@@ -355,8 +340,19 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 }
 
 // NewFactory creates a new runtime history keeper factory.
-func NewFactory(prunerFactory PrunerFactory, haveLocalStorageWorker bool) Factory {
+func NewFactory(prunerFactory PrunerFactory) Factory {
 	return func(runtimeID common.Namespace, dataDir string) (History, error) {
-		return New(runtimeID, dataDir, prunerFactory, haveLocalStorageWorker)
+		return New(runtimeID, dataDir, prunerFactory)
 	}
+}
+
+// sendToChannel sends a value to the channel, overwriting any pending value.
+func sendToChannel[T any](ch chan T, value T) {
+	// Clear any pending value.
+	select {
+	case <-ch:
+	default:
+	}
+	// Send the new value.
+	ch <- value
 }

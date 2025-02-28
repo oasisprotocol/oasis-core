@@ -290,7 +290,7 @@ func (n *Node) worker() {
 	}()
 
 	// Subscribe to blocks being synced to local storage.
-	blkCh, blkSub, err := n.commonNode.Runtime.History().WatchBlocks()
+	blkCh, blkSub, err := n.commonNode.Runtime.History().WatchSyncedBlocks()
 	if err != nil {
 		close(n.initCh)
 		return

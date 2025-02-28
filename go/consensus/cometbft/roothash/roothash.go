@@ -27,10 +27,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
-const (
-	crashPointBlockBeforeIndex = "roothash.before_index"
-	reindexWriteBatchSize      = 1000
-)
+const crashPointBlockBeforeIndex = "roothash.before_index"
 
 // ServiceClient is the roothash service client interface.
 type ServiceClient interface {
