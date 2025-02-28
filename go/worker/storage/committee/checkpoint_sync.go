@@ -311,7 +311,7 @@ func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask o
 		return false
 	}
 
-	blk, err := n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, cp.Root.Version)
+	blk, err := n.commonNode.Runtime.History().GetBlock(n.ctx, cp.Root.Version)
 	if err != nil {
 		n.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
 		return false
@@ -321,8 +321,8 @@ func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask o
 		storageApi.RootTypeIO:    lastIORoot.Version,
 		storageApi.RootTypeState: lastStateRoot.Version,
 	}
-	if namespace.Equal(&blk.Header.Namespace) {
-		for _, root := range blk.Header.StorageRoots() {
+	if namespace.Equal(&blk.Block.Header.Namespace) {
+		for _, root := range blk.Block.Header.StorageRoots() {
 			if cp.Root.Type == root.Type && root.Hash.Equal(&cp.Root.Hash) {
 				// Do we already have this root?
 				if lastVersions[cp.Root.Type] < cp.Root.Version && remainingMask.contains(cp.Root.Type) {

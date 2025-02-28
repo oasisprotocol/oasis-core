@@ -117,12 +117,12 @@ type migrateHelper struct {
 	displayHelper
 
 	ctx     context.Context
-	history history.History
+	history roothash.BlockHistory
 	roots   map[hash.Hash]node.RootType
 }
 
 func (mh *migrateHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.Root, error) {
-	block, err := mh.history.GetBlock(mh.ctx, version)
+	block, err := mh.history.GetSyncedBlock(mh.ctx, version)
 	if err != nil {
 		if errors.Is(err, roothash.ErrNotFound) {
 			return nil, badger.ErrVersionNotFound
@@ -131,7 +131,7 @@ func (mh *migrateHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.
 	}
 
 	var roots []node.Root
-	for _, blockRoot := range block.Header.StorageRoots() {
+	for _, blockRoot := range block.Block.Header.StorageRoots() {
 		if blockRoot.Hash.Equal(&root) {
 			roots = append(roots, blockRoot)
 		}
@@ -166,7 +166,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 			runtimeDir := registry.GetRuntimeStateDir(dataDir, rt)
 
 			prunerFactory := history.NewNonePrunerFactory()
-			history, err := history.New(rt, runtimeDir, prunerFactory, false)
+			history, err := history.New(rt, runtimeDir, prunerFactory)
 			if err != nil {
 				return fmt.Errorf("error creating history provider: %w", err)
 			}

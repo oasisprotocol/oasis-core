@@ -146,8 +146,7 @@ type Node struct { // nolint: maligned
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	quitCh       chan struct{}
-	workerQuitCh chan struct{}
+	quitCh chan struct{}
 
 	initCh chan struct{}
 }
@@ -188,9 +187,8 @@ func NewNode(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		quitCh:       make(chan struct{}),
-		workerQuitCh: make(chan struct{}),
-		initCh:       make(chan struct{}),
+		quitCh: make(chan struct{}),
+		initCh: make(chan struct{}),
 	}
 
 	// Validate checkpoint sync configuration.
@@ -236,12 +234,12 @@ func NewNode(
 			}, nil
 		},
 		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
-			blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
+			blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
 			if berr != nil {
 				return nil, berr
 			}
 
-			return blk.Header.StorageRoots(), nil
+			return blk.Block.Header.StorageRoots(), nil
 		},
 	}
 	var err error
@@ -282,7 +280,6 @@ func (n *Node) Name() string {
 
 // Start causes the worker to start responding to CometBFT new block events.
 func (n *Node) Start() error {
-	go n.watchQuit()
 	go n.worker()
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		go n.consensusCheckpointSyncer()
@@ -581,17 +578,15 @@ func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
 	defer n.syncedLock.Unlock()
 
 	n.syncedState = *summary
-	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
-		return 0, err
+
+	// If we are in archive mode, ignore storage sync checkpoints.
+	if config.GlobalConfig.Mode != config.ModeArchive {
+		if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
+			return 0, err
+		}
 	}
 
 	return n.syncedState.Round, nil
-}
-
-func (n *Node) watchQuit() {
-	// Close quit channel on any worker quitting.
-	<-n.workerQuitCh
-	close(n.quitCh)
 }
 
 func (n *Node) consensusCheckpointSyncer() {
@@ -756,7 +751,7 @@ func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
 }
 
 func (n *Node) worker() { // nolint: gocyclo
-	defer close(n.workerQuitCh)
+	defer close(n.quitCh)
 	defer close(n.diffCh)
 
 	// Wait for the common node to be initialized.
@@ -786,12 +781,11 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	// Determine last finalized storage version.
 	if version, dbNonEmpty := n.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
-		var blk *block.Block
-		blk, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, version)
+		blk, err := n.commonNode.Runtime.History().GetBlock(n.ctx, version)
 		switch err {
 		case nil:
 			// Set last synced version to last finalized storage version.
-			if _, err = n.flushSyncedState(summaryFromBlock(blk)); err != nil {
+			if _, err = n.flushSyncedState(summaryFromBlock(blk.Block)); err != nil {
 				n.logger.Error("failed to flush synced state", "err", err)
 				return
 			}
@@ -860,23 +854,22 @@ func (n *Node) worker() { // nolint: gocyclo
 
 		// Check if we actually have information about that round. This assumes that any reindexing
 		// was already performed (the common node would not indicate being initialized otherwise).
-		_, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, iterativeSyncStart)
+		_, err = n.commonNode.Runtime.History().GetBlock(n.ctx, iterativeSyncStart)
 	SyncStartCheck:
 		switch {
 		case err == nil:
 		case errors.Is(err, roothashApi.ErrNotFound):
 			// No information is available about the initial round. Query the earliest historic
 			// block and check if that block has the genesis state root and empty I/O root.
-			var earlyBlk *block.Block
-			earlyBlk, err = n.commonNode.Runtime.History().GetEarliestBlock(n.ctx)
+			earlyBlk, err := n.commonNode.Runtime.History().GetEarliestBlock(n.ctx)
 			switch err {
 			case nil:
 				// Make sure the state root is still the same as at genesis time.
-				if !earlyBlk.Header.StateRoot.Equal(&genesisBlock.Header.StateRoot) {
+				if !earlyBlk.Block.Header.StateRoot.Equal(&genesisBlock.Header.StateRoot) {
 					break
 				}
 				// Make sure the I/O root is empty.
-				if !earlyBlk.Header.IORoot.IsEmpty() {
+				if !earlyBlk.Block.Header.IORoot.IsEmpty() {
 					break
 				}
 
@@ -884,9 +877,9 @@ func (n *Node) worker() { // nolint: gocyclo
 				// remaining versions to make sure they actually exist in the database.
 				n.logger.Debug("filling in versions to genesis",
 					"genesis_round", genesisBlock.Header.Round,
-					"earliest_round", earlyBlk.Header.Round,
+					"earliest_round", earlyBlk.Block.Header.Round,
 				)
-				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
+				for v := genesisBlock.Header.Round; v < earlyBlk.Block.Header.Round; v++ {
 					err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 						Namespace: n.commonNode.Runtime.ID(),
 						RootType:  storageApi.RootTypeState,
@@ -924,7 +917,7 @@ func (n *Node) worker() { // nolint: gocyclo
 						return
 					}
 				}
-				cachedLastRound, err = n.flushSyncedState(summaryFromBlock(earlyBlk))
+				cachedLastRound, err = n.flushSyncedState(summaryFromBlock(earlyBlk.Block))
 				if err != nil {
 					n.logger.Error("failed to flush synced state",
 						"err", err,
@@ -1240,8 +1233,7 @@ mainLoop:
 				if _, ok := hashCache[i]; ok {
 					continue
 				}
-				var oldBlock *block.Block
-				oldBlock, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, i)
+				oldBlock, err := n.commonNode.Runtime.History().GetBlock(n.ctx, i)
 				if err != nil {
 					n.logger.Error("can't get block for round",
 						"err", err,
@@ -1250,7 +1242,7 @@ mainLoop:
 					)
 					panic("can't get block in storage worker")
 				}
-				hashCache[i] = summaryFromBlock(oldBlock)
+				hashCache[i] = summaryFromBlock(oldBlock.Block)
 			}
 			if _, ok := hashCache[blk.Header.Round]; !ok {
 				hashCache[blk.Header.Round] = summaryFromBlock(blk)

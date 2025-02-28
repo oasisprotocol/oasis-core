@@ -524,16 +524,19 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 
 	if managed {
 		// Create runtime history keeper.
-		history, err := r.historyFactory(runtimeID, rt.dataDir)
+		rt.history, err = r.historyFactory(runtimeID, rt.dataDir)
 		if err != nil {
 			return nil, fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 		}
-		rt.history = history
 
 		// Start tracking this runtime.
-		if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
+		if err = r.consensus.RootHash().TrackRuntime(ctx, rt.history); err != nil {
 			return nil, fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
 		}
+
+		// Start indexing blocks.
+		indexer := history.NewBlockIndexer(r.consensus, rt.history)
+		indexer.Start()
 	}
 
 	r.runtimes[runtimeID] = rt

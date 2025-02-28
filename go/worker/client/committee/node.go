@@ -189,7 +189,7 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 	}
 	maxMessages := dsc.Executor.MaxMessages
 
-	annBlk, err := n.commonNode.Runtime.History().GetAnnotatedBlock(ctx, round)
+	annBlk, err := n.commonNode.Runtime.History().GetSyncedBlock(ctx, round)
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
 	}
@@ -290,7 +290,7 @@ func (n *Node) worker() {
 	}()
 
 	// Subscribe to blocks being synced to local storage.
-	blkCh, blkSub, err := n.commonNode.Runtime.History().WatchBlocks()
+	blkCh, blkSub, err := n.commonNode.Runtime.History().WatchSyncedBlocks()
 	if err != nil {
 		close(n.initCh)
 		return

@@ -267,7 +267,8 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Fetch the oldest retained block.
-		blk, err = rt.History().GetEarliestBlock(ctx)
+		annBlk, err := rt.History().GetEarliestBlock(ctx)
+		blk = annBlk.Block
 		switch err {
 		case nil:
 			status.LastRetainedRound = blk.Header.Round
@@ -290,7 +291,8 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			default:
 				// Update last retained round if storage earliest round is higher.
 				if earliest := lsb.NodeDB().GetEarliestVersion(); earliest > status.LastRetainedRound {
-					blk, err = rt.History().GetBlock(ctx, earliest)
+					annBlk, err = rt.History().GetSyncedBlock(ctx, earliest)
+					blk = annBlk.Block
 					switch err {
 					case nil:
 						status.LastRetainedRound = blk.Header.Round

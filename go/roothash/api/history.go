@@ -5,7 +5,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 // BlockHistory is the root hash block history keeper interface.
@@ -37,46 +36,50 @@ type BlockHistory interface {
 	// in a batch was already committed.
 	CommitBatch(blks []*AnnotatedBlock, results []*RoundResults, notify bool) error
 
-	// StorageSyncCheckpoint records the last storage round which was synced
-	// to runtime storage.
-	StorageSyncCheckpoint(round uint64) error
-
-	// LastStorageSyncedRound returns the last runtime round which was synced to storage.
-	LastStorageSyncedRound() (uint64, error)
-
-	// WatchBlocks returns a channel watching block rounds as they are committed.
-	// If node has local storage this includes waiting for the round to be synced into storage.
-	WatchBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
-
-	// WaitRoundSynced waits for the specified round to be synced to storage.
-	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)
-
-	// LastConsensusHeight returns the last consensus height which was seen
-	// by block history.
-	LastConsensusHeight() (int64, error)
-
-	// GetCommittedBlock returns the committed block at a specific round.
+	// GetBlock returns committed block at the specific round.
+	//
 	// Passing the special value `RoundLatest` will return the latest block.
-	//
-	// This method can return blocks not yet synced to storage.
-	GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error)
+	GetBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
 
-	// GetBlock returns the block at a specific round.
+	// GetEarliestBlock returns the earliest known committed block.
+	GetEarliestBlock(ctx context.Context) (*AnnotatedBlock, error)
+
+	// GetSyncedBlock returns committed and synced block at the specific round.
+	//
 	// Passing the special value `RoundLatest` will return the latest block.
-	//
-	// This method returns blocks that are both committed and synced to storage.
-	GetBlock(ctx context.Context, round uint64) (*block.Block, error)
+	GetSyncedBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
 
-	// GetAnnotatedBlock returns the annotated block at a specific round.
-	//
-	// Passing the special value `RoundLatest` will return the latest annotated block.
-	GetAnnotatedBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
-
-	// GetEarliestBlock returns the earliest known block.
-	GetEarliestBlock(ctx context.Context) (*block.Block, error)
+	// GetEarliestSyncedBlock returns the earliest known committed and synced block.
+	GetEarliestSyncedBlock(ctx context.Context) (*AnnotatedBlock, error)
 
 	// GetRoundResults returns the round results for the given round.
 	//
 	// Passing the special value `RoundLatest` will return results for the latest round.
 	GetRoundResults(ctx context.Context, round uint64) (*RoundResults, error)
+
+	// WatchBlocks returns a channel watching blocks as they are committed to storage.
+	WatchBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// WatchSyncedBlocks returns a channel watching blocks as they are committed and synced to storage.
+	WatchSyncedBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// WaitRound waits for the specified round to be committed to storage.
+	WaitRound(ctx context.Context, round uint64) (uint64, error)
+
+	// WaitRoundSynced waits for the specified round to be committed and synced to storage.
+	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)
+
+	// LastRound returns the last runtime round which was committed to storage.
+	LastRound() (uint64, error)
+
+	// LastSyncedRound returns the last runtime round which was committed and synced to storage.
+	LastSyncedRound() (uint64, error)
+
+	// LastConsensusHeight returns the last consensus height which was seen
+	// by block history.
+	LastConsensusHeight() (int64, error)
+
+	// StorageSyncCheckpoint records the last storage round which was synced
+	// to runtime storage.
+	StorageSyncCheckpoint(round uint64) error
 }
