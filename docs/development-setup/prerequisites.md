@@ -137,7 +137,7 @@ Core:
   Download and install it with:
 
   ```
-  ${OASIS_GO:-go} install mvdan.cc/gofumpt@v0.6.0
+  ${OASIS_GO:-go} install mvdan.cc/gofumpt@v0.7.0
   ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.18.0
   ```
 
