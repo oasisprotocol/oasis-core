@@ -211,7 +211,7 @@ type Backend interface {
 	// ABCI multiplexer.
 	SetTransactionAuthHandler(TransactionAuthHandler) error
 
-	// GetBlock returns the CometBFT block at the specified height.
+	// GetCometBFTBlock returns the CometBFT block at the specified height.
 	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
 
 	// GetBlockResults returns the ABCI results from processing a block
