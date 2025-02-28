@@ -123,7 +123,7 @@ type Backend interface {
 	// GetRuntimeState returns the given runtime's state.
 	GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error)
 
-	// GetPastRoundRoots returns the stored state and I/O roots for the given runtime and round.
+	// GetRoundRoots returns the stored state and I/O roots for the given runtime and round.
 	GetRoundRoots(ctx context.Context, request *RoundRootsRequest) (*RoundRoots, error)
 
 	// GetPastRoundRoots returns the stored past state and I/O roots for the given runtime.
