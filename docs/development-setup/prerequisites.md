@@ -151,7 +151,7 @@ Core:
   ```
   curl -sSfL \
   https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v1.56.1
+   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v1.64.5
   ```
 
 * (**OPTIONAL**) [protoc-gen-go].
