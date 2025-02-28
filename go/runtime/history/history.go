@@ -250,7 +250,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		// Determine the last round in case RoundLatest has been passed.
 		meta, err := h.db.metadata()
 		if err != nil {
-			return roothash.RoundInvalid, err
+			return 0, err
 		}
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
@@ -264,7 +264,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		defer h.syncRoundLock.RUnlock()
 		// Ensure round exists.
 		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < round {
-			return roothash.RoundInvalid, roothash.ErrNotFound
+			return 0, roothash.ErrNotFound
 		}
 		return round, nil
 	}

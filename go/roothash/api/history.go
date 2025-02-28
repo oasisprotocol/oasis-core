@@ -8,9 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
-// RoundLatest is a special round number always referring to the latest round.
-const RoundLatest = RoundInvalid
-
 // BlockHistory is the root hash block history keeper interface.
 //
 // All methods operate on a specific runtime.
