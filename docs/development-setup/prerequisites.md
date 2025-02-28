@@ -138,7 +138,7 @@ Core:
 
   ```
   ${OASIS_GO:-go} install mvdan.cc/gofumpt@v0.7.0
-  ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.18.0
+  ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.30.0
   ```
 
 * (**OPTIONAL**) [golangci-lint].
