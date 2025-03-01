@@ -268,11 +268,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type vaultClient struct {
+// Client is a gRPC vault client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *vaultClient) Vaults(ctx context.Context, height int64) ([]*Vault, error) {
+// NewClient creates a new gRPC vault client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) Vaults(ctx context.Context, height int64) ([]*Vault, error) {
 	var rsp []*Vault
 	if err := c.conn.Invoke(ctx, methodVaults.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -280,7 +288,7 @@ func (c *vaultClient) Vaults(ctx context.Context, height int64) ([]*Vault, error
 	return rsp, nil
 }
 
-func (c *vaultClient) Vault(ctx context.Context, request *VaultQuery) (*Vault, error) {
+func (c *Client) Vault(ctx context.Context, request *VaultQuery) (*Vault, error) {
 	var rsp Vault
 	if err := c.conn.Invoke(ctx, methodVault.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -288,7 +296,7 @@ func (c *vaultClient) Vault(ctx context.Context, request *VaultQuery) (*Vault, e
 	return &rsp, nil
 }
 
-func (c *vaultClient) AddressState(ctx context.Context, request *AddressQuery) (*AddressState, error) {
+func (c *Client) AddressState(ctx context.Context, request *AddressQuery) (*AddressState, error) {
 	var rsp AddressState
 	if err := c.conn.Invoke(ctx, methodAddressState.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -296,7 +304,7 @@ func (c *vaultClient) AddressState(ctx context.Context, request *AddressQuery) (
 	return &rsp, nil
 }
 
-func (c *vaultClient) PendingActions(ctx context.Context, request *VaultQuery) ([]*PendingAction, error) {
+func (c *Client) PendingActions(ctx context.Context, request *VaultQuery) ([]*PendingAction, error) {
 	var rsp []*PendingAction
 	if err := c.conn.Invoke(ctx, methodPendingActions.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -304,7 +312,7 @@ func (c *vaultClient) PendingActions(ctx context.Context, request *VaultQuery) (
 	return rsp, nil
 }
 
-func (c *vaultClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -312,7 +320,7 @@ func (c *vaultClient) StateToGenesis(ctx context.Context, height int64) (*Genesi
 	return &rsp, nil
 }
 
-func (c *vaultClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -320,7 +328,7 @@ func (c *vaultClient) ConsensusParameters(ctx context.Context, height int64) (*C
 	return &rsp, nil
 }
 
-func (c *vaultClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -328,7 +336,7 @@ func (c *vaultClient) GetEvents(ctx context.Context, height int64) ([]*Event, er
 	return rsp, nil
 }
 
-func (c *vaultClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
@@ -363,10 +371,5 @@ func (c *vaultClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.Cl
 	return ch, sub, nil
 }
 
-func (c *vaultClient) Cleanup() {
-}
-
-// NewVaultClient creates a new gRPC vault client service.
-func NewVaultClient(c *grpc.ClientConn) Backend {
-	return &vaultClient{c}
+func (c *Client) Cleanup() {
 }

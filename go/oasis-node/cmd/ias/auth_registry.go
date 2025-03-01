@@ -66,7 +66,7 @@ func (auth *registryAuthenticator) watchRuntimes(ctx context.Context, conn *grpc
 	err error,
 ) {
 	op := func() error {
-		client = registry.NewRegistryClient(conn)
+		client = registry.NewClient(conn)
 
 		// Subscribe to runtimes.
 		ch, sub, err = client.WatchRuntimes(ctx)
@@ -94,7 +94,7 @@ func (auth *registryAuthenticator) watchEpochs(ctx context.Context, conn *grpc.C
 	err error,
 ) {
 	op := func() error {
-		client := beacon.NewBeaconClient(conn)
+		client := beacon.NewClient(conn)
 
 		// Subscribe to epochs.
 		ch, sub, err = client.WatchEpochs(ctx)

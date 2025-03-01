@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"fmt"
+
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
@@ -13,24 +16,26 @@ func RegisterService(server *grpc.Server, service Backend) {
 	churp.RegisterService(server, service.Churp())
 }
 
-// KeymanagerClient is a gRPC keymanager client.
-type KeymanagerClient struct {
-	secretsClient *secrets.Client
-	churpClient   *churp.Client
+// Client is a gRPC key manager client.
+type Client struct {
+	conn *grpc.ClientConn
 }
 
-func (c *KeymanagerClient) Secrets() *secrets.Client {
-	return c.secretsClient
-}
-
-func (c *KeymanagerClient) Churp() *churp.Client {
-	return c.churpClient
-}
-
-// NewKeymanagerClient creates a new gRPC keymanager client service.
-func NewKeymanagerClient(c *grpc.ClientConn) *KeymanagerClient {
-	return &KeymanagerClient{
-		secretsClient: secrets.NewClient(c),
-		churpClient:   churp.NewClient(c),
+// NewClient creates a new gRPC key manager client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
 	}
+}
+
+func (c *Client) StateToGenesis(context.Context, int64) (*Genesis, error) {
+	return nil, fmt.Errorf("keymanager: not supported")
+}
+
+func (c *Client) Secrets() secrets.Backend {
+	return secrets.NewClient(c.conn)
+}
+
+func (c *Client) Churp() churp.Backend {
+	return churp.NewClient(c.conn)
 }

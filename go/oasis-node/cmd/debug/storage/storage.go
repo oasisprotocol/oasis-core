@@ -110,9 +110,9 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
 	conn, _ := cmdControl.DoConnect(cmd)
-	client := runtimeClient.NewRuntimeClient(conn)
-	storageWorkerClient := storageWorkerAPI.NewStorageWorkerClient(conn)
-	storageClient := storageAPI.NewStorageClient(conn)
+	client := runtimeClient.NewClient(conn)
+	storageWorkerClient := storageWorkerAPI.NewClient(conn)
+	storageClient := storageAPI.NewClient(conn)
 	defer conn.Close()
 
 	var id common.Namespace

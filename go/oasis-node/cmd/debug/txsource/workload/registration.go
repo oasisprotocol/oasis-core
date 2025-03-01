@@ -173,7 +173,7 @@ func (r *registration) Run( // nolint: gocyclo
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
 
-	beacon := beacon.NewBeaconClient(conn)
+	beacon := beacon.NewClient(conn)
 	ctx := context.Background()
 	var err error
 

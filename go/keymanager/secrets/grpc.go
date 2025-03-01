@@ -12,8 +12,10 @@ import (
 
 var (
 	// serviceName is the gRPC service name.
-	serviceName = cmnGrpc.NewServiceName("KeyManager")
+	serviceName = cmnGrpc.NewServiceName("KeyManager.Secrets")
 
+	// methodStateToGenesis is the StateToGenesis method.
+	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodGetStatus is the GetStatus method.
 	methodGetStatus = serviceName.NewMethod("GetStatus", registry.NamespaceQuery{})
 	// methodGetStatuses is the GetStatuses method.
@@ -35,6 +37,10 @@ var (
 		ServiceName: string(serviceName),
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
+			{
+				MethodName: methodStateToGenesis.ShortName(),
+				Handler:    handlerStateToGenesis,
+			},
 			{
 				MethodName: methodGetStatus.ShortName(),
 				Handler:    handlerGetStatus,
@@ -71,6 +77,29 @@ var (
 		},
 	}
 )
+
+func handlerStateToGenesis(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).StateToGenesis(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateToGenesis.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
 
 func handlerGetStatus(
 	srv interface{},
@@ -170,7 +199,10 @@ func handlerWatchStatuses(srv interface{}, stream grpc.ServerStream) error {
 	}
 
 	ctx := stream.Context()
-	ch, sub := srv.(Backend).WatchStatuses()
+	ch, sub, err := srv.(Backend).WatchStatuses(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -195,7 +227,10 @@ func handlerWatchMasterSecrets(srv interface{}, stream grpc.ServerStream) error 
 	}
 
 	ctx := stream.Context()
-	ch, sub := srv.(Backend).WatchMasterSecrets()
+	ch, sub, err := srv.(Backend).WatchMasterSecrets(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -220,7 +255,10 @@ func handlerWatchEphemeralSecrets(srv interface{}, stream grpc.ServerStream) err
 	}
 
 	ctx := stream.Context()
-	ch, sub := srv.(Backend).WatchEphemeralSecrets()
+	ch, sub, err := srv.(Backend).WatchEphemeralSecrets(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -242,11 +280,25 @@ func handlerWatchEphemeralSecrets(srv interface{}, stream grpc.ServerStream) err
 // RegisterService registers a new keymanager secrets backend service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
+	server.RegisterService(&deprecatedServiceDesc, service)
 }
 
-// Client is a gRPC keymanager secrets client.
+// Client is a gRPC key manager secrets client.
 type Client struct {
 	conn *grpc.ClientConn
+}
+
+// NewClient creates a new gRPC key manager secrets client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{c}
+}
+
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+	var resp *Genesis
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (c *Client) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*Status, error) {
@@ -384,9 +436,4 @@ func (c *Client) WatchEphemeralSecrets(ctx context.Context) (<-chan *SignedEncry
 	}()
 
 	return ch, sub, nil
-}
-
-// NewClient creates a new gRPC keymanager secrets client service.
-func NewClient(c *grpc.ClientConn) *Client {
-	return &Client{c}
 }

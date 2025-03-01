@@ -75,7 +75,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
 		os.Exit(1)
 	}
 
-	client := consensus.NewConsensusClient(conn)
+	client := consensus.NewClient(conn)
 	return conn, client
 }
 

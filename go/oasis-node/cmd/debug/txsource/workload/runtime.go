@@ -799,7 +799,7 @@ func (r *runtime) Run(
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
 
-	beacon := beacon.NewBeaconClient(conn)
+	beacon := beacon.NewClient(conn)
 	ctx := context.Background()
 
 	// Simple-keyvalue runtime.
@@ -819,7 +819,7 @@ func (r *runtime) Run(
 	}
 
 	// Set up the runtime client.
-	rtc := runtimeClient.NewRuntimeClient(conn)
+	rtc := runtimeClient.NewClient(conn)
 
 	// Wait for 3rd epoch, so that runtimes are up and running.
 	r.Logger.Info("waiting for 3rd epoch")
