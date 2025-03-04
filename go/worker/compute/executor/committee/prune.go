@@ -8,7 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
-// pruneHandler is a prune handler that prevents pruning of the last successful round.
+// pruneHandler is a prune handler that prevents pruning of the last normal round.
 type pruneHandler struct {
 	commonNode *committee.Node
 }
@@ -18,8 +18,9 @@ func (p *pruneHandler) Prune(rounds []uint64) error {
 	height := p.commonNode.CurrentBlockHeight
 	p.commonNode.CrossNode.Unlock()
 
-	// Make sure we never prune past the last successful round as we need that round in history so
-	// we can fetch any needed round results.
+	// Make sure we never prune past the last normal round, as some runtimes will do historic queries
+	// for things that are not available in the last consensus state (e.g. delegation/undelegation
+	// events that happened while the runtime was suspended or not producing blocks).
 	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(context.Background(), &roothash.RuntimeRequest{
 		RuntimeID: p.commonNode.Runtime.ID(),
 		Height:    height,

@@ -28,10 +28,14 @@ var (
 	//
 	// Value is CBOR-serialized roothash.AnnotatedBlock.
 	blockKeyFmt = keyFormat.New(0x02, uint64(0))
-	// roundResultsKeyFmt is the round result index key format.
+
+	// deprecatedRoundResultsKeyFmt is the deprecated round result index key format.
 	//
 	// Value is CBOR-serialized roothash.RoundResults.
-	roundResultsKeyFmt = keyFormat.New(0x03, uint64(0))
+	//
+	// Deprecated: This key format is deprecated and will be removed in future versions
+	// after we clean up the remaining round results from the block history (#6098).
+	deprecatedRoundResultsKeyFmt = keyFormat.New(0x03, uint64(0)) //nolint:unused
 )
 
 type dbMetadata struct {
@@ -149,13 +153,7 @@ func (d *DB) metadata() (*dbMetadata, error) {
 	return meta, nil
 }
 
-func (d *DB) commit(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults) error {
-	if len(blks) != len(results) {
-		return fmt.Errorf("length mismatch (blocks: %d round results: %d)",
-			len(blks),
-			len(results),
-		)
-	}
+func (d *DB) commit(blks []*roothash.AnnotatedBlock) error {
 	if len(blks) == 0 {
 		return nil
 	}
@@ -166,7 +164,7 @@ func (d *DB) commit(blks []*roothash.AnnotatedBlock, results []*roothash.RoundRe
 			return err
 		}
 
-		for i, blk := range blks {
+		for _, blk := range blks {
 			rtID := blk.Block.Header.Namespace
 			if !rtID.Equal(&meta.RuntimeID) {
 				return fmt.Errorf("runtime mismatch (expected: %s got: %s)",
@@ -190,10 +188,6 @@ func (d *DB) commit(blks []*roothash.AnnotatedBlock, results []*roothash.RoundRe
 			}
 
 			if err := tx.Set(blockKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(blk)); err != nil {
-				return err
-			}
-
-			if err := tx.Set(roundResultsKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(results[i])); err != nil {
 				return err
 			}
 
@@ -247,28 +241,6 @@ func (d *DB) getEarliestBlock() (*roothash.AnnotatedBlock, error) {
 		return nil, txErr
 	}
 	return &blk, nil
-}
-
-func (d *DB) getRoundResults(round uint64) (*roothash.RoundResults, error) {
-	var roundResults *roothash.RoundResults
-	txErr := d.db.View(func(tx *badger.Txn) error {
-		item, err := tx.Get(roundResultsKeyFmt.Encode(round))
-		switch err {
-		case nil:
-		case badger.ErrKeyNotFound:
-			return roothash.ErrNotFound
-		default:
-			return err
-		}
-
-		return item.Value(func(val []byte) error {
-			return cbor.UnmarshalTrusted(val, &roundResults)
-		})
-	})
-	if txErr != nil {
-		return nil, txErr
-	}
-	return roundResults, nil
 }
 
 func (d *DB) close() {
