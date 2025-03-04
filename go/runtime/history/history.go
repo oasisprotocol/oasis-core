@@ -64,16 +64,16 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, result *roothash.RoundResults, notify bool) error {
-	return h.CommitBatch([]*roothash.AnnotatedBlock{blk}, []*roothash.RoundResults{result}, notify)
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, notify bool) error {
+	return h.CommitBatch([]*roothash.AnnotatedBlock{blk}, notify)
 }
 
-func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, results []*roothash.RoundResults, notify bool) error {
-	if len(blks) == 0 && len(results) == 0 {
+func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, notify bool) error {
+	if len(blks) == 0 {
 		return nil
 	}
 
-	if err := h.db.commit(blks, results); err != nil {
+	if err := h.db.commit(blks); err != nil {
 		return err
 	}
 
@@ -239,17 +239,6 @@ func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, er
 		return nil, err
 	}
 	return annBlk.Block, nil
-}
-
-func (h *runtimeHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	resolvedRound, err := h.resolveRound(round, true)
-	if err != nil {
-		return nil, err
-	}
-	return h.db.getRoundResults(resolvedRound)
 }
 
 func (h *runtimeHistory) Pruner() Pruner {

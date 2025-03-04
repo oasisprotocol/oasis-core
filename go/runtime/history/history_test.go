@@ -62,33 +62,26 @@ func TestHistory(t *testing.T) {
 	}
 	blk.Block.Header.Round = 10
 
-	roundResults := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 0, Index: 0},
-			{Module: "", Code: 0, Index: 1},
-		},
-	}
-
 	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, true)
 	require.Error(err, "Commit should fail for different runtime")
 
 	copy(blk.Block.Header.Namespace[:], runtimeID[:])
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, true)
 	require.NoError(err, "Commit")
 
 	blk2 := roothash.AnnotatedBlock{
 		Height: 40,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
-	err = history.Commit(&blk2, roundResults, true)
+	err = history.Commit(&blk2, true)
 	require.Error(err, "Commit should fail for lower consensus height")
 
 	putBlk := *blk.Block
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, true)
 	require.Error(err, "Commit should fail for the same round")
 	blk.Block.Header.Round = 5
-	err = history.Commit(&blk, roundResults, true)
+	err = history.Commit(&blk, true)
 	require.Error(err, "Commit should fail for a lower round")
 	blk.Block.Header.Round = 10
 
@@ -129,10 +122,6 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "GetBlock(RoundLatest)")
 	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
 
-	gotResults, err := history.GetRoundResults(ctx, 10)
-	require.NoError(err, "GetRoundResults")
-	require.Equal(roundResults, gotResults, "GetRoundResults should return the correct results")
-
 	// Close history and try to reopen and continue.
 	history.Close()
 
@@ -165,10 +154,6 @@ func TestHistory(t *testing.T) {
 	gotLatestBlk, err = history.GetBlock(ctx, roothash.RoundLatest)
 	require.NoError(err, "GetBlock(RoundLatest)")
 	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
-
-	gotResults, err = history.GetRoundResults(ctx, 10)
-	require.NoError(err, "GetRoundResults")
-	require.Equal(roundResults, gotResults, "GetRoundResults should return the correct results")
 }
 
 func TestCommitBatch(t *testing.T) {
@@ -198,47 +183,21 @@ func TestCommitBatch(t *testing.T) {
 		Block:  block.NewGenesisBlock(runtimeID2, 0),
 	}
 	blk2.Block.Header.Round = 1
-	results1 := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 0, Index: 0},
-			{Module: "", Code: 0, Index: 1},
-		},
-	}
-	results2 := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 1, Index: 0},
-		},
-	}
 
-	err = history.CommitBatch(nil, nil, true)
+	err = history.CommitBatch(nil, true)
 	require.NoError(err, "CommitBatch should succeed for empty batch")
 
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
-		[]*roothash.RoundResults{results1},
-		true,
-	)
-	require.Error(err, "CommitBatch should fail when slices don't have equal size")
-
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
-		[]*roothash.RoundResults{results1, results2},
-		true,
-	)
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2}, true)
 	require.Error(err, "CommitBatch should fail when different runtimes IDs")
 
 	copy(blk2.Block.Header.Namespace[:], blk1.Block.Header.Namespace[:])
 
 	// Commit batch in wrong order: round 1 and 0 at consenus height 3 and 1.
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk2, &blk1},
-		[]*roothash.RoundResults{results2, results1},
-		true,
-	)
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk2, &blk1}, true)
 	require.Error(err, "CommitBatch should fail for unordered batch")
 
 	// Commit batch round 0 and 1 at consenus height 1 and 3.
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
-		[]*roothash.RoundResults{results1, results2},
-		true,
-	)
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2}, true)
 	require.NoError(err, "CommitBatch")
 
 	lastHeight, err := history.LastConsensusHeight()
@@ -254,17 +213,17 @@ func TestCommitBatch(t *testing.T) {
 	require.Equal(blk2.Block, gotBlock, "GetCommittedBlock should return the correct block")
 
 	// Commit for the latest height and round should fail
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, true)
 	require.Error(err, "Commit should fail for same consensus height")
 
 	// Commit for the latest round should fail.
 	blk2.Height = 4
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, true)
 	require.Error(err, "Commit should fail for same round")
 
 	// Commit after batch commit should succeed when round and height increases.
 	blk2.Block.Header.Round = 2
-	err = history.Commit(&blk2, nil, true)
+	err = history.Commit(&blk2, true)
 	require.NoError(err, "Commit")
 
 	err = history.StorageSyncCheckpoint(2)
@@ -279,10 +238,7 @@ func TestCommitBatch(t *testing.T) {
 	blk2.Height = 7
 	blk1.Block.Header.Round = 5
 	blk2.Block.Header.Round = 6
-	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2},
-		[]*roothash.RoundResults{nil, nil},
-		false,
-	)
+	err = history.CommitBatch([]*roothash.AnnotatedBlock{&blk1, &blk2}, false)
 	require.NoError(err, "CommitBatch")
 }
 
@@ -328,24 +284,12 @@ func TestWatchBlocks(t *testing.T) {
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
 	blk1.Block.Header.Round = 10
-	results1 := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 0, Index: 0},
-			{Module: "", Code: 0, Index: 1},
-		},
-	}
 	blk2 := roothash.AnnotatedBlock{
 		Height: 41,
 		Block:  block.NewGenesisBlock(runtimeID, 0),
 	}
 	blk2.Block.Header.Round = 11
-	results2 := &roothash.RoundResults{
-		Messages: []*roothash.MessageEvent{
-			{Module: "", Code: 1, Index: 0},
-		},
-	}
 	blocks := []*roothash.AnnotatedBlock{&blk1, &blk2}
-	results := []*roothash.RoundResults{results1, nil}
 
 	// Test history with local storage.
 	prunerFactory := NewNonePrunerFactory()
@@ -354,7 +298,7 @@ func TestWatchBlocks(t *testing.T) {
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
 	// Commit a block and notify.
-	err = history.Commit(&blk1, results1, true)
+	err = history.Commit(&blk1, true)
 	require.NoError(err, "Commit")
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
@@ -364,7 +308,7 @@ func TestWatchBlocks(t *testing.T) {
 	// Block should be received.
 	testWatchBlocks(t, history, 10)
 	// Commit a block without notifying.
-	err = history.Commit(&blk2, results2, false)
+	err = history.Commit(&blk2, false)
 	require.NoError(err, "Commit")
 	err = history.StorageSyncCheckpoint(11)
 	require.NoError(err, "StorageSyncCheckpoint")
@@ -384,13 +328,13 @@ func TestWatchBlocks(t *testing.T) {
 	// No blocks should be received.
 	testWatchBlocks(t, history, 0)
 	// Commit a block without notifying.
-	err = history.Commit(&blk1, results1, false)
+	err = history.Commit(&blk1, false)
 	require.NoError(err, "Commit should work")
 	// No blocks should be received since commit didn't notify and
 	// history has no local storage.
 	testWatchBlocks(t, history, 0)
 	// Commit a block and also notify.
-	err = history.Commit(&blk2, results2, true)
+	err = history.Commit(&blk2, true)
 	require.NoError(err, "Commit should work")
 	// Block should be received.
 	testWatchBlocks(t, history, 11)
@@ -409,7 +353,7 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "New")
 	testWatchBlocks(t, history, 0)
 	// Commit batch without notifying.
-	err = history.CommitBatch(blocks, results, false)
+	err = history.CommitBatch(blocks, false)
 	require.NoError(err, "CommitBatch")
 	// In case of a local storage, we broadcast blocks when
 	// StorageSyncCheckpoint is called, regardless of notify flag.
@@ -432,7 +376,7 @@ func TestWatchBlocks(t *testing.T) {
 	require.NoError(err, "New")
 	testWatchBlocks(t, history, 0)
 	// Commit batch without notifying.
-	err = history.CommitBatch(blocks, results, false)
+	err = history.CommitBatch(blocks, false)
 	require.NoError(err, "CommitBatch")
 	// No block should be received since we set notify to false.
 	testWatchBlocks(t, history, 0)
@@ -488,39 +432,26 @@ func TestHistoryPrune(t *testing.T) {
 	const n = 51
 
 	blks := make([]*roothash.AnnotatedBlock, n)
-	results := make([]*roothash.RoundResults, n)
 	for i := 0; i < n; i++ {
 		blk := roothash.AnnotatedBlock{
 			Height: int64(i),
 			Block:  block.NewGenesisBlock(runtimeID, 0),
 		}
 		blk.Block.Header.Round = uint64(i)
-
-		var msgResults []*roothash.MessageEvent
-		if i%5 == 0 {
-			msgResults = []*roothash.MessageEvent{
-				{Module: "", Code: 0, Index: 0},
-				{Module: "", Code: 0, Index: 1},
-			}
-		}
-		roundResults := &roothash.RoundResults{
-			Messages: msgResults,
-		}
 		blks[i] = &blk
-		results[i] = roundResults
 	}
 
 	// Commit first 30 blocks in a batch of 10.
-	err = history.CommitBatch(blks[:10], results[:10], false)
+	err = history.CommitBatch(blks[:10], false)
 	require.NoError(err, "Commit")
-	err = history.CommitBatch(blks[10:20], results[10:20], false)
+	err = history.CommitBatch(blks[10:20], false)
 	require.NoError(err, "Commit")
-	err = history.CommitBatch(blks[20:30], results[20:30], false)
+	err = history.CommitBatch(blks[20:30], false)
 	require.NoError(err, "Commit")
 
 	// Commit remaining 20 blocks one by one.
 	for i := 30; i < n; i++ {
-		err = history.Commit(blks[i], results[i], true)
+		err = history.Commit(blks[i], true)
 		require.NoError(err, "Commit")
 	}
 	// Simulate storage syncing.
@@ -559,18 +490,9 @@ func TestHistoryPrune(t *testing.T) {
 		if i <= 40 {
 			require.Error(err, "GetBlock should fail for pruned block %d", i)
 			require.Equal(roothash.ErrNotFound, err)
-		} else {
-			require.NoError(err, "GetBlock(%d)", i)
+			continue
 		}
-
-		roundResults, err := history.GetRoundResults(ctx, uint64(i))
-		if i <= 40 {
-			require.Error(err, "GetRoundResults(%d)", i)
-			require.Equal(roothash.ErrNotFound, err)
-		} else if i%5 == 0 {
-			require.NoError(err, "GetRoundResults(%d)", i)
-			require.NotEmpty(roundResults.Messages, "GetRoundResults should return correct results for block %d", i)
-		}
+		require.NoError(err, "GetBlock(%d)", i)
 	}
 
 	// Ensure the prune handler was called.
@@ -613,7 +535,7 @@ func TestHistoryPruneError(t *testing.T) {
 		}
 		blk.Block.Header.Round = uint64(i)
 
-		err = history.Commit(&blk, nil, true)
+		err = history.Commit(&blk, true)
 		require.NoError(err, "Commit")
 
 		err = history.StorageSyncCheckpoint(blk.Block.Header.Round)
