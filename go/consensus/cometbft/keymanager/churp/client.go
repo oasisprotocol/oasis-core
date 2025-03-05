@@ -73,12 +73,12 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*chu
 }
 
 // WatchStatuses implements churp.Backend.
-func (sc *ServiceClient) WatchStatuses() (<-chan *churp.Status, *pubsub.Subscription) {
+func (sc *ServiceClient) WatchStatuses(context.Context) (<-chan *churp.Status, pubsub.ClosableSubscription, error) {
 	sub := sc.statusNotifier.Subscribe()
 	ch := make(chan *churp.Status)
 	sub.Unwrap(ch)
 
-	return ch, sub
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {

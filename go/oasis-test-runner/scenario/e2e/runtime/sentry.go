@@ -207,7 +207,7 @@ func (s *sentryImpl) Run(ctx context.Context, childEnv *env.Env) error { // noli
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
 	defer conn.Close()
-	sentry0Client := api.NewSentryClient(conn)
+	sentry0Client := api.NewClient(conn)
 	_, err = sentry0Client.GetAddresses(ctx)
 	s.Logger.Debug("sentry0.GetAddress without cert", "err", err)
 	if status.Code(err) != codes.PermissionDenied {
@@ -227,7 +227,7 @@ func (s *sentryImpl) Run(ctx context.Context, childEnv *env.Env) error { // noli
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
 	defer conn.Close()
-	sentry0Client = api.NewSentryClient(conn)
+	sentry0Client = api.NewClient(conn)
 	_, err = sentry0Client.GetAddresses(ctx)
 	s.Logger.Debug("sentry0.GetAddress with validator1 sentry cert", "err", err)
 	if status.Code(err) != codes.PermissionDenied {
@@ -247,7 +247,7 @@ func (s *sentryImpl) Run(ctx context.Context, childEnv *env.Env) error { // noli
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
 	defer conn.Close()
-	sentry0Client = api.NewSentryClient(conn)
+	sentry0Client = api.NewClient(conn)
 	_, err = sentry0Client.GetAddresses(ctx)
 	s.Logger.Debug("sentry0.GetAddress with validator0 sentry cert", "err", err)
 	if err != nil {

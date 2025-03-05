@@ -14,6 +14,8 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("KeyManager.Churp")
 
+	// methodStateToGenesis is the StateToGenesis method.
+	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
 	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
 	// methodStatus is the Status method.
@@ -31,6 +33,10 @@ var (
 		ServiceName: string(serviceName),
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
+			{
+				MethodName: methodStateToGenesis.ShortName(),
+				Handler:    handlerStateToGenesis,
+			},
 			{
 				MethodName: methodConsensusParameters.ShortName(),
 				Handler:    handlerConsensusParameters,
@@ -57,6 +63,29 @@ var (
 		},
 	}
 )
+
+func handlerStateToGenesis(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).StateToGenesis(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateToGenesis.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
 
 func handlerConsensusParameters(
 	srv interface{},
@@ -156,7 +185,10 @@ func handlerWatchStatuses(srv interface{}, stream grpc.ServerStream) error {
 	}
 
 	ctx := stream.Context()
-	ch, sub := srv.(Backend).WatchStatuses()
+	ch, sub, err := srv.(Backend).WatchStatuses(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -180,9 +212,22 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-// Client is a gRPC keymanager secrets client.
+// Client is a gRPC key manager CHURP client.
 type Client struct {
 	conn *grpc.ClientConn
+}
+
+// NewClient creates a new gRPC key manager CHURP client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{c}
+}
+
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+	var resp *Genesis
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
@@ -201,12 +246,12 @@ func (c *Client) Status(ctx context.Context, query *StatusQuery) (*Status, error
 	return &resp, nil
 }
 
-func (c *Client) Statuses(ctx context.Context, query *registry.NamespaceQuery) (*Status, error) {
-	var resp Status
+func (c *Client) Statuses(ctx context.Context, query *registry.NamespaceQuery) ([]*Status, error) {
+	var resp []*Status
 	if err := c.conn.Invoke(ctx, methodStatuses.FullName(), query, &resp); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return resp, nil
 }
 
 func (c *Client) AllStatuses(ctx context.Context, height int64) ([]*Status, error) {
@@ -250,9 +295,4 @@ func (c *Client) WatchStatuses(ctx context.Context) (<-chan *Status, pubsub.Clos
 	}()
 
 	return ch, sub, nil
-}
-
-// NewClient creates a new gRPC keymanager CHURP client service.
-func NewClient(c *grpc.ClientConn) *Client {
-	return &Client{c}
 }

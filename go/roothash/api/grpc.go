@@ -462,11 +462,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type roothashClient struct {
+// Client is a gRPC roothash client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *roothashClient) GetGenesisBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error) {
+// NewClient creates a new gRPC roothash client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) GetGenesisBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetGenesisBlock.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -474,7 +482,7 @@ func (c *roothashClient) GetGenesisBlock(ctx context.Context, request *RuntimeRe
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetLatestBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error) {
+func (c *Client) GetLatestBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetLatestBlock.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -482,7 +490,7 @@ func (c *roothashClient) GetLatestBlock(ctx context.Context, request *RuntimeReq
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error) {
+func (c *Client) GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error) {
 	var rsp RuntimeState
 	if err := c.conn.Invoke(ctx, methodGetRuntimeState.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -490,7 +498,7 @@ func (c *roothashClient) GetRuntimeState(ctx context.Context, request *RuntimeRe
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetLastRoundResults(ctx context.Context, request *RuntimeRequest) (*RoundResults, error) {
+func (c *Client) GetLastRoundResults(ctx context.Context, request *RuntimeRequest) (*RoundResults, error) {
 	var rsp RoundResults
 	if err := c.conn.Invoke(ctx, methodGetLastRoundResults.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -498,7 +506,7 @@ func (c *roothashClient) GetLastRoundResults(ctx context.Context, request *Runti
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetRoundRoots(ctx context.Context, request *RoundRootsRequest) (*RoundRoots, error) {
+func (c *Client) GetRoundRoots(ctx context.Context, request *RoundRootsRequest) (*RoundRoots, error) {
 	var rsp RoundRoots
 	if err := c.conn.Invoke(ctx, methodGetRoundRoots.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -506,7 +514,7 @@ func (c *roothashClient) GetRoundRoots(ctx context.Context, request *RoundRootsR
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetPastRoundRoots(ctx context.Context, request *RuntimeRequest) (map[uint64]RoundRoots, error) {
+func (c *Client) GetPastRoundRoots(ctx context.Context, request *RuntimeRequest) (map[uint64]RoundRoots, error) {
 	var rsp map[uint64]RoundRoots
 	if err := c.conn.Invoke(ctx, methodGetPastRoundRoots.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -514,7 +522,7 @@ func (c *roothashClient) GetPastRoundRoots(ctx context.Context, request *Runtime
 	return rsp, nil
 }
 
-func (c *roothashClient) GetIncomingMessageQueueMeta(ctx context.Context, request *RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
+func (c *Client) GetIncomingMessageQueueMeta(ctx context.Context, request *RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
 	var rsp message.IncomingMessageQueueMeta
 	if err := c.conn.Invoke(ctx, methodGetIncomingMessageQueueMeta.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -522,7 +530,7 @@ func (c *roothashClient) GetIncomingMessageQueueMeta(ctx context.Context, reques
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetIncomingMessageQueue(ctx context.Context, request *InMessageQueueRequest) ([]*message.IncomingMessage, error) {
+func (c *Client) GetIncomingMessageQueue(ctx context.Context, request *InMessageQueueRequest) ([]*message.IncomingMessage, error) {
 	var rsp []*message.IncomingMessage
 	if err := c.conn.Invoke(ctx, methodGetIncomingMessageQueue.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -530,11 +538,11 @@ func (c *roothashClient) GetIncomingMessageQueue(ctx context.Context, request *I
 	return rsp, nil
 }
 
-func (c *roothashClient) TrackRuntime(context.Context, BlockHistory) error {
+func (c *Client) TrackRuntime(context.Context, BlockHistory) error {
 	return ErrInvalidArgument
 }
 
-func (c *roothashClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -542,7 +550,7 @@ func (c *roothashClient) StateToGenesis(ctx context.Context, height int64) (*Gen
 	return &rsp, nil
 }
 
-func (c *roothashClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -550,7 +558,7 @@ func (c *roothashClient) ConsensusParameters(ctx context.Context, height int64) 
 	return &rsp, nil
 }
 
-func (c *roothashClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -558,10 +566,10 @@ func (c *roothashClient) GetEvents(ctx context.Context, height int64) ([]*Event,
 	return rsp, nil
 }
 
-func (c *roothashClient) Cleanup() {
+func (c *Client) Cleanup() {
 }
 
-func (c *roothashClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchBlocks.FullName())
@@ -596,7 +604,7 @@ func (c *roothashClient) WatchBlocks(ctx context.Context, runtimeID common.Names
 	return ch, sub, nil
 }
 
-func (c *roothashClient) WatchEvents(ctx context.Context, runtimeID common.Namespace) (<-chan *Event, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEvents(ctx context.Context, runtimeID common.Namespace) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchEvents.FullName())
@@ -631,7 +639,7 @@ func (c *roothashClient) WatchEvents(ctx context.Context, runtimeID common.Names
 	return ch, sub, nil
 }
 
-func (c *roothashClient) WatchExecutorCommitments(ctx context.Context, runtimeID common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchExecutorCommitments(ctx context.Context, runtimeID common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchExecutorCommitments.FullName())
@@ -664,11 +672,4 @@ func (c *roothashClient) WatchExecutorCommitments(ctx context.Context, runtimeID
 	}()
 
 	return ch, sub, nil
-}
-
-// NewRootHashClient creates a new gRPC roothash client service.
-func NewRootHashClient(c *grpc.ClientConn) Backend {
-	return &roothashClient{
-		conn: c,
-	}
 }

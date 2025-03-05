@@ -316,7 +316,7 @@ func testConsensusClient(t *testing.T, node *testNode) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Dial")
 
-	client := consensusAPI.NewConsensusClient(conn)
+	client := consensusAPI.NewClient(conn)
 	consensusTests.ConsensusImplementationTests(t, client)
 }
 
@@ -354,7 +354,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 	require.NoError(t, err, "Dial")
 	defer conn.Close()
 
-	client := scheduler.NewSchedulerClient(conn)
+	client := scheduler.NewClient(conn)
 	schedulerTests.SchedulerImplementationTests(t, "client", node.Identity, client, node.Consensus)
 }
 
@@ -369,7 +369,7 @@ func testStakingClient(t *testing.T, node *testNode) {
 	require.NoError(t, err, "Dial")
 	defer conn.Close()
 
-	client := staking.NewStakingClient(conn)
+	client := staking.NewClient(conn)
 	stakingTests.StakingClientImplementationTests(t, client, node.Consensus)
 }
 
@@ -387,7 +387,7 @@ func testRootHash(t *testing.T, node *testNode) {
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
 
-		client := roothash.NewRootHashClient(conn)
+		client := roothash.NewClient(conn)
 		roothashTests.RootHashImplementationTests(t, client, node.Consensus, node.Identity)
 	})
 }
@@ -406,7 +406,7 @@ func testGovernance(t *testing.T, node *testNode) {
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
 
-		client := governance.NewGovernanceClient(conn)
+		client := governance.NewClient(conn)
 		governanceTests.GovernanceImplementationTests(t, client, node.Consensus, node.entity, node.entitySigner)
 	})
 }
@@ -443,7 +443,7 @@ func testRuntimeClient(t *testing.T, node *testNode) {
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
 
-		cli := runtimeClient.NewRuntimeClient(conn)
+		cli := runtimeClient.NewClient(conn)
 		clientTests.ClientImplementationTests(t, cli, node.runtimeID)
 	})
 }
@@ -462,7 +462,7 @@ func testVault(t *testing.T, node *testNode) {
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
 
-		client := vault.NewVaultClient(conn)
+		client := vault.NewClient(conn)
 		vaultTests.VaultImplementationTests(t, client, node.Consensus)
 	})
 }

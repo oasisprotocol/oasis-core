@@ -44,7 +44,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, beacon.Backend) {
 		os.Exit(1)
 	}
 
-	client := beacon.NewBeaconClient(conn)
+	client := beacon.NewClient(conn)
 
 	return conn, client
 }

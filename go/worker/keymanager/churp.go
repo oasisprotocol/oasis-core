@@ -228,7 +228,13 @@ func (w *churpWorker) work(ctx context.Context, _ host.RichRuntime) {
 		"node_id", w.kmWorker.nodeID,
 	)
 
-	stCh, stSub := w.kmWorker.backend.Churp().WatchStatuses()
+	stCh, stSub, err := w.kmWorker.backend.Churp().WatchStatuses(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch statuses",
+			"err", err,
+		)
+		return
+	}
 	defer stSub.Close()
 
 	epoCh, epoSub, err := w.kmWorker.commonWorker.Consensus.Beacon().WatchEpochs(ctx)

@@ -526,11 +526,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type registryClient struct {
+// Client is a gRPC registry client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *registryClient) GetEntity(ctx context.Context, query *IDQuery) (*entity.Entity, error) {
+// NewClient creates a new gRPC registry client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) GetEntity(ctx context.Context, query *IDQuery) (*entity.Entity, error) {
 	var rsp entity.Entity
 	if err := c.conn.Invoke(ctx, methodGetEntity.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -538,7 +546,7 @@ func (c *registryClient) GetEntity(ctx context.Context, query *IDQuery) (*entity
 	return &rsp, nil
 }
 
-func (c *registryClient) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
+func (c *Client) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
 	var rsp []*entity.Entity
 	if err := c.conn.Invoke(ctx, methodGetEntities.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -546,7 +554,7 @@ func (c *registryClient) GetEntities(ctx context.Context, height int64) ([]*enti
 	return rsp, nil
 }
 
-func (c *registryClient) WatchEntities(ctx context.Context) (<-chan *EntityEvent, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEntities(ctx context.Context) (<-chan *EntityEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEntities.FullName())
@@ -581,7 +589,7 @@ func (c *registryClient) WatchEntities(ctx context.Context) (<-chan *EntityEvent
 	return ch, sub, nil
 }
 
-func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Node, error) {
+func (c *Client) GetNode(ctx context.Context, query *IDQuery) (*node.Node, error) {
 	var rsp node.Node
 	if err := c.conn.Invoke(ctx, methodGetNode.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -589,7 +597,7 @@ func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Nod
 	return &rsp, nil
 }
 
-func (c *registryClient) GetNodeByConsensusAddress(ctx context.Context, query *ConsensusAddressQuery) (*node.Node, error) {
+func (c *Client) GetNodeByConsensusAddress(ctx context.Context, query *ConsensusAddressQuery) (*node.Node, error) {
 	var rsp node.Node
 	if err := c.conn.Invoke(ctx, methodGetNodeByConsensusAddress.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -597,7 +605,7 @@ func (c *registryClient) GetNodeByConsensusAddress(ctx context.Context, query *C
 	return &rsp, nil
 }
 
-func (c *registryClient) GetNodeStatus(ctx context.Context, query *IDQuery) (*NodeStatus, error) {
+func (c *Client) GetNodeStatus(ctx context.Context, query *IDQuery) (*NodeStatus, error) {
 	var rsp NodeStatus
 	if err := c.conn.Invoke(ctx, methodGetNodeStatus.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -605,7 +613,7 @@ func (c *registryClient) GetNodeStatus(ctx context.Context, query *IDQuery) (*No
 	return &rsp, nil
 }
 
-func (c *registryClient) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
+func (c *Client) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
 	var rsp []*node.Node
 	if err := c.conn.Invoke(ctx, methodGetNodes.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -613,7 +621,7 @@ func (c *registryClient) GetNodes(ctx context.Context, height int64) ([]*node.No
 	return rsp, nil
 }
 
-func (c *registryClient) WatchNodes(ctx context.Context) (<-chan *NodeEvent, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchNodes(ctx context.Context) (<-chan *NodeEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchNodes.FullName())
@@ -648,7 +656,7 @@ func (c *registryClient) WatchNodes(ctx context.Context) (<-chan *NodeEvent, pub
 	return ch, sub, nil
 }
 
-func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchNodeList(ctx context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchNodeList.FullName())
@@ -683,7 +691,7 @@ func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, p
 	return ch, sub, nil
 }
 
-func (c *registryClient) GetRuntime(ctx context.Context, query *GetRuntimeQuery) (*Runtime, error) {
+func (c *Client) GetRuntime(ctx context.Context, query *GetRuntimeQuery) (*Runtime, error) {
 	var rsp Runtime
 	if err := c.conn.Invoke(ctx, methodGetRuntime.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -691,7 +699,7 @@ func (c *registryClient) GetRuntime(ctx context.Context, query *GetRuntimeQuery)
 	return &rsp, nil
 }
 
-func (c *registryClient) GetRuntimes(ctx context.Context, query *GetRuntimesQuery) ([]*Runtime, error) {
+func (c *Client) GetRuntimes(ctx context.Context, query *GetRuntimesQuery) ([]*Runtime, error) {
 	var rsp []*Runtime
 	if err := c.conn.Invoke(ctx, methodGetRuntimes.FullName(), query, &rsp); err != nil {
 		return nil, err
@@ -699,7 +707,7 @@ func (c *registryClient) GetRuntimes(ctx context.Context, query *GetRuntimesQuer
 	return rsp, nil
 }
 
-func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[3], methodWatchRuntimes.FullName())
@@ -734,7 +742,7 @@ func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pu
 	return ch, sub, nil
 }
 
-func (c *registryClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
+func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -742,7 +750,7 @@ func (c *registryClient) StateToGenesis(ctx context.Context, height int64) (*Gen
 	return &rsp, nil
 }
 
-func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+func (c *Client) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
 	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -750,7 +758,7 @@ func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]*Event,
 	return rsp, nil
 }
 
-func (c *registryClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+func (c *Client) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
@@ -785,7 +793,7 @@ func (c *registryClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub
 	return ch, sub, nil
 }
 
-func (c *registryClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
 	var rsp ConsensusParameters
 	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
@@ -793,10 +801,5 @@ func (c *registryClient) ConsensusParameters(ctx context.Context, height int64) 
 	return &rsp, nil
 }
 
-func (c *registryClient) Cleanup() {
-}
-
-// NewRegistryClient creates a new gRPC registry client service.
-func NewRegistryClient(c *grpc.ClientConn) Backend {
-	return &registryClient{c}
+func (c *Client) Cleanup() {
 }

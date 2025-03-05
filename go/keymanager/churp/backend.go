@@ -26,7 +26,7 @@ type Backend interface {
 	// containing CHURP statuses as they change over time.
 	//
 	// Upon subscription the current statuses are sent immediately.
-	WatchStatuses() (<-chan *Status, *pubsub.Subscription)
+	WatchStatuses(context.Context) (<-chan *Status, pubsub.ClosableSubscription, error)
 
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)

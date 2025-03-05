@@ -280,11 +280,19 @@ func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
 }
 
-type storageClient struct {
+// Client is a gRPC storage client.
+type Client struct {
 	conn *grpc.ClientConn
 }
 
-func (c *storageClient) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
+// NewClient creates a new gRPC storage client.
+func NewClient(c *grpc.ClientConn) *Client {
+	return &Client{
+		conn: c,
+	}
+}
+
+func (c *Client) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
 	if err := c.conn.Invoke(ctx, MethodSyncGet.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -292,7 +300,7 @@ func (c *storageClient) SyncGet(ctx context.Context, request *GetRequest) (*Proo
 	return &rsp, nil
 }
 
-func (c *storageClient) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
+func (c *Client) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
 	if err := c.conn.Invoke(ctx, MethodSyncGetPrefixes.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -300,7 +308,7 @@ func (c *storageClient) SyncGetPrefixes(ctx context.Context, request *GetPrefixe
 	return &rsp, nil
 }
 
-func (c *storageClient) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
+func (c *Client) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
 	if err := c.conn.Invoke(ctx, MethodSyncIterate.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -308,7 +316,7 @@ func (c *storageClient) SyncIterate(ctx context.Context, request *IterateRequest
 	return &rsp, nil
 }
 
-func (c *storageClient) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
+func (c *Client) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
 	var rsp []*checkpoint.Metadata
 	if err := c.conn.Invoke(ctx, MethodGetCheckpoints.FullName(), request, &rsp); err != nil {
 		return nil, err
@@ -350,7 +358,7 @@ func receiveWriteLogIterator(ctx context.Context, stream grpc.ClientStream) Writ
 	return &pipe
 }
 
-func (c *storageClient) GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error) {
+func (c *Client) GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error) {
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], MethodGetDiff.FullName())
 	if err != nil {
 		return nil, err
@@ -365,7 +373,7 @@ func (c *storageClient) GetDiff(ctx context.Context, request *GetDiffRequest) (W
 	return receiveWriteLogIterator(ctx, stream), nil
 }
 
-func (c *storageClient) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+func (c *Client) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], MethodGetCheckpointChunk.FullName())
 	if err != nil {
 		return err
@@ -393,16 +401,11 @@ func (c *storageClient) GetCheckpointChunk(ctx context.Context, chunk *checkpoin
 	}
 }
 
-func (c *storageClient) Cleanup() {
+func (c *Client) Cleanup() {
 }
 
-func (c *storageClient) Initialized() <-chan struct{} {
+func (c *Client) Initialized() <-chan struct{} {
 	ch := make(chan struct{})
 	close(ch)
 	return ch
-}
-
-// NewStorageClient creates a new gRPC storage client service.
-func NewStorageClient(c *grpc.ClientConn) Backend {
-	return &storageClient{c}
 }

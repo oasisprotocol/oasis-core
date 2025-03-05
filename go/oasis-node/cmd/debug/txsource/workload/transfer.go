@@ -276,7 +276,7 @@ func (t *transfer) Run(
 	}
 
 	// Read all the account info up front.
-	stakingClient := staking.NewStakingClient(conn)
+	stakingClient := staking.NewClient(conn)
 	for i := range t.accounts {
 		if err := t.TransferFunds(ctx, fundingAccount, t.accounts[i].address, transferAmount); err != nil {
 			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
