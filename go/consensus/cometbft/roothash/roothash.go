@@ -454,7 +454,6 @@ func (sc *serviceClient) reindexBatch(
 
 	lastRound := api.RoundInvalid
 	var blocks []*api.AnnotatedBlock
-	var roundResults []*api.RoundResults
 	for height := start; height <= end; height++ {
 		results, err := sc.backend.GetBlockResults(ctx, height)
 		if err != nil {
@@ -519,12 +518,11 @@ func (sc *serviceClient) reindexBatch(
 				continue
 			}
 
-			annBlk, rr, err := sc.fetchFinalizedRound(ctx, height, runtimeID, &ev.Round)
+			annBlk, err := sc.fetchAnnotatedBlock(ctx, height, runtimeID, &ev.Round)
 			if err != nil {
-				return 0, fmt.Errorf("failed to fetch roothash finalized round: %w", err)
+				return 0, fmt.Errorf("failed to fetch annotated block: %w", err)
 			}
 			blocks = append(blocks, annBlk)
-			roundResults = append(roundResults, rr)
 			logger.Debug("block added to batch",
 				"height", height,
 				"round", annBlk.Block.Header.Round,
@@ -535,7 +533,7 @@ func (sc *serviceClient) reindexBatch(
 	}
 
 	// Do not notify watchers during history reindex.
-	err := bh.CommitBatch(blocks, roundResults, false)
+	err := bh.CommitBatch(blocks, false)
 	if err != nil {
 		logger.Error("failed to commit batch",
 			"err", err,
@@ -671,9 +669,9 @@ func (sc *serviceClient) processFinalizedEvent(
 	}
 
 	// Process finalized event.
-	annBlk, roundResults, err := sc.fetchFinalizedRound(ctx, height, runtimeID, round)
+	annBlk, err := sc.fetchAnnotatedBlock(ctx, height, runtimeID, round)
 	if err != nil {
-		return fmt.Errorf("failed to fetch roothash finalized round: %w", err)
+		return fmt.Errorf("failed to fetch annotated block: %w", err)
 	}
 
 	// Commit the block to history if needed.
@@ -705,7 +703,7 @@ func (sc *serviceClient) processFinalizedEvent(
 				"round", annBlk.Block.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, roundResults, true)
+			err = tr.blockHistory.Commit(annBlk, true)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
@@ -727,12 +725,12 @@ func (sc *serviceClient) processFinalizedEvent(
 	return nil
 }
 
-func (sc *serviceClient) fetchFinalizedRound(
+func (sc *serviceClient) fetchAnnotatedBlock(
 	ctx context.Context,
 	height int64,
 	runtimeID common.Namespace,
 	round *uint64,
-) (*api.AnnotatedBlock, *api.RoundResults, error) {
+) (*api.AnnotatedBlock, error) {
 	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
 	if err != nil {
 		sc.logger.Error("failed to fetch latest block",
@@ -740,34 +738,21 @@ func (sc *serviceClient) fetchFinalizedRound(
 			"height", height,
 			"runtime_id", runtimeID,
 		)
-		return nil, nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
+		return nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
 	}
 	if round != nil && blk.Header.Round != *round {
 		sc.logger.Error("finalized event/query round mismatch",
 			"block_round", blk.Header.Round,
 			"event_round", *round,
 		)
-		return nil, nil, fmt.Errorf("roothash: finalized event/query round mismatch")
-	}
-
-	roundResults, err := sc.GetLastRoundResults(ctx, &api.RuntimeRequest{
-		RuntimeID: runtimeID,
-		Height:    height,
-	})
-	if err != nil {
-		sc.logger.Error("failed to fetch round results",
-			"err", err,
-			"height", height,
-			"runtime_id", runtimeID,
-		)
-		return nil, nil, fmt.Errorf("roothash: failed to fetch round results: %w", err)
+		return nil, fmt.Errorf("roothash: finalized event/query round mismatch")
 	}
 
 	annBlk := &api.AnnotatedBlock{
 		Height: height,
 		Block:  blk,
 	}
-	return annBlk, roundResults, nil
+	return annBlk, nil
 }
 
 // EventsFromCometBFT extracts staking events from CometBFT events.
