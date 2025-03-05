@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -387,17 +389,24 @@ func (r *runtime) run(ctx context.Context) {
 				continue
 			}
 
+			// Filter the manifest hash of the active version and all upcoming
+			// versions.
+			deployments := slices.Clone(rt.Deployments)
+			sort.SliceStable(deployments, func(i, j int) bool {
+				return deployments[i].Version.Less(deployments[j].Version)
+			})
+
 			var manifestHashes []hash.Hash
-			for i := len(rt.Deployments) - 1; i >= 0; i-- {
+			for i := len(deployments) - 1; i >= 0; i-- {
 				// Some deployments may lack a bundle manifest checksum,
 				// as it is optional.
-				if h := rt.Deployments[i].BundleChecksum; len(h) == hash.Size {
+				if h := deployments[i].BundleChecksum; len(h) == hash.Size {
 					manifestHashes = append(manifestHashes, hash.Hash(h))
 				}
 
-				// Stop at the active deployment since versions follow
-				// chronological order.
-				if rt.Deployments[i].ValidFrom <= now {
+				// Stop at the active deployment since versions were sorted
+				// and now follow chronological order.
+				if deployments[i].ValidFrom <= now {
 					break
 				}
 			}

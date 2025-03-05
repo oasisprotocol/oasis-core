@@ -265,24 +265,15 @@ func (m *Manager) Download(runtimeID common.Namespace, manifestHashes []hash.Has
 		return
 	}
 
-	// Filter out bundles that have already been fetched.
-	var hashes []hash.Hash
-	for _, hash := range manifestHashes {
-		if m.store.HasManifest(hash) {
-			continue
-		}
-		hashes = append(hashes, hash)
-	}
-
 	// Update the queue.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if len(hashes) == 0 {
+	if len(manifestHashes) == 0 {
 		delete(m.downloadQueue, runtimeID)
 		return
 	}
-	m.downloadQueue[runtimeID] = hashes
+	m.downloadQueue[runtimeID] = manifestHashes
 
 	// Trigger immediate download and clean-up of bundles.
 	select {
@@ -364,6 +355,10 @@ func (m *Manager) downloadBundles(runtimeID common.Namespace) {
 
 func (m *Manager) downloadBundle(runtimeID common.Namespace, manifestHash hash.Hash) error {
 	var errs error
+
+	if m.store.HasManifest(manifestHash) {
+		return nil
+	}
 
 	for _, baseURLs := range [][]string{m.runtimeBaseURLs[runtimeID], m.globalBaseURLs} {
 		for _, baseURL := range baseURLs {
