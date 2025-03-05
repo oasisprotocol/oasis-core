@@ -61,6 +61,8 @@ func (client *Client) ModifyConfig() error {
 	if len(client.runtimes) > 0 {
 		client.Config.Mode = config.ModeClient
 		client.Config.Runtime.Provisioner = client.runtimeProvisioner
+		client.Config.Runtime.SGXLoader = client.net.cfg.RuntimeSGXLoaderBinary
+		client.Config.Runtime.AttestInterval = client.net.cfg.RuntimeAttestInterval
 	}
 
 	client.AddSeedNodesToConfig()
