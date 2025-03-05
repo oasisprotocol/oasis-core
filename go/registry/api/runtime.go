@@ -501,13 +501,17 @@ func (r *Runtime) ActiveDeployment(now beacon.EpochTime) *VersionInfo {
 
 // NextDeployment returns the first deployment that will become active next if it exists.
 func (r *Runtime) NextDeployment(now beacon.EpochTime) *VersionInfo {
+	var next *VersionInfo
 	for _, deployment := range r.Deployments {
-		// Find the first version that will become the active deployment next.
-		if deployment.ValidFrom > now {
-			return deployment
+		if deployment.ValidFrom <= now {
+			continue
 		}
+		if next != nil && next.ValidFrom < deployment.ValidFrom {
+			continue
+		}
+		next = deployment
 	}
-	return nil
+	return next
 }
 
 // DeploymentForVersion returns the deployment corresponding to the passed version if it exists.
