@@ -120,15 +120,11 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 				break
 			}
 
-			if err := tx.Delete(roundResultsKeyFmt.Encode(round)); err != nil {
+			if err := tx.Delete(item.KeyCopy(nil)); err != nil {
 				if err == badger.ErrTxnTooBig {
 					// We can't prune any more rounds in this transaction.
 					break
 				}
-				return err
-			}
-
-			if err := tx.Delete(item.KeyCopy(nil)); err != nil {
 				return err
 			}
 
