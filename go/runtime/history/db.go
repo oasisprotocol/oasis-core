@@ -243,6 +243,33 @@ func (d *DB) getEarliestBlock() (*roothash.AnnotatedBlock, error) {
 	return &blk, nil
 }
 
+func (d *DB) getLastBlock() (*roothash.AnnotatedBlock, error) {
+	var blk roothash.AnnotatedBlock
+	txErr := d.db.View(func(tx *badger.Txn) error {
+		meta, err := d.queryGetMetadata(tx)
+		if err != nil {
+			return err
+		}
+
+		item, err := tx.Get(blockKeyFmt.Encode(meta.LastRound))
+		switch err {
+		case nil:
+		case badger.ErrKeyNotFound:
+			return roothash.ErrNotFound
+		default:
+			return err
+		}
+
+		return item.Value(func(val []byte) error {
+			return cbor.UnmarshalTrusted(val, &blk)
+		})
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+	return &blk, nil
+}
+
 func (d *DB) close() {
 	d.gc.Stop()
 	d.db.Close()

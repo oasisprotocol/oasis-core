@@ -57,6 +57,7 @@ type runtimeHistory struct {
 
 	pruner  Pruner
 	pruneCh *channels.RingChannel
+	initCh  chan struct{}
 	stopCh  chan struct{}
 	quitCh  chan struct{}
 }
@@ -65,11 +66,32 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, notify bool) error {
-	return h.CommitBatch([]*roothash.AnnotatedBlock{blk}, notify)
+func (h *runtimeHistory) Initialized() <-chan struct{} {
+	return h.initCh
 }
 
-func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, notify bool) error {
+func (h *runtimeHistory) SetInitialized() error {
+	select {
+	case <-h.initCh:
+		return fmt.Errorf("already initialized")
+	default:
+		close(h.initCh)
+	}
+
+	blk, err := h.db.getLastBlock()
+	switch err {
+	case nil:
+	case roothash.ErrNotFound:
+		return nil
+	default:
+		return err
+	}
+	h.committedBlocksNotifier.Broadcast(blk)
+
+	return nil
+}
+
+func (h *runtimeHistory) Commit(blks []*roothash.AnnotatedBlock) error {
 	if len(blks) == 0 {
 		return nil
 	}
@@ -82,11 +104,15 @@ func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, notify boo
 	lastBlk := blks[len(blks)-1]
 	h.pruneCh.In() <- lastBlk.Block.Header.Round
 
-	// If no local storage worker, notify the block watcher about new blocks,
-	// otherwise the storage-sync-checkpoint will do the notification.
-	if !notify {
+	// Notify about new blocks only when initialized.
+	select {
+	case <-h.initCh:
+	default:
 		return nil
 	}
+
+	// If no local storage worker, notify the block watcher about new blocks,
+	// otherwise the storage-sync-checkpoint will do the notification.
 	for _, blk := range blks {
 		h.committedBlocksNotifier.Broadcast(blk)
 		if !h.hasLocalStorage {
@@ -124,7 +150,13 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 		return fmt.Errorf("runtime/history: storage sync block not found in history: %w", err)
 	}
 	h.lastStorageSyncedRound = round
-	h.syncedBlocksNotifier.Broadcast(annBlk)
+
+	// Notify about new blocks only when initialized.
+	select {
+	case <-h.initCh:
+		h.syncedBlocksNotifier.Broadcast(annBlk)
+	default:
+	}
 
 	return nil
 }
@@ -325,6 +357,7 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 		committedBlocksNotifier: pubsub.NewBroker(true),
 		pruner:                  pruner,
 		pruneCh:                 channels.NewRingChannel(1),
+		initCh:                  make(chan struct{}),
 		stopCh:                  make(chan struct{}),
 		quitCh:                  make(chan struct{}),
 	}

@@ -672,6 +672,32 @@ func (n *Node) worker() {
 	}
 	atomic.StoreUint32(&n.keymanagerAvailable, 1)
 
+	// Wait for for runtime history to be initialized.
+	n.logger.Info("waiting for block history to be initialized")
+	select {
+	case <-n.Runtime.History().Initialized():
+	case <-n.stopCh:
+		return
+	}
+	n.logger.Info("block history initialized")
+	atomic.StoreUint32(&n.historyReindexingDone, 1)
+
+	// Mark worker as initialized.
+	n.logger.Debug("common worker is initialized")
+	close(n.initCh)
+
+	// Wait for all child workers to initialize as well.
+	n.logger.Debug("waiting for child worker initialization")
+	for _, hooks := range n.hooks {
+		select {
+		case <-hooks.Initialized():
+		case <-n.stopCh:
+			return
+		}
+	}
+	n.logger.Debug("all child workers are initialized")
+	atomic.StoreUint32(&n.workersInitialized, 1)
+
 	// Subscribe to runtime blocks.
 	blkCh, blkSub, err := n.Runtime.History().WatchCommittedBlocks()
 	if err != nil {
@@ -719,36 +745,12 @@ func (n *Node) worker() {
 	defer n.notifier.Stop()
 
 	// Enter the main processing loop.
-	var initialized bool
 	for {
 		select {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
 		case blk := <-blkCh:
-			// We are initialized after we have received the first block. This makes sure that any
-			// history reindexing has been completed.
-			if !initialized {
-				n.logger.Debug("common worker is initialized")
-				atomic.StoreUint32(&n.historyReindexingDone, 1)
-
-				close(n.initCh)
-				initialized = true
-
-				// Wait for all child workers to initialize as well.
-				n.logger.Debug("waiting for child worker initialization")
-				for _, hooks := range n.hooks {
-					select {
-					case <-hooks.Initialized():
-					case <-n.stopCh:
-						n.logger.Info("termination requested while waiting for child worker initialization")
-						return
-					}
-				}
-				n.logger.Debug("all child workers are initialized")
-				atomic.StoreUint32(&n.workersInitialized, 1)
-			}
-
 			// Received a block (annotated).
 			func() {
 				n.CrossNode.Lock()
