@@ -672,15 +672,15 @@ func (n *Node) worker() {
 	}
 	atomic.StoreUint32(&n.keymanagerAvailable, 1)
 
-	// Start watching roothash blocks.
-	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.ctx, n.Runtime.ID())
+	// Subscribe to runtime blocks.
+	blkCh, blkSub, err := n.Runtime.History().WatchCommittedBlocks()
 	if err != nil {
-		n.logger.Error("failed to subscribe to roothash blocks",
+		n.logger.Error("failed to subscribe to runtime blocks",
 			"err", err,
 		)
 		return
 	}
-	defer blocksSub.Close()
+	defer blkSub.Close()
 
 	// Start watching runtime components so that we can provision new versions
 	// once they are discovered.
@@ -719,13 +719,13 @@ func (n *Node) worker() {
 	defer n.notifier.Stop()
 
 	// Enter the main processing loop.
-	initialized := false
+	var initialized bool
 	for {
 		select {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case blk := <-blocks:
+		case blk := <-blkCh:
 			// We are initialized after we have received the first block. This makes sure that any
 			// history reindexing has been completed.
 			if !initialized {

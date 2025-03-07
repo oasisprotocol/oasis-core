@@ -48,6 +48,9 @@ type BlockHistory interface {
 	// If node has local storage this includes waiting for the round to be synced into storage.
 	WatchBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
 
+	// WatchCommittedBlocks returns a channel watching block rounds as they are committed.
+	WatchCommittedBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
+
 	// WaitRoundSynced waits for the specified round to be synced to storage.
 	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)
 
