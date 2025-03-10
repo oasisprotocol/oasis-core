@@ -1,4 +1,5 @@
 [advisories]
 ignore = [
     "RUSTSEC-2023-0071", # Does not affect our current use of the library.
+    "RUSTSEC-2024-0437", # Ignoring until dependencies are upgraded to protobuf v3.
 ]
