@@ -3,7 +3,6 @@ package abci
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,9 +19,7 @@ func TestPruneKeepN(t *testing.T) {
 	require := require.New(t)
 
 	// Create a new random temporary directory under /tmp.
-	dir, err := os.MkdirTemp("", "abci-prune.test.badger")
-	require.NoError(err, "TempDir")
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a Badger-backed Node DB.
 	ndb, err := mkvsBadgerDB.New(&mkvsDB.Config{

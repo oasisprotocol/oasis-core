@@ -3,7 +3,6 @@ package transaction
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -228,9 +227,7 @@ func TestTransactionLocalBackend(t *testing.T) {
 		err error
 	)
 
-	cfg.DB, err = os.MkdirTemp("", "oasis-rt-tx-tree-localdb-test")
-	require.NoError(err, "TempDir()")
-	defer os.RemoveAll(cfg.DB)
+	cfg.DB := t.TempDir()
 
 	db, err := database.New(&cfg)
 	require.NoError(err, "New()")
