@@ -54,7 +54,7 @@ pushd $src_dir
             ;;
         *)
             # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
-            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --release --locked
+            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY=1 cargo build --release --locked
 
             # Build SGX runtime.
             export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"

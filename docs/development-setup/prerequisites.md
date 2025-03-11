@@ -177,7 +177,7 @@ Core:
 
 * (**OPTIONAL**) [jemalloc] (version 5.2.1, built with `'je_'` jemalloc-prefix)
 
-  Alternatively set `OASIS_BADGER_NO_JEMALLOC="1"` environment variable when
+  Alternatively set `OASIS_BADGER_NO_JEMALLOC=1` environment variable when
   building `oasis-node` code, to build [BadgerDB] without `jemalloc` support.
 
   Download and install `jemalloc` with:
