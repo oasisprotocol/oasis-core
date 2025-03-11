@@ -12,9 +12,9 @@ To build everything required for running an Oasis node locally, simply execute
 the following in the top-level directory:
 
 ```
-export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
-export OASIS_UNSAFE_SKIP_KM_POLICY="1"
-export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
+export OASIS_UNSAFE_SKIP_AVR_VERIFY=1
+export OASIS_UNSAFE_SKIP_KM_POLICY=1
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
 make
 ```
 
@@ -22,7 +22,7 @@ To build BadgerDB without `jemalloc` support (and avoid installing `jemalloc`
 on your system), set
 
 ```
-export OASIS_BADGER_NO_JEMALLOC="1"
+export OASIS_BADGER_NO_JEMALLOC=1
 ```
 
 Not using `jemalloc` is fine for development purposes.
@@ -38,8 +38,8 @@ Compilation procedure under SGX environment is similar to the non-SGX with
 slightly different environmental variables set:
 
 ```
-export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
-export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
+export OASIS_UNSAFE_SKIP_AVR_VERIFY=1
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
 make
 ```
 
