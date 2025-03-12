@@ -588,15 +588,6 @@ func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*cmtcor
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetLastRetainedVersion(ctx context.Context) (int64, error) {
-	if err := n.ensureStarted(ctx); err != nil {
-		return -1, err
-	}
-	state := store.LoadBlockStoreState(n.blockStoreDB)
-	return state.Base, nil
-}
-
-// Implements consensusAPI.Backend.
 func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
 	blk, err := n.GetCometBFTBlock(ctx, height)
 	if err != nil {
@@ -658,13 +649,14 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetLastRetainedHeight(ctx context.Context) (int64, error) {
-	height, err := n.GetLastRetainedVersion(ctx)
-	if err != nil {
+	if err := n.ensureStarted(ctx); err != nil {
 		return 0, err
 	}
+	state := store.LoadBlockStoreState(n.blockStoreDB)
+
 	// Some pruning configurations return 0 instead of a valid block height.
 	// Clamp those to the genesis height.
-	return max(height, n.genesis.Height), nil
+	return max(state.Base, n.genesis.Height), nil
 }
 
 // Implements consensusAPI.Backend.

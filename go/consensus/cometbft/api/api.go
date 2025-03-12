@@ -222,10 +222,6 @@ type Backend interface {
 	// returned via the `EventDataNewBlock` query.
 	WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
 
-	// GetLastRetainedVersion returns the earliest retained version the ABCI
-	// state.
-	GetLastRetainedVersion(ctx context.Context) (int64, error)
-
 	// Pruner returns the state pruner.
 	Pruner() StatePruner
 }

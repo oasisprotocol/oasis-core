@@ -120,7 +120,7 @@ func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.Epoc
 		return cachedHeight.(int64), nil
 	}
 
-	lowHeight, err := sc.backend.GetLastRetainedVersion(ctx)
+	lowHeight, err := sc.backend.GetLastRetainedHeight(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query last retained version: %w", err)
 	}
