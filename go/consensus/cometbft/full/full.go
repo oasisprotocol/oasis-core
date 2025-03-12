@@ -136,7 +136,10 @@ func (t *fullService) Start() error {
 		// Start event dispatchers for all the service clients.
 		t.serviceClientsWg.Add(len(t.serviceClients))
 		for _, svc := range t.serviceClients {
-			go t.serviceClientWorker(t.ctx, svc)
+			go func() {
+				defer t.serviceClientsWg.Done()
+				t.serviceClientWorker(t.ctx, svc)
+			}()
 		}
 		// Start sync checker.
 		go t.syncWorker()

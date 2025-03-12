@@ -15,8 +15,6 @@ import (
 
 // serviceClientWorker manages block and event notifications for all service clients.
 func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceClient) {
-	defer t.serviceClientsWg.Done()
-
 	sd := svc.ServiceDescriptor()
 	if sd == nil {
 		// Some services don't actually need a worker.
