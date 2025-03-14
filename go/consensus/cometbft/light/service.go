@@ -179,15 +179,10 @@ func (c *client) worker() {
 	}
 
 	// Store earliest block into trust store.
-	lastRetainedHeight, err := c.consensus.(cmtAPI.Backend).GetLastRetainedVersion(c.ctx)
+	lastRetainedHeight, err := c.consensus.GetLastRetainedHeight(c.ctx)
 	if err != nil {
 		c.logger.Error("failed to get last retained height from consensus", "err", err)
 		return
-	}
-	// Some pruning configurations return 0 instead of a valid block height. Clamp those to the
-	// genesis height.
-	if lastRetainedHeight < c.genesis.Height {
-		lastRetainedHeight = c.genesis.Height
 	}
 	if err = trustLocalBlock(c.ctx, lastRetainedHeight); err != nil {
 		c.logger.Error("failed to store last retained block into trust store", "err", err)

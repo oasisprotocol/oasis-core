@@ -1,7 +1,6 @@
 package common
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -35,10 +34,8 @@ type Worker struct {
 
 	runtimes map[common.Namespace]*committee.Node
 
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	quitCh    chan struct{}
-	initCh    chan struct{}
+	quitCh chan struct{}
+	initCh chan struct{}
 
 	logger *logging.Logger
 }
@@ -105,8 +102,6 @@ func (w *Worker) Stop() {
 
 		rt.Stop()
 	}
-
-	w.cancelCtx()
 }
 
 // Enabled returns if worker is enabled.
@@ -213,8 +208,6 @@ func New(
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}
 
-	ctx, cancelCtx := context.WithCancel(context.Background())
-
 	w := &Worker{
 		enabled:         enabled,
 		cfg:             *cfg,
@@ -229,8 +222,6 @@ func New(
 		RuntimeRegistry: runtimeRegistry,
 		Provisioner:     provisioner,
 		runtimes:        make(map[common.Namespace]*committee.Node),
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
 		quitCh:          make(chan struct{}),
 		initCh:          make(chan struct{}),
 		logger:          logging.GetLogger("worker/common"),

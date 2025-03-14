@@ -153,7 +153,7 @@ func (sc *storageEarlyStateSyncImpl) Run(ctx context.Context, childEnv *env.Env)
 	// Start the second (non-state syncing) compute node.
 	sc.Logger.Info("starting compute node without state sync")
 
-	readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	readyCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	worker := sc.Net.ComputeWorkers()[1]

@@ -15,27 +15,21 @@ type BlockHistory interface {
 	// RuntimeID returns the runtime ID of the runtime this block history is for.
 	RuntimeID() common.Namespace
 
-	// Commit commits an annotated block.
-	//
-	// If notify is set to true, the watchers will be notified about the new block.
-	//
-	// Any sequence of Commit and CommitBatch calls is valid as long as as blocks
-	// are sorted by round.
-	//
-	// Returns an error if a block at higher or equal round was already committed.
-	Commit(blk *AnnotatedBlock, notify bool) error
+	// Initialized returns a channel that will be closed when the block history
+	// is initialized and ready to service requests.
+	Initialized() <-chan struct{}
 
-	// CommitBatch commits annotated blocks.
+	// SetInitialized marks the block history as initialized.
+	SetInitialized() error
+
+	// Commit commits annotated blocks.
 	//
-	// If notify is set to true, the watchers will be notified about all
-	// blocks in batch.
-	//
-	// Within a batch, blocks should be sorted by round. Any sequence of Commit
-	// and CommitBatch calls is valid as long as blocks are sorted by round.
+	// Within a batch, blocks should be sorted by round. Any sequence of commit
+	// calls is valid as long as blocks are sorted by round.
 	//
 	// Returns an error if a block at higher or equal round than the first item
 	// in a batch was already committed.
-	CommitBatch(blks []*AnnotatedBlock, notify bool) error
+	Commit(blks []*AnnotatedBlock) error
 
 	// StorageSyncCheckpoint records the last storage round which was synced
 	// to runtime storage.
@@ -47,6 +41,13 @@ type BlockHistory interface {
 	// WatchBlocks returns a channel watching block rounds as they are committed.
 	// If node has local storage this includes waiting for the round to be synced into storage.
 	WatchBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
+
+	// WatchCommittedBlocks returns a channel watching block rounds as they are committed.
+	//
+	// The latest block if any will get pushed to the stream immediately.
+	// Subsequent blocks will be pushed into the stream as they are
+	// committed.
+	WatchCommittedBlocks() (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
 
 	// WaitRoundSynced waits for the specified round to be synced to storage.
 	WaitRoundSynced(ctx context.Context, round uint64) (uint64, error)

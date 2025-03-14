@@ -45,8 +45,9 @@ type runtimeHistory struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
-	db             *DB
-	blocksNotifier *pubsub.Broker
+	db                      *DB
+	syncedBlocksNotifier    *pubsub.Broker
+	committedBlocksNotifier *pubsub.Broker
 
 	// Last storage synced round as reported by the storage backend (if enabled).
 	syncRoundLock          sync.RWMutex
@@ -56,6 +57,7 @@ type runtimeHistory struct {
 
 	pruner  Pruner
 	pruneCh *channels.RingChannel
+	initCh  chan struct{}
 	stopCh  chan struct{}
 	quitCh  chan struct{}
 }
@@ -64,11 +66,32 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, notify bool) error {
-	return h.CommitBatch([]*roothash.AnnotatedBlock{blk}, notify)
+func (h *runtimeHistory) Initialized() <-chan struct{} {
+	return h.initCh
 }
 
-func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, notify bool) error {
+func (h *runtimeHistory) SetInitialized() error {
+	select {
+	case <-h.initCh:
+		return fmt.Errorf("already initialized")
+	default:
+		close(h.initCh)
+	}
+
+	blk, err := h.db.getLastBlock()
+	switch err {
+	case nil:
+	case roothash.ErrNotFound:
+		return nil
+	default:
+		return err
+	}
+	h.committedBlocksNotifier.Broadcast(blk)
+
+	return nil
+}
+
+func (h *runtimeHistory) Commit(blks []*roothash.AnnotatedBlock) error {
 	if len(blks) == 0 {
 		return nil
 	}
@@ -81,13 +104,20 @@ func (h *runtimeHistory) CommitBatch(blks []*roothash.AnnotatedBlock, notify boo
 	lastBlk := blks[len(blks)-1]
 	h.pruneCh.In() <- lastBlk.Block.Header.Round
 
-	// If no local storage worker, notify the block watcher about new blocks,
-	// otherwise the storage-sync-checkpoint will do the notification.
-	if h.hasLocalStorage || !notify {
+	// Notify about new blocks only when initialized.
+	select {
+	case <-h.initCh:
+	default:
 		return nil
 	}
+
+	// If no local storage worker, notify the block watcher about new blocks,
+	// otherwise the storage-sync-checkpoint will do the notification.
 	for _, blk := range blks {
-		h.blocksNotifier.Broadcast(blk)
+		h.committedBlocksNotifier.Broadcast(blk)
+		if !h.hasLocalStorage {
+			h.syncedBlocksNotifier.Broadcast(blk)
+		}
 	}
 
 	return nil
@@ -107,7 +137,7 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 	defer h.syncRoundLock.Unlock()
 	switch {
 	case round < h.lastStorageSyncedRound:
-		return fmt.Errorf("runtime/history: storage sync checkpoint at lower height (current: %d wanted: %d)", h.lastStorageSyncedRound, round)
+		return fmt.Errorf("runtime/history: storage sync checkpoint at lower round (current: %d wanted: %d)", h.lastStorageSyncedRound, round)
 	case round == h.lastStorageSyncedRound:
 		// Nothing to do.
 		return nil
@@ -120,7 +150,13 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 		return fmt.Errorf("runtime/history: storage sync block not found in history: %w", err)
 	}
 	h.lastStorageSyncedRound = round
-	h.blocksNotifier.Broadcast(annBlk)
+
+	// Notify about new blocks only when initialized.
+	select {
+	case <-h.initCh:
+		h.syncedBlocksNotifier.Broadcast(annBlk)
+	default:
+	}
 
 	return nil
 }
@@ -133,7 +169,15 @@ func (h *runtimeHistory) LastStorageSyncedRound() (uint64, error) {
 
 func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *roothash.AnnotatedBlock)
-	sub := h.blocksNotifier.Subscribe()
+	sub := h.syncedBlocksNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
+}
+
+func (h *runtimeHistory) WatchCommittedBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *roothash.AnnotatedBlock)
+	sub := h.committedBlocksNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -303,17 +347,19 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	h := &runtimeHistory{
-		runtimeID:       runtimeID,
-		logger:          logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		db:              db,
-		hasLocalStorage: hasLocalStorage,
-		blocksNotifier:  pubsub.NewBroker(true),
-		pruner:          pruner,
-		pruneCh:         channels.NewRingChannel(1),
-		stopCh:          make(chan struct{}),
-		quitCh:          make(chan struct{}),
+		runtimeID:               runtimeID,
+		logger:                  logging.GetLogger("runtime/history").With("runtime_id", runtimeID),
+		ctx:                     ctx,
+		cancelCtx:               cancelCtx,
+		db:                      db,
+		hasLocalStorage:         hasLocalStorage,
+		syncedBlocksNotifier:    pubsub.NewBroker(true),
+		committedBlocksNotifier: pubsub.NewBroker(true),
+		pruner:                  pruner,
+		pruneCh:                 channels.NewRingChannel(1),
+		initCh:                  make(chan struct{}),
+		stopCh:                  make(chan struct{}),
+		quitCh:                  make(chan struct{}),
 	}
 
 	go h.pruneWorker()

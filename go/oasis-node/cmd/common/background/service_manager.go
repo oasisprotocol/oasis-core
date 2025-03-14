@@ -53,9 +53,9 @@ func (m *ServiceManager) Wait() {
 
 	select {
 	case <-m.stopCh:
-		m.logger.Info("programatic termination requested")
+		m.logger.Info("programmatic termination requested")
 	case m.termSvc = <-m.termCh:
-		m.logger.Info("background task terminated, propagating")
+		m.logger.Info("background task terminated, propagating", "task", m.termSvc.Name())
 	case <-sigCh:
 		m.logger.Info("user requested termination")
 	}

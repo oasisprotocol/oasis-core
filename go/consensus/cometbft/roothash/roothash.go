@@ -27,10 +27,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
-const (
-	crashPointBlockBeforeIndex = "roothash.before_index"
-	reindexWriteBatchSize      = 1000
-)
+const crashPointBlockBeforeIndex = "roothash.before_index"
 
 // ServiceClient is the roothash service client interface.
 type ServiceClient interface {
@@ -46,15 +43,12 @@ type runtimeBrokers struct {
 
 type trackedRuntime struct {
 	runtimeID common.Namespace
-
-	height       int64
-	blockHistory api.BlockHistory
-	reindexDone  bool
+	height    int64
+	round     uint64
 }
 
 type cmdTrackRuntime struct {
-	runtimeID    common.Namespace
-	blockHistory api.BlockHistory
+	runtimeID common.Namespace
 }
 
 type serviceClient struct {
@@ -187,7 +181,7 @@ func (sc *serviceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-
 	sub.Unwrap(ch)
 
 	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
+	if err := sc.trackRuntime(sc.ctx, id); err != nil {
 		sub.Close()
 		return nil, nil, err
 	}
@@ -211,7 +205,7 @@ func (sc *serviceClient) WatchEvents(_ context.Context, id common.Namespace) (<-
 	sub.Unwrap(ch)
 
 	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
+	if err := sc.trackRuntime(sc.ctx, id); err != nil {
 		sub.Close()
 		return nil, nil, err
 	}
@@ -227,7 +221,7 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 	sub.Unwrap(ch)
 
 	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id, nil); err != nil {
+	if err := sc.trackRuntime(sc.ctx, id); err != nil {
 		sub.Close()
 		return nil, nil, err
 	}
@@ -236,15 +230,14 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 }
 
 // Implements api.Backend.
-func (sc *serviceClient) TrackRuntime(ctx context.Context, history api.BlockHistory) error {
+func (sc *serviceClient) TrackRuntime(_ context.Context, history api.BlockHistory) error {
 	sc.pruneHandler.trackRuntime(history)
-	return sc.trackRuntime(ctx, history.RuntimeID(), history)
+	return nil
 }
 
-func (sc *serviceClient) trackRuntime(ctx context.Context, id common.Namespace, history api.BlockHistory) error {
+func (sc *serviceClient) trackRuntime(ctx context.Context, id common.Namespace) error {
 	cmd := &cmdTrackRuntime{
-		runtimeID:    id,
-		blockHistory: history,
+		runtimeID: id,
 	}
 
 	select {
@@ -356,195 +349,6 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-func (sc *serviceClient) reindexBlocks(ctx context.Context, currentHeight int64, bh api.BlockHistory) (uint64, error) {
-	lastRound := api.RoundInvalid
-	if currentHeight <= 0 {
-		return lastRound, nil
-	}
-
-	runtimeID := bh.RuntimeID()
-	logger := sc.logger.With("runtime_id", runtimeID)
-
-	var err error
-	var lastHeight int64
-	if lastHeight, err = bh.LastConsensusHeight(); err != nil {
-		logger.Error("failed to get last indexed height",
-			"err", err,
-		)
-		return 0, fmt.Errorf("failed to get last indexed height: %w", err)
-	}
-	// +1 since we want the last non-seen height.
-	lastHeight++
-
-	// Take prune strategy into account.
-	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last retained height: %w", err)
-	}
-	if lastHeight < lastRetainedHeight {
-		logger.Debug("last height pruned, skipping until last retained",
-			"last_retained_height", lastRetainedHeight,
-			"last_height", lastHeight,
-		)
-		lastHeight = lastRetainedHeight
-	}
-
-	// Take initial genesis height into account.
-	genesisDoc, err := sc.backend.GetGenesisDocument(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get genesis document: %w", err)
-	}
-	if lastHeight < genesisDoc.Height {
-		lastHeight = genesisDoc.Height
-	}
-
-	// Scan all blocks between last indexed height and current height.
-	logger.Info("reindexing blocks",
-		"last_height", lastHeight,
-		"current_height", currentHeight,
-		logging.LogEvent, api.LogEventHistoryReindexing,
-	)
-
-	for height := lastHeight; height <= currentHeight; height += reindexWriteBatchSize {
-		end := height + reindexWriteBatchSize - 1
-		if end > currentHeight {
-			end = currentHeight
-		}
-		last, err := sc.reindexBatch(ctx, runtimeID, bh, height, end)
-		if err != nil {
-			return 0, fmt.Errorf("failed to reindex batch: %w", err)
-		}
-		if last != api.RoundInvalid {
-			// New rounds indexed.
-			lastRound = last
-		}
-	}
-
-	if lastRound == api.RoundInvalid {
-		logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetCommittedBlock(ctx, api.RoundLatest); err {
-		case api.ErrNotFound:
-		case nil:
-			lastRound = blk.Header.Round
-		default:
-			return lastRound, fmt.Errorf("failed to get latest block: %w", err)
-		}
-	}
-
-	logger.Info("block reindex complete",
-		"last_round", lastRound,
-	)
-
-	return lastRound, nil
-}
-
-func (sc *serviceClient) reindexBatch(
-	ctx context.Context,
-	runtimeID common.Namespace,
-	bh api.BlockHistory,
-	start int64,
-	end int64,
-) (uint64, error) {
-	logger := sc.logger.With("runtime_id", runtimeID)
-
-	logger.Debug("reindexing batch",
-		"start", start,
-		"end", end,
-	)
-
-	lastRound := api.RoundInvalid
-	var blocks []*api.AnnotatedBlock
-	for height := start; height <= end; height++ {
-		results, err := sc.backend.GetBlockResults(ctx, height)
-		if err != nil {
-			// XXX: could soft-fail first few heights in case more heights were
-			// pruned right after the GetLastRetainedVersion query.
-			logger.Error("failed to get cometbft block results",
-				"err", err,
-				"height", height,
-			)
-			return 0, fmt.Errorf("failed to get cometbft block results: %w", err)
-		}
-
-		// Index block.
-		tmEvents := results.BeginBlockEvents
-		for _, txResults := range results.TxsResults {
-			tmEvents = append(tmEvents, txResults.Events...)
-		}
-		tmEvents = append(tmEvents, results.EndBlockEvents...)
-		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != app.EventType {
-				continue
-			}
-
-			var evRtID *common.Namespace
-			var ev *api.FinalizedEvent
-			for _, pair := range tmEv.GetAttributes() {
-				key := pair.GetKey()
-				val := pair.GetValue()
-
-				switch {
-				case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-					if evRtID != nil {
-						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
-					}
-
-					var rtAttribute api.RuntimeIDAttribute
-					if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
-					}
-					evRtID = &rtAttribute.ID
-
-				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
-					var e api.FinalizedEvent
-					if err = eventsAPI.DecodeValue(val, &e); err != nil {
-						logger.Error("failed to unmarshal finalized event",
-							"err", err,
-							"height", height,
-						)
-						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
-					}
-					ev = &e
-				default:
-				}
-			}
-
-			// Only process finalized events.
-			if ev == nil {
-				continue
-			}
-			// Only process events for the given runtime.
-			if !evRtID.Equal(&runtimeID) {
-				continue
-			}
-
-			annBlk, err := sc.fetchAnnotatedBlock(ctx, height, runtimeID, &ev.Round)
-			if err != nil {
-				return 0, fmt.Errorf("failed to fetch annotated block: %w", err)
-			}
-			blocks = append(blocks, annBlk)
-			logger.Debug("block added to batch",
-				"height", height,
-				"round", annBlk.Block.Header.Round,
-			)
-
-			lastRound = ev.Round
-		}
-	}
-
-	// Do not notify watchers during history reindex.
-	err := bh.CommitBatch(blocks, false)
-	if err != nil {
-		logger.Error("failed to commit batch",
-			"err", err,
-			"start", start,
-			"end", end,
-		)
-		return 0, fmt.Errorf("failed to commit batch: %w", err)
-	}
-	return lastRound, nil
-}
-
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh, sc.cmdCh)
@@ -555,25 +359,22 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 	switch c := cmd.(type) {
 	case *cmdTrackRuntime:
 		// Request to track a new runtime.
-		etr := sc.trackedRuntime[c.runtimeID]
-		if etr != nil {
-			// Ignore duplicate runtime tracking requests unless this updates the block history.
-			if etr.blockHistory != nil || c.blockHistory == nil {
-				break
-			}
-		} else {
-			sc.logger.Debug("tracking new runtime",
-				"runtime_id", c.runtimeID,
-				"height", height,
-			)
+		if _, ok := sc.trackedRuntime[c.runtimeID]; ok {
+			// Ignore duplicate runtime tracking requests.
+			return nil
 		}
 
-		// We need to start watching a new block history.
+		sc.logger.Debug("tracking new runtime",
+			"runtime_id", c.runtimeID,
+			"height", height,
+		)
+
 		tr := &trackedRuntime{
-			runtimeID:    c.runtimeID,
-			blockHistory: c.blockHistory,
+			runtimeID: c.runtimeID,
+			round:     api.RoundInvalid,
 		}
 		sc.trackedRuntime[c.runtimeID] = tr
+
 		// Request subscription to events for this runtime.
 		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
 
@@ -584,24 +385,27 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 			Height:    height,
 		})
 		if err != nil {
-			sc.logger.Warn("failed to get runtime state for latest block",
-				"err",
+			sc.logger.Warn("failed to get runtime state",
+				"err", err,
 				"runtime_id", tr.runtimeID,
 				"height", height,
 			)
-			return nil
+			return fmt.Errorf("roothash: failed to get runtime state: %w", err)
+		}
+		annBlk := &api.AnnotatedBlock{
+			Height: rs.LastBlockHeight,
+			Block:  rs.LastBlock,
 		}
 
-		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil); err != nil {
+		// Emit the latest block.
+		if err := sc.emitLatestBlock(tr, annBlk); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
 				"runtime_id", tr.runtimeID,
 				"height", height,
 			)
+			return fmt.Errorf("roothash: failed to emit latest block: %w", err)
 		}
-		// Make sure we reindex again when receiving the first event.
-		tr.reindexDone = false
 	default:
 		return fmt.Errorf("roothash: unknown command: %T", cmd)
 	}
@@ -624,13 +428,78 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 		}
 
 		// Only process finalized events for tracked runtimes.
-		if sc.trackedRuntime[ev.RuntimeID] == nil {
+		tr, ok := sc.trackedRuntime[ev.RuntimeID]
+		if !ok {
 			continue
 		}
-		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round); err != nil { //nolint:gosec
-			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
+
+		// Fetch the latest block.
+		blk, err := sc.getLatestBlockAt(ctx, tr.runtimeID, height)
+		if err != nil {
+			sc.logger.Error("failed to fetch latest block",
+				"err", err,
+				"height", height,
+				"runtime_id", tr.runtimeID,
+			)
+			return fmt.Errorf("roothash: failed to fetch latest block: %w", err)
+		}
+		if blk.Header.Round != ev.Finalized.Round {
+			sc.logger.Error("block round mismatch",
+				"height", height,
+				"round", blk.Header.Round,
+				"expected_round", ev.Finalized.Round,
+			)
+			return fmt.Errorf("roothash: block round mismatch")
+		}
+		annBlk := &api.AnnotatedBlock{
+			Height: height,
+			Block:  blk,
+		}
+
+		// Emit the latest block.
+		if err = sc.emitLatestBlock(tr, annBlk); err != nil {
+			return fmt.Errorf("roothash: failed to emit latest block: %w", err)
 		}
 	}
+
+	return nil
+}
+
+func (sc *serviceClient) emitLatestBlock(tr *trackedRuntime, annBlk *api.AnnotatedBlock) error {
+	if tr.round != api.RoundInvalid {
+		switch {
+		case annBlk.Block.Header.Round <= tr.round:
+			// This can occur if a block is finalized immediately after we
+			// subscribe to runtime events.
+			sc.logger.Warn("skipping outdated block",
+				"height", annBlk.Height,
+				"round", annBlk.Block.Header.Round,
+				"last_height", tr.height,
+				"last_round", tr.round,
+			)
+			return nil
+		case annBlk.Block.Header.Round == tr.round+1:
+			// Blocks should be processed sequentially.
+		default:
+			// Detected a gap in block rounds. While recovery might be possible
+			// by fetching the missing blocks, it's unlikely we can fully recover.
+			// For now, enforce strict error handling and address if necessary later.
+			sc.logger.Error("unexpected block round",
+				"height", annBlk.Height,
+				"round", annBlk.Block.Header.Round,
+				"last_height", tr.height,
+				"last_round", tr.round,
+			)
+			return fmt.Errorf("unexpected block round")
+		}
+	}
+
+	notifiers := sc.getRuntimeNotifiers(tr.runtimeID)
+	notifiers.blockNotifier.Broadcast(annBlk)
+	sc.allBlockNotifier.Broadcast(annBlk.Block)
+
+	tr.height = annBlk.Height
+	tr.round = annBlk.Block.Header.Round
 
 	return nil
 }
@@ -639,120 +508,6 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 func (sc *serviceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.ecNotifier.Broadcast(ec)
-}
-
-func (sc *serviceClient) processFinalizedEvent(
-	ctx context.Context,
-	height int64,
-	runtimeID common.Namespace,
-	round *uint64,
-) (err error) {
-	tr := sc.trackedRuntime[runtimeID]
-	if tr == nil {
-		sc.logger.Error("runtime not tracked",
-			"runtime_id", runtimeID,
-			"tracked_runtimes", sc.trackedRuntime,
-		)
-		return fmt.Errorf("roothash: runtime not tracked: %s", runtimeID)
-	}
-	defer func() {
-		// If there was an error, flag the tracked runtime for reindex.
-		if err == nil {
-			return
-		}
-
-		tr.reindexDone = false
-	}()
-
-	if height <= tr.height {
-		return nil
-	}
-
-	// Process finalized event.
-	annBlk, err := sc.fetchAnnotatedBlock(ctx, height, runtimeID, round)
-	if err != nil {
-		return fmt.Errorf("failed to fetch annotated block: %w", err)
-	}
-
-	// Commit the block to history if needed.
-	if tr.blockHistory != nil {
-		crash.Here(crashPointBlockBeforeIndex)
-
-		// Perform reindex if required.
-		lastRound := api.RoundInvalid
-		if !tr.reindexDone {
-			// Note that we need to reindex up to the previous height as the current height is
-			// already being processed right now.
-			if lastRound, err = sc.reindexBlocks(ctx, height-1, tr.blockHistory); err != nil {
-				sc.logger.Error("failed to reindex blocks",
-					"err", err,
-					"runtime_id", runtimeID,
-				)
-				return fmt.Errorf("failed to reindex blocks: %w", err)
-			}
-			tr.reindexDone = true
-		}
-
-		// Only commit the block in case it was not already committed during reindex. Note that even
-		// in case we only reindex up to height-1 this can still happen on the first emitted block
-		// since that height is not guaranteed to be the one that contains a round finalized event.
-		if lastRound == api.RoundInvalid || annBlk.Block.Header.Round > lastRound {
-			sc.logger.Debug("commit block",
-				"runtime_id", runtimeID,
-				"height", height,
-				"round", annBlk.Block.Header.Round,
-			)
-
-			err = tr.blockHistory.Commit(annBlk, true)
-			if err != nil {
-				sc.logger.Error("failed to commit block to history keeper",
-					"err", err,
-					"runtime_id", runtimeID,
-					"height", height,
-					"round", annBlk.Block.Header.Round,
-				)
-				return fmt.Errorf("failed to commit block to history keeper: %w", err)
-			}
-		}
-	}
-
-	notifiers := sc.getRuntimeNotifiers(runtimeID)
-	notifiers.blockNotifier.Broadcast(annBlk)
-	sc.allBlockNotifier.Broadcast(annBlk.Block)
-
-	tr.height = height
-
-	return nil
-}
-
-func (sc *serviceClient) fetchAnnotatedBlock(
-	ctx context.Context,
-	height int64,
-	runtimeID common.Namespace,
-	round *uint64,
-) (*api.AnnotatedBlock, error) {
-	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
-	if err != nil {
-		sc.logger.Error("failed to fetch latest block",
-			"err", err,
-			"height", height,
-			"runtime_id", runtimeID,
-		)
-		return nil, fmt.Errorf("roothash: failed to fetch latest block: %w", err)
-	}
-	if round != nil && blk.Header.Round != *round {
-		sc.logger.Error("finalized event/query round mismatch",
-			"block_round", blk.Header.Round,
-			"event_round", *round,
-		)
-		return nil, fmt.Errorf("roothash: finalized event/query round mismatch")
-	}
-
-	annBlk := &api.AnnotatedBlock{
-		Height: height,
-		Block:  blk,
-	}
-	return annBlk, nil
 }
 
 // EventsFromCometBFT extracts staking events from CometBFT events.
@@ -809,7 +564,7 @@ EventLoop:
 				// An executor commit has been processed.
 				var e api.ExecutorCommittedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorCommitted event: %w", err))
 					continue EventLoop
 				}
 

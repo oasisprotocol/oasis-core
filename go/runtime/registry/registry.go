@@ -51,10 +51,6 @@ type Registry interface {
 	// Runtimes returns a list of all runtimes.
 	Runtimes() []Runtime
 
-	// NewRuntime creates a new runtime that may or may not be managed
-	// by this registry.
-	NewRuntime(ctx context.Context, runtimeID common.Namespace, managed bool) (Runtime, error)
-
 	// RegisterClient registers a runtime client service. If the service has already been registered
 	// this method returns an error.
 	RegisterClient(rc runtimeClient.RuntimeClient) error
@@ -279,20 +275,17 @@ func (r *runtime) start() {
 
 // stop halts the runtime worker.
 func (r *runtime) stop() {
-	// Stop watching runtime updates.
 	r.startOne.TryStop()
-
-	// Close local storage backend.
 	r.localStorage.Stop()
-
-	// Close storage backend.
-	if r.storage != nil {
-		r.storage.Cleanup()
-	}
-
-	// Close history keeper.
 	if r.history != nil {
 		r.history.Close()
+	}
+}
+
+// cleanup cleans up the runtime worker.
+func (r *runtime) cleanup() {
+	if r.storage != nil {
+		r.storage.Cleanup()
 	}
 }
 
@@ -477,6 +470,7 @@ type runtimeRegistry struct {
 	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
+	indexers []*history.BlockIndexer
 
 	historyFactory history.Factory
 
@@ -508,8 +502,9 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 	return rts
 }
 
-// NewRuntime implements Registry.
-func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Namespace, managed bool) (Runtime, error) {
+// createRuntime creates a new runtime that may or may not be managed
+// by this registry.
+func (r *runtimeRegistry) createRuntime(ctx context.Context, runtimeID common.Namespace, managed bool) (Runtime, error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -533,21 +528,22 @@ func (r *runtimeRegistry) NewRuntime(ctx context.Context, runtimeID common.Names
 
 	if managed {
 		// Create runtime history keeper.
-		history, err := r.historyFactory(runtimeID, rt.dataDir)
+		rt.history, err = r.historyFactory(runtimeID, rt.dataDir)
 		if err != nil {
 			return nil, fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 		}
-		rt.history = history
 
 		// Start tracking this runtime.
-		if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
+		if err = r.consensus.RootHash().TrackRuntime(ctx, rt.history); err != nil {
 			return nil, fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
 		}
+
+		// Start indexing blocks.
+		indexer := history.NewBlockIndexer(r.consensus, rt.history)
+		r.indexers = append(r.indexers, indexer)
 	}
 
 	r.runtimes[runtimeID] = rt
-
-	rt.start()
 
 	r.logger.Info("runtime added",
 		"id", runtimeID,
@@ -611,12 +607,32 @@ func (r *runtimeRegistry) Name() string {
 // Start implements BackgroundService.
 func (r *runtimeRegistry) Start() error {
 	r.bundleManager.Start()
+
+	r.RLock()
+	defer r.RUnlock()
+	for _, rt := range r.runtimes {
+		rt.start()
+	}
+	for _, indexer := range r.indexers {
+		indexer.Start()
+	}
+
 	return nil
 }
 
 // Stop implements BackgroundService.
 func (r *runtimeRegistry) Stop() {
 	r.bundleManager.Stop()
+
+	r.RLock()
+	defer r.RUnlock()
+	for _, rt := range r.runtimes {
+		rt.stop()
+	}
+	for _, indexer := range r.indexers {
+		indexer.Stop()
+	}
+
 	close(r.quitCh)
 }
 
@@ -627,11 +643,10 @@ func (r *runtimeRegistry) Quit() <-chan struct{} {
 
 // Cleanup implements BackgroundService.
 func (r *runtimeRegistry) Cleanup() {
-	r.Lock()
-	defer r.Unlock()
-
+	r.RLock()
+	defer r.RUnlock()
 	for _, rt := range r.runtimes {
-		rt.stop()
+		rt.cleanup()
 	}
 }
 
@@ -641,7 +656,7 @@ func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespac
 	managed := config.GlobalConfig.Mode != config.ModeKeyManager
 
 	for _, runtimeID := range runtimeIDs {
-		if _, err := r.NewRuntime(ctx, runtimeID, managed); err != nil {
+		if _, err := r.createRuntime(ctx, runtimeID, managed); err != nil {
 			r.logger.Error("failed to add runtime",
 				"err", err,
 				"id", runtimeID,
@@ -685,6 +700,7 @@ func New(
 		dataDir:        dataDir,
 		consensus:      consensus,
 		runtimes:       make(map[common.Namespace]*runtime),
+		indexers:       make([]*history.BlockIndexer, 0),
 		historyFactory: historyFactory,
 		bundleRegistry: bundleRegistry,
 		bundleManager:  bundleManager,

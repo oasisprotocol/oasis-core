@@ -174,9 +174,6 @@ func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult,
 
 func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *component.ID) ([]byte, error) {
 	hrt := n.commonNode.GetHostedRuntime()
-	if hrt == nil {
-		return nil, api.ErrNoHostedRuntime
-	}
 
 	// Fetch the active descriptor so we can get the current message limits.
 	n.commonNode.CrossNode.Lock()
