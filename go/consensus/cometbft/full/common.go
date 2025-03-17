@@ -968,15 +968,8 @@ func newCommonNode(
 	ctx context.Context,
 	dataDir string,
 	identity *identity.Identity,
-	genesisProvider genesisAPI.Provider,
+	genesisDoc *genesisAPI.Document,
 ) (*commonNode, error) {
-	// Retrieve the genesis document early so that it is possible to
-	// use it while initializing other things.
-	genesisDoc, err := genesisProvider.GetGenesisDocument()
-	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to get genesis doc: %w", err)
-	}
-
 	// Make sure that the consensus backend specified in the genesis
 	// document is the correct one.
 	if genesisDoc.Consensus.Backend != api.BackendName {

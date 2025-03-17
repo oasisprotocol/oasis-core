@@ -159,9 +159,9 @@ func NewArchive(
 	ctx context.Context,
 	dataDir string,
 	identity *identity.Identity,
-	genesisProvider genesisAPI.Provider,
+	genesisDoc *genesisAPI.Document,
 ) (consensusAPI.Backend, error) {
-	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisProvider)
+	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisDoc)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func NewArchive(
 	stateDB = db.WithCloser(stateDB, srv.dbCloser)
 	srv.stateStore = state.NewStore(stateDB, state.StoreOptions{})
 
-	tmGenDoc, err := api.GetCometBFTGenesisDocument(genesisProvider)
+	tmGenDoc, err := api.GetCometBFTGenesisDocument(genesisDoc)
 	if err != nil {
 		return nil, err
 	}

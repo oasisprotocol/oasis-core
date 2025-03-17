@@ -7,19 +7,19 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft"
-	"github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 type honestCometBFT struct {
 	service consensus.Backend
 
-	genesis api.Provider
+	genesisDoc *genesis.Document
 }
 
-func newHonestCometBFT(genesis api.Provider) *honestCometBFT {
+func newHonestCometBFT(genesisDoc *genesis.Document) *honestCometBFT {
 	return &honestCometBFT{
-		genesis: genesis,
+		genesisDoc: genesisDoc,
 	}
 }
 
@@ -29,7 +29,7 @@ func (ht *honestCometBFT) start(id *identity.Identity, dataDir string) error {
 	}
 
 	var err error
-	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis)
+	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesisDoc)
 	if err != nil {
 		return fmt.Errorf("cometbft New: %w", err)
 	}

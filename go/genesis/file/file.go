@@ -11,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
-// fileProvider provides the static gensis document that network was
+// fileProvider provides the static genesis document that network was
 // initialized with.
 type fileProvider struct {
 	document *api.Document

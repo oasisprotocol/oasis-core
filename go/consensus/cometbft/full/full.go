@@ -92,9 +92,10 @@ type fullService struct { // nolint: maligned
 
 	submissionMgr consensusAPI.SubmissionManager
 
-	genesisProvider genesisAPI.Provider
-	syncedCh        chan struct{}
-	quitCh          chan struct{}
+	tmGenDoc *cmttypes.GenesisDoc
+
+	syncedCh chan struct{}
+	quitCh   chan struct{}
 
 	startFn  func() error
 	stopOnce sync.Once
@@ -636,15 +637,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		return err
 	}
 
-	tmGenDoc, err := api.GetCometBFTGenesisDocument(t.genesisProvider)
-	if err != nil {
-		t.Logger.Error("failed to obtain genesis document",
-			"err", err,
-		)
-		return err
-	}
 	cometbftGenesisProvider := func() (*cmttypes.GenesisDoc, error) {
-		return tmGenDoc, nil
+		return t.tmGenDoc, nil
 	}
 
 	dbProvider, err := db.GetProvider()
@@ -718,7 +712,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
-				GenesisDocument: tmGenDoc,
+				GenesisDocument: t.tmGenDoc,
 				TrustOptions: cmtlight.TrustOptions{
 					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
@@ -923,20 +917,25 @@ func New(
 	dataDir string,
 	identity *identity.Identity,
 	upgrader upgradeAPI.Backend,
-	genesisProvider genesisAPI.Provider,
+	genesisDoc *genesisAPI.Document,
 ) (consensusAPI.Backend, error) {
-	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisProvider)
+	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisDoc)
 	if err != nil {
 		return nil, err
 	}
 
+	tmGenDoc, err := api.GetCometBFTGenesisDocument(genesisDoc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain genesis document: %w", err)
+	}
+
 	t := &fullService{
-		commonNode:      commonNode,
-		upgrader:        upgrader,
-		blockNotifier:   pubsub.NewBroker(false),
-		genesisProvider: genesisProvider,
-		syncedCh:        make(chan struct{}),
-		quitCh:          make(chan struct{}),
+		commonNode:    commonNode,
+		upgrader:      upgrader,
+		blockNotifier: pubsub.NewBroker(false),
+		tmGenDoc:      tmGenDoc,
+		syncedCh:      make(chan struct{}),
+		quitCh:        make(chan struct{}),
 	}
 	// Common node needs access to parent struct for initializing consensus services.
 	t.commonNode.parentNode = t

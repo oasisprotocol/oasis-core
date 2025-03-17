@@ -20,15 +20,15 @@ func New(
 	dataDir string,
 	identity *identity.Identity,
 	upgrader upgradeAPI.Backend,
-	genesisProvider genesisAPI.Provider,
+	genesisDoc *genesisAPI.Document,
 ) (consensusAPI.Backend, error) {
 	switch config.GlobalConfig.Mode {
 	case config.ModeArchive:
 		// Archive node.
-		return full.NewArchive(ctx, dataDir, identity, genesisProvider)
+		return full.NewArchive(ctx, dataDir, identity, genesisDoc)
 	default:
 		// Full node.
-		return full.New(ctx, dataDir, identity, upgrader, genesisProvider)
+		return full.New(ctx, dataDir, identity, upgrader, genesisDoc)
 	}
 }
 

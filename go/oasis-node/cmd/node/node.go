@@ -547,7 +547,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize CometBFT consensus backend.
-	node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, node.Genesis)
+	node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesisDoc)
 	if err != nil {
 		logger.Error("failed to initialize cometbft service",
 			"err", err,

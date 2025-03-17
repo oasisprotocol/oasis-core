@@ -1,12 +1,9 @@
 package genesis
 
 import (
-	"encoding/json"
 	"math"
 	"net"
 	"time"
-
-	cmttypes "github.com/cometbft/cometbft/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -15,10 +12,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
@@ -31,24 +26,9 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-var _ cmt.GenesisProvider = (*testNodeGenesisProvider)(nil)
-
-type testNodeGenesisProvider struct {
-	document   *genesis.Document
-	tmDocument *cmttypes.GenesisDoc
-}
-
-func (p *testNodeGenesisProvider) GetGenesisDocument() (*genesis.Document, error) {
-	return p.document, nil
-}
-
-func (p *testNodeGenesisProvider) GetCometBFTGenesisDocument() (*cmttypes.GenesisDoc, error) {
-	return p.tmDocument, nil
-}
-
-// NewTestNodeGenesisProvider creates a synthetic genesis document for
+// CreateTestNodeGenesisDocument creates a synthetic genesis document for
 // running a single node "network", only for testing.
-func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity, entSigner signature.Signer) (genesis.Provider, error) {
+func CreateTestNodeGenesisDocument(identity *identity.Identity, ent *entity.Entity, entSigner signature.Signer) (*genesis.Document, error) {
 	doc := &genesis.Document{
 		Height:  1,
 		ChainID: genesisTestHelpers.TestChainID,
@@ -185,34 +165,5 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 	}
 	doc.Registry.Nodes = append(doc.Registry.Nodes, signed)
 
-	b, err := json.Marshal(doc)
-	if err != nil {
-		return nil, err
-	}
-	tmDoc := &cmttypes.GenesisDoc{
-		InitialHeight:   doc.Height,
-		ChainID:         doc.ChainID,
-		GenesisTime:     doc.Time,
-		ConsensusParams: cmttypes.DefaultConsensusParams(),
-		AppState:        b,
-	}
-	tmDoc.ConsensusParams.Version = cmttypes.VersionParams{
-		App: version.CometBFTAppVersion,
-	}
-
-	nodeID := identity.ConsensusSigner.Public()
-	pk := crypto.PublicKeyToCometBFT(&nodeID)
-	validator := cmttypes.GenesisValidator{
-		Address: pk.Address(),
-		PubKey:  pk,
-		Power:   1,
-		Name:    "oasis-test-validator-" + nodeID.String(),
-	}
-
-	tmDoc.Validators = append(tmDoc.Validators, validator)
-
-	return &testNodeGenesisProvider{
-		document:   doc,
-		tmDocument: tmDoc,
-	}, nil
+	return doc, nil
 }
