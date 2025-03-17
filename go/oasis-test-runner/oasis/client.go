@@ -35,6 +35,11 @@ type ClientCfg struct {
 	RuntimeConfig      map[int]map[string]interface{}
 }
 
+// UpdateRuntimes updates the client node runtimes.
+func (client *Client) UpdateRuntimes(runtimes []int) {
+	client.runtimes = runtimes
+}
+
 func (client *Client) AddArgs(args *argBuilder) error {
 	args.appendNetwork(client.net)
 
