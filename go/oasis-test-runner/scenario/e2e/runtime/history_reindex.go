@@ -82,14 +82,27 @@ func (sc *historyReindexImpl) Clone() scenario.Scenario {
 }
 
 func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error {
-	cli := cli.New(childEnv, sc.Net, sc.Logger)
-
 	// Start the network.
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
 	// Wait for enough block to ensure pruning on the compute node.
+	if err := sc.ensureComputePruning(ctx); err != nil {
+		return fmt.Errorf("failed to ensure compute node pruning: %w", err)
+	}
+
+	// Restart compute worker with configured runtime.
+	if err := sc.restartCompute(ctx, childEnv); err != nil {
+		return fmt.Errorf("failed to restart compute node: %w", err)
+	}
+
+	// Run client to ensure runtime works.
+	sc.Logger.Info("Starting the basic client")
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
+}
+
+func (sc *historyReindexImpl) ensureComputePruning(ctx context.Context) error {
 	waitForHeight := int64(reindexComputePruneNumKept + 20)
 	sc.Logger.Info("waiting enough blocks to ensure pruning",
 		"compute_prune_num_kept", reindexComputePruneNumKept,
@@ -112,7 +125,12 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		)
 	}
 
-	// Restart compute worker with configured runtime.
+	return nil
+}
+
+func (sc *historyReindexImpl) restartCompute(ctx context.Context, childEnv *env.Env) error {
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
+
 	compute := sc.Net.ComputeWorkers()[0]
 	sc.Logger.Info("stopping the compute worker")
 	if err := compute.Stop(); err != nil {
@@ -156,7 +174,5 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return err
 	}
 
-	// Run client to ensure runtime works.
-	sc.Logger.Info("Starting the basic client")
-	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
+	return nil
 }
