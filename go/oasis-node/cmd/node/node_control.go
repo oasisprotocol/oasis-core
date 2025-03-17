@@ -319,6 +319,15 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			}
 		}
 
+		// Fetch history indexer status.
+		indexer, err := n.RuntimeRegistry.Indexer(rt.ID())
+		switch err {
+		case nil:
+			status.History = indexer.Status()
+		default:
+			logger.Error("failed to fetch history indexer", "err", err)
+		}
+
 		// Fetch provisioner type.
 		status.Provisioner = n.Provisioner.Name()
 
