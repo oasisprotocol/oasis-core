@@ -16,17 +16,59 @@ import (
 )
 
 const (
+	statusStarted    = "started"
+	statusReindexing = "reindexing"
+	statusIndexing   = "indexing"
+	statusStopped    = "stopped"
+)
+
+// IndexerStatus is the status of runtime history indexer.
+type IndexerStatus struct {
+	// Status is the concise status of runtime history indexer state.
+	Status string `json:"status"`
+
+	// LastRound is the last runtime round that was indexed.
+	LastRound uint64 `json:"last_round"`
+
+	// ReindexStatus is history reindex status.
+	//
+	// It is nil unless during history reindex.
+	ReindexStatus *ReindexStatus `json:"reindex_status,omitempty"`
+}
+
+type ReindexStatus struct {
+	// BatchSize is the number of blocks to reindex in a single batch.
+	BatchSize uint16 `json:"batch_size"`
+	// LastHeight is the last consensus height that was indexed.
+	LastHeight int64 `json:"last_height"`
+	// StartHeight is the first height of history reindex interval.
+	StartHeight int64 `json:"start_height"`
+	// EndHeight is the last height of history reindex interval.
+	EndHeight int64 `json:"end_height"`
+	// ETA is expected time of history reindex completition.
+	ETA time.Time `json:"eta"`
+}
+
+const (
 	maxPendingBlocks = 10
 )
 
 // BlockIndexer is responsible for indexing and committing finalized
 // runtime blocks from the consensus into the runtime history.
 type BlockIndexer struct {
+	mu       sync.RWMutex
 	startOne cmSync.One
 
 	consensus consensus.Backend
 	history   History
 	batchSize uint16
+
+	status      string
+	lastHeight  int64
+	startHeight int64
+	endHeight   int64
+	lastRound   uint64
+	started     time.Time
 
 	logger *logging.Logger
 }
@@ -54,8 +96,40 @@ func (bi *BlockIndexer) Stop() {
 	bi.startOne.TryStop()
 }
 
+// Status returns runtime block history indexer status.
+func (bi *BlockIndexer) Status() *IndexerStatus {
+	bi.mu.RLock()
+	defer bi.mu.RUnlock()
+
+	status := &IndexerStatus{
+		Status:    bi.status,
+		LastRound: bi.lastRound,
+	}
+
+	if bi.status != statusReindexing {
+		return status
+	}
+
+	elapsed := time.Since(bi.started).Milliseconds()
+	remaining := elapsed * (bi.endHeight - bi.lastHeight) / max((bi.lastHeight-bi.startHeight+1), 1)
+	eta := time.Now().Add(time.Duration(remaining) * time.Millisecond)
+	status.ReindexStatus = &ReindexStatus{
+		BatchSize:   bi.batchSize,
+		LastHeight:  bi.lastHeight,
+		StartHeight: bi.startHeight,
+		EndHeight:   bi.endHeight,
+		ETA:         eta,
+	}
+
+	return status
+}
+
 func (bi *BlockIndexer) run(ctx context.Context) {
 	bi.logger.Info("starting")
+
+	bi.mu.Lock()
+	bi.status = statusStarted
+	bi.mu.Unlock()
 
 	// Subscribe to new runtime blocks.
 	blkCh, blkSub, err := bi.consensus.RootHash().WatchBlocks(ctx, bi.history.RuntimeID())
@@ -86,10 +160,18 @@ func (bi *BlockIndexer) run(ctx context.Context) {
 	// Index new blocks.
 	bi.index(ctx, blkCh)
 	bi.logger.Info("stopping")
+
+	bi.mu.Lock()
+	bi.status = statusStopped
+	bi.mu.Unlock()
 }
 
 func (bi *BlockIndexer) index(ctx context.Context, blkCh <-chan *roothash.AnnotatedBlock) {
 	bi.logger.Debug("indexing")
+
+	bi.mu.Lock()
+	bi.status = statusIndexing
+	bi.mu.Unlock()
 
 	retry := time.Duration(math.MaxInt64)
 	boff := cmnBackoff.NewExponentialBackOff()
@@ -216,23 +298,33 @@ func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 		)
 		return fmt.Errorf("failed to get last indexed height: %w", err)
 	}
-	lastHeight++ // +1 since we want the last non-seen height.
+	startHeight := lastHeight + 1 // +1 since we want the last non-seen height.
 
 	lastRetainedHeight, err := bi.consensus.GetLastRetainedHeight(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get last retained height: %w", err)
 	}
 
-	if lastHeight < lastRetainedHeight {
+	if startHeight < lastRetainedHeight {
 		bi.logger.Debug("skipping pruned heights",
 			"last_retained_height", lastRetainedHeight,
-			"last_height", lastHeight,
+			"start_height", startHeight,
 		)
-		lastHeight = lastRetainedHeight
+		startHeight = lastRetainedHeight
 	}
 
+	bi.mu.Lock()
+	bi.status = statusReindexing
+	bi.endHeight = height
+	if bi.startHeight == 0 {
+		bi.lastHeight = lastHeight
+		bi.startHeight = startHeight
+		bi.started = time.Now()
+	}
+	bi.mu.Unlock()
+
 	batchSize := int64(bi.batchSize)
-	for start := lastHeight; start <= height; start += batchSize {
+	for start := startHeight; start <= height; start += batchSize {
 		end := min(start+batchSize-1, height)
 		if err = bi.reindexRange(ctx, start, end); err != nil {
 			return fmt.Errorf("failed to reindex batch: %w", err)
@@ -291,6 +383,10 @@ func (bi *BlockIndexer) reindexRange(ctx context.Context, start int64, end int64
 		return err
 	}
 
+	bi.mu.Lock()
+	bi.lastHeight = end
+	bi.mu.Unlock()
+
 	bi.logger.Debug("block reindex completed")
 	return nil
 }
@@ -311,6 +407,11 @@ func (bi *BlockIndexer) commitBlocks(blocks []*roothash.AnnotatedBlock) error {
 		)
 		return fmt.Errorf("failed to commit blocks: %w", err)
 	}
+
+	bi.mu.Lock()
+	defer bi.mu.Unlock()
+	lastBlk := blocks[len(blocks)-1]
+	bi.lastRound = lastBlk.Block.Header.Round
 
 	return nil
 }
