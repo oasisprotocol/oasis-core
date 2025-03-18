@@ -21,36 +21,9 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// GenesisProvider is a CometBFT specific genesis document provider.
-type GenesisProvider interface {
-	GetCometBFTGenesisDocument() (*cmttypes.GenesisDoc, error)
-}
-
 // GetCometBFTGenesisDocument returns the CometBFT genesis document corresponding to the Oasis
 // genesis document specified by the given genesis provider.
-func GetCometBFTGenesisDocument(provider genesis.Provider) (*cmttypes.GenesisDoc, error) {
-	doc, err := provider.GetGenesisDocument()
-	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to obtain genesis document: %w", err)
-	}
-
-	var tmGenDoc *cmttypes.GenesisDoc
-	if tmProvider, ok := provider.(GenesisProvider); ok {
-		// This is a single node config, because the genesis document was
-		// missing, probably in unit tests.
-		tmGenDoc, err = tmProvider.GetCometBFTGenesisDocument()
-	} else {
-		tmGenDoc, err = genesisToCometBFT(doc)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to create genesis document: %w", err)
-	}
-
-	return tmGenDoc, nil
-}
-
-// genesisToCometBFT converts the Oasis genesis block to CometBFT's format.
-func genesisToCometBFT(d *genesis.Document) (*cmttypes.GenesisDoc, error) {
+func GetCometBFTGenesisDocument(d *genesis.Document) (*cmttypes.GenesisDoc, error) {
 	// WARNING: The AppState MUST be encoded as JSON since its type is
 	// json.RawMessage which requires it to be valid JSON. It may appear
 	// to work until you try to restore from an existing data directory.

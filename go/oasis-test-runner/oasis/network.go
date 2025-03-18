@@ -437,14 +437,8 @@ func (net *Network) Start() error { // nolint: gocyclo
 
 	// Retrieve the genesis document and use it to configure the context for
 	// signature domain separation.
-	genesisProvider, err := genesisFile.NewFileProvider(net.GenesisPath())
-	if err != nil {
-		net.logger.Error("failed to load genesis file",
-			"err", err,
-		)
-		return err
-	}
-	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	genesis := genesisFile.NewProvider(net.GenesisPath())
+	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		net.logger.Error("failed to retrieve genesis document",
 			"err", err,

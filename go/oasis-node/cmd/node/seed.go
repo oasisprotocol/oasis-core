@@ -11,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	cmtSeed "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/seed"
 	controlApi "github.com/oasisprotocol/oasis-core/go/control/api"
-	genesisApi "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -30,7 +30,6 @@ type SeedNode struct {
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
 
-	genesis  genesisApi.Provider
 	identity *identity.Identity
 
 	cometbftSeed *cmtSeed.Service
@@ -92,10 +91,15 @@ func NewSeedNode() (node *SeedNode, err error) {
 	}
 
 	// Initialize the genesis provider.
-	node.genesis, err = initGenesis(node.logger)
+	genesis := genesisFile.DefaultProvider()
+	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
+		logger.Error("failed to get genesis document",
+			"err", err,
+		)
 		return nil, err
 	}
+	genesisDoc.SetChainContext()
 
 	// Configure a directory for the node to work in.
 	dataDir, err := configureDataDir(node.logger)
@@ -132,7 +136,7 @@ func NewSeedNode() (node *SeedNode, err error) {
 	controlApi.RegisterService(node.grpcInternal.Server(), node)
 
 	// Initialize and start the CometBFT seed.
-	node.cometbftSeed, err = cmtSeed.New(dataDir, node.identity, node.genesis)
+	node.cometbftSeed, err = cmtSeed.New(dataDir, node.identity, genesisDoc)
 	if err != nil {
 		return nil, err
 	}

@@ -125,10 +125,7 @@ func initializeAndRegisterByzantineNode(
 	)
 
 	// Initialize the genesis provider.
-	genesis, err := genesis.NewFileProvider(cmdFlags.GenesisFile())
-	if err != nil {
-		return nil, fmt.Errorf("genesis init failed: %w", err)
-	}
+	genesis := genesis.NewProvider(cmdFlags.GenesisFile())
 
 	// Retrieve the genesis document and use it to configure the ChainID for
 	// signature domain separation. We do this as early as possible.
@@ -141,7 +138,7 @@ func initializeAndRegisterByzantineNode(
 	b.chainContext = genesisDoc.ChainContext()
 
 	// Setup CometBFT.
-	b.cometbft = newHonestCometBFT(genesis)
+	b.cometbft = newHonestCometBFT(genesis, genesisDoc)
 	if err = b.cometbft.start(b.identity, cmdCommon.DataDir()); err != nil {
 		return nil, fmt.Errorf("node cometbft start failed: %w", err)
 	}

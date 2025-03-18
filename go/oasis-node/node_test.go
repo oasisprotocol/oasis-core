@@ -181,9 +181,7 @@ func newTestNode(t *testing.T) *testNode {
 
 	// Generate genesis and save it to file.
 	genesisPath := filepath.Join(dataDir, "genesis.json")
-	genesis, err := tmTestGenesis.NewTestNodeGenesisProvider(identity, entity, entitySigner)
-	require.NoError(err, "test genesis provision")
-	doc, err := genesis.GetGenesisDocument()
+	doc, err := tmTestGenesis.CreateTestNodeGenesisDocument(identity, entity, entitySigner)
 	require.NoError(err, "test entity genesis document")
 	require.NoError(doc.WriteFileJSON(genesisPath))
 	config.GlobalConfig.Genesis.File = genesisPath

@@ -19,8 +19,13 @@ type Genesis struct {
 
 // Parameters are the consensus parameters.
 type Parameters struct { // nolint: maligned
-	TimeoutCommit      time.Duration `json:"timeout_commit"`
-	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
+	// TimeoutCommit specifies the duration to wait after committing a block
+	// before starting a new height.
+	TimeoutCommit time.Duration `json:"timeout_commit"`
+	// SkipTimeoutCommit determines whether to proceed immediately once all
+	// precommits are received.
+	SkipTimeoutCommit bool `json:"skip_timeout_commit"`
+	// EmptyBlockInterval defines the time interval between empty blocks.
 	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
 
 	MaxTxSize       uint64          `json:"max_tx_size"`

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/control/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 )
 
@@ -15,7 +14,7 @@ var _ control.DebugController = (*Node)(nil)
 func (n *Node) SetEpoch(ctx context.Context, epoch beacon.EpochTime) error {
 	mockTS, ok := n.Consensus.Beacon().(beacon.SetableBackend)
 	if !ok {
-		return api.ErrIncompatibleBackend
+		return control.ErrIncompatibleBackend
 	}
 
 	return mockTS.SetEpoch(ctx, epoch)
