@@ -106,18 +106,28 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return fmt.Errorf("failed to run test client and check logs: %w", err)
 	}
 
-	// Start a new client and ensure reindex works, by comparing all blocks
-	// of default scenario client with the new client.
-	return sc.startNewClientAndTestReindex(ctx)
-}
-
-func (sc *historyReindexImpl) startNewClientAndTestReindex(ctx context.Context) error {
 	lastRound, err := sc.fetchLatestRound(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch default client latest round: %w", err)
 	}
 
-	client, err := sc.starNewClient()
+	// Start new clients, all with different history indexer batch size configuration.
+	// For every client, ensure reindex works by comparing all blocks of default client.
+	for _, batchSize := range []uint16{1, 2, 3, 1000} {
+		if err := sc.startNewClientAndTestReindex(ctx, lastRound, batchSize); err != nil {
+			return fmt.Errorf("wrong history reindex (batchSize: %d): %w", batchSize, err)
+		}
+	}
+
+	return nil
+}
+
+func (sc *historyReindexImpl) startNewClientAndTestReindex(
+	ctx context.Context,
+	lastRound uint64,
+	batchSize uint16,
+) error {
+	client, err := sc.starNewClient(batchSize)
 	if err != nil {
 		return fmt.Errorf("failed to start a new client: %w", err)
 	}
@@ -259,7 +269,7 @@ func (sc *historyReindexImpl) restartCompute(ctx context.Context, childEnv *env.
 	return nil
 }
 
-func (sc *historyReindexImpl) starNewClient() (*oasis.Client, error) {
+func (sc *historyReindexImpl) starNewClient(batchSize uint16) (*oasis.Client, error) {
 	var rtIdx int
 	for idx, rt := range sc.Net.Runtimes() {
 		if rt.Kind() == registry.KindCompute {
@@ -275,6 +285,7 @@ func (sc *historyReindexImpl) starNewClient() (*oasis.Client, error) {
 	cfg := &oasis.ClientCfg{
 		Runtimes:           []int{rtIdx},
 		RuntimeProvisioner: rtProv,
+		BatchSize:          batchSize,
 	}
 	client, err := sc.Net.NewClient(cfg)
 	if err != nil {
@@ -286,6 +297,7 @@ func (sc *historyReindexImpl) starNewClient() (*oasis.Client, error) {
 	}
 	sc.Logger.Info("started new client node",
 		"name", client.Name,
+		"batch_size", batchSize,
 	)
 
 	return client, nil
