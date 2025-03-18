@@ -138,10 +138,9 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
-	runtimeProvisionerRaw, _ := sc.Flags.GetString(cfgRuntimeProvisioner)
-	var runtimeProvisioner runtimeConfig.RuntimeProvisioner
-	if err = runtimeProvisioner.UnmarshalText([]byte(runtimeProvisionerRaw)); err != nil {
-		return nil, fmt.Errorf("failed to parse runtime provisioner: %w", err)
+	runtimeProvisioner, err := sc.runtimeProvisioner()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get runtime provisioner: %w", err)
 	}
 
 	ff := &oasis.NetworkFixture{
@@ -403,4 +402,13 @@ func RegisterScenarios() error {
 	}
 
 	return nil
+}
+
+func (sc *Scenario) runtimeProvisioner() (runtimeConfig.RuntimeProvisioner, error) {
+	runtimeProvisionerRaw, _ := sc.Flags.GetString(cfgRuntimeProvisioner)
+	var runtimeProvisioner runtimeConfig.RuntimeProvisioner
+	if err := runtimeProvisioner.UnmarshalText([]byte(runtimeProvisionerRaw)); err != nil {
+		return "", fmt.Errorf("failed to parse runtime provisioner: %w", err)
+	}
+	return runtimeProvisioner, nil
 }
