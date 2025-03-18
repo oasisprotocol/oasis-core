@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -96,15 +96,8 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("starting the network again")
 
 	// Update genesis file.
-	genesisFileProvider, err := genesis.NewFileProvider(files[0])
-	if err != nil {
-		sc.Logger.Error("failed getting genesis file provider",
-			"err", err,
-			"genesis_file", files[0],
-		)
-		return err
-	}
-	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
+	genesis := genesisFile.NewProvider(files[0])
+	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		sc.Logger.Error("failed getting genesis document from file provider",
 			"err", err,

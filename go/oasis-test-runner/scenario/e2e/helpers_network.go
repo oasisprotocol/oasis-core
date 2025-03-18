@@ -173,11 +173,8 @@ func (sc *Scenario) DumpRestoreNetwork(
 	// Apply optional mapping function to the genesis document.
 	if genesisMapFn != nil {
 		// Load the existing export.
-		fp, err := genesisFile.NewFileProvider(dumpPath)
-		if err != nil {
-			return fmt.Errorf("failed to instantiate genesis document file provider: %w", err)
-		}
-		doc, err := fp.GetGenesisDocument()
+		genesis := genesisFile.NewProvider(dumpPath)
+		doc, err := genesis.GetGenesisDocument()
 		if err != nil {
 			return fmt.Errorf("failed to get genesis document: %w", err)
 		}
@@ -219,11 +216,8 @@ func (sc *Scenario) DumpRestoreNetwork(
 
 func (sc *Scenario) dumpDatabase(childEnv *env.Env, _ *oasis.NetworkFixture, exportPath string) error {
 	// Load the existing export.
-	eFp, err := genesisFile.NewFileProvider(exportPath)
-	if err != nil {
-		return fmt.Errorf("failed to instantiate file provider (export): %w", err)
-	}
-	exportedDoc, err := eFp.GetGenesisDocument()
+	genesis := genesisFile.NewProvider(exportPath)
+	exportedDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		return fmt.Errorf("failed to get genesis doc (export): %w", err)
 	}
@@ -246,11 +240,8 @@ func (sc *Scenario) dumpDatabase(childEnv *env.Env, _ *oasis.NetworkFixture, exp
 	}
 
 	// Load the dumped state.
-	fp, err := genesisFile.NewFileProvider(dbDumpPath)
-	if err != nil {
-		return fmt.Errorf("failed to instantiate file provider (db): %w", err)
-	}
-	dbDoc, err := fp.GetGenesisDocument()
+	genesis = genesisFile.NewProvider(dbDumpPath)
+	dbDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		return fmt.Errorf("failed to get genesis doc (dump): %w", err)
 	}

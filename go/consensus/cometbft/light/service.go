@@ -26,7 +26,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	p2pLight "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
-	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -47,7 +46,6 @@ type client struct {
 
 	logger *logging.Logger
 
-	genesis   *genesisAPI.Document
 	consensus consensus.Backend
 	p2p       rpc.P2P
 
@@ -375,7 +373,7 @@ func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtp
 // New creates a new CometBFT light client service backed by the local full node.
 //
 // This light client is initialized with a trusted blocks obtained from the local consensus backend.
-func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, c consensus.Backend, p2p rpc.P2P) (api.ClientService, error) {
+func New(ctx context.Context, dataDir string, c consensus.Backend, p2p rpc.P2P) (api.ClientService, error) {
 	tdb, err := db.New(filepath.Join(dataDir, dbName), false)
 	if err != nil {
 		return nil, err
@@ -386,7 +384,6 @@ func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, c co
 		ctx:       ctx,
 		enabled:   c.SupportedFeatures().Has(consensus.FeatureFullNode),
 		logger:    logging.GetLogger("consensus/cometbft/light"),
-		genesis:   genesis,
 		consensus: c,
 		p2p:       p2p,
 		store:     store,

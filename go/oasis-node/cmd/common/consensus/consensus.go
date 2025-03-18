@@ -57,13 +57,7 @@ func AssertTxFileOK() {
 }
 
 func InitGenesis() *genesisAPI.Document {
-	genesis, err := genesisFile.NewFileProvider(cmdFlags.GenesisFile())
-	if err != nil {
-		logger.Error("failed to load genesis file",
-			"err", err,
-		)
-		os.Exit(1)
-	}
+	genesis := genesisFile.NewProvider(cmdFlags.GenesisFile())
 
 	// Retrieve the genesis document and use it to configure the ChainID for
 	// signature domain separation. We do this as early as possible.

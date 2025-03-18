@@ -35,9 +35,8 @@ const (
 
 // Service is the seed node service.
 type Service struct {
-	identity *identity.Identity
-
-	doc *genesis.Document
+	identity     *identity.Identity
+	chainContext string
 
 	addr      *cmtp2p.NetAddress
 	transport *cmtp2p.MultiplexTransport
@@ -96,7 +95,7 @@ func (s *Service) Cleanup() {
 
 // GetChainContext returns chain context from which network/chain ID was derived.
 func (s *Service) GetChainContext() string {
-	return s.doc.ChainContext()
+	return s.chainContext
 }
 
 // GetPeers returns a list of peers that are connected to the seed.
@@ -142,7 +141,7 @@ func initSeedDataDir(dataDir string) (string, error) {
 }
 
 // New creates a new seed node service.
-func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (*Service, error) {
+func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*Service, error) {
 	var err error
 
 	// This is heavily inspired by https://gitlab.com/polychainlabs/tenderseed
@@ -150,8 +149,9 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	// to get the PEX reactor to operate in seed mode.
 
 	srv := &Service{
-		quitCh:   make(chan struct{}),
-		identity: identity,
+		quitCh:       make(chan struct{}),
+		identity:     identity,
+		chainContext: doc.ChainContext(),
 	}
 
 	seedDataDir, err := initSeedDataDir(dataDir)
@@ -177,12 +177,6 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 
 	nodeKey := &cmtp2p.NodeKey{PrivKey: crypto.SignerToCometBFT(identity.P2PSigner)}
 
-	doc, err := genesisProvider.GetGenesisDocument()
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/seed: failed to get genesis document: %w", err)
-	}
-	srv.doc = doc
-
 	nodeInfo := cmtp2p.DefaultNodeInfo{
 		ProtocolVersion: cmtp2p.NewProtocolVersion(
 			cmtversion.P2PProtocol,
@@ -191,7 +185,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		),
 		DefaultNodeID: nodeKey.ID(),
 		ListenAddr:    config.GlobalConfig.Consensus.ListenAddress,
-		Network:       api.CometBFTChainID(doc.ChainContext()),
+		Network:       api.CometBFTChainID(srv.chainContext),
 		Version:       cmtversion.TMCoreSemVer,
 		Channels:      []byte{pex.PexChannel},
 		Moniker:       "oasis-seed-" + identity.P2PSigner.Public().String(),

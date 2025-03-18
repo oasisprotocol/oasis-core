@@ -8,8 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
-	"github.com/oasisprotocol/oasis-core/go/genesis/api"
-	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
@@ -42,28 +40,6 @@ func verifyElevatedPrivileges(logger *logging.Logger) error {
 	}
 
 	return nil
-}
-
-// initGenesis initializes the genesis provider and sets the chain context.
-func initGenesis(logger *logging.Logger) (api.Provider, error) {
-	genesis, err := genesisFile.DefaultFileProvider()
-	if err != nil {
-		err = fmt.Errorf("failed to initialize the genesis provider: failed to create local genesis file provider: %w", err)
-		logger.Error(err.Error())
-		return nil, err
-	}
-
-	// Retrieve the genesis document and use it to configure the ChainID for
-	// signature domain separation. We do this as early as possible.
-	genesisDoc, err := genesis.GetGenesisDocument()
-	if err != nil {
-		err = fmt.Errorf("failed to initialize the genesis provider: failed to get genesis: %w", err)
-		logger.Error(err.Error())
-		return nil, err
-	}
-	genesisDoc.SetChainContext()
-
-	return genesis, nil
 }
 
 // configureDataDir configures data directory.

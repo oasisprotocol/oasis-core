@@ -18,9 +18,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft"
+	cometbftAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	consensusLightP2P "github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -73,7 +75,6 @@ type Node struct {
 	chainContext string
 
 	Upgrader upgradeAPI.Backend
-	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
 	Sentry   sentryAPI.Backend
 
@@ -154,7 +155,7 @@ func (n *Node) waitReady() {
 
 // startRuntimeServices initializes and starts all the services that are required for runtime
 // support to work.
-func (n *Node) startRuntimeServices() error {
+func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 	var err error
 	if n.Sentry, err = sentry.New(n.Consensus, n.Identity); err != nil {
 		return err
@@ -190,7 +191,7 @@ func (n *Node) startRuntimeServices() error {
 	})
 
 	// Initialize runtime workers.
-	if err = n.initRuntimeWorkers(); err != nil {
+	if err = n.initRuntimeWorkers(genesisDoc); err != nil {
 		n.logger.Error("failed to initialize workers",
 			"err", err,
 		)
@@ -210,13 +211,8 @@ func (n *Node) startRuntimeServices() error {
 	return nil
 }
 
-func (n *Node) initRuntimeWorkers() error {
+func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	var err error
-
-	genesisDoc, err := n.Genesis.GetGenesisDocument()
-	if err != nil {
-		return err
-	}
 
 	// Initialize runtime provisioner.
 	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus)
@@ -468,16 +464,15 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize the genesis provider.
-	node.Genesis, err = initGenesis(logger)
+	genesis := genesisFile.DefaultProvider()
+	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
+		logger.Error("failed to get genesis document",
+			"err", err,
+		)
 		return nil, err
 	}
-
-	genesisDoc, err := node.Genesis.GetGenesisDocument()
-	if err != nil {
-		return nil, err
-	}
-
+	genesisDoc.SetChainContext()
 	node.chainContext = genesisDoc.ChainContext()
 
 	// Configure a directory for the node to work in.
@@ -546,13 +541,18 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		}
 	}
 
-	// Initialize CometBFT consensus backend.
-	node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesisDoc)
-	if err != nil {
-		logger.Error("failed to initialize cometbft service",
-			"err", err,
-		)
-		return nil, err
+	// Initialize consensus backend.
+	switch backend := genesisDoc.Consensus.Backend; backend {
+	case cometbftAPI.BackendName:
+		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc)
+		if err != nil {
+			logger.Error("failed to initialize cometbft consensus backend",
+				"err", err,
+			)
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported consensus backend: %s", backend)
 	}
 	node.svcMgr.Register(node.Consensus)
 	consensusAPI.RegisterService(node.grpcInternal.Server(), node.Consensus)
@@ -583,7 +583,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize CometBFT light client.
-	node.LightClient, err = cometbft.NewLightClient(node.svcMgr.Ctx, node.dataDir, genesisDoc, node.Consensus, node.P2P)
+	node.LightClient, err = cometbft.NewLightClient(node.svcMgr.Ctx, node.dataDir, node.Consensus, node.P2P)
 	if err != nil {
 		logger.Error("failed to initialize cometbft light client service",
 			"err", err,
@@ -598,7 +598,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
 	if node.Consensus.SupportedFeatures().Has(consensusAPI.FeatureServices) {
-		if err = node.startRuntimeServices(); err != nil {
+		if err = node.startRuntimeServices(genesisDoc); err != nil {
 			logger.Error("failed to initialize runtime services",
 				"err", err,
 			)

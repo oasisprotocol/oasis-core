@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/full"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
@@ -20,15 +21,40 @@ func New(
 	dataDir string,
 	identity *identity.Identity,
 	upgrader upgradeAPI.Backend,
-	genesisDoc *genesisAPI.Document,
+	genesis genesisAPI.Provider,
+	doc *genesisAPI.Document,
 ) (consensusAPI.Backend, error) {
+	genesisDoc, err := api.GetCometBFTGenesisDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	commonCfg := full.CommonConfig{
+		DataDir:            dataDir,
+		Identity:           identity,
+		ChainID:            doc.ChainID,
+		ChainContext:       doc.ChainContext(),
+		Genesis:            genesis,
+		GenesisDoc:         genesisDoc,
+		GenesisHeight:      doc.Height,
+		PublicKeyBlacklist: doc.Consensus.Parameters.PublicKeyBlacklist,
+	}
+
 	switch config.GlobalConfig.Mode {
 	case config.ModeArchive:
-		// Archive node.
-		return full.NewArchive(ctx, dataDir, identity, genesisDoc)
+		cfg := full.ArchiveConfig{
+			CommonConfig: commonCfg,
+		}
+		return full.NewArchive(ctx, cfg)
 	default:
-		// Full node.
-		return full.New(ctx, dataDir, identity, upgrader, genesisDoc)
+		cfg := full.Config{
+			CommonConfig:       commonCfg,
+			TimeoutCommit:      doc.Consensus.Parameters.TimeoutCommit,
+			EmptyBlockInterval: doc.Consensus.Parameters.EmptyBlockInterval,
+			SkipTimeoutCommit:  doc.Consensus.Parameters.SkipTimeoutCommit,
+			Upgrader:           upgrader,
+		}
+		return full.New(ctx, cfg)
 	}
 }
 
@@ -36,9 +62,8 @@ func New(
 func NewLightClient(
 	ctx context.Context,
 	dataDir string,
-	genesis *genesisAPI.Document,
 	consensus consensusAPI.Backend,
 	p2p rpc.P2P,
 ) (lightAPI.ClientService, error) {
-	return light.New(ctx, dataDir, genesis, consensus, p2p)
+	return light.New(ctx, dataDir, consensus, p2p)
 }

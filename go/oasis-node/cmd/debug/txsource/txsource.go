@@ -66,10 +66,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Set up the genesis system for the signature system's chain context.
-	genesis, err := genesisFile.NewFileProvider(cmdFlags.GenesisFile())
-	if err != nil {
-		return fmt.Errorf("genesis init failed: %w", err)
-	}
+	genesis := genesisFile.NewProvider(cmdFlags.GenesisFile())
 	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		return fmt.Errorf("genesis get document failed: %w", err)

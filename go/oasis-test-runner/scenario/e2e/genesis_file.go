@@ -206,10 +206,7 @@ func (s *genesisFileImpl) downloadGenesisFile(_ *env.Env, path string) error {
 }
 
 func (s *genesisFileImpl) createUncanonicalGenesisFile(_ *env.Env, uncanonicalGenesisFilePath string) error {
-	provider, err := genesisFile.NewFileProvider(s.Net.GenesisPath())
-	if err != nil {
-		return fmt.Errorf("failed to open genesis file: %w", err)
-	}
+	provider := genesisFile.NewProvider(s.Net.GenesisPath())
 	doc, err := provider.GetGenesisDocument()
 	if err != nil {
 		return fmt.Errorf("failed to get genesis document: %w", err)

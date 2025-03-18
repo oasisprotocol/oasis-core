@@ -33,7 +33,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/random"
@@ -48,7 +47,6 @@ import (
 	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
-	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
@@ -77,6 +75,23 @@ var (
 	labelCometBFT = prometheus.Labels{"backend": "cometbft"}
 )
 
+// Config contains configuration parameters for the full node.
+type Config struct {
+	CommonConfig
+
+	// TimeoutCommit specifies the duration to wait after committing a block
+	// before starting a new height.
+	TimeoutCommit time.Duration
+	// SkipTimeoutCommit determines whether to proceed immediately once all
+	// precommits are received.
+	SkipTimeoutCommit bool
+	// EmptyBlockInterval defines the time interval between empty blocks.
+	EmptyBlockInterval time.Duration
+
+	// Upgrader manages software upgrades.
+	Upgrader upgradeAPI.Backend
+}
+
 // fullService implements a full CometBFT node.
 type fullService struct { // nolint: maligned
 	sync.Mutex
@@ -92,7 +107,9 @@ type fullService struct { // nolint: maligned
 
 	submissionMgr consensusAPI.SubmissionManager
 
-	tmGenDoc *cmttypes.GenesisDoc
+	timeoutCommit      time.Duration
+	skipTimeoutCommit  bool
+	emptyBlockInterval time.Duration
 
 	syncedCh chan struct{}
 	quitCh   chan struct{}
@@ -542,8 +559,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		Identity:                  t.identity,
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
-		InitialHeight:             uint64(t.genesis.Height),
-		ChainContext:              t.genesis.ChainContext(),
+		InitialHeight:             uint64(t.genesisHeight),
+		ChainContext:              t.chainContext,
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
@@ -580,12 +597,10 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	cometConfig := cmtconfig.DefaultConfig()
 	_ = viper.Unmarshal(&cometConfig)
 	cometConfig.SetRoot(cometbftDataDir)
-	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
-	emptyBlockInterval := t.genesis.Consensus.Parameters.EmptyBlockInterval
-	cometConfig.Consensus.TimeoutCommit = timeoutCommit
-	cometConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
+	cometConfig.Consensus.TimeoutCommit = t.timeoutCommit
+	cometConfig.Consensus.SkipTimeoutCommit = t.skipTimeoutCommit
 	cometConfig.Consensus.CreateEmptyBlocks = true
-	cometConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
+	cometConfig.Consensus.CreateEmptyBlocksInterval = t.emptyBlockInterval
 	cometConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
 	cometConfig.Mempool.Version = cmtconfig.MempoolV1
 	cometConfig.Instrumentation.Prometheus = true
@@ -638,7 +653,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	cometbftGenesisProvider := func() (*cmttypes.GenesisDoc, error) {
-		return t.tmGenDoc, nil
+		return t.genesisDoc, nil
 	}
 
 	dbProvider, err := db.GetProvider()
@@ -712,14 +727,14 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
-				GenesisDocument: t.tmGenDoc,
+				GenesisDocument: t.genesisDoc,
 				TrustOptions: cmtlight.TrustOptions{
 					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
 					Hash:   cometConfig.StateSync.TrustHashBytes(),
 				},
 			}
-			if stateProvider, err = newStateProvider(t.ctx, t.genesis.ChainContext(), cfg, t.p2p); err != nil {
+			if stateProvider, err = newStateProvider(t.ctx, t.chainContext, cfg, t.p2p); err != nil {
 				t.Logger.Error("failed to create state sync state provider",
 					"err", err,
 				)
@@ -760,7 +775,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			// minUpgradeStopWaitPeriod or the configured commit timeout.
 			t.Logger.Info("waiting a bit before stopping the node for upgrade")
 			waitPeriod := minUpgradeStopWaitPeriod
-			if tc := t.genesis.Consensus.Parameters.TimeoutCommit; tc > waitPeriod {
+			if tc := t.timeoutCommit; tc > waitPeriod {
 				waitPeriod = tc
 			}
 			time.Sleep(waitPeriod)
@@ -912,30 +927,18 @@ func (t *fullService) metrics() {
 }
 
 // New creates a new CometBFT consensus backend.
-func New(
-	ctx context.Context,
-	dataDir string,
-	identity *identity.Identity,
-	upgrader upgradeAPI.Backend,
-	genesisDoc *genesisAPI.Document,
-) (consensusAPI.Backend, error) {
-	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisDoc)
-	if err != nil {
-		return nil, err
-	}
-
-	tmGenDoc, err := api.GetCometBFTGenesisDocument(genesisDoc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to obtain genesis document: %w", err)
-	}
+func New(ctx context.Context, cfg Config) (consensusAPI.Backend, error) {
+	commonNode := newCommonNode(ctx, cfg.CommonConfig)
 
 	t := &fullService{
-		commonNode:    commonNode,
-		upgrader:      upgrader,
-		blockNotifier: pubsub.NewBroker(false),
-		tmGenDoc:      tmGenDoc,
-		syncedCh:      make(chan struct{}),
-		quitCh:        make(chan struct{}),
+		commonNode:         commonNode,
+		upgrader:           cfg.Upgrader,
+		blockNotifier:      pubsub.NewBroker(false),
+		timeoutCommit:      cfg.TimeoutCommit,
+		skipTimeoutCommit:  cfg.SkipTimeoutCommit,
+		emptyBlockInterval: cfg.EmptyBlockInterval,
+		syncedCh:           make(chan struct{}),
+		quitCh:             make(chan struct{}),
 	}
 	// Common node needs access to parent struct for initializing consensus services.
 	t.commonNode.parentNode = t

@@ -19,7 +19,6 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/spf13/viper"
 
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -28,10 +27,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
-	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 var _ api.Backend = (*archiveService)(nil)
+
+// ArchiveConfig contains configuration parameters for the archive node.
+type ArchiveConfig struct {
+	CommonConfig
+}
 
 type archiveService struct {
 	sync.Mutex
@@ -155,16 +158,8 @@ func (srv *archiveService) WatchBlocks(ctx context.Context) (<-chan *consensusAP
 }
 
 // NewArchive creates a new archive-only consensus service.
-func NewArchive(
-	ctx context.Context,
-	dataDir string,
-	identity *identity.Identity,
-	genesisDoc *genesisAPI.Document,
-) (consensusAPI.Backend, error) {
-	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisDoc)
-	if err != nil {
-		return nil, err
-	}
+func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Backend, error) {
+	commonNode := newCommonNode(ctx, cfg.CommonConfig)
 
 	srv := &archiveService{
 		commonNode: commonNode,
@@ -180,14 +175,15 @@ func NewArchive(
 			Strategy:      abci.PruneNone,
 			PruneInterval: time.Hour * 100, // Irrelevant as pruning is disabled.
 		},
-		Identity:            srv.identity,
+		Identity:            cfg.Identity,
 		DisableCheckpointer: true,
-		InitialHeight:       uint64(srv.genesis.Height),
+		InitialHeight:       uint64(srv.genesisHeight),
 		// ReadOnly should actually be preferable for archive but there is a badger issue with read-only:
 		// https://discuss.dgraph.io/t/read-only-log-truncate-required-to-run-db/16444/2
 		ReadOnlyStorage: false,
-		ChainContext:    srv.genesis.ChainContext(),
+		ChainContext:    srv.chainContext,
 	}
+	var err error
 	srv.mux, err = abci.NewApplicationServer(srv.ctx, nil, appConfig)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/archive: failed to create application server: %w", err)
@@ -223,11 +219,6 @@ func NewArchive(
 	stateDB = db.WithCloser(stateDB, srv.dbCloser)
 	srv.stateStore = state.NewStore(stateDB, state.StoreOptions{})
 
-	tmGenDoc, err := api.GetCometBFTGenesisDocument(genesisDoc)
-	if err != nil {
-		return nil, err
-	}
-
 	srv.eb = cmttypes.NewEventBus()
 	// Setup minimal CometBFT environment needed to support consensus queries.
 	cmtcore.SetEnvironment(&cmtcore.Environment{
@@ -237,7 +228,7 @@ func NewArchive(
 		BlockStore:       store.NewBlockStore(srv.blockStoreDB),
 		EvidencePool:     state.EmptyEvidencePool{},
 		ConsensusState:   nil,
-		GenDoc:           tmGenDoc,
+		GenDoc:           cfg.GenesisDoc,
 		Logger:           logger,
 		Config:           *cmtConfig.RPC,
 		EventBus:         srv.eb,

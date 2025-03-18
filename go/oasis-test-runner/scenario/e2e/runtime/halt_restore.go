@@ -7,7 +7,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -167,15 +167,8 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	sc.Logger.Info("starting the network again")
 
 	// Ensure compute runtime in genesis is in expected state.
-	genesisFileProvider, err := genesis.NewFileProvider(files[0])
-	if err != nil {
-		sc.Logger.Error("failed getting genesis file provider",
-			"err", err,
-			"genesis_file", files[0],
-		)
-		return err
-	}
-	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
+	genesis := genesisFile.NewProvider(files[0])
+	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		sc.Logger.Error("failed getting genesis document from file provider",
 			"err", err,

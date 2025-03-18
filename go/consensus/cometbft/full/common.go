@@ -62,6 +62,35 @@ import (
 	vaultAPI "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
+// Possible internal node states.
+const (
+	stateNotReady    = 0
+	stateInitialized = 1
+	stateStarted     = 2
+	stateStopping    = 3
+)
+
+// CommonConfig contains configuration parameters shared across all nodes.
+type CommonConfig struct {
+	// DataDir is the path to the node's data directory.
+	DataDir string
+	// Identity is the node's cryptographic identity.
+	Identity *identity.Identity
+	// ChainID is the unique identifier of the chain.
+	ChainID string
+	// ChainContext is the chain's domain separation context.
+	ChainContext string
+	// Genesis provides access to the genesis document.
+	Genesis genesisAPI.Provider
+	// GenesisDoc is the CometBFT genesis document.
+	GenesisDoc *cmttypes.GenesisDoc
+	// GenesisHeight is the block height at which the genesis document
+	// was generated.
+	GenesisHeight int64
+	// PublicKeyBlacklist is the network-wide public key blacklist.
+	PublicKeyBlacklist []signature.PublicKey
+}
+
 // commonNode implements the common CometBFT node functionality shared between
 // full and archive nodes.
 type commonNode struct {
@@ -76,10 +105,14 @@ type commonNode struct {
 	ctx    context.Context
 	rpcCtx *cmtrpctypes.Context
 
-	dataDir  string
-	identity *identity.Identity
-
-	genesis *genesisAPI.Document
+	dataDir            string
+	identity           *identity.Identity
+	chainID            string
+	chainContext       string
+	genesis            genesisAPI.Provider
+	genesisDoc         *cmttypes.GenesisDoc
+	genesisHeight      int64
+	publicKeyBlacklist []signature.PublicKey
 
 	mux *abci.ApplicationServer
 
@@ -102,14 +135,6 @@ type commonNode struct {
 
 	parentNode api.Backend
 }
-
-// Possible internal node states.
-const (
-	stateNotReady    = 0
-	stateInitialized = 1
-	stateStarted     = 2
-	stateStopping    = 3
-)
 
 func (n *commonNode) initialized() bool {
 	return atomic.LoadUint32(&n.state) >= stateInitialized
@@ -180,7 +205,7 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Apply the genesis public key blacklist.
-	for _, v := range n.genesis.Consensus.Parameters.PublicKeyBlacklist {
+	for _, v := range n.publicKeyBlacklist {
 		if err := v.Blacklist(); err != nil {
 			n.Logger.Error("initialize: failed to blacklist key",
 				"err", err,
@@ -350,12 +375,6 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	}
 	blockHeight = blk.Header.Height
 
-	// Get initial genesis doc.
-	genesisDoc, err := n.GetGenesisDocument(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Query root consensus parameters.
 	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), blockHeight)
 	if err != nil {
@@ -409,7 +428,7 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 
 	return &genesisAPI.Document{
 		Height:     blockHeight,
-		ChainID:    genesisDoc.ChainID,
+		ChainID:    n.chainID,
 		Time:       blk.Header.Time,
 		Beacon:     *beaconGenesis,
 		Registry:   *registryGenesis,
@@ -428,12 +447,12 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetGenesisDocument(context.Context) (*genesisAPI.Document, error) {
-	return n.genesis, nil
+	return n.genesis.GetGenesisDocument()
 }
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetChainContext(context.Context) (string, error) {
-	return n.genesis.ChainContext(), nil
+	return n.chainContext, nil
 }
 
 // Implements consensusAPI.Backend.
@@ -656,7 +675,7 @@ func (n *commonNode) GetLastRetainedHeight(ctx context.Context) (int64, error) {
 
 	// Some pruning configurations return 0 instead of a valid block height.
 	// Clamp those to the genesis height.
-	return max(state.Base, n.genesis.Height), nil
+	return max(state.Base, n.genesisHeight), nil
 }
 
 // Implements consensusAPI.Backend.
@@ -845,12 +864,12 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 		Features: n.SupportedFeatures(),
 	}
 
-	status.ChainContext = n.genesis.ChainContext()
-	status.GenesisHeight = n.genesis.Height
+	status.ChainContext = n.chainContext
+	status.GenesisHeight = n.genesisHeight
 	if n.started() {
 		// Only attempt to fetch blocks in case the consensus service has started as otherwise
 		// requests will block.
-		genBlk, err := n.GetBlock(ctx, n.genesis.Height)
+		genBlk, err := n.GetBlock(ctx, n.genesisHeight)
 		switch err {
 		case nil:
 			status.GenesisHash = genBlk.Hash
@@ -964,29 +983,21 @@ func (n *commonNode) RegisterP2PService(p2pAPI.Service) error {
 	return consensusAPI.ErrUnsupported
 }
 
-func newCommonNode(
-	ctx context.Context,
-	dataDir string,
-	identity *identity.Identity,
-	genesisDoc *genesisAPI.Document,
-) (*commonNode, error) {
-	// Make sure that the consensus backend specified in the genesis
-	// document is the correct one.
-	if genesisDoc.Consensus.Backend != api.BackendName {
-		return nil, fmt.Errorf("cometbft: genesis document contains incorrect consensus backend: %s",
-			genesisDoc.Consensus.Backend,
-		)
-	}
-
+func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 	return &commonNode{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("cometbft"),
 		ctx:                   ctx,
-		identity:              identity,
+		identity:              cfg.Identity,
 		rpcCtx:                &cmtrpctypes.Context{},
-		genesis:               genesisDoc,
-		dataDir:               dataDir,
+		dataDir:               cfg.DataDir,
+		chainID:               cfg.ChainID,
+		chainContext:          cfg.ChainContext,
+		genesis:               cfg.Genesis,
+		genesisDoc:            cfg.GenesisDoc,
+		genesisHeight:         cfg.GenesisHeight,
+		publicKeyBlacklist:    cfg.PublicKeyBlacklist,
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("cometbft/servicemanager")),
 		dbCloser:              db.NewCloser(),
 		startedCh:             make(chan struct{}),
-	}, nil
+	}
 }

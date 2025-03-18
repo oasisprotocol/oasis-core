@@ -120,11 +120,8 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 	}
 
 	// Load genesis.
-	fp, err := genesisFile.NewFileProvider(sc.Net.GenesisPath())
-	if err != nil {
-		return fmt.Errorf("failed to instantiate genesis document file provider: %w", err)
-	}
-	doc, err := fp.GetGenesisDocument()
+	genesis := genesisFile.NewProvider(sc.Net.GenesisPath())
+	doc, err := genesis.GetGenesisDocument()
 	if err != nil {
 		return fmt.Errorf("failed to get genesis document: %w", err)
 	}

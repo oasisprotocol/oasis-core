@@ -14,11 +14,13 @@ import (
 type honestCometBFT struct {
 	service consensus.Backend
 
+	genesis    genesis.Provider
 	genesisDoc *genesis.Document
 }
 
-func newHonestCometBFT(genesisDoc *genesis.Document) *honestCometBFT {
+func newHonestCometBFT(genesis genesis.Provider, genesisDoc *genesis.Document) *honestCometBFT {
 	return &honestCometBFT{
+		genesis:    genesis,
 		genesisDoc: genesisDoc,
 	}
 }
@@ -29,7 +31,7 @@ func (ht *honestCometBFT) start(id *identity.Identity, dataDir string) error {
 	}
 
 	var err error
-	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesisDoc)
+	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis, ht.genesisDoc)
 	if err != nil {
 		return fmt.Errorf("cometbft New: %w", err)
 	}

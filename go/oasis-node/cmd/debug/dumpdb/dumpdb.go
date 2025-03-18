@@ -81,13 +81,7 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 
 	// Load the old genesis document, required for filling in parameters
 	// that are not persisted to ABCI state.
-	fp, err := genesisFile.NewFileProvider(flags.GenesisFile())
-	if err != nil {
-		logger.Error("failed to load existing genesis document",
-			"err", err,
-		)
-		return
-	}
+	fp := genesisFile.NewProvider(flags.GenesisFile())
 	oldDoc, err := fp.GetGenesisDocument()
 	if err != nil {
 		logger.Error("failed to get existing genesis document",
