@@ -6,6 +6,7 @@ import (
 	"time"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -97,10 +98,12 @@ func (sc *consensusStateSyncImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	// Configure state sync for the consensus validator.
 	val := sc.Net.Validators()[lastValidator]
-	val.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		TrustHeight: uint64(blk.Height),
-		TrustHash:   blk.Hash.Hex(),
+	val.ConfigureConsensusLightClient(config.TrustConfig{
+		Period: time.Hour,
+		Height: uint64(blk.Height),
+		Hash:   blk.Hash.Hex(),
 	})
+	val.EnableConsensusStateSync()
 
 	if err = val.Start(); err != nil {
 		return fmt.Errorf("failed to start validator: %w", err)

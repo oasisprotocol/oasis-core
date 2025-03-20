@@ -216,7 +216,7 @@ func (c *client) worker() {
 
 	tmc, err := cmtlight.NewClientFromTrustedStore(
 		tmChainID,
-		config.GlobalConfig.Consensus.StateSync.TrustPeriod,
+		config.GlobalConfig.Consensus.LightClient.Trust.Period,
 		providers[0],  // Primary provider.
 		providers[1:], // Witnesses.
 		c.store,

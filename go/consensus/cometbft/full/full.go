@@ -723,14 +723,14 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 			// Enable state sync in the configuration.
 			cometConfig.StateSync.Enable = true
-			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.StateSync.TrustHash
+			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.LightClient.Trust.Hash
 
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
 				GenesisDocument: t.genesisDoc,
 				TrustOptions: cmtlight.TrustOptions{
-					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
-					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
+					Period: config.GlobalConfig.Consensus.LightClient.Trust.Period,
+					Height: int64(config.GlobalConfig.Consensus.LightClient.Trust.Height),
 					Hash:   cometConfig.StateSync.TrustHashBytes(),
 				},
 			}

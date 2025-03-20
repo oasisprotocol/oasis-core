@@ -8,6 +8,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -168,10 +169,12 @@ func (sc *storageEarlyStateSyncImpl) Run(ctx context.Context, childEnv *env.Env)
 	// Configure state sync for the compute node.
 	sc.Logger.Info("starting compute node with state sync")
 	worker = sc.Net.ComputeWorkers()[0]
-	worker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		TrustHeight: uint64(latest.Height),
-		TrustHash:   latest.Hash.Hex(),
+	worker.ConfigureConsensusLightClient(config.TrustConfig{
+		Period: time.Hour,
+		Height: uint64(latest.Height),
+		Hash:   latest.Hash.Hex(),
 	})
+	worker.EnableConsensusStateSync()
 
 	if err := worker.Start(); err != nil {
 		return fmt.Errorf("can't start compute worker 0: %w", err)

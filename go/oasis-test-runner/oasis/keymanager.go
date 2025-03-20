@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
-	runtimeCfg "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	keymanagerConfig "github.com/oasisprotocol/oasis-core/go/worker/keymanager/config"
 )
@@ -298,7 +297,7 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.Runtime.SGXLoader = km.net.cfg.RuntimeSGXLoaderBinary
 	km.Config.Runtime.AttestInterval = km.net.cfg.RuntimeAttestInterval
 
-	rtCfg := runtimeCfg.RuntimeConfig{
+	rtCfg := runtimeConfig.RuntimeConfig{
 		ID: km.runtime.cfgSave.id,
 	}
 
