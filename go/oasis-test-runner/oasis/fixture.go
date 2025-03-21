@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -142,6 +143,12 @@ type ConsensusFixture struct { // nolint: maligned
 
 	// EnableArchiveMode enables the archive node mode.
 	EnableArchiveMode bool `json:"enable_archive_mode,omitempty"`
+
+	// StateSync contains state sync configuration.
+	StateSync config.StateSyncConfig `yaml:"state_sync,omitempty"`
+
+	// LightClient contains light client configuration.
+	LightClient config.LightClientConfig `json:"light_client,omitempty"`
 }
 
 // NodeFixture is a common subset of settings for node-backed fixtures.

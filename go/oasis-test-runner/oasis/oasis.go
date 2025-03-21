@@ -20,6 +20,7 @@ import (
 	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
+	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -61,12 +62,6 @@ const (
 	allInterfacesAddr = "tcp://0.0.0.0"
 	localhostAddr     = "tcp://127.0.0.1"
 )
-
-// ConsensusStateSyncCfg is a node's consensus state sync configuration.
-type ConsensusStateSyncCfg struct {
-	TrustHeight uint64
-	TrustHash   string
-}
 
 // Feature is a feature or worker hosted by a concrete oasis-node process.
 type Feature interface {
@@ -116,7 +111,6 @@ type Node struct { // nolint: maligned
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
 
 	consensus            ConsensusFixture
-	consensusStateSync   *ConsensusStateSyncCfg
 	customGrpcSocketPath string
 
 	pprofPort uint16
@@ -426,13 +420,20 @@ func (n *Node) Consensus() ConsensusFixture {
 	return n.consensus
 }
 
-// SetConsensusStateSync configures whether a node should perform consensus
-// state sync.
-func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
+// EnableConsensusStateSync enables consensus state sync.
+func (n *Node) EnableConsensusStateSync() {
 	n.Lock()
 	defer n.Unlock()
 
-	n.consensusStateSync = cfg
+	n.consensus.StateSync.Enabled = true
+}
+
+// ConfigureConsensusLightClient configures consensus light client.
+func (n *Node) ConfigureConsensusLightClient(trust cmtConfig.TrustConfig) {
+	n.Lock()
+	defer n.Unlock()
+
+	n.consensus.LightClient.Trust = trust
 }
 
 func (n *Node) setProvisionedIdentity(seed string) error {

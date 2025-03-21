@@ -48,6 +48,9 @@ type Config struct {
 	// Consensus state sync configuration.
 	StateSync StateSyncConfig `yaml:"state_sync,omitempty"`
 
+	// LightClient contains light client configuration.
+	LightClient LightClientConfig `yaml:"light_client,omitempty"`
+
 	// Supplementary sanity checks configuration.
 	SupplementarySanity SupplementarySanityConfig `yaml:"supplementary_sanity,omitempty"`
 
@@ -117,13 +120,33 @@ type CheckpointerConfig struct {
 // StateSyncConfig is the consensus state sync configuration structure.
 type StateSyncConfig struct {
 	// Enable consensus state sync.
-	Enabled bool `yaml:"enabled"`
-	// Light client trust period.
-	TrustPeriod time.Duration `yaml:"trust_period"`
-	// Light client trusted height.
-	TrustHeight uint64 `yaml:"trust_height"`
-	// Light client trusted consensus header hash.
-	TrustHash string `yaml:"trust_hash"`
+	Enabled bool `yaml:"enabled,omitempty"`
+}
+
+// LightClientConfig is the consensus light client configuration structure.
+type LightClientConfig struct {
+	// Trust contains trust parameters required for a light client
+	// to securely connect to the network.
+	Trust TrustConfig `yaml:"trust,omitempty"`
+}
+
+// TrustConfig contains trust parameters required for a light client
+// to securely connect to the network.
+//
+// This information should be obtained from a trusted source, such as
+// a validator, a friend, a trusted peer, or a secure website.
+type TrustConfig struct {
+	// Period is the duration for which the trust remains valid.
+	//
+	// Should be significantly shorter than the unbonding period.
+	// Specifically, the sum of the trust period, the time required
+	// to verify headers, and the time needed to detect and penalize
+	// misbehavior must be less than the unbonding period.
+	Period time.Duration `yaml:"period,omitempty"`
+	// Height is the height of a trusted consensus header.
+	Height uint64 `yaml:"height,omitempty"`
+	// Hash is the hash of a trusted consensus header.
+	Hash string `yaml:"hash,omitempty"`
 }
 
 // SupplementarySanityConfig is the supplementary sanity configuration structure.
@@ -169,11 +192,20 @@ func (c *Config) Validate() error {
 	}
 
 	if c.StateSync.Enabled {
-		if c.StateSync.TrustPeriod < 1*time.Second {
-			return fmt.Errorf("state sync enabled, but state_sync.trust_period is zero")
+		if c.LightClient.Trust.Hash == "" {
+			return fmt.Errorf("state sync requires light client to be configured")
 		}
-		if c.StateSync.TrustHash == "" {
-			return fmt.Errorf("state sync enabled, but state_sync.trust_hash is not given")
+	}
+
+	if c.LightClient.Trust.Hash != "" {
+		if c.LightClient.Trust.Period == 0 {
+			return fmt.Errorf("trust period must be greater than zero")
+		}
+		if c.LightClient.Trust.Height == 0 {
+			return fmt.Errorf("trust height must be greater than zero")
+		}
+		if len(c.LightClient.Trust.Hash) != 64 {
+			return fmt.Errorf("malformed trust hash")
 		}
 	}
 
@@ -219,10 +251,12 @@ func DefaultConfig() Config {
 			CheckInterval: 1 * time.Minute,
 		},
 		StateSync: StateSyncConfig{
-			Enabled:     false,
-			TrustPeriod: 30 * 24 * time.Hour,
-			TrustHeight: 0,
-			TrustHash:   "",
+			Enabled: false,
+		},
+		LightClient: LightClientConfig{
+			Trust: TrustConfig{
+				Period: 30 * 24 * time.Hour,
+			},
 		},
 		SupplementarySanity: SupplementarySanityConfig{
 			Enabled:  false,

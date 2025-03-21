@@ -689,11 +689,9 @@ func (net *Network) startOasisNode(
 		}
 		cfg.Common.InternalSocketPath = node.customGrpcSocketPath
 	}
-	if node.consensusStateSync != nil {
-		cfg.Consensus.StateSync.Enabled = true
-		cfg.Consensus.StateSync.TrustHeight = node.consensusStateSync.TrustHeight
-		cfg.Consensus.StateSync.TrustHash = node.consensusStateSync.TrustHash
-	}
+	cfg.Consensus.StateSync = node.consensus.StateSync
+	cfg.Consensus.LightClient = node.consensus.LightClient
+
 	if net.Config().Metrics.Address != "" {
 		cfg.Metrics.Mode = metrics.MetricsModePush
 		cfg.Metrics.Address = net.Config().Metrics.Address

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -204,10 +205,12 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 
 	// Configure state sync for the last compute node.
 	lateWorker = sc.Net.ComputeWorkers()[4]
-	lateWorker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		TrustHeight: uint64(latest.Height),
-		TrustHash:   latest.Hash.Hex(),
+	lateWorker.ConfigureConsensusLightClient(config.TrustConfig{
+		Period: time.Hour,
+		Height: uint64(latest.Height),
+		Hash:   latest.Hash.Hex(),
 	})
+	lateWorker.EnableConsensusStateSync()
 
 	if err = lateWorker.Start(); err != nil {
 		return fmt.Errorf("can't start second late compute worker: %w", err)
