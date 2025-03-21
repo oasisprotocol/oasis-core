@@ -556,6 +556,22 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 		return nil, fmt.Errorf("runtime/bundle: invalid manifest (got: %s, expected: %s)", manifestHash.Hex(), h.Hex())
 	}
 
+	// Rewrite components if requested.
+	if options.componentRewriter != nil {
+		for _, comp := range manifest.Components {
+			options.componentRewriter(comp)
+		}
+
+		// Recompute the manifest hash and change the underlying serialized manifest.
+		manifestHash = manifest.Hash()
+		var rawManifest []byte
+		rawManifest, err = json.Marshal(manifest)
+		if err != nil {
+			return nil, fmt.Errorf("runtime/bundle: failed to serialize manifest: %w", err)
+		}
+		data[manifestName] = NewBytesData(rawManifest)
+	}
+
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
 		Manifest:     &manifest,
@@ -620,9 +636,13 @@ func HashAllData(d Data) (hash.Hash, error) {
 	return hash.NewFromReader(f)
 }
 
+// ComponentRewriterFunc is a function which is passed a component for modification.
+type ComponentRewriterFunc func(*Component)
+
 // OpenOptions are options for opening bundle files.
 type OpenOptions struct {
-	manifestHash *hash.Hash
+	manifestHash      *hash.Hash
+	componentRewriter ComponentRewriterFunc
 }
 
 // NewOpenOptions creates options using default and given values.
@@ -641,5 +661,13 @@ type OpenOption func(o *OpenOptions)
 func WithManifestHash(manifestHash hash.Hash) OpenOption {
 	return func(o *OpenOptions) {
 		o.manifestHash = &manifestHash
+	}
+}
+
+// WithComponentRewriter sets the component rewriter function to use to rewrite all components in
+// the manfiest. Note that this will modify the manifest hash.
+func WithComponentRewriter(f ComponentRewriterFunc) OpenOption {
+	return func(o *OpenOptions) {
+		o.componentRewriter = f
 	}
 }

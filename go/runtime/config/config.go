@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -223,6 +224,9 @@ type ComponentConfig struct {
 	// Disabled specifies whether the component is disabled. If a component is specified and not
 	// disabled, it is enabled.
 	Disabled bool `yaml:"disabled,omitempty"`
+
+	// Permissions is the list of permissions for this component.
+	Permissions []ComponentPermission `yaml:"permissions,omitempty"`
 }
 
 // Validate validates the component configuration.
@@ -268,6 +272,24 @@ func (c *ComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 		return value.Decode((*compConfig)(c))
 	}
 }
+
+// HasPermission returns true iff the component has a given permission configured.
+func (c *ComponentConfig) HasPermission(perm ComponentPermission) bool {
+	return slices.Contains(c.Permissions, perm)
+}
+
+// ComponentPermission represents a permission given to a component.
+type ComponentPermission string
+
+const (
+	// PermissionComponentAdd is the permission that grants the component rights to provision other
+	// components.
+	PermissionComponentAdd ComponentPermission = "component_add"
+
+	// PermissionComponentRemove is the permission that grants the component rights to remove other
+	// components that were previously added dynamically.
+	PermissionComponentRemove ComponentPermission = "component_remove"
+)
 
 // PruneConfig is the history pruner configuration structure.
 type PruneConfig struct {

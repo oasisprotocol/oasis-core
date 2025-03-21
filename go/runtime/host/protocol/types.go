@@ -135,6 +135,15 @@ type Body struct {
 	HostSubmitTxResponse             *HostSubmitTxResponse             `json:",omitempty"`
 	HostRegisterNotifyRequest        *HostRegisterNotifyRequest        `json:",omitempty"`
 	HostRegisterNotifyResponse       *Empty                            `json:",omitempty"`
+
+	HostBundleWriteRequest    *HostBundleWriteRequest    `json:",omitempty"`
+	HostBundleWriteResponse   *Empty                     `json:",omitempty"`
+	HostBundleAddRequest      *HostBundleAddRequest      `json:",omitempty"`
+	HostBundleAddResponse     *Empty                     `json:",omitempty"`
+	HostBundleRemoveRequest   *HostBundleRemoveRequest   `json:",omitempty"`
+	HostBundleRemoveResponse  *Empty                     `json:",omitempty"`
+	HostComponentListRequest  *HostComponentListRequest  `json:",omitempty"`
+	HostComponentListResponse *HostComponentListResponse `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -652,4 +661,60 @@ type HostIdentityRequest struct{}
 type HostIdentityResponse struct {
 	// NodeID is the host node identifier.
 	NodeID signature.PublicKey `json:"node_id"`
+}
+
+// HostBundleWriteRequest is a request to host to write a chunk of the bundle to a temporary file.
+//
+// The `PermissionComponentAdd` permission is required to call this method.
+type HostBundleWriteRequest struct {
+	// TemporaryName is the temporary file name to use on the host while writing the bundle.
+	TemporaryName string `json:"temporary_name"`
+	// Create is the optional flag which specifies that the temporary file should be recreated. If
+	// the file exists and this flag is set to true, it will be truncated. If the flag is set to
+	// false, any content will be appended to the existing file.
+	Create bool `json:"create,omitempty"`
+	// Data that should be appended to the temporary file.
+	Data []byte `json:"data"`
+}
+
+// HostBundleAddRequest is a request to host to add a specific bundle to the host.
+//
+// The `PermissionComponentAdd` permission is required to call this method.
+type HostBundleAddRequest struct {
+	// TemporaryName is the temporary file name to read the bundle from. The file must have
+	// previously been created by using `HostBundleWriteRequest`.
+	//
+	// The file must be a valid bundle.
+	TemporaryName string `json:"temporary_name"`
+	// ManifestHash is the expected hash of the manifest contained inside the bundle.
+	ManifestHash hash.Hash `json:"manifest_hash"`
+	// Labels are the labels to tag the bundle with.
+	//
+	// Note that the host will assign a random component identifier to these components, so one
+	// should use labels to later be able to find them.
+	//
+	// Use the special `LabelInstanceID` label to specify a deterministic instance ID.
+	Labels map[string]string `json:"labels"`
+}
+
+// HostBundleRemoveRequest is a request to host to remove a specific component. Only ROFL
+// components added by this component can be removed.
+//
+// The `PermissionComponentRemove` permission is required to call this method.
+type HostBundleRemoveRequest struct {
+	// Labels are the labels to filter the components by.
+	Labels map[string]string `json:"labels"`
+}
+
+// HostComponentListRequest is a request to host to list all components.
+//
+// The `PermissionComponentAdd` permission is required to call this method.
+type HostComponentListRequest struct {
+	// Labels are the labels to filter the components by.
+	Labels map[string]string `json:"labels"`
+}
+
+// HostComponentListResponse is a response from host to list all components.
+type HostComponentListResponse struct {
+	//
 }
