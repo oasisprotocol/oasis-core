@@ -524,7 +524,7 @@ func (n *commonNode) MinGasPrice(ctx context.Context) (*quantity.Quantity, error
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) Pruner() api.StatePruner {
+func (n *commonNode) Pruner() consensusAPI.StatePruner {
 	return n.mux.Pruner()
 }
 

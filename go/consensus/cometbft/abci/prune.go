@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
@@ -67,7 +67,7 @@ type PruneConfig struct {
 
 // StatePruner is a concrete ABCI mux state pruner implementation.
 type StatePruner interface {
-	api.StatePruner
+	consensus.StatePruner
 
 	// Prune purges unneeded versions from the ABCI mux node database,
 	// given the latest version, based on the underlying strategy.
@@ -94,7 +94,7 @@ func (p *nonePruner) Prune(uint64) error {
 	return nil
 }
 
-func (p *nonePruner) RegisterHandler(api.StatePruneHandler) {
+func (p *nonePruner) RegisterHandler(consensus.StatePruneHandler) {
 }
 
 func (p *nonePruner) GetLastRetainedVersion() uint64 {
@@ -111,7 +111,7 @@ type genericPruner struct {
 	keepN               uint64
 	lastRetainedVersion uint64
 
-	handlers []api.StatePruneHandler
+	handlers []consensus.StatePruneHandler
 }
 
 func (p *genericPruner) Initialize() error {
@@ -150,7 +150,7 @@ PruneLoop:
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
 		for _, ph := range p.handlers {
-			if err := ph.Prune(i); err != nil {
+			if err := ph.Prune(int64(i)); err != nil {
 				p.logger.Debug("prune handler blocked pruning version",
 					"err", err,
 					"latest_version", latestVersion,
@@ -199,7 +199,7 @@ PruneLoop:
 	return nil
 }
 
-func (p *genericPruner) RegisterHandler(handler api.StatePruneHandler) {
+func (p *genericPruner) RegisterHandler(handler consensus.StatePruneHandler) {
 	p.Lock()
 	defer p.Unlock()
 

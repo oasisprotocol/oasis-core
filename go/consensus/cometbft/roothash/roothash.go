@@ -68,8 +68,6 @@ type serviceClient struct {
 	queryCh        chan cmtpubsub.Query
 	cmdCh          chan interface{}
 	trackedRuntime map[common.Namespace]*trackedRuntime
-
-	pruneHandler *pruneHandler
 }
 
 // Implements api.Backend.
@@ -227,12 +225,6 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 	}
 
 	return ch, sub, nil
-}
-
-// Implements api.Backend.
-func (sc *serviceClient) TrackRuntime(_ context.Context, history api.BlockHistory) error {
-	sc.pruneHandler.trackRuntime(history)
-	return nil
 }
 
 func (sc *serviceClient) trackRuntime(ctx context.Context, id common.Namespace) error {
@@ -608,44 +600,6 @@ EventLoop:
 	return events, errs
 }
 
-type pruneHandler struct {
-	sync.Mutex
-
-	logger *logging.Logger
-
-	trackedRuntimes []api.BlockHistory
-}
-
-func (ph *pruneHandler) trackRuntime(bh api.BlockHistory) {
-	ph.Lock()
-	defer ph.Unlock()
-
-	ph.trackedRuntimes = append(ph.trackedRuntimes, bh)
-}
-
-// Implements api.StatePruneHandler.
-func (ph *pruneHandler) Prune(version uint64) error {
-	ph.Lock()
-	defer ph.Unlock()
-
-	for _, bh := range ph.trackedRuntimes {
-		lastHeight, err := bh.LastConsensusHeight()
-		if err != nil {
-			ph.logger.Warn("failed to fetch last consensus height for tracked runtime",
-				"err", err,
-				"runtime_id", bh.RuntimeID(),
-			)
-			// We can't be sure if it is ok to prune this version, so prevent pruning to be safe.
-			return fmt.Errorf("failed to fetch last consensus height for tracked runtime: %w", err)
-		}
-
-		if version > uint64(lastHeight) {
-			return fmt.Errorf("version %d not yet indexed for %s", version, bh.RuntimeID())
-		}
-	}
-	return nil
-}
-
 // New constructs a new CometBFT-based root hash backend.
 func New(
 	ctx context.Context,
@@ -669,13 +623,6 @@ func New(
 		return nil, err
 	}
 	sc.querier = a.QueryFactory().(*app.QueryFactory)
-
-	// Register a consensus state prune handler to make sure that we don't prune blocks that haven't
-	// yet been indexed by the roothash backend.
-	sc.pruneHandler = &pruneHandler{
-		logger: logging.GetLogger("cometbft/roothash/prunehandler"),
-	}
-	backend.Pruner().RegisterHandler(sc.pruneHandler)
 
 	return &sc, nil
 }

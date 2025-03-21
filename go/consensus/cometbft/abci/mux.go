@@ -184,7 +184,7 @@ func (a *ApplicationServer) State() api.ApplicationQueryState {
 }
 
 // Pruner returns the state pruner.
-func (a *ApplicationServer) Pruner() api.StatePruner {
+func (a *ApplicationServer) Pruner() consensus.StatePruner {
 	return a.mux.state.statePruner
 }
 

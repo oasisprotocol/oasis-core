@@ -504,7 +504,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 
 // createRuntime creates a new runtime that may or may not be managed
 // by this registry.
-func (r *runtimeRegistry) createRuntime(ctx context.Context, runtimeID common.Namespace, managed bool) (Runtime, error) {
+func (r *runtimeRegistry) createRuntime(runtimeID common.Namespace, managed bool) (Runtime, error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -533,10 +533,9 @@ func (r *runtimeRegistry) createRuntime(ctx context.Context, runtimeID common.Na
 			return nil, fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", runtimeID, err)
 		}
 
-		// Start tracking this runtime.
-		if err = r.consensus.RootHash().TrackRuntime(ctx, rt.history); err != nil {
-			return nil, fmt.Errorf("runtime/registry: cannot track runtime %s: %w", runtimeID, err)
-		}
+		// Register a consensus state prune handler to make sure that we don't
+		// prune blocks that haven't yet been indexed by the roothash backend.
+		r.consensus.Pruner().RegisterHandler(rt.history)
 
 		// Start indexing blocks.
 		indexer := history.NewBlockIndexer(r.consensus, rt.history)
@@ -652,11 +651,11 @@ func (r *runtimeRegistry) Cleanup() {
 
 // Init initializes the runtime registry by adding runtimes from the global
 // runtime configuration to the registry.
-func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespace) error {
+func (r *runtimeRegistry) Init(runtimeIDs []common.Namespace) error {
 	managed := config.GlobalConfig.Mode != config.ModeKeyManager
 
 	for _, runtimeID := range runtimeIDs {
-		if _, err := r.createRuntime(ctx, runtimeID, managed); err != nil {
+		if _, err := r.createRuntime(runtimeID, managed); err != nil {
 			r.logger.Error("failed to add runtime",
 				"err", err,
 				"id", runtimeID,
@@ -670,7 +669,6 @@ func (r *runtimeRegistry) Init(ctx context.Context, runtimeIDs []common.Namespac
 
 // New creates a new runtime registry.
 func New(
-	ctx context.Context,
 	dataDir string,
 	consensus consensus.Backend,
 ) (Registry, error) {
@@ -707,7 +705,7 @@ func New(
 	}
 
 	// Initialize the runtime registry.
-	if err = r.Init(ctx, runtimeIDs); err != nil {
+	if err = r.Init(runtimeIDs); err != nil {
 		return nil, err
 	}
 
