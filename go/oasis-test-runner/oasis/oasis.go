@@ -234,6 +234,10 @@ func (n *Node) AddSentriesToConfig(sentries []*Sentry) {
 	n.Config.Runtime.SentryAddresses = addrs
 }
 
+func (n *Node) SetIndexerBatchSize(size uint16) {
+	n.Config.Runtime.Indexer.BatchSize = size
+}
+
 // Start starts the node.
 func (n *Node) Start() error {
 	// Initialize node configuration.

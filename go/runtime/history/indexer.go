@@ -11,12 +11,12 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
 const (
-	batchSize        = 1000
 	maxPendingBlocks = 10
 )
 
@@ -230,6 +230,7 @@ func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 		lastHeight = lastRetainedHeight
 	}
 
+	batchSize := int64(config.GlobalConfig.Runtime.Indexer.BatchSize)
 	for start := lastHeight; start <= height; start += batchSize {
 		end := min(start+batchSize-1, height)
 		if err = bi.reindexRange(ctx, start, end); err != nil {
