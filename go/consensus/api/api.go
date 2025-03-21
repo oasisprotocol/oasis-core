@@ -386,6 +386,9 @@ type Backend interface {
 	// This may be nil in case checkpoints are disabled.
 	Checkpointer() checkpoint.Checkpointer
 
+	// Pruner returns the state pruner.
+	Pruner() StatePruner
+
 	// RegisterP2PService registers the P2P service used for light client state sync.
 	RegisterP2PService(p2pAPI.Service) error
 }
@@ -405,6 +408,26 @@ type ServicesBackend interface {
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
+}
+
+// StatePruner is a state pruner implementation.
+type StatePruner interface {
+	// RegisterHandler registers a prune handler.
+	RegisterHandler(handler StatePruneHandler)
+}
+
+// StatePruneHandler is a handler that is called when heights are pruned
+// from history.
+type StatePruneHandler interface {
+	// Prune is called before the specified height is pruned.
+	//
+	// If an error is returned, pruning is aborted and the height is
+	// not pruned from history.
+	//
+	// Note that this can be called for the same height multiple
+	// times (e.g., if one of the handlers fails but others succeed
+	// and pruning is later retried).
+	Prune(height int64) error
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication

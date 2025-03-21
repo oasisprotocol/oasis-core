@@ -538,10 +538,6 @@ func (c *Client) GetIncomingMessageQueue(ctx context.Context, request *InMessage
 	return rsp, nil
 }
 
-func (c *Client) TrackRuntime(context.Context, BlockHistory) error {
-	return ErrInvalidArgument
-}
-
 func (c *Client) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {

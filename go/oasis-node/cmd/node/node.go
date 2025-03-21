@@ -221,7 +221,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 
 	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.Consensus)
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.dataDir, n.Consensus)
 	if err != nil {
 		return err
 	}

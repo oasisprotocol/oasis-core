@@ -156,9 +156,6 @@ type Backend interface {
 	// received in any order and duplicates are possible.
 	WatchExecutorCommitments(ctx context.Context, runtimeID common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error)
 
-	// TrackRuntime adds a runtime the history of which should be tracked.
-	TrackRuntime(ctx context.Context, history BlockHistory) error
-
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 

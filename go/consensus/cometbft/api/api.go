@@ -221,29 +221,6 @@ type Backend interface {
 	// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
-
-	// Pruner returns the state pruner.
-	Pruner() StatePruner
-}
-
-// StatePruneHandler is a handler that is called when versions are pruned
-// from history.
-type StatePruneHandler interface {
-	// Prune is called before the specified version is pruned.
-	//
-	// If an error is returned, pruning is aborted and the version is
-	// not pruned from history.
-	//
-	// Note that this can be called for the same version multiple
-	// times (e.g., if one of the handlers fails but others succeed
-	// and pruning is later retried).
-	Prune(version uint64) error
-}
-
-// StatePruner is a concrete ABCI mux state pruner implementation.
-type StatePruner interface {
-	// RegisterHandler registers a prune handler.
-	RegisterHandler(handler StatePruneHandler)
 }
 
 // TransactionAuthHandler is the interface for ABCI applications that handle

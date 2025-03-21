@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/config"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
@@ -29,6 +30,7 @@ type Factory func(runtimeID common.Namespace, dataDir string) (History, error)
 // History is the runtime history interface.
 type History interface {
 	roothash.BlockHistory
+	consensus.StatePruneHandler
 
 	// Pruner returns the history pruner.
 	Pruner() Pruner
@@ -283,6 +285,23 @@ func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, er
 		return nil, err
 	}
 	return annBlk.Block, nil
+}
+
+func (h *runtimeHistory) Prune(height int64) error {
+	lastHeight, err := h.LastConsensusHeight()
+	if err != nil {
+		h.logger.Warn("failed to fetch last consensus height for tracked runtime",
+			"err", err,
+		)
+		// We can't be sure if it is ok to prune this version, so prevent pruning to be safe.
+		return fmt.Errorf("failed to fetch last consensus height for tracked runtime: %w", err)
+	}
+
+	if height > lastHeight {
+		return fmt.Errorf("height %d not yet indexed for %s", height, h.RuntimeID())
+	}
+
+	return nil
 }
 
 func (h *runtimeHistory) Pruner() Pruner {
