@@ -144,7 +144,7 @@ func (lc *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmt
 // This client is instantiated from the provided (obtained out of bound) trusted block
 // and is used internally for CometBFT's state sync protocol.
 func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config) (*Client, error) {
-	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, cfg.GenesisDocument.ChainID, p2p)
+	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, p2p)
 
 	initChCases := []reflect.SelectCase{}
 	var providers []cmtlightprovider.Provider

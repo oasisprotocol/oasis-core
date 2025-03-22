@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
@@ -35,7 +36,8 @@ type LightClientProvidersPool struct {
 }
 
 // NewLightClientProviderPool returns a light client provider pool.
-func NewLightClientProviderPool(ctx context.Context, chainContext string, chainID string, p2p rpc.P2P) *LightClientProvidersPool {
+func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rpc.P2P) *LightClientProvidersPool {
+	chainID := cmtAPI.CometBFTChainID(chainContext)
 	pid := light.ProtocolID(chainContext)
 
 	mgr := rpc.NewPeerManager(p2p, pid)

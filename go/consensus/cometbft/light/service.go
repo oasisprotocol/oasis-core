@@ -199,7 +199,7 @@ func (c *ClientService) worker() {
 	}
 
 	// Initialize a provider pool.
-	pool := p2p.NewLightClientProviderPool(c.ctx, chainCtx, tmChainID, c.p2p)
+	pool := p2p.NewLightClientProviderPool(c.ctx, chainCtx, c.p2p)
 	for i := 0; i < numProviders; i++ {
 		p := pool.NewLightClientProvider()
 		c.providers = append(c.providers, p)
