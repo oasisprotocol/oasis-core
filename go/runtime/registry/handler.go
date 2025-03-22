@@ -34,8 +34,8 @@ type RuntimeHostHandlerEnvironment interface {
 	// GetNodeIdentity returns the identity of a node running this runtime.
 	GetNodeIdentity() (*identity.Identity, error)
 
-	// GetLightClient returns the consensus light client.
-	GetLightClient() (consensus.LightClient, error)
+	// GetLightProvider returns the consensus light provider.
+	GetLightProvider() (consensus.LightProvider, error)
 
 	// GetRuntimeRegistry returns the runtime registry.
 	GetRuntimeRegistry() Registry
@@ -257,13 +257,11 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 	ctx context.Context,
 	rq *protocol.HostFetchConsensusBlockRequest,
 ) (*protocol.HostFetchConsensusBlockResponse, error) {
-	// Invoke the light client. If a local full node is available the light
-	// client will internally query the local node first.
-	lc, err := h.env.GetLightClient()
+	lc, err := h.env.GetLightProvider()
 	if err != nil {
 		return nil, err
 	}
-	blk, _, err := lc.GetLightBlock(ctx, int64(rq.Height))
+	blk, err := lc.LightBlock(ctx, int64(rq.Height))
 	if err != nil {
 		return nil, fmt.Errorf("light block fetch failure: %w", err)
 	}

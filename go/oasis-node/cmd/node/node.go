@@ -68,8 +68,8 @@ type Node struct {
 
 	commonStore *persistent.CommonStore
 
-	Consensus   consensusAPI.Backend
-	LightClient consensusAPI.LightService
+	Consensus    consensusAPI.Backend
+	LightService consensusAPI.LightService
 
 	dataDir      string
 	chainContext string
@@ -234,7 +234,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 		n.chainContext,
 		n.Identity,
 		n.Consensus,
-		n.LightClient,
+		n.LightService,
 		n.P2P,
 		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
@@ -583,17 +583,17 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize CometBFT light client.
-	node.LightClient, err = cometbft.NewLightClient(node.svcMgr.Ctx, node.dataDir, node.Consensus, node.P2P)
+	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, node.dataDir, node.Consensus, node.P2P)
 	if err != nil {
 		logger.Error("failed to initialize cometbft light client service",
 			"err", err,
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.LightClient)
+	node.svcMgr.Register(node.LightService)
 
 	// Register consensus light client P2P protocol server.
-	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus, node.LightClient))
+	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus, node.LightService))
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
@@ -631,7 +631,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Start the consensus light client service.
-	if err = node.LightClient.Start(); err != nil {
+	if err = node.LightService.Start(); err != nil {
 		logger.Error("failed to start consensus light client service",
 			"err", err,
 		)

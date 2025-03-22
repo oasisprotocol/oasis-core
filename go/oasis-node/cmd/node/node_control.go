@@ -190,7 +190,7 @@ func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error
 }
 
 func (n *Node) getLightClientStatus() (*consensus.LightClientStatus, error) {
-	return n.LightClient.GetStatus()
+	return n.LightService.GetStatus()
 }
 
 func (n *Node) getRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
