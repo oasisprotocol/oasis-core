@@ -48,7 +48,14 @@ func tryProviders[R any](
 	for _, provider := range lc.tmc.Witnesses() {
 		providers = append(providers, provider.(*p2pLight.LightClientProvider))
 	}
+	return tryProvidersFrom(ctx, providers, fn)
+}
 
+func tryProvidersFrom[R any](
+	ctx context.Context,
+	providers []*p2pLight.LightClientProvider,
+	fn func(*p2pLight.LightClientProvider) (R, rpc.PeerFeedback, error),
+) (R, rpc.PeerFeedback, error) {
 	var (
 		result R
 		err    error
@@ -166,7 +173,7 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 		primary,   // Primary provider.
 		providers, // Witnesses.
 		cmtlightdb.New(dbm.NewMemDB(), ""),
-		cmtlight.MaxRetryAttempts(5), // TODO: Make this configurable.
+		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts), // TODO: Make this configurable.
 		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		cmtlight.DisableProviderRemoval(),
 	)

@@ -9,8 +9,6 @@ import (
 	"sync"
 
 	dbm "github.com/cometbft/cometbft-db"
-	cmtlight "github.com/cometbft/cometbft/light"
-	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
 	cmtlightstore "github.com/cometbft/cometbft/light/store"
 	cmtlightdb "github.com/cometbft/cometbft/light/store/db"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -21,10 +19,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
+	p2pLight "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -50,7 +48,6 @@ type ClientService struct {
 
 	store cmtlightstore.Store
 
-	lc        *Client
 	providers []*p2p.LightClientProvider
 
 	initOnce sync.Once
@@ -194,8 +191,6 @@ func (c *ClientService) worker() {
 	}
 	if err = trustLocalBlock(c.ctx, lastRetainedHeight); err != nil {
 		c.logger.Error("failed to store last retained block into trust store", "err", err)
-		// Errors ignored as we could still initialize if we can get the latest block. If not, the
-		// light client constructor will fail anyway.
 	}
 
 	// Store latest block into trust store.
@@ -205,38 +200,11 @@ func (c *ClientService) worker() {
 
 	// Initialize a provider pool.
 	pool := p2p.NewLightClientProviderPool(c.ctx, chainCtx, tmChainID, c.p2p)
-	var providers []cmtlightprovider.Provider
 	for i := 0; i < numProviders; i++ {
 		p := pool.NewLightClientProvider()
-		providers = append(providers, p)
 		c.providers = append(c.providers, p)
 	}
 
-	opts := []cmtlight.Option{
-		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
-		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
-		cmtlight.DisableProviderRemoval(),
-	}
-	switch config.GlobalConfig.Consensus.Prune.Strategy {
-	case cmtConfig.PruneStrategyNone:
-		opts = append(opts, cmtlight.PruningSize(0)) // Disable pruning the light store.
-	default:
-		opts = append(opts, cmtlight.PruningSize(config.GlobalConfig.Consensus.Prune.NumLightBlocksKept))
-	}
-
-	tmc, err := cmtlight.NewClientFromTrustedStore(
-		tmChainID,
-		config.GlobalConfig.Consensus.LightClient.Trust.Period,
-		providers[0],  // Primary provider.
-		providers[1:], // Witnesses.
-		c.store,
-		opts...,
-	)
-	if err != nil {
-		c.logger.Error("failed to initialize cometbft light client", "err", err)
-		return
-	}
-	c.lc = &Client{tmc: tmc}
 	c.initOnce.Do(func() { close(c.initCh) })
 
 	// Watch epochs and insert new trusted blocks on every epoch transition.
@@ -308,7 +276,9 @@ func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensu
 
 	// Direct peer query.
 	directPeerQuerySource := func() (*consensus.LightBlock, error) {
-		lb, _, err := c.lc.GetLightBlock(ctx, height)
+		lb, _, err := tryProvidersFrom(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+			return p.GetLightBlock(ctx, height)
+		})
 		if err != nil {
 			c.logger.Debug("failed to fetch light block from peer",
 				"err", err,
