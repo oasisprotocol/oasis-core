@@ -61,8 +61,7 @@ func New(
 func NewLightService(
 	ctx context.Context,
 	doc *genesisAPI.Document,
-	consensus consensusAPI.Backend,
 	p2p rpc.P2P,
 ) (consensusAPI.LightService, error) {
-	return light.New(ctx, doc.ChainContext(), consensus, p2p)
+	return light.New(ctx, doc.ChainContext(), p2p)
 }

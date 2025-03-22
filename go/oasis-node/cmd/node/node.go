@@ -583,7 +583,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize CometBFT light client.
-	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, genesisDoc, node.Consensus, node.P2P)
+	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, genesisDoc, node.P2P)
 	if err != nil {
 		logger.Error("failed to initialize cometbft light client service",
 			"err", err,
