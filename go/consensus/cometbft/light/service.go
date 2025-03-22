@@ -177,6 +177,12 @@ func (c *ClientService) worker() {
 		if err = c.store.SaveLightBlock(tmLb); err != nil {
 			return fmt.Errorf("failed to save block %d into the light client trust store: %w", lb.Height, err)
 		}
+		switch config.GlobalConfig.Consensus.Prune.Strategy {
+		case cmtConfig.PruneStrategyKeepN:
+			if err = c.store.Prune(config.GlobalConfig.Consensus.Prune.NumLightBlocksKept); err != nil {
+				return fmt.Errorf("failed to prune trust store: %w", err)
+			}
+		}
 		return nil
 	}
 
