@@ -5,35 +5,33 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // LightService is a consensus light client service.
 type LightService interface {
-	service.BackgroundService
-
-	LightClient
+	LightProvider
 
 	// GetStatus returns the current status overview.
 	GetStatus() (*LightClientStatus, error)
 }
 
+// LightProvider is a consensus light provider interface.
+//
+// Warning: Light blocks returned by this provider are untrusted and should be
+// verified before use.
+type LightProvider interface {
+	// LightBlock retrieves an untrusted light block at the specified height.
+	LightBlock(ctx context.Context, height int64) (*LightBlock, error)
+}
+
 // LightClient is a consensus light client interface.
+//
+// Light blocks returned by this client are trusted and don't need to be
+// verified before use.
 type LightClient interface {
-	// GetStoredLightBlock retrieves a light block from the local light block store without doing
-	// any remote queries.
-	GetStoredLightBlock(height int64) (*LightBlock, error)
-
-	// GetLightBlock queries peers for a specific light block.
-	GetLightBlock(ctx context.Context, height int64) (*LightBlock, rpc.PeerFeedback, error)
-
-	// GetParameters queries peers for consensus parameters for a specific height.
-	GetParameters(ctx context.Context, height int64) (*Parameters, rpc.PeerFeedback, error)
-
-	// SubmitEvidence submits evidence of misbehavior to peers.
-	SubmitEvidence(ctx context.Context, evidence *Evidence) (rpc.PeerFeedback, error)
+	// TrustedLightBlock returns trusted light block at the specified height.
+	TrustedLightBlock(height int64) (*LightBlock, error)
 }
 
 // LightBlock is a light consensus block suitable for syncing light clients.

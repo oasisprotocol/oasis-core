@@ -155,7 +155,7 @@ type Node struct {
 	KeyManager       keymanager.Backend
 	KeyManagerClient *KeyManagerClientWrapper
 	Consensus        consensus.Backend
-	LightClient      consensus.LightClient
+	LightProvider    consensus.LightProvider
 	Group            *Group
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
@@ -866,7 +866,7 @@ func NewNode(
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
 	consensus consensus.Backend,
-	lightClient consensus.LightClient,
+	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
 	txPoolCfg tpConfig.Config,
 ) (*Node, error) {
@@ -893,7 +893,7 @@ func NewNode(
 		Identity:        identity,
 		KeyManager:      keymanager,
 		Consensus:       consensus,
-		LightClient:     lightClient,
+		LightProvider:   lightProvider,
 		Group:           group,
 		P2P:             p2pHost,
 		txTopic:         txTopic,

@@ -20,7 +20,6 @@ const (
 
 type service struct {
 	consensus consensus.Backend
-	lc        consensus.LightClient
 
 	logger *logging.Logger
 }
@@ -51,14 +50,7 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 }
 
 func (s *service) handleGetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
-	lb, err := s.consensus.GetLightBlock(ctx, height)
-	if err != nil {
-		// Also try the local light store.
-		if lb, err = s.lc.GetStoredLightBlock(height); err != nil {
-			return nil, err
-		}
-	}
-	return lb, nil
+	return s.consensus.GetLightBlock(ctx, height)
 }
 
 // NewServer creates a new light block sync protocol server.
@@ -66,7 +58,6 @@ func NewServer(
 	p2p rpc.P2P,
 	chainContext string,
 	consensus consensus.Backend,
-	lightClient consensus.LightClient,
 ) rpc.Server {
 	p2p.RegisterProtocol(ProtocolID(chainContext), minProtocolPeers, totalProtocolPeers)
 
@@ -74,7 +65,6 @@ func NewServer(
 		ProtocolID(chainContext),
 		&service{
 			consensus: consensus,
-			lc:        lightClient,
 			logger:    logging.GetLogger("consensus/p2p/light/server"),
 		},
 	)

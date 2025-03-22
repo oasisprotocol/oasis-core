@@ -44,7 +44,7 @@ import (
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
-	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -726,7 +726,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.LightClient.Trust.Hash
 
 			// Create new state sync state provider.
-			cfg := lightAPI.ClientConfig{
+			cfg := light.Config{
 				GenesisDocument: t.genesisDoc,
 				TrustOptions: cmtlight.TrustOptions{
 					Period: config.GlobalConfig.Consensus.LightClient.Trust.Period,

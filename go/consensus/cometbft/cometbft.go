@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/full"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
-	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -58,12 +57,11 @@ func New(
 	}
 }
 
-// NewLightClient creates a new CometBFT light client service.
-func NewLightClient(
+// NewLightService creates a new CometBFT light client service.
+func NewLightService(
 	ctx context.Context,
-	dataDir string,
-	consensus consensusAPI.Backend,
+	doc *genesisAPI.Document,
 	p2p rpc.P2P,
-) (lightAPI.ClientService, error) {
-	return light.New(ctx, dataDir, consensus, p2p)
+) (consensusAPI.LightService, error) {
+	return light.New(ctx, doc.ChainContext(), p2p)
 }

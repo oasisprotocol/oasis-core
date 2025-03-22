@@ -28,8 +28,8 @@ func (env *nodeEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 }
 
 // GetIdentity implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
-	return env.n.LightClient, nil
+func (env *nodeEnvironment) GetLightProvider() (consensusAPI.LightProvider, error) {
+	return env.n.LightProvider, nil
 }
 
 // GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
