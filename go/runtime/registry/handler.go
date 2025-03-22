@@ -257,18 +257,18 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 	ctx context.Context,
 	rq *protocol.HostFetchConsensusBlockRequest,
 ) (*protocol.HostFetchConsensusBlockResponse, error) {
-	lb, err := h.consensus.GetLightBlock(ctx, int64(rq.Height))
+	blk, err := h.consensus.GetLightBlock(ctx, int64(rq.Height))
 	if err != nil {
 		lc, err := h.env.GetLightProvider()
 		if err != nil {
 			return nil, err
 		}
-		lb, err = lc.LightBlock(ctx, int64(rq.Height))
+		blk, err = lc.LightBlock(ctx, int64(rq.Height))
 		if err != nil {
 			return nil, fmt.Errorf("light block fetch failure: %w", err)
 		}
 	}
-	return &protocol.HostFetchConsensusBlockResponse{Block: *lb}, nil
+	return &protocol.HostFetchConsensusBlockResponse{Block: *blk}, nil
 }
 
 func (h *runtimeHostHandler) handleHostFetchConsensusEvents(

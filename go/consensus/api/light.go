@@ -11,7 +11,6 @@ import (
 // LightService is a consensus light client service.
 type LightService interface {
 	LightProvider
-	LightClient
 
 	// GetStatus returns the current status overview.
 	GetStatus() (*LightClientStatus, error)
