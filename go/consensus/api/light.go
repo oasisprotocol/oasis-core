@@ -5,14 +5,11 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 )
 
 // LightService is a consensus light client service.
 type LightService interface {
-	service.BackgroundService
-
 	LightProvider
 	LightClient
 

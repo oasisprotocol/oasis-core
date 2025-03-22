@@ -583,14 +583,13 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize CometBFT light client.
-	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, node.dataDir, node.Consensus, node.P2P)
+	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, genesisDoc, node.Consensus, node.P2P)
 	if err != nil {
 		logger.Error("failed to initialize cometbft light client service",
 			"err", err,
 		)
 		return nil, err
 	}
-	node.svcMgr.Register(node.LightService)
 
 	// Register consensus light client P2P protocol server.
 	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus, node.LightService))
@@ -625,14 +624,6 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Start the consensus backend service.
 	if err = node.Consensus.Start(); err != nil {
 		logger.Error("failed to start consensus backend service",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	// Start the consensus light client service.
-	if err = node.LightService.Start(); err != nil {
-		logger.Error("failed to start consensus light client service",
 			"err", err,
 		)
 		return nil, err
