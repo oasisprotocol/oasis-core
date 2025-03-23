@@ -291,7 +291,7 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 	rtNonce++
 
 	// Wait for next round.
-	_, err = sc.WaitRuntimeBlock(blkCh, meta.Round+1)
+	_, err = sc.WaitRuntimeBlock(ctx, blkCh, meta.Round+1)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	// The bogus update should cause the runtime to panic, which will result
 	// in no more blocks being produced.
-	blk, err := sc.WaitRuntimeBlock(blkCh, meta.Round+1)
+	blk, err := sc.WaitRuntimeBlock(ctx, blkCh, meta.Round+1)
 	if err == nil {
 		return fmt.Errorf("unexpected round %d, the bogus update should cause the runtime to panic", blk.Block.Header.Round)
 	}

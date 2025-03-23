@@ -87,7 +87,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	latestRound := txMetaResponse.Round
 
 	// Round with the submitted consensus_transfer transaction.
-	blk, err := sc.WaitRuntimeBlock(blkCh, latestRound)
+	blk, err := sc.WaitRuntimeBlock(ctx, blkCh, latestRound)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	}
 
 	// Round with no transactions - triggered due to message results.
-	blk, err = sc.WaitRuntimeBlock(blkCh, blk.Block.Header.Round+1)
+	blk, err = sc.WaitRuntimeBlock(ctx, blkCh, blk.Block.Header.Round+1)
 	if err != nil {
 		return err
 	}
