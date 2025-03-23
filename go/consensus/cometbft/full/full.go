@@ -734,12 +734,14 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 					Hash:   cometConfig.StateSync.TrustHashBytes(),
 				},
 			}
-			if stateProvider, err = newStateProvider(t.ctx, t.chainContext, cfg, t.p2p); err != nil {
-				t.Logger.Error("failed to create state sync state provider",
+			lightClient, err := light.NewClient(t.ctx, t.chainContext, t.p2p, cfg)
+			if err != nil {
+				t.Logger.Error("failed to create light client",
 					"err", err,
 				)
-				return fmt.Errorf("failed to create state sync state provider: %w", err)
+				return fmt.Errorf("failed to create light client: %w", err)
 			}
+			stateProvider = newStateProvider(t.chainContext, t.genesisHeight, lightClient)
 		}
 
 		t.node, err = cmtnode.NewNode(cometConfig,
