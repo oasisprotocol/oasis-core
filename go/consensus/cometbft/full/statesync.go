@@ -3,7 +3,6 @@ package full
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	cmtstate "github.com/cometbft/cometbft/state"
 	cmtstatesync "github.com/cometbft/cometbft/statesync"
@@ -16,8 +15,6 @@ import (
 )
 
 type stateProvider struct {
-	sync.Mutex
-
 	chainID       string
 	genesisHeight int64
 	lightClient   *light.Client
@@ -27,9 +24,6 @@ type stateProvider struct {
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
 	// We have to fetch the next height, which contains the app hash for the previous height.
 	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height+1))
 	if err != nil {
@@ -40,9 +34,6 @@ func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, er
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.Commit, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
 	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height))
 	if err != nil {
 		return nil, err
@@ -52,9 +43,6 @@ func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.C
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.State, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
 	state := cmtstate.State{
 		ChainID:       sp.chainID,
 		Version:       cmtstate.InitStateVersion,
