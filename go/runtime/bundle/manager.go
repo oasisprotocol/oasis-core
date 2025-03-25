@@ -24,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
 const (
@@ -65,6 +66,9 @@ type ManifestStore interface {
 
 	// Manifests returns all known exploded manifests.
 	Manifests() []*ExplodedManifest
+
+	// ManifestsWithLabels returns all manifests that have the specified labels set.
+	ManifestsWithLabels(labels map[string]string) []*ExplodedManifest
 }
 
 // Manager is responsible for managing bundles.
@@ -355,6 +359,33 @@ func (m *Manager) WriteTemporary(tmpName string, labels map[string]string, creat
 
 	_, err = f.Write(data)
 	return err
+}
+
+// WipeStorage wipes persistent storage of all components from bundles matching the given labels.
+func (m *Manager) WipeStorage(labels map[string]string) error {
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
+	for _, manifest := range m.store.ManifestsWithLabels(labels) {
+		for _, comp := range manifest.Components {
+			if err := m.wipeStorage(manifest.ID, comp.ID()); err != nil {
+				m.logger.Error("failed to wipe component storage",
+					"err", err,
+					"runtime_id", manifest.ID,
+					"component_id", comp.ID(),
+				)
+				continue
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) wipeStorage(runtimeID common.Namespace, componentID component.ID) error {
+	imageDir := runtimeConfig.GetPersistentImageDir(m.dataDir, runtimeID, componentID)
+	return os.RemoveAll(imageDir)
 }
 
 // Download updates the checksums of bundles pending download for the given runtime.

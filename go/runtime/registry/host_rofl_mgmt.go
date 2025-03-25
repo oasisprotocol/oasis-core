@@ -36,6 +36,13 @@ func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (inter
 			return nil, err
 		}
 		return rh.handleBundleRemove(&args)
+	case rofl.MethodBundleWipeStorage:
+		// Wipe storage of all components in a bundle.
+		var args rofl.BundleWipeStorageRequest
+		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
+			return nil, err
+		}
+		return rh.handleBundleWipeStorage(&args)
 	case rofl.MethodBundleList:
 		// List all bundles that we have access to.
 		var args rofl.BundleListRequest
@@ -90,6 +97,21 @@ func (rh *roflHostHandler) handleBundleRemove(rq *rofl.BundleRemoveRequest) (*ro
 		return nil, err
 	}
 	return &rofl.BundleRemoveResponse{}, nil
+}
+
+func (rh *roflHostHandler) handleBundleWipeStorage(rq *rofl.BundleWipeStorageRequest) (*rofl.BundleWipeStorageResponse, error) {
+	if err := rh.ensureComponentPermissions(runtimeConfig.PermissionBundleRemove); err != nil {
+		return nil, err
+	}
+
+	// Determine labels, make sure to override origin as that is used for isolation.
+	labels := maps.Clone(rq.Labels)
+	maps.Copy(labels, rh.getBundleManagementLabels())
+
+	if err := rh.getBundleManager().WipeStorage(labels); err != nil {
+		return nil, err
+	}
+	return &rofl.BundleWipeStorageResponse{}, nil
 }
 
 func (rh *roflHostHandler) handleBundleList(rq *rofl.BundleListRequest) (*rofl.BundleListResponse, error) {

@@ -12,6 +12,8 @@ const (
 	MethodBundleAdd = "BundleAdd"
 	// MethodBundleRemove is the name of the BundleRemove method.
 	MethodBundleRemove = "BundleRemove"
+	// MethodBundleWipeStorage is the name of the BundleWipeStorage method.
+	MethodBundleWipeStorage = "BundleWipeStorage"
 	// MethodBundleList is the name of the BundleList method.
 	MethodBundleList = "BundleList"
 )
@@ -59,6 +61,17 @@ type BundleRemoveRequest struct {
 
 // BundleRemoveResponse is the response from the BundleRemove method.
 type BundleRemoveResponse struct{}
+
+// BundleWipeStorageRequest is a request to wipe storage of all components in specific bundles.
+//
+// The `PermissionBundleRemove` permission is required to call this method.
+type BundleWipeStorageRequest struct {
+	// Labels are the labels to filter the components by. All labels must match.
+	Labels map[string]string `json:"labels"`
+}
+
+// BundleWipeStorageResponse is the response from the BundleWipeStorage method.
+type BundleWipeStorageResponse struct{}
 
 // BundleListRequest is a request to host to list all bundles.
 //
