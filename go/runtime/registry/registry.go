@@ -23,6 +23,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -148,7 +149,7 @@ func newRuntime(
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
 
 	// Ensure runtime state directory exists.
-	rtDataDir, err := EnsureRuntimeStateDir(dataDir, runtimeID)
+	rtDataDir, err := runtimeConfig.EnsureRuntimeStateDir(dataDir, runtimeID)
 	if err != nil {
 		return nil, err
 	}

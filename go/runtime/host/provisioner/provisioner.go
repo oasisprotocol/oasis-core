@@ -3,7 +3,6 @@ package provisioner
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
@@ -23,7 +22,6 @@ import (
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
 	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
-	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 // New creates a new runtime provisioner.
@@ -178,7 +176,7 @@ func createProvisioner(
 	// Configure TDX provisioner.
 	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
 	provisioners[component.TEEKindTDX], err = hostTdx.NewQemuProvisioner(hostTdx.QemuConfig{
-		DataDir:               filepath.Join(dataDir, registry.RuntimesDir),
+		DataDir:               dataDir,
 		HostInfo:              hostInfo,
 		CommonStore:           commonStore,
 		PCS:                   qs,
