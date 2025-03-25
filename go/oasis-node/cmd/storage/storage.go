@@ -18,8 +18,8 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
-	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -163,7 +163,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 			fmt.Printf(" ** Upgrading storage database for runtime %v...\n", rt)
 		}
 		err := func() error {
-			runtimeDir := registry.GetRuntimeStateDir(dataDir, rt)
+			runtimeDir := runtimeConfig.GetRuntimeStateDir(dataDir, rt)
 
 			prunerFactory := history.NewNonePrunerFactory()
 			history, err := history.New(rt, runtimeDir, prunerFactory, false)
@@ -213,7 +213,7 @@ func doCheck(_ *cobra.Command, args []string) error {
 			fmt.Printf("Checking storage database for runtime %v...\n", rt)
 		}
 		err := func() error {
-			runtimeDir := registry.GetRuntimeStateDir(dataDir, rt)
+			runtimeDir := runtimeConfig.GetRuntimeStateDir(dataDir, rt)
 
 			nodeCfg := &db.Config{
 				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfig.Storage.Backend),
@@ -258,8 +258,8 @@ func doRenameNs(_ *cobra.Command, args []string) error {
 		fmt.Printf("Renaming storage database for runtime from %s to %s...\n", srcID, dstID)
 	}
 
-	srcDir := registry.GetRuntimeStateDir(dataDir, srcID)
-	dstDir := registry.GetRuntimeStateDir(dataDir, dstID)
+	srcDir := runtimeConfig.GetRuntimeStateDir(dataDir, srcID)
+	dstDir := runtimeConfig.GetRuntimeStateDir(dataDir, dstID)
 
 	nodeCfg := &db.Config{
 		DB:        workerStorage.GetLocalBackendDBDir(srcDir, config.GlobalConfig.Storage.Backend),
