@@ -44,6 +44,8 @@ type BundleAddRequest struct {
 	ManifestHash hash.Hash `json:"manifest_hash"`
 	// Labels are the labels to tag the bundle with so it can later be found.
 	Labels map[string]string `json:"labels"`
+	// Volumes are the volumes to attach to the bundle.
+	Volumes map[string]string `json:"volumes"`
 }
 
 // BundleAddResponse is the response from the BundleAdd method.

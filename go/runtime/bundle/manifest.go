@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
 
 const (
@@ -25,6 +26,9 @@ type ExplodedManifest struct {
 
 	// Labels are labels attached to the manifest by the registry.
 	Labels map[string]string
+
+	// Volumes are the volumes attached to this exploded manifest.
+	Volumes map[string]*volume.Volume
 }
 
 // HasLabels returns true iff the exploded manifest has all of the given labels set.
@@ -35,6 +39,18 @@ func (m *ExplodedManifest) HasLabels(labels map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// ValidateVolumes validates that the exploded manifest has all of the required volumes present.
+func (m *ExplodedManifest) ValidateVolumes() error {
+	for _, comp := range m.Components {
+		for _, volName := range comp.RequiredVolumeNames() {
+			if _, ok := m.Volumes[volName]; !ok {
+				return fmt.Errorf("missing required volume '%s'", volName)
+			}
+		}
+	}
+	return nil
 }
 
 // Manifest is a deserialized runtime bundle manifest.

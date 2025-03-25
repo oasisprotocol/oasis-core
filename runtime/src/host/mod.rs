@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod bundle_manager;
+pub mod volume_manager;
 
 /// Errors.
 #[derive(Error, Debug)]
@@ -73,6 +74,9 @@ pub trait Host: Send + Sync {
 
     /// Bundle manager interface.
     fn bundle_manager(&self) -> &dyn bundle_manager::BundleManager;
+
+    /// Volume manager interface.
+    fn volume_manager(&self) -> &dyn volume_manager::VolumeManager;
 }
 
 #[async_trait]
@@ -137,6 +141,10 @@ impl Host for Protocol {
     }
 
     fn bundle_manager(&self) -> &dyn bundle_manager::BundleManager {
+        self
+    }
+
+    fn volume_manager(&self) -> &dyn volume_manager::VolumeManager {
         self
     }
 }

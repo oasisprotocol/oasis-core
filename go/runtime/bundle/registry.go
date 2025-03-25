@@ -119,6 +119,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			TEEKind:         teeKind,
 			Detached:        detached,
 			ExplodedDataDir: manifest.ExplodedDataDir,
+			Volumes:         manifest.Volumes,
 		}
 
 		runtimeComponents, ok := r.components[manifest.ID]

@@ -171,8 +171,8 @@ func (rh *roflHostHandler) handleHostRPCCall(
 				Response: rsp.Response,
 			},
 		}, nil
-	case rofl.LocalRPCEndpointBundleManager:
-		// Route bundle management requests to handler.
+	case rofl.LocalRPCEndpointBundleManager, rofl.LocalRPCEndpointVolumeManager:
+		// Route management requests to handler.
 		if rq.HostRPCCallRequest.Kind != enclaverpc.KindLocalQuery {
 			return nil, fmt.Errorf("endpoint not supported")
 		}
@@ -182,7 +182,17 @@ func (rh *roflHostHandler) handleHostRPCCall(
 			return nil, fmt.Errorf("malformed request: %w", err)
 		}
 
-		rsp, err := rh.handleBundleManagement(&rpcRq)
+		var (
+			rsp any
+			err error
+		)
+		switch rq.HostRPCCallRequest.Endpoint {
+		case rofl.LocalRPCEndpointBundleManager:
+			rsp, err = rh.handleBundleManagement(&rpcRq)
+		case rofl.LocalRPCEndpointVolumeManager:
+			rsp, err = rh.handleVolumeManagement(&rpcRq)
+		}
+
 		if err != nil {
 			return nil, err
 		}

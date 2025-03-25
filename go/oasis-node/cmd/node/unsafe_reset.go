@@ -14,8 +14,8 @@ import (
 	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 const (
@@ -39,7 +39,7 @@ var (
 		Run:   doUnsafeReset,
 	}
 
-	runtimesGlob = filepath.Join(runtimeRegistry.RuntimesDir, "*")
+	runtimesGlob = filepath.Join(runtimeConfig.RuntimesDir, "*")
 
 	nodeStateGlobs = []string{
 		"persistent-store.*.db",

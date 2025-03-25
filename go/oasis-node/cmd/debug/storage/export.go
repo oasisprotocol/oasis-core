@@ -17,7 +17,7 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDatabase "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -82,7 +82,7 @@ func doExport(*cobra.Command, []string) {
 }
 
 func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *roothash.GenesisRuntimeState) error {
-	dataDir = filepath.Join(dataDir, runtimeRegistry.RuntimesDir, id.String())
+	dataDir = runtimeConfig.GetRuntimeStateDir(dataDir, id)
 
 	// Initialize the storage backend.
 	storageBackend, err := newDirectStorageBackend(dataDir, id)

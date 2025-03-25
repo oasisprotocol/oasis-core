@@ -321,6 +321,12 @@ const (
 	// PermissionBundleRemove is the permission that grants the component rights to remove other
 	// bundles that were previously added by it (e.g. it cannot remove unrelated bundles).
 	PermissionBundleRemove ComponentPermission = "bundle_remove"
+
+	// PermissionVolumeAdd is the permission that grants the component rights to add volumes.
+	PermissionVolumeAdd ComponentPermission = "volume_add"
+
+	// PermissionVolumeRemove is the permission that grants the component rights to remove volumes.
+	PermissionVolumeRemove ComponentPermission = "volume_remove"
 )
 
 // NetworkingConfig is the networking configuration.

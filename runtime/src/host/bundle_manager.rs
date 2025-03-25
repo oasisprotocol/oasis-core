@@ -34,7 +34,7 @@ pub trait BundleManager: Send + Sync {
     /// The `PermissionBundleAdd` permission is required to call this method.
     async fn bundle_add(&self, args: BundleAddRequest) -> Result<BundleAddResponse, Error>;
 
-    /// Request to host to remove a specific component. Only ROFL components added by this component
+    /// Request to host to remove a specific component. Only components added by this component
     /// can be removed.
     ///
     /// The `PermissionBundleRemove` permission is required to call this method.
@@ -131,14 +131,16 @@ pub struct BundleAddRequest {
     ///
     /// Use the special `LABEL_INSTANCE_ID` label to specify a deterministic instance ID.
     pub labels: BTreeMap<String, String>,
+    /// Volumes to attach to the bundle.
+    pub volumes: BTreeMap<String, String>,
 }
 
 /// Response form the BundleAdd method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct BundleAddResponse {}
 
-/// Request to host to remove a specific component. Only ROFL components added by this component can
-/// be removed.
+/// Request to host to remove a specific component. Only components added by this component can be
+/// removed.
 ///
 /// The `PermissionBundleRemove` permission is required to call this method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]

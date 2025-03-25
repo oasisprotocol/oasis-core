@@ -1,4 +1,4 @@
-package registry
+package config
 
 import (
 	"path/filepath"
@@ -12,6 +12,7 @@ const (
 	RuntimesDir = "runtimes"
 )
 
+// GetRuntimeStateDir derives the path to the runtime state directory.
 func GetRuntimeStateDir(dataDir string, runtimeID common.Namespace) string {
 	return filepath.Join(dataDir, RuntimesDir, runtimeID.String())
 }

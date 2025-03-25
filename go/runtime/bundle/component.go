@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
 
 // componentNameRegexp is the regular expression for valid component names.
@@ -36,6 +37,9 @@ type ExplodedComponent struct {
 	// ExplodedDataDir is the path to the data directory where the bundle
 	// containing the component has been extracted.
 	ExplodedDataDir string
+
+	// Volumes are the volumes attached to this exploded component.
+	Volumes map[string]*volume.Volume
 }
 
 // ExplodedPath returns the path that the corresponding asset will be written to via WriteExploded.
@@ -166,6 +170,19 @@ func (c *Component) TEEKind() component.TEEKind {
 	default:
 		return component.TEEKindNone
 	}
+}
+
+// RequiredVolumeNames returns a list of required volume names for this component.
+func (c *Component) RequiredVolumeNames() []string {
+	var volumes []string
+	switch {
+	case c.TDX != nil:
+		if c.TDX.HasStage2() && c.TDX.Stage2Persist {
+			volumes = append(volumes, c.TDX.Stage2Image)
+		}
+	default:
+	}
+	return volumes
 }
 
 // ELFMetadata is the ELF specific manifest metadata.
