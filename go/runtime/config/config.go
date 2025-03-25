@@ -110,6 +110,9 @@ type Config struct {
 	// History pruner configuration.
 	Prune PruneConfig `yaml:"prune,omitempty"`
 
+	// Indexer is history indexer configuration.
+	Indexer IndexerConfig `yaml:"indexer,omitempty"`
+
 	// RuntimeConfig maps runtime IDs to their respective local configurations.
 	// NOTE: This may go away in the future, use `RuntimeConfig.Config` instead.
 	RuntimeConfig map[string]map[string]interface{} `yaml:"config,omitempty"`
@@ -301,10 +304,19 @@ type PruneConfig struct {
 	NumKept uint64 `yaml:"num_kept"`
 }
 
+// IndexerConfig is history indexer configuration.
+type IndexerConfig struct {
+	// BatchSize is max number of blocks committed in a batch during history reindex.
+	//
+	// Setting it to zero uses the default batch size.
+	BatchSize uint16 `yaml:"batch_size,omitempty"`
+}
+
 // LoadBalancerConfig is the load balancer configuration.
 type LoadBalancerConfig struct {
-	// NumInstances is the number of runtime instances to provision for load-balancing. Setting it
-	// to zero (default) or one disables load balancing.
+	// NumInstances is the number of runtime instances to provision for load-balancing.
+	//
+	// Setting it to zero or one disables load balancing.
 	NumInstances uint64 `yaml:"num_instances,omitempty"`
 }
 
@@ -427,6 +439,9 @@ func DefaultConfig() Config {
 			Strategy: "none",
 			Interval: 2 * time.Minute,
 			NumKept:  600,
+		},
+		Indexer: IndexerConfig{
+			BatchSize: 1000,
 		},
 		SentryAddresses: []string{},
 		TxPool: tpConfig.Config{

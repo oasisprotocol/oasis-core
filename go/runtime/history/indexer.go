@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	batchSize        = 1000
 	maxPendingBlocks = 10
 )
 
@@ -27,18 +26,20 @@ type BlockIndexer struct {
 
 	consensus consensus.Backend
 	history   History
+	batchSize uint16
 
 	logger *logging.Logger
 }
 
 // NewBlockIndexer creates a new block indexer.
-func NewBlockIndexer(consensus consensus.Backend, history History) *BlockIndexer {
+func NewBlockIndexer(consensus consensus.Backend, history History, batchSize uint16) *BlockIndexer {
 	logger := logging.GetLogger("runtime/history/indexer").With("runtime_id", history.RuntimeID())
 
 	return &BlockIndexer{
 		startOne:  cmSync.NewOne(),
 		consensus: consensus,
 		history:   history,
+		batchSize: batchSize,
 		logger:    logger,
 	}
 }
@@ -230,6 +231,7 @@ func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 		lastHeight = lastRetainedHeight
 	}
 
+	batchSize := int64(bi.batchSize)
 	for start := lastHeight; start <= height; start += batchSize {
 		end := min(start+batchSize-1, height)
 		if err = bi.reindexRange(ctx, start, end); err != nil {

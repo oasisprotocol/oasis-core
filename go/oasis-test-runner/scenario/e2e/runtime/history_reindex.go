@@ -55,6 +55,7 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Start client without any runtime.
 	f.Clients[0].Runtimes = nil
+	f.Clients[0].BatchSize = 3
 
 	return f, nil
 }
