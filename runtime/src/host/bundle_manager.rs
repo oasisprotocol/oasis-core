@@ -15,6 +15,8 @@ pub const METHOD_BUNDLE_WRITE: &str = "BundleWrite";
 pub const METHOD_BUNDLE_ADD: &str = "BundleAdd";
 /// Name of the BundleRemove method.
 pub const METHOD_BUNDLE_REMOVE: &str = "BundleRemove";
+/// Name of the BundleWipeStorage method.
+pub const METHOD_BUNDLE_WIPE_STORAGE: &str = "BundleWipeStorage";
 /// Name of the BundleList method.
 pub const METHOD_BUNDLE_LIST: &str = "BundleList";
 
@@ -34,12 +36,21 @@ pub trait BundleManager: Send + Sync {
     /// The `PermissionBundleAdd` permission is required to call this method.
     async fn bundle_add(&self, args: BundleAddRequest) -> Result<BundleAddResponse, Error>;
 
-    /// Request to host to remove a specific component. Only ROFL components added by this component
+    /// Request to host to remove a specific component. Only components added by this component
     /// can be removed.
     ///
     /// The `PermissionBundleRemove` permission is required to call this method.
     async fn bundle_remove(&self, args: BundleRemoveRequest)
         -> Result<BundleRemoveResponse, Error>;
+
+    /// Request to wipe storage of all components in a bundle. Only storage for components added by
+    /// this component can be wiped.
+    ///
+    /// The `PermissionBundleRemove` permission is required to call this method.
+    async fn bundle_wipe_storage(
+        &self,
+        args: BundleWipeStorageRequest,
+    ) -> Result<BundleWipeStorageResponse, Error>;
 
     /// Request to host to list all bundles.
     ///
@@ -77,6 +88,19 @@ impl BundleManager for Protocol {
             self,
             LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
             METHOD_BUNDLE_REMOVE,
+            args,
+        )
+        .await
+    }
+
+    async fn bundle_wipe_storage(
+        &self,
+        args: BundleWipeStorageRequest,
+    ) -> Result<BundleWipeStorageResponse, Error> {
+        host_rpc_call(
+            self,
+            LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
+            METHOD_BUNDLE_WIPE_STORAGE,
             args,
         )
         .await
@@ -137,8 +161,8 @@ pub struct BundleAddRequest {
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct BundleAddResponse {}
 
-/// Request to host to remove a specific component. Only ROFL components added by this component can
-/// be removed.
+/// Request to host to remove a specific component. Only components added by this component can be
+/// removed.
 ///
 /// The `PermissionBundleRemove` permission is required to call this method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
@@ -150,6 +174,20 @@ pub struct BundleRemoveRequest {
 /// Response form the BundleRemove method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct BundleRemoveResponse {}
+
+/// Request to wipe storage of all components in a bundle. Only components added by this component
+/// can be wiped.
+///
+/// The `PermissionBundleRemove` permission is required to call this method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleWipeStorageRequest {
+    /// Labels to filter the components by.
+    pub labels: BTreeMap<String, String>,
+}
+
+/// Response form the BundleWipeStorage method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleWipeStorageResponse {}
 
 /// Request to host to list all bundles.
 ///

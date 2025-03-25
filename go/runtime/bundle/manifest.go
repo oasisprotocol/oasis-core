@@ -28,7 +28,13 @@ type ExplodedManifest struct {
 }
 
 // HasLabels returns true iff the exploded manifest has the given labels set.
+//
+// If no labels are passed, this method always returns false.
 func (m *ExplodedManifest) HasLabels(labels map[string]string) bool {
+	if len(labels) == 0 {
+		return false
+	}
+
 	for key, value := range labels {
 		if m.Labels[key] != value {
 			return false
