@@ -26,6 +26,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
@@ -42,9 +43,6 @@ const (
 	defaultStartCid = 0xA5150000
 	// defaultRuntimeAttestInterval is the default runtime (re-)attestation interval.
 	defaultRuntimeAttestInterval = 2 * time.Hour
-	// persistentImageDir is the name of the directory within the runtime data directory
-	// where persistent overlay images can be stored.
-	persistentImageDir = "images"
 
 	// vsockPortRHP is the VSOCK port used for the Runtime-Host Protocol.
 	vsockPortRHP = 1
@@ -54,7 +52,7 @@ const (
 
 // QemuConfig is the configuration of the QEMU-based TDX runtime provisioner.
 type QemuConfig struct {
-	// DataDir is the runtime data directory.
+	// DataDir is the node data directory.
 	DataDir string
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
@@ -333,8 +331,7 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 	image string,
 	format string,
 ) (string, error) {
-	compID, _ := comp.ID().MarshalText()
-	imageDir := filepath.Join(p.cfg.DataDir, persistentImageDir, rtCfg.ID.String(), string(compID))
+	imageDir := runtimeConfig.GetPersistentImageDir(p.cfg.DataDir, rtCfg.ID, comp.ID())
 	imageFn := filepath.Join(imageDir, fmt.Sprintf("%s.overlay", filepath.Base(image)))
 	switch _, err := os.Stat(imageFn); {
 	case err == nil:
