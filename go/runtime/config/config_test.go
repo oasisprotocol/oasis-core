@@ -66,3 +66,74 @@ runtimes:
 	require.EqualValues(compCfg.ID.Name, "another")
 	require.True(compCfg.Disabled)
 }
+
+func TestNetworkingConfig(t *testing.T) {
+	require := require.New(t)
+
+	var runtimeID common.Namespace
+	err := runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
+	require.NoError(err)
+
+	cfg := Config{
+		Provisioner: RuntimeProvisionerMock,
+		Environment: RuntimeEnvironmentAuto,
+		Prune: PruneConfig{
+			Strategy: "none",
+		},
+		Runtimes: []RuntimeConfig{
+			{
+				ID: runtimeID,
+				Components: []ComponentConfig{
+					{
+						ID:       component.ID{Kind: component.ROFL, Name: "foo-test"},
+						Disabled: false,
+						Networking: NetworkingConfig{
+							Incoming: []IncomingNetworkingConfig{
+								{
+									IP:       "192.168.0.5",
+									Protocol: "tcp",
+									SrcPort:  80,
+									DstPort:  80,
+								},
+								{
+									IP:       "192.168.0.5",
+									Protocol: "tcp",
+									SrcPort:  81,
+									DstPort:  81,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	err = cfg.Validate()
+	require.NoError(err)
+
+	cfg.Runtimes[0].Components[0].Networking.Incoming = append(cfg.Runtimes[0].Components[0].Networking.Incoming,
+		IncomingNetworkingConfig{
+			IP:      "192.168.0.5",
+			SrcPort: 80,
+		},
+	)
+	err = cfg.Validate()
+	require.ErrorContains(err, "component rofl (foo-test): overlapping incoming IP/protocol/port")
+
+	cfg.Runtimes[0].Components[0].Networking.Incoming[2] = IncomingNetworkingConfig{
+		IP:      "0.0.0.0",
+		SrcPort: 80,
+	}
+	err = cfg.Validate()
+	require.ErrorContains(err, "component rofl (foo-test): overlapping incoming IP/protocol/port")
+
+	cfg.Runtimes[0].Components[0].Networking.Incoming[0].IP = "0.0.0.0"
+	cfg.Runtimes[0].Components[0].Networking.Incoming[2].IP = "192.168.0.5"
+	err = cfg.Validate()
+	require.ErrorContains(err, "component rofl (foo-test): overlapping incoming IP/protocol/port")
+
+	cfg.Runtimes[0].Components[0].Networking.Incoming[0].IP = "::"
+	cfg.Runtimes[0].Components[0].Networking.Incoming[2].IP = "192.168.0.5"
+	err = cfg.Validate()
+	require.ErrorContains(err, "component rofl (foo-test): overlapping incoming IP/protocol/port")
+}

@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
@@ -236,12 +237,17 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 		}
 	}
 
+	// compCfg, ok := config.GlobalConfig.Runtime.GetComponent(rh.parent.runtime.ID(), rh.id)
+
 	// Configure network access.
 	switch cfg.Component.IsNetworkAllowed() {
 	case true:
-		pcfg.Args = append(pcfg.Args,
-			"-netdev", "user,id=net0",
-		)
+		netArgs, err := p.createNetworkingConfig(cfg)
+		if err != nil {
+			return process.Config{}, fmt.Errorf("failed to create networking config: %w", err)
+		}
+
+		pcfg.Args = append(pcfg.Args, netArgs...)
 		pcfg.AllowNetwork = true
 	case false:
 		pcfg.Args = append(pcfg.Args,
@@ -264,6 +270,57 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 	pcfg.Stderr = logWrapper
 
 	return pcfg, nil
+}
+
+// createNetworkingConfig generates QEMU networking configuration for a component.
+func (p *qemuProvisioner) createNetworkingConfig(cfg host.Config) ([]string, error) {
+	compCfg, _ := config.GlobalConfig.Runtime.GetComponent(cfg.ID, cfg.Component.ID())
+	netdevOpts := []string{"user", "id=net0"}
+
+	// Inbound forwarding.
+	for _, netCfg := range compCfg.Networking.Incoming {
+		var proto string
+		switch netCfg.Protocol {
+		case "tcp", "udp":
+			proto = netCfg.Protocol
+		case "":
+			proto = "tcp"
+		default:
+			return nil, fmt.Errorf("network protocol '%s' not supported", netCfg.Protocol)
+		}
+
+		ip := netCfg.IP
+		if ip == "" {
+			ip = "0.0.0.0"
+		}
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			return nil, fmt.Errorf("IP address '%s' is malformed", ip)
+		}
+		if parsedIP.IsUnspecified() {
+			ip = ""
+		} else {
+			ip = parsedIP.String()
+		}
+		if parsedIP.To4() == nil {
+			return nil, fmt.Errorf("IPv6 forwarding not supported")
+		}
+
+		if netCfg.SrcPort == 0 {
+			return nil, fmt.Errorf("source port not specified")
+		}
+		dstPort := netCfg.DstPort
+		if dstPort == 0 {
+			dstPort = netCfg.SrcPort
+		}
+
+		netdevOpts = append(netdevOpts,
+			fmt.Sprintf("hostfwd=%s:%s:%d-:%d", proto, ip, netCfg.SrcPort, dstPort),
+		)
+	}
+
+	netArgs := []string{"-netdev", strings.Join(netdevOpts, ",")}
+	return netArgs, nil
 }
 
 // createPersistentOverlayImage creates a persistent overlay image for the given backing image and
