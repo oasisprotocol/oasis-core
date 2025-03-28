@@ -14,10 +14,6 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-const (
-	reindexComputePruneNumKept = 50
-)
-
 // HistoryReindex is the scenario that triggers roothash history reindexing.
 var HistoryReindex scenario.Scenario = newHistoryReindexImpl()
 
@@ -44,12 +40,7 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 		{
 			Entity:   1,
 			Runtimes: []int{},
-			Consensus: oasis.ConsensusFixture{
-				PruneNumKept: reindexComputePruneNumKept,
-			},
 			LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
-				// Ensure ABCI pruning happens on the node.
-				oasis.LogEventABCIPruneDelete(),
 				// Ensure re-indexing happens on the node.
 				oasis.LogAssertRoothashRoothashReindexing(),
 			},
@@ -89,27 +80,9 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return err
 	}
 
-	// Wait for enough block to ensure pruning on the compute node.
-	waitForHeight := int64(reindexComputePruneNumKept + 20)
-	sc.Logger.Info("waiting enough blocks to ensure pruning",
-		"compute_prune_num_kept", reindexComputePruneNumKept,
-		"wait_for_height", waitForHeight,
-	)
-
-	blockCh, blockSub, bErr := sc.Net.Controller().Consensus.WatchBlocks(ctx)
-	if bErr != nil {
-		return fmt.Errorf("failed waiting for block height: %w", bErr)
-	}
-	defer blockSub.Close()
-
-	for newBlk := range blockCh {
-		if newBlk.Height > waitForHeight {
-			break
-		}
-		sc.Logger.Debug("waiting enough blocks to ensure pruning",
-			"current_height", newBlk.Height,
-			"wait_for_height", waitForHeight,
-		)
+	// Wait for one block so that initial epoch can be fetched below.
+	if _, err := sc.WaitBlocks(ctx, 1); err != nil {
+		return fmt.Errorf("failed to wait for one block: %w", err)
 	}
 
 	// Restart compute worker with configured runtime.
