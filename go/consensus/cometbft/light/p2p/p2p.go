@@ -14,7 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
+	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
@@ -23,15 +23,7 @@ import (
 //
 // Pool ensures that that every instantiated provider is backed by a single distinct libp2p peer
 // at all times.
-type LightClientProvidersPool interface {
-	// NewLightClientProvider creates a new provider for the CometBFT's light client backed by the
-	// Oasis Core LightBlocks P2P protocol.
-	//
-	// Each instantiated provider is backed by a distinct P2P Peer.
-	NewLightClientProvider() api.Provider
-}
-
-type providersPool struct {
+type LightClientProvidersPool struct {
 	ctx context.Context
 
 	chainID string
@@ -43,9 +35,30 @@ type providersPool struct {
 	peerRegistry map[core.PeerID]bool
 }
 
-// NewLightClientProvider implements LightClientProvidersPool.
-func (p *providersPool) NewLightClientProvider() api.Provider {
-	provider := &lightClientProvider{
+// NewLightClientProviderPool returns a light client provider pool.
+func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rpc.P2P) *LightClientProvidersPool {
+	chainID := cmtAPI.CometBFTChainID(chainContext)
+	pid := light.ProtocolID(chainContext)
+
+	mgr := rpc.NewPeerManager(p2p, pid)
+	rc := rpc.NewClient(p2p.Host(), pid)
+	rc.RegisterListener(mgr)
+
+	return &LightClientProvidersPool{
+		ctx:          ctx,
+		chainID:      chainID,
+		peerRegistry: make(map[core.PeerID]bool),
+		p2pMgr:       mgr,
+		rc:           rc,
+	}
+}
+
+// NewLightClientProvider creates a new provider for the CometBFT's light client backed by the
+// Oasis Core LightBlocks P2P protocol.
+//
+// Each instantiated provider is backed by a distinct P2P Peer.
+func (p *LightClientProvidersPool) NewLightClientProvider() *LightClientProvider {
+	provider := &LightClientProvider{
 		initCh:    make(chan struct{}),
 		chainID:   p.chainID,
 		p2pMgr:    p.p2pMgr,
@@ -60,24 +73,7 @@ func (p *providersPool) NewLightClientProvider() api.Provider {
 	return provider
 }
 
-// NewLightClientProviderPool returns a light client provider pool.
-func NewLightClientProviderPool(ctx context.Context, chainContext string, chainID string, p2p rpc.P2P) LightClientProvidersPool {
-	pid := light.ProtocolID(chainContext)
-
-	mgr := rpc.NewPeerManager(p2p, pid)
-	rc := rpc.NewClient(p2p.Host(), pid)
-	rc.RegisterListener(mgr)
-
-	return &providersPool{
-		ctx:          ctx,
-		chainID:      chainID,
-		peerRegistry: make(map[core.PeerID]bool),
-		p2pMgr:       mgr,
-		rc:           rc,
-	}
-}
-
-type lightClientProvider struct {
+type LightClientProvider struct {
 	initOnce sync.Once
 	initCh   chan struct{}
 
@@ -94,10 +90,10 @@ type lightClientProvider struct {
 	l      sync.RWMutex
 	peerID *core.PeerID
 
-	pool *providersPool
+	pool *LightClientProvidersPool
 }
 
-func (lp *lightClientProvider) worker(ctx context.Context) {
+func (lp *LightClientProvider) worker(ctx context.Context) {
 	ch, sub, err := lp.p2pMgr.WatchUpdates()
 	if err != nil {
 		lp.logger.Error("peer manager watch updates failure", "err", err)
@@ -136,7 +132,7 @@ func (lp *lightClientProvider) worker(ctx context.Context) {
 	}
 }
 
-func (lp *lightClientProvider) dropPeer() {
+func (lp *LightClientProvider) dropPeer() {
 	lp.l.Lock()
 	defer lp.l.Unlock()
 	lp.pool.l.Lock()
@@ -148,13 +144,13 @@ func (lp *lightClientProvider) dropPeer() {
 	lp.peerID = nil
 }
 
-func (lp *lightClientProvider) getPeer() *core.PeerID {
+func (lp *LightClientProvider) getPeer() *core.PeerID {
 	lp.l.RLock()
 	defer lp.l.RUnlock()
 	return lp.peerID
 }
 
-func (lp *lightClientProvider) refreshPeer() {
+func (lp *LightClientProvider) refreshPeer() {
 	lp.l.Lock()
 	defer lp.l.Unlock()
 	lp.pool.l.Lock()
@@ -187,12 +183,12 @@ func (lp *lightClientProvider) refreshPeer() {
 }
 
 // Initialized implements api.Provider.
-func (lp *lightClientProvider) Initialized() <-chan struct{} {
+func (lp *LightClientProvider) Initialized() <-chan struct{} {
 	return lp.initCh
 }
 
 // PeerID implements api.Provider.
-func (lp *lightClientProvider) PeerID() string {
+func (lp *LightClientProvider) PeerID() string {
 	peer := lp.getPeer()
 	if peer == nil {
 		// This happens if a provider is not yet initialized, or
@@ -203,7 +199,7 @@ func (lp *lightClientProvider) PeerID() string {
 }
 
 // RefreshPeer implements api.Provider.
-func (lp *lightClientProvider) RefreshPeer() {
+func (lp *LightClientProvider) RefreshPeer() {
 	select {
 	case lp.refreshCh <- struct{}{}:
 	default:
@@ -211,12 +207,12 @@ func (lp *lightClientProvider) RefreshPeer() {
 }
 
 // MalevolentProvider implements api.Provider.
-func (lp *lightClientProvider) MalevolentProvider(peerID string) {
+func (lp *LightClientProvider) MalevolentProvider(peerID string) {
 	lp.p2pMgr.RecordBadPeer(core.PeerID(peerID))
 }
 
 // ReportEvidence implements api.Provider.
-func (lp *lightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.Evidence) error {
+func (lp *LightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.Evidence) error {
 	proto, err := cmttypes.EvidenceToProto(ev)
 	if err != nil {
 		return fmt.Errorf("failed to convert evidence: %w", err)
@@ -231,7 +227,7 @@ func (lp *lightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.E
 }
 
 // SubmitEvidence implements api.Provider.
-func (lp *lightClientProvider) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) (rpc.PeerFeedback, error) {
+func (lp *LightClientProvider) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) (rpc.PeerFeedback, error) {
 	peerID := lp.getPeer()
 	if peerID == nil {
 		return nil, fmt.Errorf("no peer available")
@@ -246,13 +242,13 @@ func (lp *lightClientProvider) SubmitEvidence(ctx context.Context, evidence *con
 }
 
 // GetStoredLightBlock implements api.Provider.
-func (lp *lightClientProvider) GetStoredLightBlock(_ int64) (*consensus.LightBlock, error) {
+func (lp *LightClientProvider) GetStoredLightBlock(_ int64) (*consensus.LightBlock, error) {
 	// The remote client provider stores no blocks locally.
 	return nil, consensus.ErrVersionNotFound
 }
 
 // GetLightBlock implements api.Provider.
-func (lp *lightClientProvider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+func (lp *LightClientProvider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	peerID := lp.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
@@ -274,7 +270,7 @@ func (lp *lightClientProvider) GetLightBlock(ctx context.Context, height int64) 
 }
 
 // GetParameters implements api.Provider.
-func (lp *lightClientProvider) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+func (lp *LightClientProvider) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
 	peerID := lp.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
@@ -296,18 +292,18 @@ func (lp *lightClientProvider) GetParameters(ctx context.Context, height int64) 
 }
 
 // ChainID implements api.Provider.
-func (lp *lightClientProvider) ChainID() string {
+func (lp *LightClientProvider) ChainID() string {
 	return lp.chainID
 }
 
 // LightBlock implements api.Provider.
-func (lp *lightClientProvider) LightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
+func (lp *LightClientProvider) LightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
 	lb, _, err := lp.LightBlockWithPeerID(ctx, height)
 	return lb, err
 }
 
 // LightBlockWithPeerID implements api.Provider.
-func (lp *lightClientProvider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
+func (lp *LightClientProvider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
 	rsp, pf, err := lp.GetLightBlock(ctx, height)
 	switch {
 	case err == nil:

@@ -12,14 +12,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
-	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 type stateProvider struct {
 	sync.Mutex
 
-	lc              lightAPI.Client
+	lc              *light.Client
 	genesisDocument *cmttypes.GenesisDoc
 
 	logger *logging.Logger
@@ -106,8 +105,8 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	return state, nil
 }
 
-func newStateProvider(ctx context.Context, chainContext string, cfg lightAPI.ClientConfig, p2p rpc.P2P) (cmtstatesync.StateProvider, error) {
-	lc, err := light.NewInternalClient(ctx, chainContext, p2p, cfg)
+func newStateProvider(ctx context.Context, chainContext string, cfg light.Config, p2p rpc.P2P) (cmtstatesync.StateProvider, error) {
+	lc, err := light.NewClient(ctx, chainContext, p2p, cfg)
 	if err != nil {
 		return nil, err
 	}

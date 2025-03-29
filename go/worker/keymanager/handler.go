@@ -24,14 +24,14 @@ func (env *workerEnvironment) GetTxPool() (txpool.TransactionPool, error) {
 	return nil, fmt.Errorf("method not supported")
 }
 
-// GetIdentity implements RuntimeHostHandlerEnvironment.
+// GetNodeIdentity implements RuntimeHostHandlerEnvironment.
 func (env *workerEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 	return env.w.commonWorker.Identity, nil
 }
 
-// GetIdentity implements RuntimeHostHandlerEnvironment.
-func (env *workerEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
-	return env.w.commonWorker.LightClient, nil
+// GetLightProvider implements RuntimeHostHandlerEnvironment.
+func (env *workerEnvironment) GetLightProvider() (consensusAPI.LightProvider, error) {
+	return env.w.commonWorker.LightProvider, nil
 }
 
 // GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.

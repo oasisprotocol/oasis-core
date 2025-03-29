@@ -26,7 +26,7 @@ type Worker struct {
 	ChainContext    string
 	Identity        *identity.Identity
 	Consensus       consensus.Backend
-	LightClient     consensus.LightClient
+	LightProvider   consensus.LightProvider
 	P2P             p2p.Service
 	KeyManager      keymanagerApi.Backend
 	RuntimeRegistry runtimeRegistry.Registry
@@ -163,7 +163,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.Identity,
 		w.KeyManager,
 		w.Consensus,
-		w.LightClient,
+		w.LightProvider,
 		w.P2P,
 		w.cfg.TxPool,
 	)
@@ -186,7 +186,7 @@ func New(
 	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
-	lightClient consensus.LightClient,
+	lightProvider consensus.LightProvider,
 	p2p p2p.Service,
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
@@ -216,7 +216,7 @@ func New(
 		ChainContext:    chainContext,
 		Identity:        identity,
 		Consensus:       consensus,
-		LightClient:     lightClient,
+		LightProvider:   lightProvider,
 		P2P:             p2p,
 		KeyManager:      keyManager,
 		RuntimeRegistry: runtimeRegistry,
