@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -223,6 +224,9 @@ type ComponentConfig struct {
 	// Disabled specifies whether the component is disabled. If a component is specified and not
 	// disabled, it is enabled.
 	Disabled bool `yaml:"disabled,omitempty"`
+
+	// Networking contains the networking configuration for a component.
+	Networking NetworkingConfig `yaml:"networking,omitempty"`
 }
 
 // Validate validates the component configuration.
@@ -267,6 +271,24 @@ func (c *ComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 		type compConfig ComponentConfig
 		return value.Decode((*compConfig)(c))
 	}
+}
+
+// NetworkingConfig is the networking configuration.
+type NetworkingConfig struct {
+	// Incoming is a list of IPs/ports to expose to the component from the host.
+	Incoming []IncomingNetworkingConfig `yaml:"incoming,omitempty"`
+}
+
+// IncomingNetworkingConfig describes an IP/port to expose to the component from the host.
+type IncomingNetworkingConfig struct {
+	// IP is the host IP address to expose to the component.
+	IP string `yaml:"ip,omitempty"`
+	// Protocol is the optional protocol to expose to the component.
+	Protocol string `yaml:"protocol,omitempty"`
+	// SrcPort is the source port (on the host).
+	SrcPort uint16 `yaml:"src_port"`
+	// DstPort is the optional destination port (in the component).
+	DstPort uint16 `yaml:"dst_port,omitempty"`
 }
 
 // PruneConfig is the history pruner configuration structure.
@@ -327,6 +349,65 @@ func (c *Config) Validate() error {
 	for _, rt := range c.Runtimes {
 		if err := rt.Validate(); err != nil {
 			return err
+		}
+	}
+
+	// Validate combined network configurations to quickly check there is no overlap.
+	type usedPort struct {
+		proto string
+		port  uint16
+	}
+	const anyIP = "0.0.0.0"
+	usedPorts := make(map[usedPort]map[string]struct{})
+	for _, rt := range c.Runtimes {
+		for _, comp := range rt.Components {
+			for _, compNet := range comp.Networking.Incoming {
+				var proto string
+				switch compNet.Protocol {
+				case "tcp", "udp":
+					proto = compNet.Protocol
+				case "":
+					proto = "tcp"
+				default:
+					return fmt.Errorf("component %s: network protocol '%s' not supported", comp.ID, compNet.Protocol)
+				}
+
+				ip := compNet.IP
+				if ip == "" {
+					ip = anyIP
+				}
+				parsedIP := net.ParseIP(ip)
+				if parsedIP == nil {
+					return fmt.Errorf("component %s: IP address '%s' is malformed", comp.ID, ip)
+				}
+				// Ensure canonical representation.
+				if parsedIP.IsUnspecified() {
+					ip = anyIP
+				} else {
+					ip = parsedIP.String()
+				}
+
+				up := usedPort{proto, compNet.SrcPort}
+
+				switch ip {
+				case anyIP:
+					if _, ok := usedPorts[up]; ok {
+						return fmt.Errorf("component %s: overlapping incoming IP/protocol/port", comp.ID)
+					}
+				default:
+					if _, ok := usedPorts[up][ip]; ok {
+						return fmt.Errorf("component %s: overlapping incoming IP/protocol/port", comp.ID)
+					}
+					if _, ok := usedPorts[up][anyIP]; ok {
+						return fmt.Errorf("component %s: overlapping incoming IP/protocol/port", comp.ID)
+					}
+				}
+
+				if _, ok := usedPorts[up]; !ok {
+					usedPorts[up] = make(map[string]struct{})
+				}
+				usedPorts[up][ip] = struct{}{}
+			}
 		}
 	}
 
