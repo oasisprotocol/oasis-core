@@ -11,9 +11,12 @@ futures = { version = "0.3.31", features = ["compat", "io-compat"] }
 tokio = { version = "1.40", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-aesm-client = { version = "0.6.0", features = ["sgxs"] }
-enclave-runner = { version = "0.6.0" }
-sgxs-loaders = { version = "0.4.0" }
+# TODO: Change back to released version once upstream fix released.
+aesm-client = { git = "https://github.com/fortanix/rust-sgx", branch = "raoul/rte-418-fix_enclave_runner", features = ["sgxs"] }
+# TODO: Change back to released version once upstream fix released.
+enclave-runner = { git = "https://github.com/fortanix/rust-sgx", branch = "raoul/rte-418-fix_enclave_runner" }
+# TODO: Change back to released version once upstream fix released.
+sgxs-loaders = { git = "https://github.com/fortanix/rust-sgx", branch = "raoul/rte-418-fix_enclave_runner" }
 
 [[bin]]
 name = "oasis-core-runtime-loader"

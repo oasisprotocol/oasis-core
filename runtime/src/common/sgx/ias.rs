@@ -222,7 +222,7 @@ impl ParsedAVR {
     fn tcb_evaluation_data_number(&self) -> Result<u32> {
         match self.body["tcbEvaluationDataNumber"].as_u64() {
             None => Ok(0),
-            Some(eval_num) if eval_num > u32::MAX.into() => {
+            Some(eval_num) if eval_num > Into::<u64>::into(u32::MAX) => {
                 Err(AVRError::TCBEvaluationDataNumberInvalid.into())
             }
             Some(eval_num) => Ok(eval_num as u32),
