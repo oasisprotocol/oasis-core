@@ -22,6 +22,8 @@ type Client struct {
 	runtimeProvisioner runtimeConfig.RuntimeProvisioner
 	runtimeConfig      map[int]map[string]interface{}
 
+	batchSize uint16
+
 	consensusPort uint16
 	p2pPort       uint16
 }
@@ -33,6 +35,12 @@ type ClientCfg struct {
 	Runtimes           []int
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 	RuntimeConfig      map[int]map[string]interface{}
+	BatchSize          uint16
+}
+
+// UpdateRuntimes updates the client node runtimes.
+func (client *Client) UpdateRuntimes(runtimes []int) {
+	client.runtimes = runtimes
 }
 
 func (client *Client) AddArgs(args *argBuilder) error {
@@ -61,6 +69,7 @@ func (client *Client) ModifyConfig() error {
 	if len(client.runtimes) > 0 {
 		client.Config.Mode = config.ModeClient
 		client.Config.Runtime.Provisioner = client.runtimeProvisioner
+		client.Config.Runtime.Indexer.BatchSize = client.batchSize
 	}
 
 	client.AddSeedNodesToConfig()
@@ -91,6 +100,7 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		runtimes:           cfg.Runtimes,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
 		runtimeConfig:      cfg.RuntimeConfig,
+		batchSize:          cfg.BatchSize,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}

@@ -518,6 +518,9 @@ type ClientFixture struct {
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
 	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
+
+	// BatchSize is max number of block that block indexer writes at the same time.
+	BatchSize uint16 `json:"batch_size"`
 }
 
 // Create instantiates the client node described by the fixture.
@@ -536,6 +539,7 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 		Runtimes:           f.Runtimes,
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		RuntimeConfig:      f.RuntimeConfig,
+		BatchSize:          f.BatchSize,
 	})
 }
 

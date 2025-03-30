@@ -538,7 +538,7 @@ func (r *runtimeRegistry) createRuntime(runtimeID common.Namespace, managed bool
 		r.consensus.Pruner().RegisterHandler(rt.history)
 
 		// Start indexing blocks.
-		indexer := history.NewBlockIndexer(r.consensus, rt.history)
+		indexer := history.NewBlockIndexer(r.consensus, rt.history, config.GlobalConfig.Runtime.Indexer.BatchSize)
 		r.indexers = append(r.indexers, indexer)
 	}
 

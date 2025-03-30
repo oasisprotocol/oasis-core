@@ -143,6 +143,8 @@ func RegisterScenarios() error {
 		Debond,
 		// Consensus state sync.
 		ConsensusStateSync,
+		// Consensus pruning test.
+		ConsensusPrune,
 		// Multiple seeds test.
 		MultipleSeeds,
 		// Seed API test.

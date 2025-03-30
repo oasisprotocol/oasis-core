@@ -613,30 +613,11 @@ func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keyma
 	return fmt.Errorf("consensus state missing km status")
 }
 
-func (sc *Scenario) WaitNextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock) (*roothash.AnnotatedBlock, error) {
-	sc.Logger.Info("waiting for next runtime block")
-
-	timer := time.NewTimer(10 * time.Second)
-
-	for {
-		select {
-		case blk, ok := <-ch:
-			if !ok {
-				return nil, fmt.Errorf("runtime block channel closed")
-			}
-			return blk, nil
-		case <-timer.C:
-			return nil, fmt.Errorf("failed to receive runtime block")
-		}
-	}
-}
-
-func (sc *Scenario) WaitRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, round uint64) (*roothash.AnnotatedBlock, error) {
+// WaitRuntimeBlock waits until the runtime block for the specified round is generated.
+func (sc *Scenario) WaitRuntimeBlock(ctx context.Context, ch <-chan *roothash.AnnotatedBlock, round uint64) (*roothash.AnnotatedBlock, error) {
 	sc.Logger.Info("waiting for runtime block",
 		"round", round,
 	)
-
-	timer := time.NewTimer(10 * time.Second)
 
 	for {
 		select {
@@ -655,8 +636,10 @@ func (sc *Scenario) WaitRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, round u
 				continue
 			}
 			return blk, nil
-		case <-timer.C:
-			return nil, fmt.Errorf("failed to receive runtime block")
+		case <-time.After(time.Minute):
+			return nil, fmt.Errorf("runtime block timeout")
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 }
