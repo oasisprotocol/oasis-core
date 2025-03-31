@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"github.com/cometbft/cometbft/abci/types"
-	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	cmtcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto/merkle"
 )
 
 // prepareSystemTxs prepares a list of system transactions to be included in a proposed block in
@@ -154,5 +154,5 @@ func (mux *abciMux) computeProvableEventsRoot() ([]byte, error) {
 	for i, pe := range provable {
 		provableEvents[i] = cbor.Marshal(pe.ProvableRepresentation())
 	}
-	return cmtmerkle.HashFromByteSlices(provableEvents), nil
+	return merkle.RootHash(provableEvents), nil
 }
