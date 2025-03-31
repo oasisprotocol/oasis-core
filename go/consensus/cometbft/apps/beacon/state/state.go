@@ -36,11 +36,12 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x43)
 )
 
-// ImmutableState is the immutable beacon state wrapper.
+// ImmutableState is an immutable beacon state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
 }
 
+// NewImmutableState creates a new immutable beacon state wrapper.
 func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
 	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
@@ -143,6 +144,16 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable beacon state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
+	}
+}
+
 func (s *MutableState) SetBeacon(ctx context.Context, newBeacon []byte) error {
 	if l := len(newBeacon); l != beacon.BeaconSize {
 		return fmt.Errorf("cometbft/beacon: unexpected beacon size: %d", l)
@@ -194,14 +205,4 @@ func (s *MutableState) SetConsensusParameters(ctx context.Context, params *beaco
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable beacon state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

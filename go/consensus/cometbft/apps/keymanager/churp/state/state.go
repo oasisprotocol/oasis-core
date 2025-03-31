@@ -25,9 +25,18 @@ var (
 	statusKeyFmt = consensus.KeyFormat.New(0x75, keyformat.H(&common.Namespace{}), uint8(0))
 )
 
-// ImmutableState is a immutable state wrapper.
+// ImmutableState is an immutable key manager CHURP state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable key manager CHURP state wrapper.
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+	return &ImmutableState{is}, nil
 }
 
 // ConsensusParameters returns the consensus parameters.
@@ -122,20 +131,21 @@ func (st *ImmutableState) AllStatuses(ctx context.Context) ([]*churp.Status, err
 	return statuses, nil
 }
 
-// NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-	return &ImmutableState{is}, nil
-}
-
-// MutableState is a mutable state wrapper.
+// MutableState is a mutable key manager CHURP state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable key manager CHURP state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
+	}
 }
 
 // SetConsensusParameters updates the state using the provided consensus parameters.
@@ -153,14 +163,4 @@ func (st *MutableState) SetConsensusParameters(ctx context.Context, params *chur
 func (st *MutableState) SetStatus(ctx context.Context, status *churp.Status) error {
 	err := st.ms.Insert(ctx, statusKeyFmt.Encode(&status.RuntimeID, status.ID), cbor.Marshal(status))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

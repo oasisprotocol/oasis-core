@@ -49,12 +49,12 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x85)
 )
 
-// ImmutableState is the immutable consensus state wrapper.
+// ImmutableState is an immutable governance state wrapper.
 type ImmutableState struct {
 	is *api.ImmutableState
 }
 
-// NewImmutableState returns immutable governance state.
+// NewImmutableState creates a new immutable governance state wrapper.
 func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
 	is, err := api.NewImmutableState(ctx, state, version)
 	if err != nil {
@@ -249,14 +249,14 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*governance.C
 	return &params, nil
 }
 
-// MutableState is a mutable consensus state wrapper.
+// MutableState is a mutable governance state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
 }
 
-// NewMutableState creates a new mutable governance state.
+// NewMutableState creates a new mutable governance state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
 		ImmutableState: &ImmutableState{

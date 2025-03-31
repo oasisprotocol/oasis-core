@@ -61,11 +61,12 @@ var (
 	pastRootsKeyFmt = consensus.KeyFormat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
-// ImmutableState is the immutable roothash state wrapper.
+// ImmutableState is an immutable roothash state wrapper.
 type ImmutableState struct {
 	is *api.ImmutableState
 }
 
+// NewImmutableState creates a new immutable roothash state wrapper.
 func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
 	is, err := api.NewImmutableState(ctx, state, version)
 	if err != nil {
@@ -374,6 +375,7 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable roothash state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
 		ImmutableState: &ImmutableState{

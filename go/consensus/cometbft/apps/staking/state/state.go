@@ -83,9 +83,19 @@ var (
 	logger = logging.GetLogger("cometbft/staking")
 )
 
-// ImmutableState is the immutable staking state wrapper.
+// ImmutableState is an immutable staking state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable staking state wrapper.
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImmutableState{is}, nil
 }
 
 func (s *ImmutableState) loadStoredBalance(ctx context.Context, key *keyformat.KeyFormat) (*quantity.Quantity, error) {
@@ -585,20 +595,21 @@ func (s *ImmutableState) EpochSigning(ctx context.Context) (*EpochSigning, error
 	return &es, nil
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // MutableState is a mutable staking state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable staking state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
+	}
 }
 
 func (s *MutableState) SetAccount(ctx context.Context, addr staking.Address, account *staking.Account) error {
@@ -1433,14 +1444,4 @@ func (s *MutableState) AddRewardSingleAttenuated(
 	}
 
 	return nil
-}
-
-// NewMutableState creates a new mutable staking state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

@@ -70,6 +70,16 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable consensus backend state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: &ImmutableState{
+			&api.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
+	}
+}
+
 // SetChainContext sets the chain context.
 //
 // NOTE: This method must only be called from InitChain context.
@@ -90,14 +100,4 @@ func (s *MutableState) SetConsensusParameters(ctx context.Context, params *conse
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return api.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable consensus backend state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&api.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

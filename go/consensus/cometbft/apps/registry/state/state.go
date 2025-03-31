@@ -78,9 +78,19 @@ var (
 	runtimeByEntityKeyFmt = consensus.KeyFormat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
 )
 
-// ImmutableState is the immutable registry state wrapper.
+// ImmutableState is an immutable registry state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable registry state wrapper.
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImmutableState{is}, nil
 }
 
 func (s *ImmutableState) getSignedEntityRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
@@ -499,20 +509,21 @@ func (s *ImmutableState) NodeBySubKey(ctx context.Context, key signature.PublicK
 	return s.Node(ctx, id)
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // MutableState is a mutable registry state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable registry state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
+	}
 }
 
 // SetEntity sets a signed entity descriptor for a registered entity.
@@ -705,14 +716,4 @@ func (s *MutableState) SetConsensusParameters(ctx context.Context, params *regis
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable registry state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }
