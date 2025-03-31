@@ -51,6 +51,9 @@ type Registry interface {
 	// Runtimes returns a list of all runtimes.
 	Runtimes() []Runtime
 
+	// Indexer returns runtime history indexer for the specified runtime.
+	Indexer(runtimeID common.Namespace) (*history.BlockIndexer, bool)
+
 	// RegisterClient registers a runtime client service. If the service has already been registered
 	// this method returns an error.
 	RegisterClient(rc runtimeClient.RuntimeClient) error
@@ -470,7 +473,7 @@ type runtimeRegistry struct {
 	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
-	indexers []*history.BlockIndexer
+	indexers map[common.Namespace]*history.BlockIndexer
 
 	historyFactory history.Factory
 
@@ -488,6 +491,15 @@ func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error
 		return nil, fmt.Errorf("runtime/registry: runtime %s not found", runtimeID)
 	}
 	return rt, nil
+}
+
+// Indexer implements Registry.
+func (r *runtimeRegistry) Indexer(runtimeID common.Namespace) (*history.BlockIndexer, bool) {
+	r.RLock()
+	defer r.RUnlock()
+
+	indexer, ok := r.indexers[runtimeID]
+	return indexer, ok
 }
 
 // Runtimes implements Registry.
@@ -539,7 +551,7 @@ func (r *runtimeRegistry) createRuntime(runtimeID common.Namespace, managed bool
 
 		// Start indexing blocks.
 		indexer := history.NewBlockIndexer(r.consensus, rt.history, config.GlobalConfig.Runtime.Indexer.BatchSize)
-		r.indexers = append(r.indexers, indexer)
+		r.indexers[runtimeID] = indexer
 	}
 
 	r.runtimes[runtimeID] = rt
@@ -698,7 +710,7 @@ func New(
 		dataDir:        dataDir,
 		consensus:      consensus,
 		runtimes:       make(map[common.Namespace]*runtime),
-		indexers:       make([]*history.BlockIndexer, 0),
+		indexers:       make(map[common.Namespace]*history.BlockIndexer),
 		historyFactory: historyFactory,
 		bundleRegistry: bundleRegistry,
 		bundleManager:  bundleManager,

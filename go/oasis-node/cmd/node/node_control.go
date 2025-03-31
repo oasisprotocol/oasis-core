@@ -208,6 +208,8 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			continue
 		}
 
+		logger := n.logger.With("runtime_id", rt.ID())
+
 		var status control.RuntimeStatus
 
 		// Fetch runtime registry descriptor. Do not wait too long for the descriptor to become
@@ -221,10 +223,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		case context.DeadlineExceeded:
 			// The descriptor may not yet be available. It is fine if we use nil in this case.
 		default:
-			n.logger.Error("failed to fetch registry descriptor",
-				"err", err,
-				"runtime_id", rt.ID(),
-			)
+			logger.Error("failed to fetch registry descriptor", "err", err)
 		}
 
 		// Fetch latest block as seen by this node.
@@ -244,10 +243,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 				Hash:      blk.Header.StateRoot,
 			}
 		default:
-			n.logger.Error("failed to fetch latest runtime block",
-				"err", err,
-				"runtime_id", rt.ID(),
-			)
+			logger.Error("failed to fetch latest runtime block", "err", err)
 		}
 
 		// Fetch latest genesis block as seen by this node.
@@ -260,10 +256,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			status.GenesisRound = blk.Header.Round
 			status.GenesisHash = blk.Header.EncodedHash()
 		default:
-			n.logger.Error("failed to fetch genesis runtime block",
-				"err", err,
-				"runtime_id", rt.ID(),
-			)
+			logger.Error("failed to fetch genesis runtime block", "err", err)
 		}
 
 		// Fetch the oldest retained block.
@@ -273,10 +266,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			status.LastRetainedRound = blk.Header.Round
 			status.LastRetainedHash = blk.Header.EncodedHash()
 		default:
-			n.logger.Error("failed to fetch last retained runtime block",
-				"err", err,
-				"runtime_id", rt.ID(),
-			)
+			logger.Error("failed to fetch last retained runtime block", "err", err)
 		}
 
 		// Take storage into account for last retained round.
@@ -284,9 +274,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			lsb, ok := rt.Storage().(storage.LocalBackend)
 			switch ok {
 			case false:
-				n.logger.Error("local storage backend expected",
-					"runtime_id", rt.ID(),
-				)
+				logger.Error("local storage backend expected")
 			default:
 				// Update last retained round if storage earliest round is higher.
 				if earliest := lsb.NodeDB().GetEarliestVersion(); earliest > status.LastRetainedRound {
@@ -296,10 +284,9 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 						status.LastRetainedRound = blk.Header.Round
 						status.LastRetainedHash = blk.Header.EncodedHash()
 					default:
-						n.logger.Error("failed to fetch runtime block",
+						logger.Error("failed to fetch runtime block",
 							"err", err,
 							"round", earliest,
-							"runtime_id", rt.ID(),
 						)
 					}
 
@@ -312,10 +299,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		if rtNode := n.CommonWorker.GetRuntime(rt.ID()); rtNode != nil {
 			status.Committee, err = rtNode.GetStatus()
 			if err != nil {
-				n.logger.Error("failed to fetch common committee worker status",
-					"err", err,
-					"runtime_id", rt.ID(),
-				)
+				logger.Error("failed to fetch common committee worker status", "err", err)
 			}
 		}
 
@@ -323,10 +307,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		if execNode := n.ExecutorWorker.GetRuntime(rt.ID()); execNode != nil {
 			status.Executor, err = execNode.GetStatus()
 			if err != nil {
-				n.logger.Error("failed to fetch executor worker status",
-					"err", err,
-					"runtime_id", rt.ID(),
-				)
+				logger.Error("failed to fetch executor worker status", "err", err)
 			}
 		}
 
@@ -334,11 +315,13 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		if storageNode := n.StorageWorker.GetRuntime(rt.ID()); storageNode != nil {
 			status.Storage, err = storageNode.GetStatus(ctx)
 			if err != nil {
-				n.logger.Error("failed to fetch storage worker status",
-					"err", err,
-					"runtime_id", rt.ID(),
-				)
+				logger.Error("failed to fetch storage worker status", "err", err)
 			}
+		}
+
+		// Fetch history indexer status.
+		if indexer, ok := n.RuntimeRegistry.Indexer(rt.ID()); ok {
+			status.Indexer = indexer.Status()
 		}
 
 		// Fetch provisioner type.

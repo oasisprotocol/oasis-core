@@ -18,6 +18,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	block "github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
@@ -184,13 +185,14 @@ type RuntimeStatus struct {
 	// LastRetainedHash is the hash of the oldest retained block.
 	LastRetainedHash hash.Hash `json:"last_retained_hash"`
 
-	// Committee contains the runtime worker status in case this node is a (candidate) member of a
-	// runtime committee.
+	// Committee contains the runtime common committee worker status.
 	Committee *commonWorker.Status `json:"committee"`
 	// Executor contains the executor worker status in case this node is an executor node.
 	Executor *executorWorker.Status `json:"executor,omitempty"`
 	// Storage contains the storage worker status in case this node is a storage node.
 	Storage *storageWorker.Status `json:"storage,omitempty"`
+	// Indexer contains the runtime history indexer status in case this runtime has a block indexer.
+	Indexer *history.IndexerStatus `json:"indexer,omitempty"`
 
 	// Provisioner is the name of the runtime provisioner.
 	Provisioner string `json:"provisioner,omitempty"`
