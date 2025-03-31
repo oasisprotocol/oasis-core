@@ -537,9 +537,6 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		if firstBlockReceived {
 			n.logger.Warn("forcing an epoch transition on first received block")
 			n.handleEpochTransitionLocked(height)
-		} else {
-			// Normal block.
-			n.Group.RoundTransition()
 		}
 	case block.RoundFailed:
 		if firstBlockReceived {
@@ -548,8 +545,6 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		} else {
 			// Round has failed.
 			n.logger.Warn("round has failed")
-			n.Group.RoundTransition()
-
 			failedRoundCount.With(n.getMetricLabels()).Inc()
 		}
 	case block.EpochTransition:
