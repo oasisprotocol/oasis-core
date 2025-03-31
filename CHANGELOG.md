@@ -12,6 +12,144 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.1 (2025-03-31)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- go/runtime/history: Make history indexer batch size configurable
+  ([#6070](https://github.com/oasisprotocol/oasis-core/issues/6070))
+
+  Batch size can now be specified via `runtime.indexer.batch_size`.
+
+- go/consensus/cometbft/config: Move light client config
+  ([#6115](https://github.com/oasisprotocol/oasis-core/issues/6115))
+
+  The consensus light client is currently used only for consensus state
+  synchronization. However, in the future, stateless clients will also rely
+  on it. Therefore, we have moved the trust root configuration to a dedicated
+  section.
+
+  The following configuration options have been removed:
+
+  - `consensus.state_sync.trust_period`,
+
+  - `consensus.state_sync.trust_height`,
+
+  - `consensus.state_sync.trust_hash`.
+
+  The following configuration options have been added:
+
+  - `consensus.light_client.trust.period`,
+
+  - `consensus.light_client.trust.height`,
+
+  - `consensus.light_client.trust.hash`.
+
+- Add support for simple per-component networking
+  ([#6123](https://github.com/oasisprotocol/oasis-core/issues/6123))
+
+  One can now configure incoming connection forwarding to the guest for each
+  component as follows:
+
+  ```yaml
+  runtime:
+    runtimes:
+      - id: 000000000000000000000000000000000000000000000000a6d1e3ebf60dff6c
+        components:
+          - id: rofl.rofl1...
+            networking:
+              incoming:
+                - ip: 1.2.3.4
+                  protocol: tcp
+                  src_port: 1234
+                  dst_port: 5678
+  ```
+
+### Features
+
+- go/oasis-node: Display runtime block history indexer status
+  ([#5998](https://github.com/oasisprotocol/oasis-core/issues/5998))
+
+  A new field `indexer` has been added to the `oasis-node control status`
+  output under the runtime status section. Unless keymanager runtime,
+  this field displays:
+
+   1. The status of runtime block history indexer.
+   2. The last indexed round.
+
+  Additionally, if history reindex is in progress, it also includes:
+
+  - Batch size that is used during reindex.
+  - Last consensus height that was indexed.
+  - Start and end heights of reindex range.
+  - ETA field, which specifies expected time of reindex completion.
+
+  This is useful for the node operators, so that they can estimate when their
+  node will be ready to accept runtime work.
+
+- go/roothash: Optimize runtime history reindex
+  ([#6069](https://github.com/oasisprotocol/oasis-core/issues/6069))
+
+  During runtime history reindex, we batch writes resulting in significant
+  speed-up of history reindex.
+
+### Bug Fixes
+
+- go/consensus/cometbft: Fail ImmutableState creation if version is missing
+  ([#6040](https://github.com/oasisprotocol/oasis-core/issues/6040))
+
+  Previously, when an `ImmutableState` was requested for a block version that
+  didn't exist, the function would silently default to the latest available
+  block. This could lead to inconsistencies since clients might receive state
+  for a different block than expected. With this change, calls to create
+  an `ImmutableState` for a missing version now explicitly fail with a
+  "version not found" error, ensuring that such cases are handled properly.
+
+- go/runtime/host/multi: Fix host removal when stopping a version
+  ([#6053](https://github.com/oasisprotocol/oasis-core/issues/6053))
+
+- runtime/src/transaction: Fix is_supported call to wrapped dispatcher
+  ([#6058](https://github.com/oasisprotocol/oasis-core/issues/6058))
+
+- go/runtime/host/sandbox: Verify sandbox binary when needed
+  ([#6060](https://github.com/oasisprotocol/oasis-core/issues/6060))
+
+  Ensures validator nodes without configured runtimes and with the default
+  runtime provisioner set to sandbox do not fail to start if bubblewrap
+  is not installed.
+
+- go/runtime/bundle/manager: Cleanup key manager bundles on startup
+  ([#6062](https://github.com/oasisprotocol/oasis-core/issues/6062))
+
+- go/runtime/host: Ensure processes get cleaned up on node termination
+  ([#6066](https://github.com/oasisprotocol/oasis-core/issues/6066))
+
+- go/runtime/host/tdx: Resize overlay image if needed
+  ([#6077](https://github.com/oasisprotocol/oasis-core/issues/6077))
+
+- go/runtime/registry: Order deployments before filtering versions
+  ([#6097](https://github.com/oasisprotocol/oasis-core/issues/6097))
+
+  Deployments need to be ordered first before filtering the active and
+  upcoming versions, as consensus does not enforce chronological order.
+
+### Internal Changes
+
+- go: Bump golang.org/x/crypto to v0.35.0
+  ([#6090](https://github.com/oasisprotocol/oasis-core/issues/6090))
+
+- go: Bump go to 1.24.0
+  ([#6091](https://github.com/oasisprotocol/oasis-core/issues/6091))
+
+- rust: Bump ring to 0.17.13
+  ([#6104](https://github.com/oasisprotocol/oasis-core/issues/6104))
+
 ## 25.0 (2025-02-07)
 
 | Protocol          | Version   |
