@@ -27,7 +27,7 @@ type QueryFactory struct {
 
 // QueryAt returns the governance query interface for a specific height.
 func (qf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := governanceState.NewImmutableState(ctx, qf.state, height)
+	state, err := governanceState.NewImmutableStateAt(ctx, qf.state, height)
 	if err != nil {
 		return nil, err
 	}

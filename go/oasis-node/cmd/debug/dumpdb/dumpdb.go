@@ -374,7 +374,7 @@ func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error
 }
 
 func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis, error) {
-	is, err := abciState.NewImmutableState(ctx, qs, qs.BlockHeight())
+	is, err := abciState.NewImmutableStateAt(ctx, qs, qs.BlockHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to get consensus state: %w", err)
 	}

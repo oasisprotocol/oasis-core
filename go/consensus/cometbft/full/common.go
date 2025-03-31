@@ -371,7 +371,7 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	blockHeight = blk.Header.Height
 
 	// Query root consensus parameters.
-	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), blockHeight)
+	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), blockHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -507,7 +507,7 @@ func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGa
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
-	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), consensusAPI.HeightLatest)
+	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), consensusAPI.HeightLatest)
 	if err != nil {
 		return nil, err
 	}
@@ -816,7 +816,7 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, fmt.Errorf("cometbft: failed to marshal consensus params: %w", err)
 	}
 
-	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), height)
+	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: failed to initialize core consensus state: %w", err)
 	}

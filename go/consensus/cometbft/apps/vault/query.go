@@ -26,7 +26,7 @@ type QueryFactory struct {
 
 // QueryAt returns the vault query interface for a specific height.
 func (qf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := vaultState.NewImmutableState(ctx, qf.state, height)
+	state, err := vaultState.NewImmutableStateAt(ctx, qf.state, height)
 	if err != nil {
 		return nil, err
 	}

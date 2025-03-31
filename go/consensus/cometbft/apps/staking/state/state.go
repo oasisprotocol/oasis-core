@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -89,8 +90,16 @@ type ImmutableState struct {
 }
 
 // NewImmutableState creates a new immutable staking state wrapper.
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		is: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable staking state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -605,10 +614,8 @@ type MutableState struct {
 // NewMutableState creates a new mutable staking state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
 	}
 }
 

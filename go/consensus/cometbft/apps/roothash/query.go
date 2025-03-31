@@ -32,7 +32,7 @@ type QueryFactory struct {
 
 // QueryAt returns the roothash query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := roothashState.NewImmutableState(ctx, sf.state, height)
+	state, err := roothashState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}

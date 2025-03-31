@@ -34,7 +34,7 @@ type QueryFactory struct {
 
 // QueryAt returns the registry query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := registryState.NewImmutableState(ctx, sf.state, height)
+	state, err := registryState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}

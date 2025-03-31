@@ -38,8 +38,16 @@ type ImmutableState struct {
 }
 
 // NewImmutableState creates a new immutable key manager secrets state wrapper.
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		is: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable key manager secrets state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -156,10 +164,8 @@ type MutableState struct {
 // NewMutableState creates a new mutable key manager secrets state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
 	}
 }
 

@@ -38,7 +38,7 @@ type QueryFactory struct {
 
 // QueryAt returns the staking query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := stakingState.NewImmutableState(ctx, sf.state, height)
+	state, err := stakingState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}

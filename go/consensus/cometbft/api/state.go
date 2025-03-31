@@ -247,7 +247,15 @@ type ImmutableState struct {
 }
 
 // NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(ctx context.Context, state ApplicationQueryState, version int64) (*ImmutableState, error) {
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		ImmutableKeyValueTree: tree,
+	}
+}
+
+// NewImmutableStateAt creates a new immutable state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state ApplicationQueryState, version int64) (*ImmutableState, error) {
 	if state == nil {
 		return nil, ErrNoState
 	}

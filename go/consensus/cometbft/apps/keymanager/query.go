@@ -23,12 +23,12 @@ type QueryFactory struct {
 
 // QueryAt returns the key manager query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	secretsState, err := secretsState.NewImmutableState(ctx, sf.state, height)
+	secretsState, err := secretsState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
 
-	churpState, err := churpState.NewImmutableState(ctx, sf.state, height)
+	churpState, err := churpState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
