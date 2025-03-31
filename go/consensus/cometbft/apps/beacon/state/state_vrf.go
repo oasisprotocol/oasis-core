@@ -14,7 +14,7 @@ import (
 var vrfStateKeyFmt = consensus.KeyFormat.New(0x46)
 
 func (s *ImmutableState) VRFState(ctx context.Context) (*beacon.VRFState, error) {
-	data, err := s.is.Get(ctx, vrfStateKeyFmt.Encode())
+	data, err := s.state.Get(ctx, vrfStateKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}

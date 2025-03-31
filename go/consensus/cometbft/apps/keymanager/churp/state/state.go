@@ -27,13 +27,13 @@ var (
 
 // ImmutableState is an immutable key manager CHURP state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
 }
 
 // NewImmutableState creates a new immutable key manager CHURP state wrapper.
 func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	return &ImmutableState{
-		is: abciAPI.NewImmutableState(tree),
+		state: abciAPI.NewImmutableState(tree),
 	}
 }
 
@@ -49,7 +49,7 @@ func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryStat
 
 // ConsensusParameters returns the consensus parameters.
 func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.ConsensusParameters, error) {
-	raw, err := st.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := st.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -66,7 +66,7 @@ func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.Conse
 
 // Status returns the CHURP status for the specified runtime and CHURP instance.
 func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace, churpID uint8) (*churp.Status, error) {
-	data, err := st.is.Get(ctx, statusKeyFmt.Encode(&runtimeID, churpID))
+	data, err := st.state.Get(ctx, statusKeyFmt.Encode(&runtimeID, churpID))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -83,7 +83,7 @@ func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace
 
 // Statuses returns the CHURP statuses for the specified runtime.
 func (st *ImmutableState) Statuses(ctx context.Context, runtimeID common.Namespace) ([]*churp.Status, error) {
-	it := st.is.NewIterator(ctx)
+	it := st.state.NewIterator(ctx)
 	defer it.Close()
 
 	// We need to pre-hash the runtime ID, so we can compare it below.
@@ -117,7 +117,7 @@ func (st *ImmutableState) Statuses(ctx context.Context, runtimeID common.Namespa
 
 // AllStatuses returns the CHURP statuses for all runtimes.
 func (st *ImmutableState) AllStatuses(ctx context.Context) ([]*churp.Status, error) {
-	it := st.is.NewIterator(ctx)
+	it := st.state.NewIterator(ctx)
 	defer it.Close()
 
 	var statuses []*churp.Status
@@ -158,7 +158,7 @@ func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 //
 // This method must only be called from InitChain or EndBlock contexts.
 func (st *MutableState) SetConsensusParameters(ctx context.Context, params *churp.ConsensusParameters) error {
-	if err := st.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := st.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := st.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))

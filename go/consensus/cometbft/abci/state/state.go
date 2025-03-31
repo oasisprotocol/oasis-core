@@ -24,13 +24,13 @@ var (
 
 // ImmutableState is an immutable consensus backend state wrapper.
 type ImmutableState struct {
-	is *api.ImmutableState
+	state *api.ImmutableState
 }
 
 // NewImmutableState creates a new immutable consensus backend state wrapper.
 func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	return &ImmutableState{
-		is: api.NewImmutableState(tree),
+		state: api.NewImmutableState(tree),
 	}
 }
 
@@ -47,7 +47,7 @@ func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, v
 
 // ChainContext returns the stored chain context.
 func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
-	chainContext, err := s.is.Get(ctx, chainContextKeyFmt.Encode())
+	chainContext, err := s.state.Get(ctx, chainContextKeyFmt.Encode())
 	if err != nil {
 		return "", api.UnavailableStateError(err)
 	}
@@ -56,7 +56,7 @@ func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
 
 // ConsensusParameters returns the consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*consensusGenesis.Parameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -90,7 +90,7 @@ func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 //
 // NOTE: This method must only be called from InitChain context.
 func (s *MutableState) SetChainContext(ctx context.Context, chainContext string) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, chainContextKeyFmt.Encode(), []byte(chainContext))
@@ -101,7 +101,7 @@ func (s *MutableState) SetChainContext(ctx context.Context, chainContext string)
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *consensusGenesis.Parameters) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))

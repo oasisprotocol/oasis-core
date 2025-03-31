@@ -243,13 +243,13 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 
 // ImmutableState is an immutable state wrapper.
 type ImmutableState struct {
-	mkvs.ImmutableKeyValueTree
+	tree mkvs.ImmutableKeyValueTree
 }
 
 // NewImmutableState creates a new immutable state wrapper.
 func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	return &ImmutableState{
-		ImmutableKeyValueTree: tree,
+		tree: tree,
 	}
 }
 
@@ -324,7 +324,17 @@ func (s *ImmutableState) CheckContextMode(ctx context.Context, allowedModes []Co
 //
 // After calling this method, the immutable state wrapper should not be used anymore.
 func (s *ImmutableState) Close() {
-	if tree, ok := s.ImmutableKeyValueTree.(mkvs.ClosableTree); ok {
+	if tree, ok := s.tree.(mkvs.ClosableTree); ok {
 		tree.Close()
 	}
+}
+
+// Get looks up an existing key.
+func (s *ImmutableState) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return s.tree.Get(ctx, key)
+}
+
+// NewIterator returns a new iterator over the tree.
+func (s *ImmutableState) NewIterator(ctx context.Context, options ...mkvs.IteratorOption) mkvs.Iterator {
+	return s.tree.NewIterator(ctx, options...)
 }
