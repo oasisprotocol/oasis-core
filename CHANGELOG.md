@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.8 (2025-03-31)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- Add archive mode support
+  ([#4539](https://github.com/oasisprotocol/oasis-core/issues/4539))
+
+  Node started in archive mode only serves existing consensus and runtime
+  states. The node has all unneeded consensus and P2P functionality disabled so
+  it wont participate in the network. Archive mode can be set using the
+  `consensus.tendermint.mode` setting.
+
 ## 20.12.7 (2021-04-23)
 
 | Protocol          | Version   |
