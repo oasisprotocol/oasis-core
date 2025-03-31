@@ -226,8 +226,6 @@ type Backend interface {
 // TransactionAuthHandler is the interface for ABCI applications that handle
 // authenticating transactions (checking nonces and fees).
 type TransactionAuthHandler interface {
-	consensus.TransactionAuthHandler
-
 	// AuthenticateTx authenticates the given transaction by making sure
 	// that the nonce is correct and deducts any fees as specified.
 	//

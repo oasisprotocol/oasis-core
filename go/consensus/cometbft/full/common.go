@@ -501,11 +501,6 @@ func (n *commonNode) SetTransactionAuthHandler(handler api.TransactionAuthHandle
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
-	return n.mux.TransactionAuthHandler()
-}
-
-// Implements consensusAPI.Backend.
 func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return n.mux.EstimateGas(req.Signer, req.Transaction)
 }
@@ -557,7 +552,15 @@ func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	return n.mux.TransactionAuthHandler().GetSignerNonce(ctx, req)
+	acct, err := n.Staking().Account(ctx, &stakingAPI.OwnerQuery{
+		Height: req.Height,
+		Owner:  req.AccountAddress,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return acct.General.Nonce, nil
 }
 
 // Implements consensusAPI.Backend.
