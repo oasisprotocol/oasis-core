@@ -94,7 +94,7 @@ func (k Key) SetBit(bit Depth, val bool) Key {
 	if val {
 		kb[bit/8] |= mask
 	} else {
-		kb[bit/8] &= mask
+		kb[bit/8] &^= mask
 	}
 	return kb
 }
