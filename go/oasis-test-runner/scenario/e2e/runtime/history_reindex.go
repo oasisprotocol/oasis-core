@@ -80,7 +80,7 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	}
 	err = sc.waitForClientRuntimeBlock(ctx, computeCtrl.RuntimeClient, 10)
 	if err != nil {
-		return fmt.Errorf("failed to wait for runtime block: %w", err)
+		return fmt.Errorf("failed to wait for runtime block (node: %s): %w", compute.Name, err)
 	}
 
 	// Reindex existing runtime blocks and start indexing new ones.
@@ -92,7 +92,12 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Verify that indexing works.
 	if err := sc.waitForClientRuntimeBlock(ctx, sc.Net.ClientController().RuntimeClient, 20); err != nil {
-		return fmt.Errorf("failed to wait for runtime block: %w", err)
+		return fmt.Errorf("failed to wait for runtime block (node: %s): %w", client.Name, err)
+	}
+
+	// Ensure that the compute worker indexes all blocks as well.
+	if err := sc.waitForClientRuntimeBlock(ctx, computeCtrl.RuntimeClient, 20); err != nil {
+		return fmt.Errorf("failed to wait for runtime block (node: %s): %w", compute.Name, err)
 	}
 
 	// Verify (re)indexed runtime blocks.
