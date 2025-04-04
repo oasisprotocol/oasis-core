@@ -141,7 +141,7 @@ func (r *richRuntime) LocalRPC(
 		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
 			Request: cbor.Marshal(&enclaverpc.Request{
 				Method: method,
-				Args:   args,
+				Args:   cbor.Marshal(args),
 			}),
 		},
 	})

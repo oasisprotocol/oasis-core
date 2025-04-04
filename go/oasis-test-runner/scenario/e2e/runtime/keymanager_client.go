@@ -91,7 +91,7 @@ func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uin
 
 	req := enclaverpc.Request{
 		Method: secrets.RPCMethodGetPublicKey,
-		Args:   args,
+		Args:   cbor.Marshal(args),
 	}
 
 	p2pReq := kmp2p.CallEnclaveRequest{
@@ -136,7 +136,7 @@ func (c *keyManagerRPCClient) fetchEphemeralPublicKey(ctx context.Context, epoch
 
 	req := enclaverpc.Request{
 		Method: secrets.RPCMethodGetPublicEphemeralKey,
-		Args:   args,
+		Args:   cbor.Marshal(args),
 	}
 
 	p2pReq := kmp2p.CallEnclaveRequest{

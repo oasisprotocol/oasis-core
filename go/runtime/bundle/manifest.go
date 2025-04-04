@@ -22,6 +22,25 @@ type ExplodedManifest struct {
 	// ExplodedDataDir is the path to the data directory where the bundle
 	// represented by manifest has been extracted.
 	ExplodedDataDir string
+
+	// Labels are labels attached to the manifest by the registry.
+	Labels map[string]string
+}
+
+// HasLabels returns true iff the exploded manifest has the given labels set.
+//
+// If no labels are passed, this method always returns false.
+func (m *ExplodedManifest) HasLabels(labels map[string]string) bool {
+	if len(labels) == 0 {
+		return false
+	}
+
+	for key, value := range labels {
+		if m.Labels[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // Manifest is a deserialized runtime bundle manifest.

@@ -1,21 +1,31 @@
-package registry
+package config
 
 import (
-	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 const (
 	// RuntimesDir is the name of the directory located inside the node's data
 	// directory which contains the per-runtime state.
 	RuntimesDir = "runtimes"
+
+	// PersistentImagesDir is the name of the directory located inside the `RuntimesDir`
+	// which contains the persistent overlay images.
+	PersistentImagesDir = "images"
 )
 
+// GetRuntimeStateDir derives the path to the runtime state directory.
 func GetRuntimeStateDir(dataDir string, runtimeID common.Namespace) string {
 	return filepath.Join(dataDir, RuntimesDir, runtimeID.String())
+}
+
+// GetPersistentImageDir derives the path to the persistent overlay image directory.
+func GetPersistentImageDir(dataDir string, runtimeID common.Namespace, componentID component.ID) string {
+	compID, _ := componentID.MarshalText()
+	return filepath.Join(dataDir, RuntimesDir, PersistentImagesDir, runtimeID.String(), string(compID))
 }
 
 // EnsureRuntimeStateDir ensures a specific per-runtime directory exists and
@@ -27,25 +37,4 @@ func EnsureRuntimeStateDir(dataDir string, runtimeID common.Namespace) (string, 
 	}
 
 	return path, nil
-}
-
-// ParseRuntimeMap parses strings in the format of <runtime-id>[:<value>] and
-// returns them as a map of runtime IDs to value.
-func ParseRuntimeMap(rawItems []string) (map[common.Namespace]string, error) {
-	result := make(map[common.Namespace]string, len(rawItems))
-	for _, rawItem := range rawItems {
-		atoms := strings.SplitN(rawItem, ":", 2)
-
-		var id common.Namespace
-		if err := id.UnmarshalHex(atoms[0]); err != nil {
-			return nil, fmt.Errorf("malformed runtime map item: %s", rawItem)
-		}
-
-		if len(atoms) == 1 {
-			result[id] = ""
-		} else {
-			result[id] = atoms[1]
-		}
-	}
-	return result, nil
 }
