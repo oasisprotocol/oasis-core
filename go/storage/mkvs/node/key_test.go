@@ -6,6 +6,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSetBit(t *testing.T) {
+	testCases := []struct {
+		key  Key
+		bit  Depth
+		val  bool
+		want Key
+		name string
+	}{
+		{Key{0b00000000}, 6, true, Key{0b00000010}, "Set bit"},
+		{Key{0b00000010}, 6, true, Key{0b00000010}, "Set bit (no change)"},
+		{Key{0b00000000, 0b00000000}, 6, true, Key{0b00000010, 0b00000000}, "Set bit in first byte"},
+		{Key{0b00000010, 0b00000000}, 6, true, Key{0b00000010, 0b00000000}, "Set bit in first byte (no change)"},
+		{Key{0b00000000, 0b00000000}, 14, true, Key{0b00000000, 0b00000010}, "Set bit in last byte"},
+		{Key{0b00000000, 0b00000010}, 14, true, Key{0b00000000, 0b00000010}, "Set bit in last byte (no change)"},
+		{Key{0b11111111}, 6, false, Key{0b11111101}, "Unset bit"},
+		{Key{0b11111101}, 6, false, Key{0b11111101}, "Unset bit (no change)"},
+		{Key{0b11111111, 0b11111111}, 6, false, Key{0b11111101, 0b11111111}, "Unset bit in first byte"},
+		{Key{0b11111101, 0b11111111}, 6, false, Key{0b11111101, 0b11111111}, "Unset bit in first byte (no change)"},
+		{Key{0b11111111, 0b11111111}, 14, false, Key{0b11111111, 0b11111101}, "Unset bit in last byte"},
+		{Key{0b11111111, 0b11111101}, 14, false, Key{0b11111111, 0b11111101}, "Unset bit in last byte (no change)"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.key.SetBit(tc.bit, tc.val); !got.Equal(tc.want) {
+				t.Errorf("%08b.SetBit(%d, %t) = %08b, want %08b", tc.key, tc.bit, tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestKeyAppendSplitMerge(t *testing.T) {
 	var key, newKey Key
 
