@@ -56,7 +56,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
 	google.golang.org/grpc v1.68.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
