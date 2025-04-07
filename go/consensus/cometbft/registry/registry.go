@@ -50,10 +50,6 @@ type NodeListEpochInternalEvent struct {
 	Height int64 `json:"height"`
 }
 
-func (sc *serviceClient) Querier() *app.QueryFactory {
-	return sc.querier
-}
-
 func (sc *serviceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
