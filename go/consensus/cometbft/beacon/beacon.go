@@ -271,18 +271,17 @@ func (sc *serviceClient) ServiceDescriptor() tmAPI.ServiceDescriptor {
 	return tmAPI.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
+func (sc *serviceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
 	if sc.initialNotify {
 		return nil
 	}
 
-	q, err := sc.querier.QueryAt(ctx, height)
+	q, err := sc.querier.QueryAt(ctx, blk.Height)
 	if err != nil {
 		return fmt.Errorf("epochtime: failed to query state: %w", err)
 	}
 
-	var epoch beaconAPI.EpochTime
-	epoch, height, err = q.Epoch(ctx)
+	epoch, height, err := q.Epoch(ctx)
 	if err != nil {
 		return fmt.Errorf("epochtime: failed to query epoch: %w", err)
 	}

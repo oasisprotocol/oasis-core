@@ -32,15 +32,10 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 	}
 	defer blkSub.Close()
 
-	// Initially, start with a nil channel and only start looking into commands after we see a
-	// block from the consensus backend.
-	var cmdCh <-chan any
-
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
 	// Service client event loop.
-	var height int64
 	evCh := make(chan annotatedEvent, 1)
 	for {
 		select {
@@ -56,32 +51,13 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 					t.Logger.Error("event processing failed", "err", err)
 				}
 			}()
-		case cmd := <-cmdCh:
-			if err := svc.DeliverCommand(ctx, height, cmd); err != nil {
-				logger.Error("failed to deliver command to service client",
-					"err", err,
-				)
-				continue
-			}
 		case blk := <-blkCh:
-			if height == 0 {
-				// Seen a block, now we are ready to process commands.
-				cmdCh = svd.Commands()
-			}
-			height = blk.Header.Height
-
-			if err := svc.DeliverBlock(ctx, height); err != nil {
-				logger.Error("failed to deliver block to service client",
-					"err", err,
-				)
-				continue
+			if err := svc.DeliverBlock(ctx, blk); err != nil {
+				logger.Error("failed to deliver block to service client", "err", err)
 			}
 		case ev := <-evCh:
 			if err := svc.DeliverEvent(ctx, ev.height, ev.tx, &ev.ev); err != nil {
-				logger.Error("failed to deliver event to service client",
-					"err", err,
-				)
-				continue
+				logger.Error("failed to deliver event to service client", "err", err)
 			}
 		}
 	}
