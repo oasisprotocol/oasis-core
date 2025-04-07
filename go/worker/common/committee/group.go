@@ -162,26 +162,12 @@ type Group struct {
 	logger *logging.Logger
 }
 
-// RoundTransition processes a round transition that just happened.
-func (g *Group) RoundTransition() {
-	g.Lock()
-	defer g.Unlock()
-
-	if g.activeEpoch == nil {
-		return
-	}
-}
-
 // Suspend processes a runtime suspension that just happened.
 //
 // Resumption will be processed as a regular epoch transition.
 func (g *Group) Suspend() {
 	g.Lock()
 	defer g.Unlock()
-
-	if g.activeEpoch == nil {
-		return
-	}
 
 	// Invalidate current epoch.
 	g.activeEpoch = nil

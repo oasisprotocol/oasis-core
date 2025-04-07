@@ -3,7 +3,6 @@ package full
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	cmtstate "github.com/cometbft/cometbft/state"
 	cmtstatesync "github.com/cometbft/cometbft/statesync"
@@ -11,26 +10,22 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 type stateProvider struct {
-	sync.Mutex
-
-	lc              *light.Client
-	genesisDocument *cmttypes.GenesisDoc
+	chainID       string
+	genesisHeight int64
+	lightClient   *light.Client
 
 	logger *logging.Logger
 }
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
 	// We have to fetch the next height, which contains the app hash for the previous height.
-	lb, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height+1))
+	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height+1))
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +34,7 @@ func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, er
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.Commit, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
-	lb, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height))
+	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height))
 	if err != nil {
 		return nil, err
 	}
@@ -51,13 +43,10 @@ func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.C
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.State, error) {
-	sp.Lock()
-	defer sp.Unlock()
-
 	state := cmtstate.State{
-		ChainID:       sp.genesisDocument.ChainID,
+		ChainID:       sp.chainID,
 		Version:       cmtstate.InitStateVersion,
-		InitialHeight: sp.genesisDocument.InitialHeight,
+		InitialHeight: sp.genesisHeight,
 	}
 	// XXX: This will fail in case an upgrade happened in-between.
 	state.Version.Consensus.App = version.CometBFTAppVersion
@@ -70,15 +59,15 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	//
 	// We need to fetch the NextValidators from height+2 because if the application changed
 	// the validator set at the snapshot height then this only takes effect at height+2.
-	lastLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height))
+	lastLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height))
 	if err != nil {
 		return cmtstate.State{}, err
 	}
-	curLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height)+1)
+	curLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height)+1)
 	if err != nil {
 		return cmtstate.State{}, err
 	}
-	nextLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height)+2)
+	nextLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height)+2)
 	if err != nil {
 		return cmtstate.State{}, err
 	}
@@ -93,7 +82,7 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	state.LastHeightValidatorsChanged = nextLightBlock.Height
 
 	// Fetch consensus parameters with light client verification.
-	params, err := sp.lc.GetVerifiedParameters(ctx, nextLightBlock.Height)
+	params, err := sp.lightClient.GetVerifiedParameters(ctx, nextLightBlock.Height)
 	if err != nil {
 		return cmtstate.State{}, fmt.Errorf("failed to fetch consensus parameters for height %d: %w",
 			nextLightBlock.Height,
@@ -105,15 +94,13 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	return state, nil
 }
 
-func newStateProvider(ctx context.Context, chainContext string, cfg light.Config, p2p rpc.P2P) (cmtstatesync.StateProvider, error) {
-	lc, err := light.NewClient(ctx, chainContext, p2p, cfg)
-	if err != nil {
-		return nil, err
-	}
+func newStateProvider(chainContext string, genesisHeight int64, lightClient *light.Client) cmtstatesync.StateProvider {
+	chainID := cmtAPI.CometBFTChainID(chainContext)
 
 	return &stateProvider{
-		lc:              lc,
-		genesisDocument: cfg.GenesisDocument,
-		logger:          logging.GetLogger("consensus/cometbft/stateprovider"),
-	}, nil
+		chainID:       chainID,
+		genesisHeight: genesisHeight,
+		lightClient:   lightClient,
+		logger:        logging.GetLogger("consensus/cometbft/stateprovider"),
+	}
 }

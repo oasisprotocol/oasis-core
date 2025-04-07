@@ -684,32 +684,26 @@ func (n *commonNode) GetTransactions(ctx context.Context, height int64) ([][]byt
 	}
 
 	txs := make([][]byte, 0, len(blk.Data.Txs))
-	for _, v := range blk.Data.Txs {
-		txs = append(txs, v[:])
+	for _, tx := range blk.Data.Txs {
+		txs = append(txs, tx[:])
 	}
 	return txs, nil
 }
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int64) (*consensusAPI.TransactionsWithResults, error) {
-	var txsWithResults consensusAPI.TransactionsWithResults
-
-	blk, err := n.GetCometBFTBlock(ctx, height)
+	txs, err := n.GetTransactions(ctx, height)
 	if err != nil {
 		return nil, err
 	}
-	if blk == nil {
-		return nil, consensusAPI.ErrNoCommittedBlocks
-	}
-	for _, tx := range blk.Data.Txs {
-		txsWithResults.Transactions = append(txsWithResults.Transactions, tx[:])
-	}
 
-	res, err := n.GetBlockResults(ctx, blk.Height)
+	blockResults, err := n.GetBlockResults(ctx, height)
 	if err != nil {
 		return nil, err
 	}
-	for txIdx, rs := range res.TxsResults {
+
+	txResults := make([]*results.Result, 0, len(txs))
+	for idx, rs := range blockResults.TxsResults {
 		// Transaction result.
 		result := &results.Result{
 			Error: results.Error{
@@ -721,11 +715,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction staking events.
-		stakingEvents, err := tmstaking.EventsFromCometBFT(
-			txsWithResults.Transactions[txIdx],
-			blk.Height,
-			rs.Events,
-		)
+		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -734,11 +724,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction registry events.
-		registryEvents, _, err := tmregistry.EventsFromCometBFT(
-			txsWithResults.Transactions[txIdx],
-			blk.Height,
-			rs.Events,
-		)
+		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -747,11 +733,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction roothash events.
-		roothashEvents, err := tmroothash.EventsFromCometBFT(
-			txsWithResults.Transactions[txIdx],
-			blk.Height,
-			rs.Events,
-		)
+		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -760,11 +742,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction governance events.
-		governanceEvents, err := tmgovernance.EventsFromCometBFT(
-			txsWithResults.Transactions[txIdx],
-			blk.Height,
-			rs.Events,
-		)
+		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -772,9 +750,13 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 			result.Events = append(result.Events, &results.Event{Governance: e})
 		}
 
-		txsWithResults.Results = append(txsWithResults.Results, result)
+		txResults = append(txResults, result)
 	}
-	return &txsWithResults, nil
+
+	return &consensusAPI.TransactionsWithResults{
+		Transactions: txs,
+		Results:      txResults,
+	}, nil
 }
 
 // Implements consensusAPI.Backend.

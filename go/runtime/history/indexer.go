@@ -167,7 +167,7 @@ func (bi *BlockIndexer) run(ctx context.Context) {
 }
 
 func (bi *BlockIndexer) index(ctx context.Context, blkCh <-chan *roothash.AnnotatedBlock) {
-	bi.logger.Debug("indexing")
+	bi.logger.Info("indexing")
 
 	bi.mu.Lock()
 	bi.status = statusIndexing
@@ -184,7 +184,6 @@ func (bi *BlockIndexer) index(ctx context.Context, blkCh <-chan *roothash.Annota
 			blks = append(blks, blk)
 		case <-time.After(retry):
 		case <-ctx.Done():
-			bi.logger.Info("stopping")
 			return
 		}
 
@@ -194,6 +193,7 @@ func (bi *BlockIndexer) index(ctx context.Context, blkCh <-chan *roothash.Annota
 		}
 
 		if err := bi.commitBlocks(blks); err != nil {
+			bi.logger.Warn("failed to commit blocks", "err", err)
 			retry = boff.NextBackOff()
 			continue
 		}
@@ -205,7 +205,7 @@ func (bi *BlockIndexer) index(ctx context.Context, blkCh <-chan *roothash.Annota
 }
 
 func (bi *BlockIndexer) reindex(ctx context.Context, blkCh <-chan *roothash.AnnotatedBlock) error {
-	bi.logger.Debug("reindexing",
+	bi.logger.Info("reindexing",
 		logging.LogEvent, roothash.LogEventHistoryReindexing,
 	)
 
@@ -237,7 +237,7 @@ func (bi *BlockIndexer) reindex(ctx context.Context, blkCh <-chan *roothash.Anno
 			}
 			// Reindex blocks up to the specified height.
 			if err := bi.reindexTo(ctx, height); err != nil {
-				bi.logger.Error("failed to reindex blocks",
+				bi.logger.Warn("failed to reindex blocks",
 					"err", err,
 					"height", height,
 				)
@@ -275,27 +275,21 @@ func (bi *BlockIndexer) reindex(ctx context.Context, blkCh <-chan *roothash.Anno
 	// This ensures that there is always at least one block in the history.
 	height, err := bi.history.LastConsensusHeight()
 	if err != nil {
-		bi.logger.Error("failed to fetch last consensus height",
-			"err", err,
-		)
-		return err
+		return fmt.Errorf("failed to fetch last consensus height: %w", err)
 	}
 	if height != blk.Height {
 		if err := bi.commitBlocks([]*roothash.AnnotatedBlock{blk}); err != nil {
-			return err
+			return fmt.Errorf("failed to commit blocks: %w", err)
 		}
 	}
 
-	bi.logger.Debug("reindex completed")
+	bi.logger.Info("reindex completed")
 	return nil
 }
 
 func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 	lastHeight, err := bi.history.LastConsensusHeight()
 	if err != nil {
-		bi.logger.Error("failed to get last indexed height",
-			"err", err,
-		)
 		return fmt.Errorf("failed to get last indexed height: %w", err)
 	}
 	startHeight := lastHeight + 1 // +1 since we want the last non-seen height.
@@ -361,10 +355,6 @@ func (bi *BlockIndexer) reindexRange(ctx context.Context, start int64, end int64
 			)
 			continue
 		default:
-			bi.logger.Error("failed to get runtime state",
-				"err", err,
-				"height", height,
-			)
 			return fmt.Errorf("failed to get runtime state: %w", err)
 		}
 		if state.LastBlockHeight != height {
@@ -380,7 +370,7 @@ func (bi *BlockIndexer) reindexRange(ctx context.Context, start int64, end int64
 	}
 
 	if err := bi.commitBlocks(blocks); err != nil {
-		return err
+		return fmt.Errorf("failed to commit blocks: %w", err)
 	}
 
 	bi.mu.Lock()
@@ -402,10 +392,7 @@ func (bi *BlockIndexer) commitBlocks(blocks []*roothash.AnnotatedBlock) error {
 	)
 
 	if err := bi.history.Commit(blocks); err != nil {
-		bi.logger.Error("failed to commit blocks",
-			"err", err,
-		)
-		return fmt.Errorf("failed to commit blocks: %w", err)
+		return err
 	}
 
 	bi.mu.Lock()
