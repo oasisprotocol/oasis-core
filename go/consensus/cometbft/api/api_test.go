@@ -19,6 +19,4 @@ func TestServiceDescriptor(t *testing.T) {
 	require.Equal("test_type", sd.EventType())
 	recvQ1 := <-sd.Queries()
 	require.EqualValues(q1, recvQ1, "received query should be correct")
-	_, ok := <-sd.Queries()
-	require.False(ok, "query channel must be closed")
 }

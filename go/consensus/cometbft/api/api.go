@@ -299,8 +299,6 @@ func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query
 func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) ServiceDescriptor {
 	ch := make(chan cmtpubsub.Query)
 	go func() {
-		defer close(ch)
-
 		for _, q := range queries {
 			ch <- q
 		}

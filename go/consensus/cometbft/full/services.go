@@ -3,206 +3,191 @@ package full
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"sync"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 )
 
 // serviceClientWorker manages block and event notifications for all service clients.
 func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceClient) {
-	sd := svc.ServiceDescriptor()
-	if sd == nil {
+	svd := svc.ServiceDescriptor()
+	if svd == nil {
 		// Some services don't actually need a worker.
 		return
 	}
 
-	logger := t.Logger.With("service", sd.Name())
+	logger := t.Logger.With("service", svd.Name())
 	logger.Info("starting event dispatcher")
 
-	var (
-		cases   []reflect.SelectCase
-		queries []cmtpubsub.Query
-	)
-	// Context cancellation.
-	const indexCtx = 0
-	cases = append(cases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(ctx.Done()),
-	})
-	queries = append(queries, nil)
-	// General query for new block headers.
-	newBlockCh, newBlockSub, err := t.WatchCometBFTBlocks()
+	blkCh, blkSub, err := t.WatchCometBFTBlocks()
 	if err != nil {
 		logger.Error("failed to subscribe to cometbft blocks, not starting",
 			"err", err,
 		)
 		return
 	}
-	defer newBlockSub.Close()
+	defer blkSub.Close()
 
-	const indexNewBlock = 1
-	cases = append(cases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(newBlockCh),
-	})
-	queries = append(queries, nil)
-	// Query update.
-	const indexQueries = 2
-	cases = append(cases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(sd.Queries()),
-	})
-	queries = append(queries, nil)
-	// Commands.
-	const indexCommands = 3
-	cases = append(cases, reflect.SelectCase{
-		Dir: reflect.SelectRecv,
-		// Initially, start with a nil channel and only start looking into commands after we see a
-		// block from the consensus backend.
-		Chan: reflect.ValueOf(nil),
-	})
-	queries = append(queries, nil)
+	// Initially, start with a nil channel and only start looking into commands after we see a
+	// block from the consensus backend.
+	var cmdCh <-chan any
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
 	// Service client event loop.
 	var height int64
+	evCh := make(chan annotatedEvent, 1)
 	for {
-		chosen, recv, recvOk := reflect.Select(cases)
-		if !recvOk {
-			// Replace closed channels with nil to avoid needless wakeups.
-			cases[chosen].Chan = reflect.ValueOf(nil)
-			if chosen != indexCtx {
-				continue
-			}
-		}
-		switch chosen {
-		case indexCtx:
+		select {
+		case <-ctx.Done():
 			return
-		case indexQueries:
-			// Subscribe to new query.
-			query := recv.Interface().(cmtpubsub.Query)
-
-			logger.Debug("subscribing to new query",
-				"query", query,
-			)
-
-			sub, err := t.node.EventBus().SubscribeUnbuffered(ctx, tmSubscriberID, query)
-			if err != nil {
-				logger.Error("failed to subscribe to service events",
-					"err", err,
-				)
-				continue
-			}
-			// Oh yes, this can actually return a nil subscription even though the error was also
-			// nil if the node is just shutting down.
-			if sub == (*cmtpubsub.Subscription)(nil) {
-				continue
-			}
-
-			// Transform events.
-			buffer := channels.NewInfiniteChannel()
+		case query := <-svd.Queries():
+			subscriber := newEventSubscriber(query, t.node.EventBus())
+			handler := newEventHandler(query, svd.EventType(), evCh)
+			wg.Add(1)
 			go func() {
-				defer t.node.EventBus().Unsubscribe(ctx, tmSubscriberID, query) // nolint: errcheck
-				defer buffer.Close()
-
-				for {
-					select {
-					// Should not return on ctx.Done() as that could lead to a deadlock.
-					case <-sub.Cancelled():
-						// Subscription cancelled.
-						return
-					case v := <-sub.Out():
-						// Received an event.
-						switch ev := v.Data().(type) {
-						case cmttypes.EventDataNewBlockHeader:
-							buffer.In() <- &api.ServiceEvent{Block: &ev}
-						case cmttypes.EventDataTx:
-							buffer.In() <- &api.ServiceEvent{Tx: &ev}
-						default:
-						}
-					}
+				defer wg.Done()
+				if err := subscriber.process(ctx, handler.handle); err != nil {
+					t.Logger.Error("event processing failed", "err", err)
 				}
 			}()
-
-			cases = append(cases, reflect.SelectCase{
-				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(buffer.Out()),
-			})
-			queries = append(queries, query)
-		case indexCommands:
-			// New command.
-			if err := svc.DeliverCommand(ctx, height, recv.Interface()); err != nil {
+		case cmd := <-cmdCh:
+			if err := svc.DeliverCommand(ctx, height, cmd); err != nil {
 				logger.Error("failed to deliver command to service client",
 					"err", err,
 				)
 				continue
 			}
-		case indexNewBlock:
-			// New block.
+		case blk := <-blkCh:
 			if height == 0 {
 				// Seen a block, now we are ready to process commands.
-				cases[indexCommands].Chan = reflect.ValueOf(sd.Commands())
+				cmdCh = svd.Commands()
 			}
-			height = recv.Interface().(*cmttypes.Block).Header.Height
+			height = blk.Header.Height
 
 			if err := svc.DeliverBlock(ctx, height); err != nil {
-				logger.Error("failed to deliver block notification to service client",
+				logger.Error("failed to deliver block to service client",
 					"err", err,
 				)
 				continue
 			}
-		default:
-			// New service client event.
-			ev := recv.Interface().(*api.ServiceEvent)
-			var (
-				tx       cmttypes.Tx
-				tmEvents []cmtabcitypes.Event
-			)
-			switch {
-			case ev.Block != nil:
-				height = ev.Block.Header.Height
-				tmEvents = append([]cmtabcitypes.Event{}, ev.Block.ResultBeginBlock.GetEvents()...)
-				tmEvents = append(tmEvents, ev.Block.ResultEndBlock.GetEvents()...)
-			case ev.Tx != nil:
-				height = ev.Tx.Height
-				tx = ev.Tx.Tx
-				tmEvents = ev.Tx.Result.Events
-			default:
-				logger.Warn("unknown event",
-					"ev", fmt.Sprintf("%+v", ev),
+		case ev := <-evCh:
+			if err := svc.DeliverEvent(ctx, ev.height, ev.tx, &ev.ev); err != nil {
+				logger.Error("failed to deliver event to service client",
+					"err", err,
 				)
 				continue
 			}
+		}
+	}
+}
 
-			// Deliver all events.
-			query := queries[chosen]
-			for i, tmEv := range tmEvents {
-				// Skip all events not from the target service.
-				if tmEv.GetType() != sd.EventType() {
-					continue
-				}
-				// Skip all events not matching the initial query. This is required as we get all
-				// events not only those matching the query so we need to do a separate pass.
-				tagMap := make(map[string][]string)
-				for _, attr := range tmEv.Attributes {
-					compositeTag := fmt.Sprintf("%s.%s", tmEv.Type, attr.Key)
-					tagMap[compositeTag] = append(tagMap[compositeTag], attr.Value)
-				}
-				if matches, _ := query.Matches(tagMap); !matches {
-					continue
-				}
+type annotatedEvent struct {
+	height int64
+	tx     cmttypes.Tx
+	ev     cmtabcitypes.Event
+}
 
-				if err := svc.DeliverEvent(ctx, height, tx, &tmEvents[i]); err != nil {
-					logger.Error("failed to deliver event to service client",
-						"err", err,
-					)
-					continue
-				}
-			}
+type eventHandler struct {
+	query cmtpubsub.Query
+
+	evType string
+	evCh   chan<- annotatedEvent
+}
+
+func newEventHandler(query cmtpubsub.Query, evType string, evCh chan<- annotatedEvent) *eventHandler {
+	return &eventHandler{
+		query:  query,
+		evType: evType,
+		evCh:   evCh,
+	}
+}
+
+func (h *eventHandler) handle(ctx context.Context, msg cmtpubsub.Message) {
+	switch ev := msg.Data().(type) {
+	case cmttypes.EventDataNewBlockHeader:
+		h.handleBlockEvent(ctx, ev)
+	case cmttypes.EventDataTx:
+		h.handleTxEvent(ctx, ev)
+	default:
+	}
+}
+
+func (h *eventHandler) handleBlockEvent(ctx context.Context, ev cmttypes.EventDataNewBlockHeader) {
+	h.deliverEvents(ctx, ev.Header.Height, nil, ev.ResultBeginBlock.GetEvents())
+	h.deliverEvents(ctx, ev.Header.Height, nil, ev.ResultEndBlock.GetEvents())
+}
+
+func (h *eventHandler) handleTxEvent(ctx context.Context, ev cmttypes.EventDataTx) {
+	h.deliverEvents(ctx, ev.Height, ev.Tx, ev.Result.Events)
+}
+
+func (h *eventHandler) deliverEvents(ctx context.Context, height int64, tx cmttypes.Tx, events []cmtabcitypes.Event) {
+	for _, ev := range events {
+		// Skip all events not from the target service.
+		if ev.GetType() != h.evType {
+			continue
+		}
+		// Skip all events not matching the initial query. This is required as we get all
+		// events not only those matching the query so we need to do a separate pass.
+		tagMap := make(map[string][]string)
+		for _, attr := range ev.Attributes {
+			compositeTag := fmt.Sprintf("%s.%s", ev.Type, attr.Key)
+			tagMap[compositeTag] = append(tagMap[compositeTag], attr.Value)
+		}
+		if matches, _ := h.query.Matches(tagMap); !matches {
+			continue
+		}
+
+		ev := annotatedEvent{
+			height: height,
+			tx:     tx,
+			ev:     ev,
+		}
+		select {
+		case h.evCh <- ev:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+type eventSubscriber struct {
+	query    cmtpubsub.Query
+	eventBus *cmttypes.EventBus
+}
+
+func newEventSubscriber(query cmtpubsub.Query, eventBus *cmttypes.EventBus) *eventSubscriber {
+	return &eventSubscriber{
+		query:    query,
+		eventBus: eventBus,
+	}
+}
+
+func (s *eventSubscriber) process(ctx context.Context, handle func(ctx context.Context, msg cmtpubsub.Message)) error {
+	sub, err := s.eventBus.SubscribeUnbuffered(ctx, tmSubscriberID, s.query)
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to events: %w", err)
+	}
+	// Oh yes, this can actually return a nil subscription even though the error was also
+	// nil if the node is just shutting down.
+	if sub == (*cmtpubsub.Subscription)(nil) {
+		return nil
+	}
+	defer s.eventBus.Unsubscribe(ctx, tmSubscriberID, s.query) // nolint: errcheck
+
+	for {
+		select {
+		// Should not return on ctx.Done() as that could lead to a deadlock.
+		case <-sub.Cancelled():
+			return nil
+		case v := <-sub.Out():
+			handle(ctx, v)
 		}
 	}
 }
