@@ -49,14 +49,22 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x85)
 )
 
-// ImmutableState is the immutable consensus state wrapper.
+// ImmutableState is an immutable governance state wrapper.
 type ImmutableState struct {
-	is *api.ImmutableState
+	state *api.ImmutableState
 }
 
-// NewImmutableState returns immutable governance state.
-func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableState(ctx, state, version)
+// NewImmutableState creates a new immutable governance state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable governance state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := api.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +74,7 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 
 // NextProposalIdentifier looks up the next proposal identifier.
 func (s *ImmutableState) NextProposalIdentifier(ctx context.Context) (uint64, error) {
-	keyRaw, err := s.is.Get(ctx, nextProposalIdentifierKeyFmt.Encode())
+	keyRaw, err := s.state.Get(ctx, nextProposalIdentifierKeyFmt.Encode())
 	if err != nil {
 		return 0, api.UnavailableStateError(err)
 	}
@@ -83,7 +91,7 @@ func (s *ImmutableState) NextProposalIdentifier(ctx context.Context) (uint64, er
 
 // Proposals looks up all proposals.
 func (s *ImmutableState) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var proposals []*governance.Proposal
@@ -104,7 +112,7 @@ func (s *ImmutableState) Proposals(ctx context.Context) ([]*governance.Proposal,
 
 // ActiveProposals looks up all active proposals.
 func (s *ImmutableState) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var proposals []*governance.Proposal
@@ -125,7 +133,7 @@ func (s *ImmutableState) ActiveProposals(ctx context.Context) ([]*governance.Pro
 }
 
 func (s *ImmutableState) getProposalRaw(ctx context.Context, id uint64) ([]byte, error) {
-	data, err := s.is.Get(ctx, proposalsKeyFmt.Encode(&id))
+	data, err := s.state.Get(ctx, proposalsKeyFmt.Encode(&id))
 	return data, api.UnavailableStateError(err)
 }
 
@@ -147,7 +155,7 @@ func (s *ImmutableState) Proposal(ctx context.Context, id uint64) (*governance.P
 
 // Votes looks up all votes for a proposal.
 func (s *ImmutableState) Votes(ctx context.Context, id uint64) ([]*governance.VoteEntry, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var voteEntries []*governance.VoteEntry
@@ -178,7 +186,7 @@ func (s *ImmutableState) isProposalPendingUpgrade(ctx context.Context, proposal 
 	if proposal.Content.Upgrade == nil {
 		return false, nil
 	}
-	data, err := s.is.Get(ctx, pendingUpgradesKeyFmt.Encode(uint64(proposal.Content.Upgrade.Epoch), proposal.ID))
+	data, err := s.state.Get(ctx, pendingUpgradesKeyFmt.Encode(uint64(proposal.Content.Upgrade.Epoch), proposal.ID))
 	return data != nil, err
 }
 
@@ -208,7 +216,7 @@ func (s *ImmutableState) PendingUpgradeProposal(ctx context.Context, id uint64) 
 
 // PendingUpgrades looks up all pending upgrades.
 func (s *ImmutableState) PendingUpgrades(ctx context.Context) ([]*upgrade.Descriptor, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var pendingUpgrades []*upgrade.Descriptor
@@ -234,7 +242,7 @@ func (s *ImmutableState) PendingUpgrades(ctx context.Context) ([]*upgrade.Descri
 
 // ConsensusParameters returns the governance consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*governance.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -249,20 +257,18 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*governance.C
 	return &params, nil
 }
 
-// MutableState is a mutable consensus state wrapper.
+// MutableState is a mutable governance state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
 }
 
-// NewMutableState creates a new mutable governance state.
+// NewMutableState creates a new mutable governance state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&api.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
 	}
 }
 
@@ -313,7 +319,7 @@ func (s *MutableState) RemovePendingUpgrade(ctx context.Context, epoch beacon.Ep
 
 // RemovePendingUpgradesForEpoch removes pending upgrades for epoch.
 func (s *MutableState) RemovePendingUpgradesForEpoch(ctx context.Context, epoch beacon.EpochTime) error {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var upgradeProposalIDs []uint64
@@ -353,7 +359,7 @@ func (s *MutableState) SetVote(
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *governance.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))

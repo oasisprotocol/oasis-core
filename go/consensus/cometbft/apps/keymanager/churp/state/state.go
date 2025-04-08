@@ -25,14 +25,31 @@ var (
 	statusKeyFmt = consensus.KeyFormat.New(0x75, keyformat.H(&common.Namespace{}), uint8(0))
 )
 
-// ImmutableState is a immutable state wrapper.
+// ImmutableState is an immutable key manager CHURP state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable key manager CHURP state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable key manager CHURP state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+	return &ImmutableState{is}, nil
 }
 
 // ConsensusParameters returns the consensus parameters.
 func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.ConsensusParameters, error) {
-	raw, err := st.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := st.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -49,7 +66,7 @@ func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.Conse
 
 // Status returns the CHURP status for the specified runtime and CHURP instance.
 func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace, churpID uint8) (*churp.Status, error) {
-	data, err := st.is.Get(ctx, statusKeyFmt.Encode(&runtimeID, churpID))
+	data, err := st.state.Get(ctx, statusKeyFmt.Encode(&runtimeID, churpID))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -66,7 +83,7 @@ func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace
 
 // Statuses returns the CHURP statuses for the specified runtime.
 func (st *ImmutableState) Statuses(ctx context.Context, runtimeID common.Namespace) ([]*churp.Status, error) {
-	it := st.is.NewIterator(ctx)
+	it := st.state.NewIterator(ctx)
 	defer it.Close()
 
 	// We need to pre-hash the runtime ID, so we can compare it below.
@@ -100,7 +117,7 @@ func (st *ImmutableState) Statuses(ctx context.Context, runtimeID common.Namespa
 
 // AllStatuses returns the CHURP statuses for all runtimes.
 func (st *ImmutableState) AllStatuses(ctx context.Context) ([]*churp.Status, error) {
-	it := st.is.NewIterator(ctx)
+	it := st.state.NewIterator(ctx)
 	defer it.Close()
 
 	var statuses []*churp.Status
@@ -122,27 +139,26 @@ func (st *ImmutableState) AllStatuses(ctx context.Context) ([]*churp.Status, err
 	return statuses, nil
 }
 
-// NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-	return &ImmutableState{is}, nil
-}
-
-// MutableState is a mutable state wrapper.
+// MutableState is a mutable key manager CHURP state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable key manager CHURP state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
+}
+
 // SetConsensusParameters updates the state using the provided consensus parameters.
 //
 // This method must only be called from InitChain or EndBlock contexts.
 func (st *MutableState) SetConsensusParameters(ctx context.Context, params *churp.ConsensusParameters) error {
-	if err := st.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := st.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := st.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
@@ -153,14 +169,4 @@ func (st *MutableState) SetConsensusParameters(ctx context.Context, params *chur
 func (st *MutableState) SetStatus(ctx context.Context, status *churp.Status) error {
 	err := st.ms.Insert(ctx, statusKeyFmt.Encode(&status.RuntimeID, status.ID), cbor.Marshal(status))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

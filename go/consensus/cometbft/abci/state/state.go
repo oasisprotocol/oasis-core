@@ -24,12 +24,20 @@ var (
 
 // ImmutableState is an immutable consensus backend state wrapper.
 type ImmutableState struct {
-	is *api.ImmutableState
+	state *api.ImmutableState
 }
 
 // NewImmutableState creates a new immutable consensus backend state wrapper.
-func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableState(ctx, state, version)
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable consensus backend state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := api.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +47,7 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 
 // ChainContext returns the stored chain context.
 func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
-	chainContext, err := s.is.Get(ctx, chainContextKeyFmt.Encode())
+	chainContext, err := s.state.Get(ctx, chainContextKeyFmt.Encode())
 	if err != nil {
 		return "", api.UnavailableStateError(err)
 	}
@@ -48,7 +56,7 @@ func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
 
 // ConsensusParameters returns the consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*consensusGenesis.Parameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -70,11 +78,19 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable consensus backend state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
+}
+
 // SetChainContext sets the chain context.
 //
 // NOTE: This method must only be called from InitChain context.
 func (s *MutableState) SetChainContext(ctx context.Context, chainContext string) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, chainContextKeyFmt.Encode(), []byte(chainContext))
@@ -85,19 +101,9 @@ func (s *MutableState) SetChainContext(ctx context.Context, chainContext string)
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *consensusGenesis.Parameters) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return api.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable consensus backend state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&api.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

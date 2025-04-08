@@ -127,6 +127,22 @@ type mockApplicationState struct {
 	ownTxSignerAddress staking.Address
 }
 
+// NewMockApplicationState creates a new mock application state for testing.
+func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
+	tree := mkvs.New(nil, nil, storage.RootTypeState)
+
+	m := &mockApplicationState{
+		blockCtx: NewBlockContext(BlockInfo{
+			Time: time.Unix(1580461674, 0),
+		}),
+		tree:               tree,
+		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
+	}
+	m.UpdateMockApplicationStateConfig(cfg)
+
+	return m
+}
+
 func (ms *mockApplicationState) Storage() storage.LocalBackend {
 	panic("not implemented")
 }
@@ -225,55 +241,21 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 	}
 }
 
-// NewMockApplicationState creates a new mock application state for testing.
-func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
-	tree := mkvs.New(nil, nil, storage.RootTypeState)
-
-	m := &mockApplicationState{
-		blockCtx: NewBlockContext(BlockInfo{
-			Time: time.Unix(1580461674, 0),
-		}),
-		tree:               tree,
-		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
-	}
-	m.UpdateMockApplicationStateConfig(cfg)
-
-	return m
-}
-
 // ImmutableState is an immutable state wrapper.
 type ImmutableState struct {
-	mkvs.ImmutableKeyValueTree
-}
-
-// CheckContextMode checks if the passed context is an ABCI context and is using one of the
-// explicitly allowed modes.
-func (s *ImmutableState) CheckContextMode(ctx context.Context, allowedModes []ContextMode) error {
-	abciCtx := FromCtx(ctx)
-	if abciCtx == nil {
-		return fmt.Errorf("abci: method must only be called from ABCI context")
-	}
-
-	for _, m := range allowedModes {
-		if abciCtx.Mode() == m {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("abci: method cannot be called from the specified ABCI context mode (%s)", abciCtx.Mode())
-}
-
-// Close releases the resources associated with the immutable state wrapper.
-//
-// After calling this method, the immutable state wrapper should not be used anymore.
-func (s *ImmutableState) Close() {
-	if tree, ok := s.ImmutableKeyValueTree.(mkvs.ClosableTree); ok {
-		tree.Close()
-	}
+	tree mkvs.ImmutableKeyValueTree
 }
 
 // NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(ctx context.Context, state ApplicationQueryState, version int64) (*ImmutableState, error) {
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		tree: tree,
+	}
+}
+
+// NewImmutableStateAt creates a new immutable state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state ApplicationQueryState, version int64) (*ImmutableState, error) {
 	if state == nil {
 		return nil, ErrNoState
 	}
@@ -319,4 +301,40 @@ func NewImmutableState(ctx context.Context, state ApplicationQueryState, version
 	tree := mkvs.NewWithRoot(nil, ndb, roots[0], mkvs.WithoutWriteLog())
 
 	return &ImmutableState{tree}, nil
+}
+
+// CheckContextMode checks if the passed context is an ABCI context and is using one of the
+// explicitly allowed modes.
+func (s *ImmutableState) CheckContextMode(ctx context.Context, allowedModes []ContextMode) error {
+	abciCtx := FromCtx(ctx)
+	if abciCtx == nil {
+		return fmt.Errorf("abci: method must only be called from ABCI context")
+	}
+
+	for _, m := range allowedModes {
+		if abciCtx.Mode() == m {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("abci: method cannot be called from the specified ABCI context mode (%s)", abciCtx.Mode())
+}
+
+// Close releases the resources associated with the immutable state wrapper.
+//
+// After calling this method, the immutable state wrapper should not be used anymore.
+func (s *ImmutableState) Close() {
+	if tree, ok := s.tree.(mkvs.ClosableTree); ok {
+		tree.Close()
+	}
+}
+
+// Get looks up an existing key.
+func (s *ImmutableState) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return s.tree.Get(ctx, key)
+}
+
+// NewIterator returns a new iterator over the tree.
+func (s *ImmutableState) NewIterator(ctx context.Context, options ...mkvs.IteratorOption) mkvs.Iterator {
+	return s.tree.NewIterator(ctx, options...)
 }

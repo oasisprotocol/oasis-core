@@ -32,14 +32,31 @@ var (
 	ephemeralSecretKeyFmt = consensus.KeyFormat.New(0x73, keyformat.H(&common.Namespace{}))
 )
 
-// ImmutableState is the immutable key manager state wrapper.
+// ImmutableState is an immutable key manager secrets state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable key manager secrets state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable key manager secrets state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+	return &ImmutableState{is}, nil
 }
 
 // ConsensusParameters returns the key manager consensus parameters.
 func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
-	raw, err := st.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := st.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -73,7 +90,7 @@ func (st *ImmutableState) Statuses(ctx context.Context) ([]*secrets.Status, erro
 }
 
 func (st *ImmutableState) getStatusesRaw(ctx context.Context) ([][]byte, error) {
-	it := st.is.NewIterator(ctx)
+	it := st.state.NewIterator(ctx)
 	defer it.Close()
 
 	var rawVec [][]byte
@@ -90,7 +107,7 @@ func (st *ImmutableState) getStatusesRaw(ctx context.Context) ([][]byte, error) 
 }
 
 func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*secrets.Status, error) {
-	data, err := st.is.Get(ctx, statusKeyFmt.Encode(&id))
+	data, err := st.state.Get(ctx, statusKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -106,7 +123,7 @@ func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*sec
 }
 
 func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
-	data, err := st.is.Get(ctx, masterSecretKeyFmt.Encode(&id))
+	data, err := st.state.Get(ctx, masterSecretKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -122,7 +139,7 @@ func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace)
 }
 
 func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
-	data, err := st.is.Get(ctx, ephemeralSecretKeyFmt.Encode(&id))
+	data, err := st.state.Get(ctx, ephemeralSecretKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -137,26 +154,26 @@ func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespa
 	return &secret, nil
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-	return &ImmutableState{is}, nil
-}
-
-// MutableState is a mutable key manager state wrapper.
+// MutableState is a mutable key manager secrets state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable key manager secrets state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
+}
+
 // SetConsensusParameters sets key manager consensus parameters.
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (st *MutableState) SetConsensusParameters(ctx context.Context, params *secrets.ConsensusParameters) error {
-	if err := st.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := st.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := st.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
@@ -176,14 +193,4 @@ func (st *MutableState) SetMasterSecret(ctx context.Context, secret *secrets.Sig
 func (st *MutableState) SetEphemeralSecret(ctx context.Context, secret *secrets.SignedEncryptedEphemeralSecret) error {
 	err := st.ms.Insert(ctx, ephemeralSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable key manager state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

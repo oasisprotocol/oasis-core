@@ -61,13 +61,22 @@ var (
 	pastRootsKeyFmt = consensus.KeyFormat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
-// ImmutableState is the immutable roothash state wrapper.
+// ImmutableState is an immutable roothash state wrapper.
 type ImmutableState struct {
-	is *api.ImmutableState
+	state *api.ImmutableState
 }
 
-func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableState(ctx, state, version)
+// NewImmutableState creates a new immutable roothash state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable roothash state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := api.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +85,7 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 }
 
 func (s *ImmutableState) runtimesWithRoundTimeouts(ctx context.Context, height *int64) ([]common.Namespace, []int64, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var startKey []byte
@@ -122,7 +131,7 @@ func (s *ImmutableState) RuntimesWithRoundTimeoutsAny(ctx context.Context) ([]co
 
 // RuntimeState returns the roothash runtime state for a specific runtime.
 func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
-	raw, err := s.is.Get(ctx, runtimeKeyFmt.Encode(&id))
+	raw, err := s.state.Get(ctx, runtimeKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -139,7 +148,7 @@ func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) 
 
 // LastRoundResults returns the last normal round results for a specific runtime.
 func (s *ImmutableState) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
-	raw, err := s.is.Get(ctx, lastRoundResultsKeyFmt.Encode(&id))
+	raw, err := s.state.Get(ctx, lastRoundResultsKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -155,7 +164,7 @@ func (s *ImmutableState) LastRoundResults(ctx context.Context, id common.Namespa
 }
 
 func (s *ImmutableState) getRoot(ctx context.Context, id common.Namespace, kf *keyformat.KeyFormat) (hash.Hash, error) {
-	raw, err := s.is.Get(ctx, kf.Encode(&id))
+	raw, err := s.state.Get(ctx, kf.Encode(&id))
 	if err != nil {
 		return hash.Hash{}, api.UnavailableStateError(err)
 	}
@@ -182,7 +191,7 @@ func (s *ImmutableState) IORoot(ctx context.Context, id common.Namespace) (hash.
 
 // Runtimes returns the list of all roothash runtime states.
 func (s *ImmutableState) Runtimes(ctx context.Context) ([]*roothash.RuntimeState, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var runtimes []*roothash.RuntimeState
@@ -206,7 +215,7 @@ func (s *ImmutableState) Runtimes(ctx context.Context) ([]*roothash.RuntimeState
 
 // ConsensusParameters returns the roothash consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -223,13 +232,13 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*roothash.Con
 
 // EvidenceHashExists returns true if the evidence hash for the runtime exists.
 func (s *ImmutableState) EvidenceHashExists(ctx context.Context, runtimeID common.Namespace, round uint64, hash hash.Hash) (bool, error) {
-	data, err := s.is.Get(ctx, evidenceKeyFmt.Encode(&runtimeID, round, &hash))
+	data, err := s.state.Get(ctx, evidenceKeyFmt.Encode(&runtimeID, round, &hash))
 	return data != nil, api.UnavailableStateError(err)
 }
 
 // IncomingMessageQueueMeta returns the incoming message queue metadata for the given runtime.
 func (s *ImmutableState) IncomingMessageQueueMeta(ctx context.Context, runtimeID common.Namespace) (*message.IncomingMessageQueueMeta, error) {
-	raw, err := s.is.Get(ctx, inMsgQueueMetaKeyFmt.Encode(&runtimeID))
+	raw, err := s.state.Get(ctx, inMsgQueueMetaKeyFmt.Encode(&runtimeID))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -246,7 +255,7 @@ func (s *ImmutableState) IncomingMessageQueueMeta(ctx context.Context, runtimeID
 
 // IncomingMessageQueue returns a list of queued messages, starting with the passed offset.
 func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var msgs []*message.IncomingMessage
@@ -282,7 +291,7 @@ func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID com
 //
 // If no roots are present for the given runtime and round, nil is returned.
 func (s *ImmutableState) RoundRoots(ctx context.Context, runtimeID common.Namespace, round uint64) (*roothash.RoundRoots, error) {
-	raw, err := s.is.Get(ctx, pastRootsKeyFmt.Encode(&runtimeID, round))
+	raw, err := s.state.Get(ctx, pastRootsKeyFmt.Encode(&runtimeID, round))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -305,7 +314,7 @@ func (s *ImmutableState) RoundRoots(ctx context.Context, runtimeID common.Namesp
 // Keys of the returned map hold the round numbers and the values hold the
 // two roots for each round.
 func (s *ImmutableState) PastRoundRoots(ctx context.Context, runtimeID common.Namespace) (map[uint64]roothash.RoundRoots, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	// We need to pre-hash the runtime ID, so we can compare it below.
@@ -342,7 +351,7 @@ func (s *ImmutableState) PastRoundRoots(ctx context.Context, runtimeID common.Na
 // This is more efficient than calling len(PastRoundRoots(runtimeID)), as it
 // avoids deserialization.
 func (s *ImmutableState) PastRoundRootsCount(ctx context.Context, runtimeID common.Namespace) uint64 {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	// We need to pre-hash the runtime ID, so we can compare it below.
@@ -374,12 +383,11 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
+// NewMutableState creates a new mutable roothash state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&api.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
 	}
 }
 
@@ -454,7 +462,7 @@ func (s *MutableState) ShrinkPastRoots(ctx context.Context, maxStoredRoots uint6
 
 		numPastRootsToDelete := numStoredRoots - maxStoredRoots
 
-		it := s.is.NewIterator(ctx)
+		it := s.state.NewIterator(ctx)
 
 		// We need to pre-hash the runtime ID, so we can compare it below.
 		hID := keyformat.PreHashed(id.Hash())
@@ -500,7 +508,7 @@ func (s *MutableState) SetLastRoundResults(ctx context.Context, runtimeID common
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *roothash.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
@@ -528,7 +536,7 @@ func (s *MutableState) SetEvidenceHash(ctx context.Context, runtimeID common.Nam
 
 // RemoveExpiredEvidence removes expired evidence.
 func (s *MutableState) RemoveExpiredEvidence(ctx context.Context, runtimeID common.Namespace, minRound uint64) error {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	// We need to pre-hash the runtime ID, so we can compare it below.

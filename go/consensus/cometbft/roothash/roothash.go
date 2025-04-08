@@ -262,7 +262,7 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.backend.GetBlockResults(ctx, height)
+	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
 			"err", err,

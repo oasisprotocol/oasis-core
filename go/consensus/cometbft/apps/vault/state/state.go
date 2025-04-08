@@ -34,14 +34,22 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x33)
 )
 
-// ImmutableState is the immutable consensus state wrapper.
+// ImmutableState is an immutable vault state wrapper.
 type ImmutableState struct {
-	is *api.ImmutableState
+	state *api.ImmutableState
 }
 
-// NewImmutableState returns immutable vault state.
-func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableState(ctx, state, version)
+// NewImmutableState creates a new immutable vault state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable vault state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := api.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +59,7 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 
 // Vaults looks up all vaults.
 func (s *ImmutableState) Vaults(ctx context.Context) ([]*vault.Vault, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var vaults []*vault.Vault
@@ -74,7 +82,7 @@ func (s *ImmutableState) Vaults(ctx context.Context) ([]*vault.Vault, error) {
 }
 
 func (s *ImmutableState) Vault(ctx context.Context, address staking.Address) (*vault.Vault, error) {
-	raw, err := s.is.Get(ctx, vaultKeyFmt.Encode(address))
+	raw, err := s.state.Get(ctx, vaultKeyFmt.Encode(address))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -90,7 +98,7 @@ func (s *ImmutableState) Vault(ctx context.Context, address staking.Address) (*v
 }
 
 func (s *ImmutableState) AddressState(ctx context.Context, vaultAddr staking.Address, address staking.Address) (*vault.AddressState, error) {
-	raw, err := s.is.Get(ctx, addressStateKeyFmt.Encode(vaultAddr, address))
+	raw, err := s.state.Get(ctx, addressStateKeyFmt.Encode(vaultAddr, address))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -106,7 +114,7 @@ func (s *ImmutableState) AddressState(ctx context.Context, vaultAddr staking.Add
 }
 
 func (s *ImmutableState) AddressStates(ctx context.Context, vaultAddr staking.Address) (map[staking.Address]*vault.AddressState, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	states := make(map[staking.Address]*vault.AddressState)
@@ -132,7 +140,7 @@ func (s *ImmutableState) AddressStates(ctx context.Context, vaultAddr staking.Ad
 }
 
 func (s *ImmutableState) PendingAction(ctx context.Context, vaultAddr staking.Address, nonce uint64) (*vault.PendingAction, error) {
-	raw, err := s.is.Get(ctx, pendingActionsKeyFmt.Encode(vaultAddr, nonce))
+	raw, err := s.state.Get(ctx, pendingActionsKeyFmt.Encode(vaultAddr, nonce))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -148,7 +156,7 @@ func (s *ImmutableState) PendingAction(ctx context.Context, vaultAddr staking.Ad
 }
 
 func (s *ImmutableState) PendingActions(ctx context.Context, vaultAddr staking.Address) ([]*vault.PendingAction, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var actions []*vault.PendingAction
@@ -172,7 +180,7 @@ func (s *ImmutableState) PendingActions(ctx context.Context, vaultAddr staking.A
 
 // ConsensusParameters returns the vault consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*vault.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -194,13 +202,11 @@ type MutableState struct {
 	ms mkvs.KeyValueTree
 }
 
-// NewMutableState creates a new mutable vault state.
+// NewMutableState creates a new mutable vault state wrapper.
 func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&api.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
 	}
 }
 
@@ -259,7 +265,7 @@ func (s *MutableState) RemovePendingAction(ctx context.Context, vaultAddr stakin
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *vault.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))

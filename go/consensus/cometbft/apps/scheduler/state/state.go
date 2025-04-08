@@ -35,14 +35,32 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x63)
 )
 
-// ImmutableState is the immutable scheduler state wrapper.
+// ImmutableState is an immutable scheduler state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable vault state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable scheduler state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImmutableState{is}, nil
 }
 
 // Committee returns a specific elected committee.
 func (s *ImmutableState) Committee(ctx context.Context, kind api.CommitteeKind, runtimeID common.Namespace) (*api.Committee, error) {
-	raw, err := s.is.Get(ctx, committeeKeyFmt.Encode(uint8(kind), &runtimeID))
+	raw, err := s.state.Get(ctx, committeeKeyFmt.Encode(uint8(kind), &runtimeID))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -59,7 +77,7 @@ func (s *ImmutableState) Committee(ctx context.Context, kind api.CommitteeKind, 
 
 // AllCommittees returns a list of all elected committees.
 func (s *ImmutableState) AllCommittees(ctx context.Context) ([]*api.Committee, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var committees []*api.Committee
@@ -86,7 +104,7 @@ func (s *ImmutableState) AllCommittees(ctx context.Context) ([]*api.Committee, e
 
 // KindsCommittees returns a list of all committees of specific kinds.
 func (s *ImmutableState) KindsCommittees(ctx context.Context, kinds []api.CommitteeKind) ([]*api.Committee, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var committees []*api.Committee
@@ -115,7 +133,7 @@ func (s *ImmutableState) KindsCommittees(ctx context.Context, kinds []api.Commit
 
 // CurrentValidators returns a list of current validators.
 func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.PublicKey]*api.Validator, error) {
-	raw, err := s.is.Get(ctx, validatorsCurrentKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, validatorsCurrentKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -132,7 +150,7 @@ func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.P
 
 // PendingValidators returns a list of pending validators.
 func (s *ImmutableState) PendingValidators(ctx context.Context) (map[signature.PublicKey]*api.Validator, error) {
-	raw, err := s.is.Get(ctx, validatorsPendingKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, validatorsPendingKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -149,7 +167,7 @@ func (s *ImmutableState) PendingValidators(ctx context.Context) (map[signature.P
 
 // ConsensusParameters returns scheduler consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*api.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -164,20 +182,19 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*api.Consensu
 	return &params, nil
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // MutableState is a mutable scheduler state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable scheduler state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
 }
 
 // PutCommittee sets an elected committee for a specific runtime.
@@ -212,19 +229,9 @@ func (s *MutableState) PutPendingValidators(ctx context.Context, validators map[
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *api.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable scheduler state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

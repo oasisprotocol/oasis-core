@@ -36,13 +36,22 @@ var (
 	parametersKeyFmt = consensus.KeyFormat.New(0x43)
 )
 
-// ImmutableState is the immutable beacon state wrapper.
+// ImmutableState is an immutable beacon state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
+// NewImmutableState creates a new immutable beacon state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable beacon state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +61,7 @@ func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState,
 
 // Beacon gets the current random beacon value.
 func (s *ImmutableState) Beacon(ctx context.Context) ([]byte, error) {
-	data, err := s.is.Get(ctx, beaconKeyFmt.Encode())
+	data, err := s.state.Get(ctx, beaconKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -63,7 +72,7 @@ func (s *ImmutableState) Beacon(ctx context.Context) ([]byte, error) {
 }
 
 func (s *ImmutableState) GetEpoch(ctx context.Context) (beacon.EpochTime, int64, error) {
-	data, err := s.is.Get(ctx, epochCurrentKeyFmt.Encode())
+	data, err := s.state.Get(ctx, epochCurrentKeyFmt.Encode())
 	if err != nil {
 		return beacon.EpochInvalid, 0, abciAPI.UnavailableStateError(err)
 	}
@@ -79,7 +88,7 @@ func (s *ImmutableState) GetEpoch(ctx context.Context) (beacon.EpochTime, int64,
 }
 
 func (s *ImmutableState) GetFutureEpoch(ctx context.Context) (*beacon.EpochTimeState, error) {
-	data, err := s.is.Get(ctx, epochFutureKeyFmt.Encode())
+	data, err := s.state.Get(ctx, epochFutureKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -95,7 +104,7 @@ func (s *ImmutableState) GetFutureEpoch(ctx context.Context) (*beacon.EpochTimeS
 }
 
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*beacon.ConsensusParameters, error) {
-	data, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	data, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -111,7 +120,7 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*beacon.Conse
 }
 
 func (s *ImmutableState) PendingMockEpoch(ctx context.Context) (*beacon.EpochTime, error) {
-	data, err := s.is.Get(ctx, epochPendingMockKeyFmt.Encode())
+	data, err := s.state.Get(ctx, epochPendingMockKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -141,6 +150,14 @@ type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable beacon state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
 }
 
 func (s *MutableState) SetBeacon(ctx context.Context, newBeacon []byte) error {
@@ -189,19 +206,9 @@ func (s *MutableState) ClearFutureEpoch(ctx context.Context) error {
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *beacon.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable beacon state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

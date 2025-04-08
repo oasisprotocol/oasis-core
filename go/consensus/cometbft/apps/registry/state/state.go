@@ -78,13 +78,31 @@ var (
 	runtimeByEntityKeyFmt = consensus.KeyFormat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
 )
 
-// ImmutableState is the immutable registry state wrapper.
+// ImmutableState is an immutable registry state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable registry state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: abciAPI.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable registry state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImmutableState{is}, nil
 }
 
 func (s *ImmutableState) getSignedEntityRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
-	data, err := s.is.Get(ctx, signedEntityKeyFmt.Encode(&id))
+	data, err := s.state.Get(ctx, signedEntityKeyFmt.Encode(&id))
 	return data, abciAPI.UnavailableStateError(err)
 }
 
@@ -111,7 +129,7 @@ func (s *ImmutableState) Entity(ctx context.Context, id signature.PublicKey) (*e
 
 // Entities returns a list of all registered entities.
 func (s *ImmutableState) Entities(ctx context.Context) ([]*entity.Entity, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var entities []*entity.Entity
@@ -139,7 +157,7 @@ func (s *ImmutableState) Entities(ctx context.Context) ([]*entity.Entity, error)
 
 // SignedEntities returns a list of all registered entities (signed).
 func (s *ImmutableState) SignedEntities(ctx context.Context) ([]*entity.SignedEntity, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var entities []*entity.SignedEntity
@@ -162,7 +180,7 @@ func (s *ImmutableState) SignedEntities(ctx context.Context) ([]*entity.SignedEn
 }
 
 func (s *ImmutableState) getSignedNodeRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
-	data, err := s.is.Get(ctx, signedNodeKeyFmt.Encode(&id))
+	data, err := s.state.Get(ctx, signedNodeKeyFmt.Encode(&id))
 	return data, abciAPI.UnavailableStateError(err)
 }
 
@@ -191,7 +209,7 @@ func (s *ImmutableState) Node(ctx context.Context, id signature.PublicKey) (*nod
 //
 // If you need to get the actual node descriptor, use NodeByConsensusAddress instead.
 func (s *ImmutableState) NodeIDByConsensusAddress(ctx context.Context, address []byte) (signature.PublicKey, error) {
-	rawID, err := s.is.Get(ctx, nodeByConsAddressKeyFmt.Encode(address))
+	rawID, err := s.state.Get(ctx, nodeByConsAddressKeyFmt.Encode(address))
 	if err != nil {
 		return signature.PublicKey{}, abciAPI.UnavailableStateError(err)
 	}
@@ -217,7 +235,7 @@ func (s *ImmutableState) NodeByConsensusAddress(ctx context.Context, address []b
 
 // Nodes returns a list of all registered nodes.
 func (s *ImmutableState) Nodes(ctx context.Context) ([]*node.Node, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var nodes []*node.Node
@@ -246,7 +264,7 @@ func (s *ImmutableState) Nodes(ctx context.Context) ([]*node.Node, error) {
 
 // SignedNodes returns a list of all registered nodes (in signed form).
 func (s *ImmutableState) SignedNodes(ctx context.Context) ([]*node.MultiSignedNode, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var nodes []*node.MultiSignedNode
@@ -269,7 +287,7 @@ func (s *ImmutableState) SignedNodes(ctx context.Context) ([]*node.MultiSignedNo
 }
 
 func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
-	raw, err := s.is.Get(ctx, keyFmt.Encode(&id))
+	raw, err := s.state.Get(ctx, keyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -312,7 +330,7 @@ func (s *ImmutableState) iterateRuntimes(
 	keyFmt *keyformat.KeyFormat,
 	cb func(*registry.Runtime) error,
 ) error {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	for it.Seek(keyFmt.Encode()); it.Valid(); it.Next() {
@@ -378,7 +396,7 @@ func (s *ImmutableState) AllRuntimes(ctx context.Context) ([]*registry.Runtime, 
 
 // NodeStatus returns a specific node status.
 func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
-	value, err := s.is.Get(ctx, nodeStatusKeyFmt.Encode(&id))
+	value, err := s.state.Get(ctx, nodeStatusKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -396,7 +414,7 @@ func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey)
 // GetEntityNodes returns nodes registered by given entity.
 // Note that this returns both active and expired nodes.
 func (s *ImmutableState) GetEntityNodes(ctx context.Context, id signature.PublicKey) ([]*node.Node, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	hID := keyformat.PreHashed(id.Hash())
@@ -410,7 +428,7 @@ func (s *ImmutableState) GetEntityNodes(ctx context.Context, id signature.Public
 			break
 		}
 
-		rawSignedNode, err := s.is.Get(ctx, signedNodeKeyFmt.Encode(&hNodeID))
+		rawSignedNode, err := s.state.Get(ctx, signedNodeKeyFmt.Encode(&hNodeID))
 		if err != nil {
 			return nil, abciAPI.UnavailableStateError(err)
 		}
@@ -435,7 +453,7 @@ func (s *ImmutableState) GetEntityNodes(ctx context.Context, id signature.Public
 
 // HasEntityNodes checks whether an entity has any registered nodes.
 func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.PublicKey) (bool, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	hID := keyformat.PreHashed(id.Hash())
@@ -451,7 +469,7 @@ func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.Public
 
 // HasEntityRuntimes checks whether an entity has any registered runtimes.
 func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.PublicKey) (bool, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	hID := keyformat.PreHashed(id.Hash())
@@ -467,7 +485,7 @@ func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.Pub
 
 // ConsensusParameters returns the registry consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -484,7 +502,7 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*registry.Con
 
 // NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
 func (s *ImmutableState) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
-	rawID, err := s.is.Get(ctx, keyMapKeyFmt.Encode(&key))
+	rawID, err := s.state.Get(ctx, keyMapKeyFmt.Encode(&key))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -499,20 +517,19 @@ func (s *ImmutableState) NodeBySubKey(ctx context.Context, key signature.PublicK
 	return s.Node(ctx, id)
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // MutableState is a mutable registry state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable registry state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
 }
 
 // SetEntity sets a signed entity descriptor for a registered entity.
@@ -700,19 +717,9 @@ func (s *MutableState) SetNodeStatus(ctx context.Context, id signature.PublicKey
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *registry.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
-}
-
-// NewMutableState creates a new mutable registry state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

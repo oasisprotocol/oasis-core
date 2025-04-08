@@ -25,7 +25,7 @@ type QueryFactory struct {
 
 // QueryAt returns the beacon query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := beaconState.NewImmutableState(ctx, sf.state, height)
+	state, err := beaconState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}

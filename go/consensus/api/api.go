@@ -111,8 +111,6 @@ func (m FeatureMask) Has(f FeatureMask) bool {
 
 // ClientBackend is a consensus interface used by clients that connect to the local full node.
 type ClientBackend interface {
-	TransactionAuthHandler
-
 	// SubmitTx submits a signed consensus transaction and waits for the transaction to be included
 	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
@@ -153,6 +151,10 @@ type ClientBackend interface {
 
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence *Evidence) error
+
+	// GetSignerNonce returns the nonce that should be used by the given
+	// signer for transmitting the next transaction.
+	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
 
 	// GetTransactions returns a list of all transactions contained within a
 	// consensus block at a specific height.
@@ -428,14 +430,6 @@ type StatePruneHandler interface {
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
 	Prune(height int64) error
-}
-
-// TransactionAuthHandler is the interface for handling transaction authentication
-// (checking nonces and fees).
-type TransactionAuthHandler interface {
-	// GetSignerNonce returns the nonce that should be used by the given
-	// signer for transmitting the next transaction.
-	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
 }
 
 // EstimateGasRequest is a EstimateGas request.

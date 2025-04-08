@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -83,13 +84,31 @@ var (
 	logger = logging.GetLogger("cometbft/staking")
 )
 
-// ImmutableState is the immutable staking state wrapper.
+// ImmutableState is an immutable staking state wrapper.
 type ImmutableState struct {
-	is *abciAPI.ImmutableState
+	state *abciAPI.ImmutableState
+}
+
+// NewImmutableState creates a new immutable staking state wrapper.
+func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
+	return &ImmutableState{
+		state: api.NewImmutableState(tree),
+	}
+}
+
+// NewImmutableStateAt creates a new immutable staking state wrapper
+// using the provided application query state and version.
+func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImmutableState{is}, nil
 }
 
 func (s *ImmutableState) loadStoredBalance(ctx context.Context, key *keyformat.KeyFormat) (*quantity.Quantity, error) {
-	value, err := s.is.Get(ctx, key.Encode())
+	value, err := s.state.Get(ctx, key.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -116,7 +135,7 @@ func (s *ImmutableState) CommonPool(ctx context.Context) (*quantity.Quantity, er
 
 // ConsensusParameters returns the consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {
-	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	raw, err := s.state.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -170,7 +189,7 @@ func (s *ImmutableState) Thresholds(ctx context.Context) (map[staking.ThresholdK
 
 // Addresses returns the non-empty addresses from the staking ledger.
 func (s *ImmutableState) Addresses(ctx context.Context) ([]staking.Address, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var addresses []staking.Address
@@ -190,7 +209,7 @@ func (s *ImmutableState) Addresses(ctx context.Context) ([]staking.Address, erro
 
 // CommissionScheduleAddresses returns addresses that have a non empty commission schedule configured.
 func (s *ImmutableState) CommissionScheduleAddresses(ctx context.Context) ([]staking.Address, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var addresses []staking.Address
@@ -214,7 +233,7 @@ func (s *ImmutableState) Account(ctx context.Context, address staking.Address) (
 		return nil, fmt.Errorf("cometbft/staking: invalid account address: %s", address)
 	}
 
-	value, err := s.is.Get(ctx, accountKeyFmt.Encode(&address))
+	value, err := s.state.Get(ctx, accountKeyFmt.Encode(&address))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -242,7 +261,7 @@ func (s *ImmutableState) EscrowBalance(ctx context.Context, address staking.Addr
 func (s *ImmutableState) Delegations(
 	ctx context.Context,
 ) (map[staking.Address]map[staking.Address]*staking.Delegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address]map[staking.Address]*staking.Delegation)
@@ -274,7 +293,7 @@ func (s *ImmutableState) Delegation(
 	ctx context.Context,
 	delegatorAddr, escrowAddr staking.Address,
 ) (*staking.Delegation, error) {
-	value, err := s.is.Get(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr))
+	value, err := s.state.Get(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -293,7 +312,7 @@ func (s *ImmutableState) DelegationsFor(
 	ctx context.Context,
 	delegatorAddr staking.Address,
 ) (map[staking.Address]*staking.Delegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address]*staking.Delegation)
@@ -324,7 +343,7 @@ func (s *ImmutableState) DelegationsTo(
 	ctx context.Context,
 	destAddr staking.Address,
 ) (map[staking.Address]*staking.Delegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address]*staking.Delegation)
@@ -354,7 +373,7 @@ func (s *ImmutableState) DelegationsTo(
 func (s *ImmutableState) DebondingDelegations(
 	ctx context.Context,
 ) (map[staking.Address]map[staking.Address][]*staking.DebondingDelegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address]map[staking.Address][]*staking.DebondingDelegation)
@@ -386,7 +405,7 @@ func (s *ImmutableState) DebondingDelegation(
 	delegatorAddr, escrowAddr staking.Address,
 	epoch beacon.EpochTime,
 ) (*staking.DebondingDelegation, error) {
-	value, err := s.is.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
+	value, err := s.state.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -405,7 +424,7 @@ func (s *ImmutableState) DebondingDelegationsFor(
 	ctx context.Context,
 	delegatorAddr staking.Address,
 ) (map[staking.Address][]*staking.DebondingDelegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address][]*staking.DebondingDelegation)
@@ -436,7 +455,7 @@ func (s *ImmutableState) DebondingDelegationsTo(
 	ctx context.Context,
 	destAddr staking.Address,
 ) (map[staking.Address][]*staking.DebondingDelegation, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	delegations := make(map[staking.Address][]*staking.DebondingDelegation)
@@ -471,7 +490,7 @@ type DebondingQueueEntry struct {
 }
 
 func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon.EpochTime) ([]*DebondingQueueEntry, error) {
-	it := s.is.NewIterator(ctx)
+	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
 	var entries []*DebondingQueueEntry
@@ -567,7 +586,7 @@ func (es *EpochSigning) EligibleEntities(thresholdNumerator, thresholdDenominato
 }
 
 func (s *ImmutableState) EpochSigning(ctx context.Context) (*EpochSigning, error) {
-	value, err := s.is.Get(ctx, epochSigningKeyFmt.Encode())
+	value, err := s.state.Get(ctx, epochSigningKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -585,20 +604,19 @@ func (s *ImmutableState) EpochSigning(ctx context.Context) (*EpochSigning, error
 	return &es, nil
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableState(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // MutableState is a mutable staking state wrapper.
 type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// NewMutableState creates a new mutable staking state wrapper.
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
+	return &MutableState{
+		ImmutableState: NewImmutableState(tree),
+		ms:             tree,
+	}
 }
 
 func (s *MutableState) SetAccount(ctx context.Context, addr staking.Address, account *staking.Account) error {
@@ -644,7 +662,7 @@ func (s *MutableState) SetCommonPool(ctx context.Context, q *quantity.Quantity) 
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *staking.ConsensusParameters) error {
-	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+	if err := s.state.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
@@ -696,7 +714,7 @@ func (s *MutableState) SetDebondingDelegation(
 
 	// If a debonding delegation for the account and same end epoch already exists,
 	// merge the debonding delegations.
-	value, err := s.is.Get(ctx, key)
+	value, err := s.state.Get(ctx, key)
 	if err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
@@ -1433,14 +1451,4 @@ func (s *MutableState) AddRewardSingleAttenuated(
 	}
 
 	return nil
-}
-
-// NewMutableState creates a new mutable staking state wrapper.
-func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
-	return &MutableState{
-		ImmutableState: &ImmutableState{
-			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
-		},
-		ms: tree,
-	}
 }

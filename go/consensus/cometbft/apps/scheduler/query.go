@@ -25,13 +25,13 @@ type QueryFactory struct {
 
 // QueryAt returns the scheduler query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := schedulerState.NewImmutableState(ctx, sf.state, height)
+	state, err := schedulerState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
 
 	// Some queries need access to the registry to give useful responses.
-	regState, err := registryState.NewImmutableState(ctx, sf.state, height)
+	regState, err := registryState.NewImmutableStateAt(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
