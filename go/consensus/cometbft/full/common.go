@@ -587,7 +587,7 @@ func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmtty
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error) {
+func (n *commonNode) GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -700,7 +700,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		return nil, err
 	}
 
-	blockResults, err := n.GetBlockResults(ctx, height)
+	blockResults, err := n.GetCometBFTBlockResults(ctx, height)
 	if err != nil {
 		return nil, err
 	}

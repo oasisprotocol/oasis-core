@@ -214,9 +214,9 @@ type Backend interface {
 	// GetCometBFTBlock returns the CometBFT block at the specified height.
 	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
 
-	// GetBlockResults returns the ABCI results from processing a block
+	// GetCometBFTBlockResults returns the ABCI results from processing a block
 	// at a specific height.
-	GetBlockResults(ctx context.Context, height int64) (*cmtrpctypes.ResultBlockResults, error)
+	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtrpctypes.ResultBlockResults, error)
 
 	// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
 	// returned via the `EventDataNewBlock` query.
