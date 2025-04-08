@@ -15,4 +15,4 @@ oasis-core-keymanager = { path = "../../../keymanager" }
 anyhow = "1.0"
 async-trait = "0.1.82"
 rand = "0.8.5"
-tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.43.1", features = ["rt", "rt-multi-thread", "sync"] }
