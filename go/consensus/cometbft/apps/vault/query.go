@@ -25,36 +25,38 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the vault query interface for a specific height.
-func (qf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := vaultState.NewImmutableStateAt(ctx, qf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &vaultQuerier{state}, nil
+	return &vaultQuerier{
+		state: vaultState.NewImmutableState(state),
+	}, nil
 }
 
 type vaultQuerier struct {
 	state *vaultState.ImmutableState
 }
 
-func (vq *vaultQuerier) Vaults(ctx context.Context) ([]*vault.Vault, error) {
-	return vq.state.Vaults(ctx)
+func (q *vaultQuerier) Vaults(ctx context.Context) ([]*vault.Vault, error) {
+	return q.state.Vaults(ctx)
 }
 
-func (vq *vaultQuerier) Vault(ctx context.Context, address staking.Address) (*vault.Vault, error) {
-	return vq.state.Vault(ctx, address)
+func (q *vaultQuerier) Vault(ctx context.Context, address staking.Address) (*vault.Vault, error) {
+	return q.state.Vault(ctx, address)
 }
 
-func (vq *vaultQuerier) AddressState(ctx context.Context, vault staking.Address, address staking.Address) (*vault.AddressState, error) {
-	return vq.state.AddressState(ctx, vault, address)
+func (q *vaultQuerier) AddressState(ctx context.Context, vault staking.Address, address staking.Address) (*vault.AddressState, error) {
+	return q.state.AddressState(ctx, vault, address)
 }
 
-func (vq *vaultQuerier) PendingActions(ctx context.Context, address staking.Address) ([]*vault.PendingAction, error) {
-	return vq.state.PendingActions(ctx, address)
+func (q *vaultQuerier) PendingActions(ctx context.Context, address staking.Address) ([]*vault.PendingAction, error) {
+	return q.state.PendingActions(ctx, address)
 }
 
-func (vq *vaultQuerier) ConsensusParameters(ctx context.Context) (*vault.ConsensusParameters, error) {
-	return vq.state.ConsensusParameters(ctx)
+func (q *vaultQuerier) ConsensusParameters(ctx context.Context) (*vault.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
 func (app *vaultApplication) QueryFactory() any {

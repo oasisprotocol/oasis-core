@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
 	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
@@ -374,11 +373,12 @@ func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error
 }
 
 func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis, error) {
-	is, err := abciState.NewImmutableStateAt(ctx, qs, qs.BlockHeight())
+	qf := abci.NewQueryFactory(qs)
+	q, err := qf.QueryAt(ctx, qs.BlockHeight())
 	if err != nil {
-		return nil, fmt.Errorf("dumpdb: failed to get consensus state: %w", err)
+		return nil, fmt.Errorf("dumpdb: failed to create consensus query: %w", err)
 	}
-	params, err := is.ConsensusParameters(ctx)
+	params, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to get consensus params: %w", err)
 	}

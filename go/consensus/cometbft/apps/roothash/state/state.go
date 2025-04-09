@@ -73,17 +73,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable roothash state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 func (s *ImmutableState) runtimesWithRoundTimeouts(ctx context.Context, height *int64) ([]common.Namespace, []int64, error) {
 	it := s.state.NewIterator(ctx)
 	defer it.Close()

@@ -46,17 +46,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable vault state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // Vaults looks up all vaults.
 func (s *ImmutableState) Vaults(ctx context.Context) ([]*vault.Vault, error) {
 	it := s.state.NewIterator(ctx)

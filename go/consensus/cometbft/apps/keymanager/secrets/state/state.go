@@ -44,16 +44,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable key manager secrets state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-	return &ImmutableState{is}, nil
-}
-
 // ConsensusParameters returns the key manager consensus parameters.
 func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
 	raw, err := st.state.Get(ctx, parametersKeyFmt.Encode())

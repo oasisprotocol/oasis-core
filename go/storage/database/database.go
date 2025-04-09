@@ -46,7 +46,7 @@ type databaseBackend struct {
 	readOnly bool
 }
 
-// New constructs a new database backed storage Backend instance.
+// New constructs a new database backed storage backend instance.
 func New(cfg *api.Config) (api.LocalBackend, error) {
 	if err := autoDetectBackend(cfg); err != nil {
 		return nil, err

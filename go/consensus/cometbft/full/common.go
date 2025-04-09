@@ -31,7 +31,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
-	coreState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/supplementarysanity"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/beacon"
@@ -114,7 +113,8 @@ type commonNode struct {
 	genesisHeight      int64
 	publicKeyBlacklist []signature.PublicKey
 
-	mux *abci.ApplicationServer
+	mux     *abci.ApplicationServer
+	querier *abci.QueryFactory
 
 	beacon     beaconAPI.Backend
 	governance governanceAPI.Backend
@@ -214,6 +214,9 @@ func (n *commonNode) initialize() error {
 			return err
 		}
 	}
+
+	// Initialize consensus backend querier.
+	n.querier = abci.NewQueryFactory(n.mux.State())
 
 	// Initialize the beacon/epochtime backend.
 	var (
@@ -371,11 +374,11 @@ func (n *commonNode) StateToGenesis(ctx context.Context, height int64) (*genesis
 	height = blk.Header.Height
 
 	// Query root consensus parameters.
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
+	q, err := n.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -507,11 +510,11 @@ func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGa
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), consensusAPI.HeightLatest)
+	q, err := n.querier.QueryAt(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return nil, err
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -829,11 +832,11 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, fmt.Errorf("cometbft: failed to marshal consensus params: %w", err)
 	}
 
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
+	q, err := n.querier.QueryAt(ctx, height)
 	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to initialize core consensus state: %w", err)
+		return nil, fmt.Errorf("cometbft: failed to create consensus query: %w", err)
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: failed to fetch core consensus parameters: %w", err)
 	}

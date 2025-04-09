@@ -388,7 +388,7 @@ func (sc *serviceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 	return sc.epoch, sc.epochCurrentBlock
 }
 
-// New constructs a new CometBFT backed beacon and epochtime Backend instance.
+// New constructs a new CometBFT backed beacon and epochtime backend instance.
 func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()

@@ -48,17 +48,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable beacon state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // Beacon gets the current random beacon value.
 func (s *ImmutableState) Beacon(ctx context.Context) ([]byte, error) {
 	data, err := s.state.Get(ctx, beaconKeyFmt.Encode())

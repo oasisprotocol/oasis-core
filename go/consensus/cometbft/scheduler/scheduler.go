@@ -141,7 +141,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, _ cmtty
 	return nil
 }
 
-// New constructs a new CometBFT-based scheduler Backend instance.
+// New constructs a new CometBFT-based scheduler backend instance.
 func New(backend tmapi.Backend) (ServiceClient, error) {
 	// Initialze and register the CometBFT service component.
 	a := app.New()

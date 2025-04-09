@@ -22,20 +22,14 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the key manager query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	secretsState, err := secretsState.NewImmutableStateAt(ctx, sf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-
-	churpState, err := churpState.NewImmutableStateAt(ctx, sf.state, height)
-	if err != nil {
-		return nil, err
-	}
-
 	return &keymanagerQuerier{
-		secretsState: secretsState,
-		churpState:   churpState,
+		secretsState: secretsState.NewImmutableState(state),
+		churpState:   churpState.NewImmutableState(state),
 	}, nil
 }
 
@@ -44,12 +38,12 @@ type keymanagerQuerier struct {
 	churpState   *churpState.ImmutableState
 }
 
-func (kq *keymanagerQuerier) Secrets() secrets.Query {
-	return secrets.NewQuery(kq.secretsState)
+func (q *keymanagerQuerier) Secrets() secrets.Query {
+	return secrets.NewQuery(q.secretsState)
 }
 
-func (kq *keymanagerQuerier) Churp() churp.Query {
-	return churp.NewQuery(kq.churpState)
+func (q *keymanagerQuerier) Churp() churp.Query {
+	return churp.NewQuery(q.churpState)
 }
 
 func (app *keymanagerApplication) QueryFactory() any {

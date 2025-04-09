@@ -260,7 +260,7 @@ func EventsFromCometBFT(
 	return events, errs
 }
 
-// New constructs a new CometBFT backed governance Backend instance.
+// New constructs a new CometBFT backed governance backend instance.
 func New(backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()

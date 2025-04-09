@@ -53,14 +53,14 @@ func (app *vaultApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInit
 }
 
 // Genesis exports current state in genesis format.
-func (vq *vaultQuerier) Genesis(ctx context.Context) (*vault.Genesis, error) {
-	params, err := vq.state.ConsensusParameters(ctx)
+func (q *vaultQuerier) Genesis(ctx context.Context) (*vault.Genesis, error) {
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Vaults.
-	vaults, err := vq.state.Vaults(ctx)
+	vaults, err := q.state.Vaults(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +70,13 @@ func (vq *vaultQuerier) Genesis(ctx context.Context) (*vault.Genesis, error) {
 	states := make(map[staking.Address]map[staking.Address]*vault.AddressState)
 	for _, vlt := range vaults {
 		var actions []*vault.PendingAction
-		actions, err = vq.state.PendingActions(ctx, vlt.Address())
+		actions, err = q.state.PendingActions(ctx, vlt.Address())
 		if err != nil {
 			return nil, err
 		}
 
 		var vaultStates map[staking.Address]*vault.AddressState
-		vaultStates, err := vq.state.AddressStates(ctx, vlt.Address())
+		vaultStates, err := q.state.AddressStates(ctx, vlt.Address())
 		if err != nil {
 			return nil, err
 		}

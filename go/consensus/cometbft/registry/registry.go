@@ -375,7 +375,7 @@ func (sc *serviceClient) getNodeList(ctx context.Context, height int64) (*api.No
 	}, nil
 }
 
-// New constructs a new CometBFT backed registry Backend instance.
+// New constructs a new CometBFT backed registry backend instance.
 func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()

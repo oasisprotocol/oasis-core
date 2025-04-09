@@ -26,40 +26,42 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the governance query interface for a specific height.
-func (qf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := governanceState.NewImmutableStateAt(ctx, qf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &governanceQuerier{state}, nil
+	return &governanceQuerier{
+		state: governanceState.NewImmutableState(state),
+	}, nil
 }
 
 type governanceQuerier struct {
 	state *governanceState.ImmutableState
 }
 
-func (gq *governanceQuerier) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
-	return gq.state.ActiveProposals(ctx)
+func (q *governanceQuerier) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
+	return q.state.ActiveProposals(ctx)
 }
 
-func (gq *governanceQuerier) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
-	return gq.state.Proposals(ctx)
+func (q *governanceQuerier) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
+	return q.state.Proposals(ctx)
 }
 
-func (gq *governanceQuerier) Proposal(ctx context.Context, id uint64) (*governance.Proposal, error) {
-	return gq.state.Proposal(ctx, id)
+func (q *governanceQuerier) Proposal(ctx context.Context, id uint64) (*governance.Proposal, error) {
+	return q.state.Proposal(ctx, id)
 }
 
-func (gq *governanceQuerier) Votes(ctx context.Context, id uint64) ([]*governance.VoteEntry, error) {
-	return gq.state.Votes(ctx, id)
+func (q *governanceQuerier) Votes(ctx context.Context, id uint64) ([]*governance.VoteEntry, error) {
+	return q.state.Votes(ctx, id)
 }
 
-func (gq *governanceQuerier) PendingUpgrades(ctx context.Context) ([]*upgrade.Descriptor, error) {
-	return gq.state.PendingUpgrades(ctx)
+func (q *governanceQuerier) PendingUpgrades(ctx context.Context) ([]*upgrade.Descriptor, error) {
+	return q.state.PendingUpgrades(ctx)
 }
 
-func (gq *governanceQuerier) ConsensusParameters(ctx context.Context) (*governance.ConsensusParameters, error) {
-	return gq.state.ConsensusParameters(ctx)
+func (q *governanceQuerier) ConsensusParameters(ctx context.Context) (*governance.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
 func (app *governanceApplication) QueryFactory() any {
