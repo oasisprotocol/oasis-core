@@ -38,7 +38,7 @@ func (app *vaultApplication) Methods() []transaction.MethodName {
 
 // Enabled implements api.TogglableApplication and api.TogglableMessageSubscriber.
 func (app *vaultApplication) Enabled(ctx *api.Context) (bool, error) {
-	state := vaultState.NewMutableState(ctx.State())
+	state := vaultState.NewImmutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		return false, err
