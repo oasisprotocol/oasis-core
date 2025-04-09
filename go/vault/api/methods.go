@@ -58,7 +58,7 @@ func (c Create) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 }
 
 // PrettyType returns a representation of Create that can be used for pretty printing.
-func (c Create) PrettyType() (interface{}, error) {
+func (c Create) PrettyType() (any, error) {
 	return c, nil
 }
 
@@ -93,7 +93,7 @@ func (a AuthorizeAction) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 }
 
 // PrettyType returns a representation of AuthorizeAction that can be used for pretty printing.
-func (a AuthorizeAction) PrettyType() (interface{}, error) {
+func (a AuthorizeAction) PrettyType() (any, error) {
 	return a, nil
 }
 
@@ -120,7 +120,7 @@ func (a CancelAction) PrettyPrint(_ context.Context, prefix string, w io.Writer)
 }
 
 // PrettyType returns a representation of CancelAction that can be used for pretty printing.
-func (a CancelAction) PrettyType() (interface{}, error) {
+func (a CancelAction) PrettyType() (any, error) {
 	return a, nil
 }
 

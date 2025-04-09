@@ -15,7 +15,7 @@ var ErrNoSubscribers = errors.New("no subscribers to given message kind")
 // MessageSubscriber is a message subscriber interface.
 type MessageSubscriber interface {
 	// ExecuteMessage executes a given message.
-	ExecuteMessage(ctx *Context, kind, msg interface{}) (interface{}, error)
+	ExecuteMessage(ctx *Context, kind, msg any) (any, error)
 }
 
 // TogglableMessageSubscriber is a message subscriber that can be disabled.
@@ -27,7 +27,7 @@ type TogglableMessageSubscriber interface {
 // MessageDispatcher is a message dispatcher interface.
 type MessageDispatcher interface {
 	// Subscribe subscribes a given message subscriber to messages of a specific kind.
-	Subscribe(kind interface{}, ms MessageSubscriber)
+	Subscribe(kind any, ms MessageSubscriber)
 
 	// Publish publishes a message of a given kind by dispatching to all subscribers.
 	// Subscribers can return a result, but at most one subscriber should return a
@@ -35,18 +35,18 @@ type MessageDispatcher interface {
 	// returns a non-nil result.
 	//
 	// In case there are no subscribers ErrNoSubscribers is returned.
-	Publish(ctx *Context, kind, msg interface{}) (interface{}, error)
+	Publish(ctx *Context, kind, msg any) (any, error)
 }
 
 // NoopMessageDispatcher is a no-op message dispatcher that performs no dispatch.
 type NoopMessageDispatcher struct{}
 
 // Subscribe implements MessageDispatcher.
-func (nd *NoopMessageDispatcher) Subscribe(interface{}, MessageSubscriber) {
+func (nd *NoopMessageDispatcher) Subscribe(any, MessageSubscriber) {
 }
 
 // Publish implements MessageDispatcher.
-func (nd *NoopMessageDispatcher) Publish(*Context, interface{}, interface{}) (interface{}, error) {
+func (nd *NoopMessageDispatcher) Publish(*Context, any, any) (any, error) {
 	return nil, nil
 }
 
@@ -78,7 +78,7 @@ type Application interface {
 
 	// QueryFactory returns an application-specific query factory that
 	// can be used to construct new queries at specific block heights.
-	QueryFactory() interface{}
+	QueryFactory() any
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.

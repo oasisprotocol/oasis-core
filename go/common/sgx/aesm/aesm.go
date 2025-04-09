@@ -56,7 +56,7 @@ func (c *Client) transact(ctx context.Context, request *Request) (*Response, err
 	}
 	defer conn.Close()
 
-	rsp := make(chan interface{})
+	rsp := make(chan any)
 	go func() {
 		defer close(rsp)
 

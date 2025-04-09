@@ -81,7 +81,7 @@ type TxnCall struct {
 	// Method is the called method name.
 	Method string `json:"method"`
 	// Args are the method arguments.
-	Args interface{} `json:"args"`
+	Args any `json:"args"`
 }
 
 // TxnOutput is a transaction call output in the test runtime.
@@ -496,11 +496,10 @@ func (r *runtime) escrowIsZero(ctx context.Context, address staking.Address) (bo
 // at every iteration of the test.
 func (r *runtime) assertBalanceInvariants(ctx context.Context) error {
 	// Use a consistent height for querying balances.
-	blk, err := r.Consensus().GetBlock(ctx, consensus.HeightLatest)
+	height, err := r.Consensus().GetLatestHeight(ctx)
 	if err != nil {
 		return err
 	}
-	height := blk.Height
 
 	testAcct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
 		Height: height,

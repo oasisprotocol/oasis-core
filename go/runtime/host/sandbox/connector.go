@@ -94,7 +94,7 @@ func (us *UnixSocketConnector) Connect(p process.Process) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	connCh := make(chan interface{})
+	connCh := make(chan any)
 	go func() {
 		conn, lerr := us.listener.Accept()
 		if lerr != nil {

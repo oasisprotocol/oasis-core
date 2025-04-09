@@ -113,11 +113,11 @@ func (w *wrapper) Prove(req *ProveRequest) ([]byte, error) {
 }
 
 func handlerPublicKeys(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(Backend).PublicKeys()
 	}
@@ -125,18 +125,18 @@ func handlerPublicKeys(
 		Server:     srv,
 		FullMethod: methodPublicKeys.FullName(),
 	}
-	handler := func(_ context.Context, _ interface{}) (interface{}, error) {
+	handler := func(_ context.Context, _ any) (any, error) {
 		return srv.(Backend).PublicKeys()
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerSign(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req SignRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -148,18 +148,18 @@ func handlerSign(
 		Server:     srv,
 		FullMethod: methodSign.FullName(),
 	}
-	handler := func(_ context.Context, req interface{}) (interface{}, error) {
+	handler := func(_ context.Context, req any) (any, error) {
 		return srv.(Backend).Sign(req.(*SignRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerProve(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req ProveRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func handlerProve(
 		Server:     srv,
 		FullMethod: methodProve.FullName(),
 	}
-	handler := func(_ context.Context, req interface{}) (interface{}, error) {
+	handler := func(_ context.Context, req any) (any, error) {
 		return srv.(Backend).Prove(req.(*ProveRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
@@ -280,7 +280,7 @@ func (fc *FactoryConfig) IsLocal() bool {
 }
 
 // NewFactory creates a new factory with the specified roles.
-func NewFactory(config interface{}) (signature.SignerFactory, error) {
+func NewFactory(config any) (signature.SignerFactory, error) {
 	cfg, ok := config.(*FactoryConfig)
 	if !ok {
 		return nil, fmt.Errorf("signature/signer/remote: invalid remote signer configuration provided")

@@ -152,7 +152,7 @@ func WithValidationFn(fn ValidationFunc) CallOption {
 //
 // The function is passed the response and PeerFeedback instance. If the function returns true, the
 // client will continue to call other peers. If it returns false, processing will stop.
-type AggregateFunc func(rsp interface{}, pf PeerFeedback) bool
+type AggregateFunc func(rsp any, pf PeerFeedback) bool
 
 // CallMultiOptions are per-multicall options.
 type CallMultiOptions struct {
@@ -221,7 +221,7 @@ type Client interface {
 		ctx context.Context,
 		peer core.PeerID,
 		method string,
-		body, rsp interface{},
+		body, rsp any,
 		opts ...CallOption,
 	) (PeerFeedback, error)
 
@@ -236,7 +236,7 @@ type Client interface {
 		ctx context.Context,
 		peers []core.PeerID,
 		method string,
-		body, rsp interface{},
+		body, rsp any,
 		opts ...CallOption,
 	) (PeerFeedback, error)
 
@@ -249,9 +249,9 @@ type Client interface {
 		ctx context.Context,
 		peers []core.PeerID,
 		method string,
-		body, rspTyp interface{},
+		body, rspTyp any,
 		opts ...CallMultiOption,
-	) ([]interface{}, []PeerFeedback, error)
+	) ([]any, []PeerFeedback, error)
 
 	// Close closes all connections to the given peer.
 	Close(peerID core.PeerID) error
@@ -285,7 +285,7 @@ func (c *client) Call(
 	ctx context.Context,
 	peer core.PeerID,
 	method string,
-	body, rsp interface{},
+	body, rsp any,
 	opts ...CallOption,
 ) (PeerFeedback, error) {
 	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, opts...)
@@ -296,7 +296,7 @@ func (c *client) CallOne(
 	ctx context.Context,
 	peers []core.PeerID,
 	method string,
-	body, rsp interface{},
+	body, rsp any,
 	opts ...CallOption,
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
@@ -359,9 +359,9 @@ func (c *client) CallMulti(
 	ctx context.Context,
 	peers []core.PeerID,
 	method string,
-	body, rspTyp interface{},
+	body, rspTyp any,
 	opts ...CallMultiOption,
-) ([]interface{}, []PeerFeedback, error) {
+) ([]any, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
 
 	co := NewCallMultiOptions(opts...)
@@ -383,7 +383,7 @@ func (c *client) CallMulti(
 
 	// Requests results from peers.
 	type result struct {
-		rsp interface{}
+		rsp any
 		pf  PeerFeedback
 		err error
 	}
@@ -409,7 +409,7 @@ func (c *client) CallMulti(
 
 	// Gather results.
 	var (
-		rsps []interface{}
+		rsps []any
 		pfs  []PeerFeedback
 	)
 
@@ -448,7 +448,7 @@ func (c *client) timeCall(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
-	rsp interface{},
+	rsp any,
 	maxPeerResponseTime time.Duration,
 ) (PeerFeedback, error) {
 	start := time.Now()
@@ -479,7 +479,7 @@ func (c *client) call(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
-	rsp interface{},
+	rsp any,
 	maxPeerResponseTime time.Duration,
 ) error {
 	// Attempt to open stream to the given peer.

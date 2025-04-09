@@ -17,7 +17,7 @@ var (
 )
 
 func newROFLScenario(version string) TestClientScenario {
-	return NewTestClientScenario([]interface{}{
+	return NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
 		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 		RemoveKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},

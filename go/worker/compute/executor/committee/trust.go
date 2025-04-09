@@ -6,7 +6,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 )
 
@@ -21,19 +20,19 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 	ctx, n.runtimeTrustSyncCncl = context.WithCancel(n.ctx)
 
 	syncOp := func() error {
-		blk, err := n.commonNode.Consensus.GetBlock(ctx, consensus.HeightLatest)
+		height, err := n.commonNode.Consensus.GetLatestHeight(ctx)
 		if err != nil {
-			n.logger.Warn("failed to retrieve consensus block for runtime light client sync",
+			n.logger.Warn("failed to retrieve latest consensus block height for runtime light client sync",
 				"err", err,
 			)
 			return err
 		}
 
-		err = rt.ConsensusSync(ctx, uint64(blk.Height))
+		err = rt.ConsensusSync(ctx, uint64(height))
 		if err != nil {
 			n.logger.Warn("runtime failed to sync its light client",
 				"err", err,
-				"height", blk.Height,
+				"height", height,
 			)
 		}
 		return err

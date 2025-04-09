@@ -36,11 +36,11 @@ var (
 )
 
 func handlerGetLastSyncedRound(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(GetLastSyncedRoundRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -52,18 +52,18 @@ func handlerGetLastSyncedRound(
 		Server:     srv,
 		FullMethod: methodGetLastSyncedRound.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(StorageWorker).GetLastSyncedRound(ctx, req.(*GetLastSyncedRoundRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerPauseCheckpointer(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(PauseCheckpointerRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func handlerPauseCheckpointer(
 		Server:     srv,
 		FullMethod: methodPauseCheckpointer.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(StorageWorker).PauseCheckpointer(ctx, req.(*PauseCheckpointerRequest))
 	}
 	return interceptor(ctx, rq, info, handler)

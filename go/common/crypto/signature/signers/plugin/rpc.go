@@ -31,11 +31,11 @@ type RPCContextSignArgs struct {
 	Message    []byte
 }
 
-func (m *rpcServer) Initialize(args *RPCInitArgs, _ *interface{}) error {
+func (m *rpcServer) Initialize(args *RPCInitArgs, _ *any) error {
 	return m.impl.Initialize(args.Config, args.Roles...)
 }
 
-func (m *rpcServer) Load(args *RPCLoadArgs, _ *interface{}) error {
+func (m *rpcServer) Load(args *RPCLoadArgs, _ *any) error {
 	return m.impl.Load(args.Role, args.MustGenerate)
 }
 
@@ -56,7 +56,7 @@ type rpcClient struct {
 }
 
 func (m *rpcClient) Initialize(config string, roles ...signature.SignerRole) error {
-	var resp interface{}
+	var resp any
 	return m.client.Call(
 		"Plugin.Initialize",
 		&RPCInitArgs{
@@ -68,7 +68,7 @@ func (m *rpcClient) Initialize(config string, roles ...signature.SignerRole) err
 }
 
 func (m *rpcClient) Load(role signature.SignerRole, mustGenerate bool) error {
-	var resp interface{}
+	var resp any
 	return m.client.Call(
 		"Plugin.Load",
 		&RPCLoadArgs{

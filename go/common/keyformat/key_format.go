@@ -13,10 +13,10 @@ type CustomFormat interface {
 	Size() int
 
 	// MarshalBinary encodes the passed value into its binary representation.
-	MarshalBinary(v interface{}) ([]byte, error)
+	MarshalBinary(v any) ([]byte, error)
 
 	// UnmarshalBinary decodes the passed value from its binary representation.
-	UnmarshalBinary(v interface{}, data []byte) error
+	UnmarshalBinary(v any, data []byte) error
 }
 
 type elementMeta struct {
@@ -53,7 +53,7 @@ func NewNamespace(namespace string) *Namespace {
 // New constructs a new key format.
 //
 // The prefix must be unique; otherwise, this method will panic.
-func (f *Namespace) New(prefix byte, layout ...interface{}) *KeyFormat {
+func (f *Namespace) New(prefix byte, layout ...any) *KeyFormat {
 	func() {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -79,7 +79,7 @@ type KeyFormat struct {
 }
 
 // New constructs a new key format.
-func New(prefix byte, layout ...interface{}) *KeyFormat {
+func New(prefix byte, layout ...any) *KeyFormat {
 	kf := &KeyFormat{
 		prefix: prefix,
 		meta:   make([]*elementMeta, len(layout)),
@@ -120,7 +120,7 @@ func (k *KeyFormat) Prefix() byte {
 // key containing only the specified values.
 //
 // In case no values are specified this will only output the key prefix.
-func (k *KeyFormat) Encode(values ...interface{}) []byte {
+func (k *KeyFormat) Encode(values ...any) []byte {
 	if len(values) > len(k.meta) {
 		panic("key format: number of values greater than layout")
 	}
@@ -225,7 +225,7 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 //
 // *NOTE:* If decoding fails for one of the values, previous values
 // will be modified.
-func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
+func (k *KeyFormat) Decode(data []byte, values ...any) bool {
 	if data[0] != k.prefix {
 		return false
 	}
@@ -294,7 +294,7 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 	return true
 }
 
-func (k *KeyFormat) getElementMeta(l interface{}) *elementMeta {
+func (k *KeyFormat) getElementMeta(l any) *elementMeta {
 	switch t := l.(type) {
 	case uint8:
 		return &elementMeta{size: 1}

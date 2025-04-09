@@ -572,7 +572,7 @@ func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signatu
 	}
 
 	var dirStr string
-	factoryCtor := func(_ interface{}, _ ...signature.SignerRole) (signature.SignerFactory, error) {
+	factoryCtor := func(_ any, _ ...signature.SignerRole) (signature.SignerFactory, error) {
 		return memorySigner.NewFactory(), nil
 	}
 	if dir != nil {

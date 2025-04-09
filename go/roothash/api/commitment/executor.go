@@ -266,6 +266,6 @@ func (c *ExecutorCommitment) ToVote() hash.Hash {
 
 // ToDDResult returns a commitment-specific result after discrepancy
 // detection.
-func (c *ExecutorCommitment) ToDDResult() interface{} {
+func (c *ExecutorCommitment) ToDDResult() any {
 	return c
 }

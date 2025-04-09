@@ -99,7 +99,7 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 	}
 }
 
-func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageGovernance:
 		m := msg.(*message.GovernanceMessage)

@@ -53,7 +53,7 @@ func (sf *SignerFactory) Load(role signature.SignerRole) (signature.Signer, erro
 
 // NewFactory creates a new factory with the specified roles, with the
 // specified pre-created SignerFactory(s).
-func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func NewFactory(config any, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	cfg, ok := config.(FactoryConfig)
 	if !ok {
 		return nil, errors.New("signature/signer/composite: invalid composite signer configuration provided")

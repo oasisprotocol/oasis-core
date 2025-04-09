@@ -410,7 +410,7 @@ type ComputeWorkerFixture struct {
 	RuntimeStatePaths map[int]string `json:"runtime_state_paths"`
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
-	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
+	RuntimeConfig map[int]map[string]any `json:"runtime_config,omitempty"`
 }
 
 // Create instantiates the compute worker described by the fixture.
@@ -517,7 +517,7 @@ type ClientFixture struct {
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
-	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
+	RuntimeConfig map[int]map[string]any `json:"runtime_config,omitempty"`
 
 	// BatchSize is max number of block that block indexer writes at the same time.
 	BatchSize uint16 `json:"batch_size"`

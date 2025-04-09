@@ -13,7 +13,7 @@ import (
 // https://github.com/uber-go/zap/blob/6f34060764b5ea1367eecda380ba8a9a0de3f0e6/zapcore/memory_encoder.go#L28.
 type objectEncoder struct {
 	// fields contains the entire encoded log context.
-	fields []interface{}
+	fields []any
 
 	// Current namespace.
 	currNs string
@@ -21,7 +21,7 @@ type objectEncoder struct {
 
 // AddArray implements ObjectEncoder.
 func (m *objectEncoder) AddArray(key string, v zapcore.ArrayMarshaler) error {
-	arr := &sliceArrayEncoder{elems: make([]interface{}, 0)}
+	arr := &sliceArrayEncoder{elems: make([]any, 0)}
 	if err := v.MarshalLogArray(arr); err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func (m *objectEncoder) AddUintptr(k string, v uintptr) {
 }
 
 // AddReflected implements ObjectEncoder.
-func (m *objectEncoder) AddReflected(k string, v interface{}) error {
+func (m *objectEncoder) AddReflected(k string, v any) error {
 	m.fields = append(m.fields, m.namespaced(k), v)
 	return nil
 }
@@ -150,9 +150,9 @@ func (m *objectEncoder) namespaced(k string) string {
 	return m.currNs + "_" + k
 }
 
-// sliceArrayEncoder is an ArrayEncoder backed by a simple []interface{}.
+// sliceArrayEncoder is an ArrayEncoder backed by a simple []any.
 type sliceArrayEncoder struct {
-	elems []interface{}
+	elems []any
 }
 
 func (s *sliceArrayEncoder) AppendArray(v zapcore.ArrayMarshaler) error {
@@ -169,7 +169,7 @@ func (s *sliceArrayEncoder) AppendObject(v zapcore.ObjectMarshaler) error {
 	return err
 }
 
-func (s *sliceArrayEncoder) AppendReflected(v interface{}) error {
+func (s *sliceArrayEncoder) AppendReflected(v any) error {
 	s.elems = append(s.elems, v)
 	return nil
 }
@@ -261,7 +261,7 @@ func (l *zapCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 		field.AddTo(encoder)
 	}
 
-	keyvals := append([]interface{}{"msg", e.Message, "module", l.modulePrefix + e.LoggerName}, encoder.fields...)
+	keyvals := append([]any{"msg", e.Message, "module", l.modulePrefix + e.LoggerName}, encoder.fields...)
 	switch e.Level {
 	case zapcore.DebugLevel:
 		_ = level.Debug(l.logger.logger).Log(keyvals...)

@@ -258,7 +258,7 @@ func (u *upgradeManager) StartupUpgrade() error {
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch beacon.EpochTime, currentHeight int64) error {
+func (u *upgradeManager) ConsensusUpgrade(privateCtx any, currentEpoch beacon.EpochTime, currentHeight int64) error {
 	u.Lock()
 	defer u.Unlock()
 

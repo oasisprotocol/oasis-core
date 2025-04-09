@@ -11,7 +11,7 @@ import (
 
 type testBlockContextKey struct{}
 
-func (k testBlockContextKey) NewDefault() interface{} {
+func (k testBlockContextKey) NewDefault() any {
 	return 42
 }
 

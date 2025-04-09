@@ -255,7 +255,7 @@ func filterGloballyReachableAddresses(addrs []multiaddr.Multiaddr) []multiaddr.M
 }
 
 // Implements api.Service.
-func (p *p2p) Publish(_ context.Context, topic string, msg interface{}) {
+func (p *p2p) Publish(_ context.Context, topic string, msg any) {
 	rawMsg := cbor.Marshal(msg)
 
 	p.RLock()

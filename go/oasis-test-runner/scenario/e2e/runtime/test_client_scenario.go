@@ -5,38 +5,38 @@ import (
 )
 
 var (
-	InsertScenario = NewTestClientScenario([]interface{}{
+	InsertScenario = NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, plaintextTxKind},
 		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 	})
 
-	InsertEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+	InsertEncWithSecretsScenario = NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
 		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	RemoveScenario = NewTestClientScenario([]interface{}{
+	RemoveScenario = NewTestClientScenario([]any{
 		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 	})
 
-	RemoveEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+	RemoveEncWithSecretsScenario = NewTestClientScenario([]any{
 		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	InsertTransferScenario = NewTestClientScenario([]interface{}{
+	InsertTransferScenario = NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, plaintextTxKind},
 		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 		ConsensusTransferTx{},
 	})
 
-	InsertRemoveEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+	InsertRemoveEncWithSecretsScenario = NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
 		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 		RemoveKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 		GetKeyValueTx{"my_key", "", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	InsertRemoveEncWithSecretsScenarioV2 = NewTestClientScenario([]interface{}{
+	InsertRemoveEncWithSecretsScenarioV2 = NewTestClientScenario([]any{
 		InsertKeyValueTx{"my_key2", "my_value2", "", 0, 0, encryptedWithSecretsTxKind},
 		GetKeyValueTx{"my_key2", "my_value2", 0, 0, encryptedWithSecretsTxKind},
 		RemoveKeyValueTx{"my_key2", "my_value2", 0, 0, encryptedWithSecretsTxKind},
@@ -49,7 +49,7 @@ var (
 )
 
 func newSimpleKeyValueScenario(repeat bool, kind uint) TestClientScenario {
-	return func(submit func(req interface{}) error) error {
+	return func(submit func(req any) error) error {
 		// Check whether Runtime ID is also set remotely.
 		//
 		// XXX: This would check that the response is sensible but the Rust
@@ -115,11 +115,11 @@ func newSimpleKeyValueScenario(repeat bool, kind uint) TestClientScenario {
 }
 
 // TestClientScenario is a test scenario for a key-value runtime test client.
-type TestClientScenario func(submit func(req interface{}) error) error
+type TestClientScenario func(submit func(req any) error) error
 
 // NewTestClientScenario creates a new test client scenario.
-func NewTestClientScenario(requests []interface{}) TestClientScenario {
-	return func(submit func(req interface{}) error) error {
+func NewTestClientScenario(requests []any) TestClientScenario {
+	return func(submit func(req any) error) error {
 		for _, req := range requests {
 			if err := submit(req); err != nil {
 				return err
@@ -132,7 +132,7 @@ func NewTestClientScenario(requests []interface{}) TestClientScenario {
 // JoinTestClientScenarios joins an arbitrary number of test client scenarios into a single scenario
 // that executes them in the order they were provided.
 func JoinTestClientScenarios(scenarios ...TestClientScenario) TestClientScenario {
-	return func(submit func(req interface{}) error) error {
+	return func(submit func(req any) error) error {
 		for _, scenario := range scenarios {
 			if err := scenario(submit); err != nil {
 				return err

@@ -21,14 +21,14 @@ type Sizeable interface {
 //
 // Note: The callback does not support calling routines on it's associated
 // cache instance.
-type OnEvictFunc func(key, value interface{})
+type OnEvictFunc func(key, value any)
 
 // Cache is an LRU cache instance.
 type Cache struct {
 	sync.Mutex
 
 	lru     *list.List
-	entries map[interface{}]*list.Element
+	entries map[any]*list.Element
 
 	onEvict OnEvictFunc
 
@@ -38,13 +38,13 @@ type Cache struct {
 }
 
 type cacheEntry struct {
-	key   interface{}
-	value interface{}
+	key   any
+	value any
 }
 
 // Put inserts the key/value pair into the cache.  If the key is already present,
 // the value is updated, and the entry is moved to the most-recently-used position.
-func (c *Cache) Put(key, value interface{}) error {
+func (c *Cache) Put(key, value any) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -83,18 +83,18 @@ func (c *Cache) Put(key, value interface{}) error {
 
 // Get returns the value associated with the key and true if it is present in
 // the cache, and the entry is moved to the most-recently-used position.
-func (c *Cache) Get(key interface{}) (interface{}, bool) {
+func (c *Cache) Get(key any) (any, bool) {
 	return c.getEntry(key, false)
 }
 
 // Peek returns the value associated with the key and true if it is present in
 // the cache, without altering the access time of the entry.
-func (c *Cache) Peek(key interface{}) (interface{}, bool) {
+func (c *Cache) Peek(key any) (any, bool) {
 	return c.getEntry(key, true)
 }
 
 // Remove removes the key from the cache and returns true if the key existed, otherwise false.
-func (c *Cache) Remove(key interface{}) bool {
+func (c *Cache) Remove(key any) bool {
 	c.Lock()
 	defer c.Unlock()
 
@@ -110,11 +110,11 @@ func (c *Cache) Remove(key interface{}) bool {
 
 // Keys returns the keys for every entry in the cache, from the least-recently-used
 // to the most-recently-used.
-func (c *Cache) Keys() []interface{} {
+func (c *Cache) Keys() []any {
 	c.Lock()
 	defer c.Unlock()
 
-	vec := make([]interface{}, 0, c.lru.Len())
+	vec := make([]any, 0, c.lru.Len())
 	for elem := c.lru.Back(); elem != nil; elem = elem.Prev() {
 		vec = append(vec, elem.Value.(*cacheEntry).key)
 	}
@@ -128,7 +128,7 @@ func (c *Cache) Clear() {
 
 	c.size = 0
 	c.lru = list.New()
-	c.entries = make(map[interface{}]*list.Element)
+	c.entries = make(map[any]*list.Element)
 }
 
 // Size returns the current cache size in the units specified by a `Capacity`
@@ -140,7 +140,7 @@ func (c *Cache) Size() uint64 {
 	return c.size
 }
 
-func (c *Cache) getEntry(key interface{}, isPeek bool) (interface{}, bool) {
+func (c *Cache) getEntry(key any, isPeek bool) (any, bool) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -170,7 +170,7 @@ func (c *Cache) evictEntries(targetCapacity uint64) {
 	}
 }
 
-func (c *Cache) getValueSize(value interface{}) uint64 {
+func (c *Cache) getValueSize(value any) uint64 {
 	if !c.capacityInBytes {
 		// Capacity at initialization time was set to a number of
 		// elements.
@@ -184,7 +184,7 @@ func (c *Cache) getValueSize(value interface{}) uint64 {
 func New(options ...Option) *Cache {
 	c := &Cache{
 		lru:     list.New(),
-		entries: make(map[interface{}]*list.Element),
+		entries: make(map[any]*list.Element),
 	}
 
 	for _, v := range options {

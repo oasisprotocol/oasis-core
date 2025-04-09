@@ -121,7 +121,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageStaking:
 		state := stakingState.NewMutableState(ctx.State())

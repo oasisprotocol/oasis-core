@@ -265,7 +265,7 @@ func (role *SignerRole) UnmarshalText(text []byte) error {
 }
 
 // SignerFactoryCtor is an SignerFactory constructor.
-type SignerFactoryCtor func(interface{}, ...SignerRole) (SignerFactory, error)
+type SignerFactoryCtor func(any, ...SignerRole) (SignerFactory, error)
 
 // SignerFactory is the opaque factory interface for Signers.
 type SignerFactory interface {

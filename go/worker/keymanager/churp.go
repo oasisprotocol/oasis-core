@@ -1092,7 +1092,7 @@ func selectNodes(nodeIDs map[signature.PublicKey]struct{}, priorities map[signat
 
 // timeCallEnclaveLocal calls the enclave, measures the call duration,
 // and updates relevant metrics.
-func timeCallEnclaveLocal(ctx context.Context, w *Worker, method string, req interface{}, rsp interface{}, status *churp.Status) error {
+func timeCallEnclaveLocal(ctx context.Context, w *Worker, method string, req any, rsp any, status *churp.Status) error {
 	start := time.Now()
 	err := w.callEnclaveLocal(ctx, method, req, rsp)
 	latency := time.Since(start)

@@ -161,7 +161,7 @@ func (p ProposalContent) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 
 // PrettyType returns a representation of ProposalContent that can be used for
 // pretty printing.
-func (p ProposalContent) PrettyType() (interface{}, error) {
+func (p ProposalContent) PrettyType() (any, error) {
 	return p, nil
 }
 
@@ -203,7 +203,7 @@ func (p ProposalMetadata) PrettyPrint(_ context.Context, prefix string, w io.Wri
 }
 
 // PrettyType returns a representation of ProposalMetadata that can be used for pretty printing.
-func (p ProposalMetadata) PrettyType() (interface{}, error) {
+func (p ProposalMetadata) PrettyType() (any, error) {
 	return p, nil
 }
 
@@ -234,7 +234,7 @@ func (u UpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 
 // PrettyType returns a representation of UpgradeProposal that can be used for
 // pretty printing.
-func (u UpgradeProposal) PrettyType() (interface{}, error) {
+func (u UpgradeProposal) PrettyType() (any, error) {
 	return u, nil
 }
 
@@ -266,7 +266,7 @@ func (cu CancelUpgradeProposal) PrettyPrint(_ context.Context, prefix string, w 
 
 // PrettyType returns a representation of CancelUpgradeProposal that can be used
 // for pretty printing.
-func (cu CancelUpgradeProposal) PrettyType() (interface{}, error) {
+func (cu CancelUpgradeProposal) PrettyType() (any, error) {
 	return cu, nil
 }
 
@@ -298,7 +298,7 @@ func (p *ChangeParametersProposal) Equals(other *ChangeParametersProposal) bool 
 // PrettyPrint writes a pretty-printed representation of ChangeParametersProposal to the given
 // writer.
 func (p *ChangeParametersProposal) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
-	var changes map[string]interface{}
+	var changes map[string]any
 	if err := cbor.Unmarshal(p.Changes, &changes); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
 		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(p.Changes))
@@ -317,7 +317,7 @@ func (p *ChangeParametersProposal) PrettyPrint(_ context.Context, prefix string,
 
 // PrettyType returns a representation of ChangeParametersProposal that can be used for pretty
 // printing.
-func (p *ChangeParametersProposal) PrettyType() (interface{}, error) {
+func (p *ChangeParametersProposal) PrettyType() (any, error) {
 	return p, nil
 }
 
@@ -349,7 +349,7 @@ func (pv ProposalVote) PrettyPrint(_ context.Context, prefix string, w io.Writer
 
 // PrettyType returns a representation of ProposalVote that can be used for
 // pretty printing.
-func (pv ProposalVote) PrettyType() (interface{}, error) {
+func (pv ProposalVote) PrettyType() (any, error) {
 	return pv, nil
 }
 

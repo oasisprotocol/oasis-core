@@ -198,11 +198,11 @@ type testMsgDispatcher struct {
 }
 
 // Implements MessageDispatcher.
-func (nd *testMsgDispatcher) Subscribe(interface{}, abciAPI.MessageSubscriber) {
+func (nd *testMsgDispatcher) Subscribe(any, abciAPI.MessageSubscriber) {
 }
 
 // Implements MessageDispatcher.
-func (nd *testMsgDispatcher) Publish(_ *abciAPI.Context, kind, msg interface{}) (interface{}, error) {
+func (nd *testMsgDispatcher) Publish(_ *abciAPI.Context, kind, msg any) (any, error) {
 	switch kind {
 	case abciAPI.MessageExecuteSubcall:
 		// Simulate subcall execution.
@@ -260,7 +260,7 @@ func TestAuthorizeCancelAction(t *testing.T) {
 	for _, tc := range []struct {
 		msg         string
 		caller      staking.Address
-		args        interface{}
+		args        any
 		ok          bool
 		expectedErr error
 		afterFn     func(*abciAPI.Context)

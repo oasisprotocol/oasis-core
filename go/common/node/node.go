@@ -645,7 +645,7 @@ func (s MultiSignedNode) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (s MultiSignedNode) PrettyType() (interface{}, error) {
+func (s MultiSignedNode) PrettyType() (any, error) {
 	var n Node
 	if err := cbor.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
 		return nil, fmt.Errorf("malformed signed blob: %w", err)

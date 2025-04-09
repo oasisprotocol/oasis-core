@@ -15,7 +15,7 @@ import (
 
 type p2pReqRes struct {
 	peerID     signature.PublicKey
-	msg        interface{}
+	msg        any
 	responseCh chan<- error
 }
 
@@ -34,7 +34,7 @@ type txMsgHandler struct {
 	target *p2pHandle
 }
 
-func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
+func (h *txMsgHandler) DecodeMessage(msg []byte) (any, error) {
 	var tx []byte
 	if err := cbor.Unmarshal(msg, &tx); err != nil {
 		return nil, err
@@ -42,12 +42,12 @@ func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return tx, nil
 }
 
-func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
+func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, any) error {
 	// Everyone is allowed to publish transactions.
 	return nil
 }
 
-func (h *txMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *txMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg any, isOwn bool) error {
 	if isOwn {
 		return nil
 	}
@@ -64,7 +64,7 @@ type committeeMsgHandler struct {
 	target *p2pHandle
 }
 
-func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
+func (h *committeeMsgHandler) DecodeMessage(msg []byte) (any, error) {
 	var dec p2pAPI.CommitteeMessage
 	if err := cbor.Unmarshal(msg, &dec); err != nil {
 		return nil, err
@@ -72,13 +72,13 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return &dec, nil
 }
 
-func (h *committeeMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
+func (h *committeeMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, any) error {
 	// The Byzantine node itself isn't especially robust. We assume that
 	// the other nodes are honest.
 	return nil
 }
 
-func (h *committeeMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *committeeMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg any, isOwn bool) error {
 	if isOwn {
 		return nil
 	}

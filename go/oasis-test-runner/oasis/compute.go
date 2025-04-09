@@ -48,7 +48,7 @@ type Compute struct { // nolint: maligned
 	p2pPort       uint16
 
 	runtimes      []int
-	runtimeConfig map[int]map[string]interface{}
+	runtimeConfig map[int]map[string]any
 }
 
 // ComputeCfg is the Oasis compute node configuration.
@@ -58,7 +58,7 @@ type ComputeCfg struct {
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 
 	Runtimes          []int
-	RuntimeConfig     map[int]map[string]interface{}
+	RuntimeConfig     map[int]map[string]any
 	RuntimeStatePaths map[int]string
 
 	SentryIndices []int

@@ -125,11 +125,10 @@ func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.Epoc
 		return 0, fmt.Errorf("failed to query last retained version: %w", err)
 	}
 
-	blk, err := sc.backend.GetCometBFTBlock(ctx, consensus.HeightLatest)
+	hiHeight, err := sc.backend.GetLatestHeight(ctx)
 	if err != nil {
 		return 0, err
 	}
-	hiHeight := blk.Height
 	// Start with the latest height as it is possible that currentEpochBlock is not the most up to
 	// date in cases where GetEpochBlock is called during epoch transitions.
 	height := hiHeight

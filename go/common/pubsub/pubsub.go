@@ -9,7 +9,7 @@ import (
 )
 
 type broadcastedValue struct {
-	v interface{}
+	v any
 }
 
 type cmdCtx struct {
@@ -51,13 +51,13 @@ type Subscription struct {
 
 // Untyped returns the subscription's untyped output.  Effort should be
 // made to use Unwrap instead.
-func (s *Subscription) Untyped() <-chan interface{} {
+func (s *Subscription) Untyped() <-chan any {
 	return s.ch.Out()
 }
 
 // Unwrap ties the read end of the provided channel to the subscription's
 // output.
-func (s *Subscription) Unwrap(ch interface{}) {
+func (s *Subscription) Unwrap(ch any) {
 	channels.Unwrap(s.ch, ch)
 }
 
@@ -141,7 +141,7 @@ func (b *Broker) SubscribeEx(buffer int64, onSubscribeHook OnSubscribeHook) *Sub
 //
 // Note: This makes no special effort to avoid deadlocking if any one
 // of the subscribers' channel is full.
-func (b *Broker) Broadcast(v interface{}) {
+func (b *Broker) Broadcast(v any) {
 	b.broadcastCh.In() <- v
 }
 

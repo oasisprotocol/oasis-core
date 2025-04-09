@@ -64,7 +64,7 @@ type displayHelper struct {
 	lastProgress bool
 }
 
-func (dh *displayHelper) displayf(base, format string, args ...interface{}) {
+func (dh *displayHelper) displayf(base, format string, args ...any) {
 	dh.lastTime = time.Time{}
 	if pretty {
 		if dh.lastProgress {

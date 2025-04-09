@@ -86,7 +86,7 @@ func init() {
 }
 
 // Marshal serializes a given type into a CBOR byte vector.
-func Marshal(src interface{}) []byte {
+func Marshal(src any) []byte {
 	b, err := encMode.Marshal(src)
 	if err != nil {
 		panic("common/cbor: failed to marshal: " + err.Error())
@@ -95,7 +95,7 @@ func Marshal(src interface{}) []byte {
 }
 
 // Unmarshal deserializes a CBOR byte vector into a given type.
-func Unmarshal(data []byte, dst interface{}) error {
+func Unmarshal(data []byte, dst any) error {
 	if data == nil {
 		return nil
 	}
@@ -106,7 +106,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 // UnmarshalTrusted deserializes a CBOR byte vector into a given type.
 //
 // This method MUST ONLY BE USED FOR TRUSTED INPUTS as it relaxes some decoding restrictions.
-func UnmarshalTrusted(data []byte, dst interface{}) error {
+func UnmarshalTrusted(data []byte, dst any) error {
 	if data == nil {
 		return nil
 	}
@@ -117,7 +117,7 @@ func UnmarshalTrusted(data []byte, dst interface{}) error {
 // UnmarshalRPC deserializes a CBOR byte vector into a given type.
 //
 // This method is suitable for RPC endpoints as it relaxes some decoding restrictions.
-func UnmarshalRPC(data []byte, dst interface{}) error {
+func UnmarshalRPC(data []byte, dst any) error {
 	if data == nil {
 		return nil
 	}
@@ -127,7 +127,7 @@ func UnmarshalRPC(data []byte, dst interface{}) error {
 
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
 // Panics if unmarshal fails.
-func MustUnmarshal(data []byte, dst interface{}) {
+func MustUnmarshal(data []byte, dst any) {
 	if err := Unmarshal(data, dst); err != nil {
 		panic(err)
 	}

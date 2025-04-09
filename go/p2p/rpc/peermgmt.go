@@ -294,7 +294,7 @@ func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
 
 func (mgr *peerManager) peerProtocolWatcher() {
 	// Subscribe to peer protocol updates.
-	sub, err := mgr.host.EventBus().Subscribe([]interface{}{
+	sub, err := mgr.host.EventBus().Subscribe([]any{
 		new(event.EvtPeerIdentificationCompleted),
 		new(event.EvtPeerProtocolsUpdated),
 	})

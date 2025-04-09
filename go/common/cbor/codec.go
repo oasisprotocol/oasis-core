@@ -40,7 +40,7 @@ type MessageReader struct {
 }
 
 // Read deserializes a single CBOR-encoded Message from the underlying reader.
-func (c *MessageReader) Read(msg interface{}) error {
+func (c *MessageReader) Read(msg any) error {
 	// Read 32-bit length prefix.
 	rawLength := make([]byte, 4)
 	if _, err := io.ReadAtLeast(c.reader, rawLength, 4); err != nil {
@@ -76,7 +76,7 @@ type MessageWriter struct {
 }
 
 // Write serializes a single Message to CBOR and writes it to the underlying writer.
-func (c *MessageWriter) Write(msg interface{}) error {
+func (c *MessageWriter) Write(msg any) error {
 	// Encode into CBOR.
 	data := Marshal(msg)
 	length := len(data)

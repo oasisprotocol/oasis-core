@@ -34,7 +34,7 @@ func (h *Handler242) StartupUpgrade() error {
 }
 
 // ConsensusUpgrade implements Handler.
-func (h *Handler242) ConsensusUpgrade(privateCtx interface{}) error {
+func (h *Handler242) ConsensusUpgrade(privateCtx any) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:

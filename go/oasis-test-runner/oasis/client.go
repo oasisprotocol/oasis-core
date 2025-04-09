@@ -20,7 +20,7 @@ type Client struct {
 
 	runtimes           []int
 	runtimeProvisioner runtimeConfig.RuntimeProvisioner
-	runtimeConfig      map[int]map[string]interface{}
+	runtimeConfig      map[int]map[string]any
 
 	batchSize uint16
 
@@ -34,7 +34,7 @@ type ClientCfg struct {
 
 	Runtimes           []int
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
-	RuntimeConfig      map[int]map[string]interface{}
+	RuntimeConfig      map[int]map[string]any
 	BatchSize          uint16
 }
 

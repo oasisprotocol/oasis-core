@@ -131,7 +131,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 			"body", msg,
 		)
 
-		var result interface{}
+		var result any
 		var err error
 		switch {
 		case msg.Staking != nil:
@@ -168,7 +168,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 	return events, nil
 }
 
-func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg interface{}) (interface{}, error) {
+func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg any) (any, error) {
 	epoch := msg.(beacon.EpochTime)
 
 	ctx.Logger().Debug("processing liveness statistics before scheduling",
@@ -195,7 +195,7 @@ func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg interfa
 	return nil, nil
 }
 
-func (app *rootHashApplication) changeParameters(ctx *tmapi.Context, msg interface{}, apply bool) (interface{}, error) {
+func (app *rootHashApplication) changeParameters(ctx *tmapi.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

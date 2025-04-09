@@ -142,7 +142,7 @@ func (app *governanceApplication) submitProposal(
 
 	case proposalContent.ChangeParameters != nil:
 		// Notify other interested applications to validate the parameter changes.
-		var res interface{}
+		var res any
 		res, err = app.md.Publish(ctx, governanceApi.MessageValidateParameterChanges, proposalContent.ChangeParameters)
 		if err != nil {
 			ctx.Logger().Debug("governance: failed to dispatch validate parameter changes message",

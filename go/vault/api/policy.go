@@ -93,6 +93,6 @@ func (wp WithdrawPolicy) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 }
 
 // PrettyType returns a representation of WithdrawPolicy that can be used for pretty printing.
-func (wp WithdrawPolicy) PrettyType() (interface{}, error) {
+func (wp WithdrawPolicy) PrettyType() (any, error) {
 	return wp, nil
 }

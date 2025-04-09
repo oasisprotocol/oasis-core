@@ -12,11 +12,11 @@ const cborCodecName = "cbor"
 // CBORCodec implements gRPC's encoding.Codec interface.
 type CBORCodec struct{}
 
-func (c *CBORCodec) Marshal(v interface{}) ([]byte, error) {
+func (c *CBORCodec) Marshal(v any) ([]byte, error) {
 	return cbor.Marshal(v), nil
 }
 
-func (c *CBORCodec) Unmarshal(data []byte, v interface{}) error {
+func (c *CBORCodec) Unmarshal(data []byte, v any) error {
 	return cbor.UnmarshalRPC(data, v)
 }
 

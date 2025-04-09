@@ -71,7 +71,7 @@ func (app *registryApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageRegistry:
 		m := msg.(*message.RegistryMessage)

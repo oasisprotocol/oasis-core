@@ -22,7 +22,7 @@ var (
 	SecureUpgrade scenario.Scenario = newSecureUpgradeImpl()
 
 	// nodeUpgradeTestClientScenario tests that everything works before the upgrade starts.
-	nodeUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+	nodeUpgradeTestClientScenario = runtime.NewTestClientScenario([]any{
 		runtime.InsertKeyValueTx{Key: "node-key1", Value: "node-value1", Response: "", Encrypted: false},
 		runtime.InsertKeyValueTx{Key: "node-key2", Value: "node-value2", Response: "", Encrypted: true},
 		runtime.GetKeyValueTx{Key: "node-key1", Response: "node-value1", Encrypted: false},

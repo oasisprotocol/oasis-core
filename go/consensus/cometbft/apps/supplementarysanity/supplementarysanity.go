@@ -51,7 +51,7 @@ func (app *supplementarySanityApplication) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *supplementarySanityApplication) QueryFactory() interface{} {
+func (app *supplementarySanityApplication) QueryFactory() any {
 	return nil
 }
 
@@ -62,7 +62,7 @@ func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteMessage(*api.Context, interface{}, interface{}) (interface{}, error) {
+func (app *supplementarySanityApplication) ExecuteMessage(*api.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("supplementarysanity: unexpected message")
 }
 

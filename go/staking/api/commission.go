@@ -64,7 +64,7 @@ func (crs CommissionRateStep) PrettyPrint(ctx context.Context, prefix string, w 
 
 // PrettyType returns a representation of CommissionRateStep that can be used
 // for pretty printing.
-func (crs CommissionRateStep) PrettyType() (interface{}, error) {
+func (crs CommissionRateStep) PrettyType() (any, error) {
 	return crs, nil
 }
 
@@ -91,7 +91,7 @@ func (crbs CommissionRateBoundStep) PrettyPrint(ctx context.Context, prefix stri
 
 // PrettyType returns a representation of CommissionRateBoundStep that can be
 // used for pretty printing.
-func (crbs CommissionRateBoundStep) PrettyType() (interface{}, error) {
+func (crbs CommissionRateBoundStep) PrettyType() (any, error) {
 	return crbs, nil
 }
 
@@ -135,7 +135,7 @@ func (cs CommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w i
 
 // PrettyType returns a representation of CommissionSchedule that can be used
 // for pretty printing.
-func (cs CommissionSchedule) PrettyType() (interface{}, error) {
+func (cs CommissionSchedule) PrettyType() (any, error) {
 	return cs, nil
 }
 

@@ -24,7 +24,7 @@ type BlockInfo struct {
 // BlockContextKey is an interface for a block context key.
 type BlockContextKey interface {
 	// NewDefault returns a new default value for the given key.
-	NewDefault() interface{}
+	NewDefault() any
 }
 
 // BlockContext can be used to store arbitrary key/value pairs for state that
@@ -34,13 +34,13 @@ type BlockContextKey interface {
 type BlockContext struct {
 	BlockInfo
 
-	storage map[BlockContextKey]interface{}
+	storage map[BlockContextKey]any
 }
 
 // Get returns the value stored under the given key (if any). If no value
 // currently exists, the NewDefault method is called on the key to produce a
 // default value and that value is stored.
-func (bc *BlockContext) Get(key BlockContextKey) interface{} {
+func (bc *BlockContext) Get(key BlockContextKey) any {
 	v, ok := bc.storage[key]
 	if !ok {
 		v = key.NewDefault()
@@ -50,7 +50,7 @@ func (bc *BlockContext) Get(key BlockContextKey) interface{} {
 }
 
 // Set overwrites the value stored under the given key.
-func (bc *BlockContext) Set(key BlockContextKey, value interface{}) {
+func (bc *BlockContext) Set(key BlockContextKey, value any) {
 	bc.storage[key] = value
 }
 
@@ -58,6 +58,6 @@ func (bc *BlockContext) Set(key BlockContextKey, value interface{}) {
 func NewBlockContext(blockInfo BlockInfo) *BlockContext {
 	return &BlockContext{
 		BlockInfo: blockInfo,
-		storage:   make(map[BlockContextKey]interface{}),
+		storage:   make(map[BlockContextKey]any),
 	}
 }

@@ -58,11 +58,11 @@ var (
 )
 
 func handlerGetValidators(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -74,18 +74,18 @@ func handlerGetValidators(
 		Server:     srv,
 		FullMethod: methodGetValidators.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetValidators(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetCommittees(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req GetCommitteesRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -97,18 +97,18 @@ func handlerGetCommittees(
 		Server:     srv,
 		FullMethod: methodGetCommittees.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetCommittees(ctx, req.(*GetCommitteesRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -120,18 +120,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerConsensusParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -143,13 +143,13 @@ func handlerConsensusParameters(
 		Server:     srv,
 		FullMethod: methodConsensusParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchCommittees(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchCommittees(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}

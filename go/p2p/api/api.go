@@ -64,7 +64,7 @@ type Service interface {
 	Peers(runtimeID common.Namespace) []string
 
 	// Publish publishes the given message to the given topic.
-	Publish(ctx context.Context, topic string, msg interface{})
+	Publish(ctx context.Context, topic string, msg any)
 
 	// RegisterHandler registers a message handler for the specified runtime and topic kind.
 	RegisterHandler(topic string, handler Handler)
@@ -93,19 +93,19 @@ type Service interface {
 // Handler is a handler for P2P messages.
 type Handler interface {
 	// DecodeMessage decodes the given incoming message.
-	DecodeMessage(msg []byte) (interface{}, error)
+	DecodeMessage(msg []byte) (any, error)
 
 	// AuthorizeMessage handles authorizing an incoming message.
 	//
 	// The message handler will be re-invoked on error with a periodic backoff unless errors are
 	// wrapped via `p2pError.Permanent`.
-	AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error
+	AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg any) error
 
 	// HandleMessage handles an incoming message from a peer.
 	//
 	// The message handler will be re-invoked on error with a periodic backoff unless errors are
 	// wrapped via `p2pError.Permanent`.
-	HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error
+	HandleMessage(ctx context.Context, peerID signature.PublicKey, msg any, isOwn bool) error
 }
 
 // PeerManager is an interface for managing peers in the P2P network.

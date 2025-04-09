@@ -173,7 +173,7 @@ func (cli *TestClient) workload(ctx context.Context) error {
 
 	cli.sc.Logger.Info("starting k/v runtime test client")
 
-	if err := cli.scenario(func(req interface{}) error {
+	if err := cli.scenario(func(req any) error {
 		return cli.submit(ctx, req, cli.rng)
 	}); err != nil {
 		return err
@@ -184,7 +184,7 @@ func (cli *TestClient) workload(ctx context.Context) error {
 	return nil
 }
 
-func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Source64) error {
+func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) error {
 	switch req := req.(type) {
 	case KeyValueQuery:
 		rsp, err := cli.sc.submitKeyValueRuntimeGetQuery(
@@ -339,7 +339,7 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 func NewTestClient() *TestClient {
 	return &TestClient{
 		seed:     "seed",
-		scenario: func(_ func(req interface{}) error) error { return nil },
+		scenario: func(_ func(req any) error) error { return nil },
 	}
 }
 
@@ -348,8 +348,8 @@ func (sc *Scenario) submitRuntimeTxAndDecode(
 	id common.Namespace,
 	nonce uint64,
 	method string,
-	args interface{},
-	rsp interface{},
+	args any,
+	rsp any,
 ) error {
 	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, method, args)
 	if err != nil {
@@ -368,7 +368,7 @@ func (sc *Scenario) submitRuntimeTxAndDecodeString(
 	id common.Namespace,
 	nonce uint64,
 	method string,
-	args interface{},
+	args any,
 ) (string, error) {
 	var rsp string
 	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
@@ -382,7 +382,7 @@ func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
 	id common.Namespace,
 	nonce uint64,
 	method string,
-	args interface{},
+	args any,
 ) ([]byte, error) {
 	var rsp []byte
 	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
@@ -601,7 +601,7 @@ func (sc *Scenario) submitAndDecodeRuntimeQuery(
 	id common.Namespace,
 	round uint64,
 	method string,
-	args interface{},
+	args any,
 ) (string, error) {
 	rawRsp, err := sc.submitRuntimeQuery(ctx, id, round, method, args)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 const maxSubcallDepth = 8
 
 // ExecuteMessage implements api.MessageSubscriber.
-func (mux *abciMux) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (mux *abciMux) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case api.MessageExecuteSubcall:
 		// Subcall execution request.

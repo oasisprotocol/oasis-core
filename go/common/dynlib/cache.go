@@ -47,7 +47,7 @@ const (
 
 var (
 	// Debugf is a hook used for redirecting debug output.
-	Debugf func(string, ...interface{})
+	Debugf func(string, ...any)
 
 	cacheMagic = []byte{
 		'l', 'd', '.', 's', 'o', '-', '1', '.', '7', '.', '0', 0,
@@ -585,7 +585,7 @@ func isIgnoredLib(lib string) bool {
 	}
 }
 
-func debugf(fmt string, args ...interface{}) {
+func debugf(fmt string, args ...any) {
 	if Debugf != nil {
 		Debugf(fmt, args...)
 	}

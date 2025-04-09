@@ -429,7 +429,7 @@ type Signed struct {
 
 // SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
-func SignSigned(signer Signer, context Context, src interface{}) (*Signed, error) {
+func SignSigned(signer Signer, context Context, src any) (*Signed, error) {
 	data := cbor.Marshal(src)
 	signature, err := Sign(signer, context, data)
 	if err != nil {
@@ -440,7 +440,7 @@ func SignSigned(signer Signer, context Context, src interface{}) (*Signed, error
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *Signed) Open(context Context, dst interface{}) error {
+func (s *Signed) Open(context Context, dst any) error {
 	// Verify signature first.
 	if !s.Signature.Verify(context, s.Blob) {
 		return ErrVerifyFailed
@@ -462,8 +462,8 @@ func (s *Signed) Equal(cmp *Signed) bool {
 //
 // It should only be used for pretty printing.
 type PrettySigned struct {
-	Body      interface{} `json:"untrusted_raw_value"`
-	Signature Signature   `json:"signature"`
+	Body      any       `json:"untrusted_raw_value"`
+	Signature Signature `json:"signature"`
 }
 
 // PrettyPrint writes a pretty-printed representation of the type
@@ -477,13 +477,13 @@ func (p PrettySigned) PrettyPrint(_ context.Context, prefix string, w io.Writer)
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (p PrettySigned) PrettyType() (interface{}, error) {
+func (p PrettySigned) PrettyType() (any, error) {
 	return p, nil
 }
 
 // NewPrettySigned creates a new PrettySigned instance that can be
 // used for pretty printing signed values.
-func NewPrettySigned(s Signed, b interface{}) (*PrettySigned, error) {
+func NewPrettySigned(s Signed, b any) (*PrettySigned, error) {
 	if pp, ok := b.(prettyprint.PrettyPrinter); ok {
 		var err error
 		if b, err = pp.PrettyType(); err != nil {
@@ -507,7 +507,7 @@ type MultiSigned struct {
 }
 
 // Open first verifies the blob signatures, and then unmarshals the blob.
-func (s *MultiSigned) Open(context Context, dst interface{}) error {
+func (s *MultiSigned) Open(context Context, dst any) error {
 	if !VerifyManyToOne(context, s.Blob, s.Signatures) {
 		return ErrVerifyFailed
 	}
@@ -557,7 +557,7 @@ func (s *MultiSigned) IsOnlySignedBy(pks []PublicKey) bool {
 
 // SignMultiSigned generates a MultiSigned with the Signers over the context
 // and CBOR-serialized message.
-func SignMultiSigned(signers []Signer, context Context, src interface{}) (*MultiSigned, error) {
+func SignMultiSigned(signers []Signer, context Context, src any) (*MultiSigned, error) {
 	ms := &MultiSigned{
 		Blob: cbor.Marshal(src),
 	}
@@ -578,7 +578,7 @@ func SignMultiSigned(signers []Signer, context Context, src interface{}) (*Multi
 //
 // It should only be used for pretty printing.
 type PrettyMultiSigned struct {
-	Body       interface{} `json:"untrusted_raw_value"`
+	Body       any         `json:"untrusted_raw_value"`
 	Signatures []Signature `json:"signatures"`
 }
 
@@ -593,13 +593,13 @@ func (p PrettyMultiSigned) PrettyPrint(_ context.Context, prefix string, w io.Wr
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (p PrettyMultiSigned) PrettyType() (interface{}, error) {
+func (p PrettyMultiSigned) PrettyType() (any, error) {
 	return p, nil
 }
 
 // NewPrettyMultiSigned creates a new PrettySigned instance that can be
 // used for pretty printing multi-signed values.
-func NewPrettyMultiSigned(s MultiSigned, b interface{}) (*PrettyMultiSigned, error) {
+func NewPrettyMultiSigned(s MultiSigned, b any) (*PrettyMultiSigned, error) {
 	if pp, ok := b.(prettyprint.PrettyPrinter); ok {
 		var err error
 		if b, err = pp.PrettyType(); err != nil {
@@ -679,7 +679,7 @@ func RegisterTestPublicKey(pk PublicKey) {
 // BuildPublicKeyBlacklist builds the public key blacklist.
 func BuildPublicKeyBlacklist(allowTestKeys bool) {
 	if !allowTestKeys {
-		testPublicKeys.Range(func(k, v interface{}) bool {
+		testPublicKeys.Range(func(k, v any) bool {
 			blacklistedPublicKeys.Store(k, v)
 			return true
 		})

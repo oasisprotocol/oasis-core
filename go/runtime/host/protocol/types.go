@@ -180,7 +180,7 @@ type RuntimeInfoRequest struct {
 	//
 	// This configuration must not be used in any context which requires determinism across
 	// replicated runtime instances.
-	LocalConfig map[string]interface{} `json:"local_config,omitempty"`
+	LocalConfig map[string]any `json:"local_config,omitempty"`
 }
 
 // Features is a set of supported runtime features.

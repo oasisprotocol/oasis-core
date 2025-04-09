@@ -62,7 +62,7 @@ type sandboxHost struct {
 	id    common.Namespace
 
 	startOne cmSync.One
-	ctrlCh   chan interface{}
+	ctrlCh   chan any
 
 	process  process.Process
 	conn     protocol.Connection

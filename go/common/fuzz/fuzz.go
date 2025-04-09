@@ -13,7 +13,7 @@ import (
 )
 
 // NewFilledInstance fills the given object with random values from the given blob.
-func NewFilledInstance(data []byte, typ interface{}) interface{} {
+func NewFilledInstance(data []byte, typ any) any {
 	if typ == nil {
 		return nil
 	}
@@ -27,18 +27,18 @@ func NewFilledInstance(data []byte, typ interface{}) interface{} {
 
 // InterfaceFuzzer is a helper class for fuzzing methods in structs or interfaces.
 type InterfaceFuzzer struct {
-	instance interface{}
+	instance any
 
 	typeObject reflect.Type
 	valObject  reflect.Value
 
 	methodList []int
 
-	typeOverrides map[string]func() interface{}
+	typeOverrides map[string]func() any
 }
 
 // OverrideType registers a custom callback for creating instances of a given type.
-func (i *InterfaceFuzzer) OverrideType(typeName string, factory func() interface{}) {
+func (i *InterfaceFuzzer) OverrideType(typeName string, factory func() any) {
 	i.typeOverrides[typeName] = factory
 }
 
@@ -108,14 +108,14 @@ FilterLoop:
 }
 
 // NewInterfaceFuzzer creates a new InterfaceFuzzer for the given instance.
-func NewInterfaceFuzzer(instance interface{}) *InterfaceFuzzer {
+func NewInterfaceFuzzer(instance any) *InterfaceFuzzer {
 	val := reflect.ValueOf(instance)
 	ret := &InterfaceFuzzer{
 		instance:   instance,
 		typeObject: val.Type(),
 		valObject:  val,
-		typeOverrides: map[string]func() interface{}{
-			"context.Context": func() interface{} {
+		typeOverrides: map[string]func() any{
+			"context.Context": func() any {
 				return context.Background()
 			},
 		},

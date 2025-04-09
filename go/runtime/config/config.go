@@ -115,7 +115,7 @@ type Config struct {
 
 	// RuntimeConfig maps runtime IDs to their respective local configurations.
 	// NOTE: This may go away in the future, use `RuntimeConfig.Config` instead.
-	RuntimeConfig map[string]map[string]interface{} `yaml:"config,omitempty"`
+	RuntimeConfig map[string]map[string]any `yaml:"config,omitempty"`
 
 	// Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port
 	// (where the PubKey@ part represents base64 encoded node TLS public key).
@@ -172,7 +172,7 @@ func (c *Config) GetComponent(runtimeID common.Namespace, compID component.ID) (
 
 // GetLocalConfig returns the local configuration for the given runtime,
 // if it exists.
-func (c *Config) GetLocalConfig(runtimeID common.Namespace) map[string]interface{} {
+func (c *Config) GetLocalConfig(runtimeID common.Namespace) map[string]any {
 	for _, rt := range c.Runtimes {
 		if rt.ID == runtimeID {
 			return rt.Config
@@ -193,7 +193,7 @@ type RuntimeConfig struct {
 	Components []ComponentConfig `yaml:"components,omitempty"`
 
 	// Config contains runtime local configuration.
-	Config map[string]interface{} `yaml:"config,omitempty"`
+	Config map[string]any `yaml:"config,omitempty"`
 
 	// Registries is the list of base URLs used to fetch runtime bundle metadata.
 	//

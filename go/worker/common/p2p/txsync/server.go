@@ -14,7 +14,7 @@ type service struct {
 	txPool txpool.TransactionPool
 }
 
-func (s *service) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *service) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (any, error) {
 	switch method {
 	case MethodGetTxs:
 		var rq GetTxsRequest

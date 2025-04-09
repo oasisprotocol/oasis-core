@@ -58,7 +58,7 @@ var (
 	// configured directly in newTestNode().
 	testNodeStaticConfig = []struct {
 		key   string
-		value interface{}
+		value any
 	}{
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{cmdCommon.CfgDebugAllowTestKeys, true},

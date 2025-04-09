@@ -12,10 +12,10 @@ type logAdapter struct {
 	baseLogger    *logging.Logger
 	suppressDebug bool
 
-	keyVals []interface{}
+	keyVals []any
 }
 
-func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
+func (a *logAdapter) With(keyvals ...any) tmlog.Logger {
 	// CometBFT uses `module` like oasis-node does, and to add insult to
 	// injury will cave off child loggers with subsequence calls to
 	// `With()`, resulting in multiple `module` keys.
@@ -27,7 +27,7 @@ func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	// This is more convoluted than it needs to be because the kit-log
 	// prefix vector is private.
 
-	findModule := func(vec []interface{}) (string, int) {
+	findModule := func(vec []any) (string, int) {
 		for i, v := range vec {
 			if i&1 != 0 {
 				continue
@@ -50,7 +50,7 @@ func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
 
 	parentMod, parentIdx := findModule(a.keyVals)
 
-	childKeyVals := append([]interface{}{}, a.keyVals...)
+	childKeyVals := append([]any{}, a.keyVals...)
 	childMod, childIdx := findModule(keyvals)
 	if childIdx < 0 {
 		// "module" was not specified for this child, use the one belonging
@@ -85,15 +85,15 @@ func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	}
 }
 
-func (a *logAdapter) Info(msg string, keyvals ...interface{}) {
+func (a *logAdapter) Info(msg string, keyvals ...any) {
 	a.Logger.Info(msg, keyvals...)
 }
 
-func (a *logAdapter) Error(msg string, keyvals ...interface{}) {
+func (a *logAdapter) Error(msg string, keyvals ...any) {
 	a.Logger.Error(msg, keyvals...)
 }
 
-func (a *logAdapter) Debug(msg string, keyvals ...interface{}) {
+func (a *logAdapter) Debug(msg string, keyvals ...any) {
 	if !a.suppressDebug {
 		a.Logger.Debug(msg, keyvals...)
 	}

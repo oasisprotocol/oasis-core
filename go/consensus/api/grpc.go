@@ -43,6 +43,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
+	// methodGetLatestHeight is the GetLatestHeight method.
+	methodGetLatestHeight = serviceName.NewMethod("GetLatestHeight", nil)
 	// methodGetLastRetainedHeight is the GetLastRetainedHeight method.
 	methodGetLastRetainedHeight = serviceName.NewMethod("GetLastRetainedHeight", nil)
 	// methodGetTransactions is the GetTransactions method.
@@ -117,6 +119,10 @@ var (
 				Handler:    handlerGetLightBlock,
 			},
 			{
+				MethodName: methodGetLatestHeight.ShortName(),
+				Handler:    handlerGetLatestHeight,
+			},
+			{
 				MethodName: methodGetLastRetainedHeight.ShortName(),
 				Handler:    handlerGetLastRetainedHeight,
 			},
@@ -184,11 +190,11 @@ var (
 )
 
 func handlerSubmitTx(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(transaction.SignedTransaction)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -200,18 +206,18 @@ func handlerSubmitTx(
 		Server:     srv,
 		FullMethod: methodSubmitTx.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(ClientBackend).SubmitTx(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerSubmitTxNoWait(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(transaction.SignedTransaction)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -223,18 +229,18 @@ func handlerSubmitTxNoWait(
 		Server:     srv,
 		FullMethod: methodSubmitTxNoWait.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(ClientBackend).SubmitTxNoWait(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerSubmitTxWithProof(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(transaction.SignedTransaction)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -246,18 +252,18 @@ func handlerSubmitTxWithProof(
 		Server:     srv,
 		FullMethod: methodSubmitTxWithProof.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).SubmitTxWithProof(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -269,18 +275,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerEstimateGas(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(EstimateGasRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -292,18 +298,18 @@ func handlerEstimateGas(
 		Server:     srv,
 		FullMethod: methodEstimateGas.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).EstimateGas(ctx, req.(*EstimateGasRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerMinGasPrice(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).MinGasPrice(ctx)
 	}
@@ -311,18 +317,18 @@ func handlerMinGasPrice(
 		Server:     srv,
 		FullMethod: methodMinGasPrice.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).MinGasPrice(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetSignerNonce(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(GetSignerNonceRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -334,18 +340,18 @@ func handlerGetSignerNonce(
 		Server:     srv,
 		FullMethod: methodGetSignerNonce.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerGetBlock(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -357,18 +363,18 @@ func handlerGetBlock(
 		Server:     srv,
 		FullMethod: methodGetBlock.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetLightBlock(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -380,18 +386,37 @@ func handlerGetLightBlock(
 		Server:     srv,
 		FullMethod: methodGetLightBlock.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetLightBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetLastRetainedHeight(
-	srv interface{},
+func handlerGetLatestHeight(
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetLatestHeight(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetLatestHeight.FullName(),
+	}
+	handler := func(ctx context.Context, _ any) (any, error) {
+		return srv.(ClientBackend).GetLatestHeight(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerGetLastRetainedHeight(
+	srv any,
+	ctx context.Context,
+	_ func(any) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
 	}
@@ -399,18 +424,18 @@ func handlerGetLastRetainedHeight(
 		Server:     srv,
 		FullMethod: methodGetLastRetainedHeight.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetTransactions(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -422,18 +447,18 @@ func handlerGetTransactions(
 		Server:     srv,
 		FullMethod: methodGetTransactions.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetTransactions(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetTransactionsWithResults(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -445,18 +470,18 @@ func handlerGetTransactionsWithResults(
 		Server:     srv,
 		FullMethod: methodGetTransactionsWithResults.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetTransactionsWithResults(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetTransactionsWithProofs(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -468,18 +493,18 @@ func handlerGetTransactionsWithProofs(
 		Server:     srv,
 		FullMethod: methodGetTransactionsWithProofs.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetTransactionsWithProofs(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetUnconfirmedTransactions(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
 	}
@@ -487,18 +512,18 @@ func handlerGetUnconfirmedTransactions(
 		Server:     srv,
 		FullMethod: methodGetUnconfirmedTransactions.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerStateSyncGet(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(syncer.GetRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -510,18 +535,18 @@ func handlerStateSyncGet(
 		Server:     srv,
 		FullMethod: methodStateSyncGet.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).State().SyncGet(ctx, req.(*syncer.GetRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerStateSyncGetPrefixes(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(syncer.GetPrefixesRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -533,18 +558,18 @@ func handlerStateSyncGetPrefixes(
 		Server:     srv,
 		FullMethod: methodStateSyncGetPrefixes.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).State().SyncGetPrefixes(ctx, req.(*syncer.GetPrefixesRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerStateSyncIterate(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(syncer.IterateRequest)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -556,18 +581,18 @@ func handlerStateSyncIterate(
 		Server:     srv,
 		FullMethod: methodStateSyncIterate.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).State().SyncIterate(ctx, req.(*syncer.IterateRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerGetGenesisDocument(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetGenesisDocument(ctx)
 	}
@@ -575,18 +600,18 @@ func handlerGetGenesisDocument(
 		Server:     srv,
 		FullMethod: methodGetGenesisDocument.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetGenesisDocument(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetChainContext(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetChainContext(ctx)
 	}
@@ -594,18 +619,18 @@ func handlerGetChainContext(
 		Server:     srv,
 		FullMethod: methodGetChainContext.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetChainContext(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetStatus(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetStatus(ctx)
 	}
@@ -613,18 +638,18 @@ func handlerGetStatus(
 		Server:     srv,
 		FullMethod: methodGetStatus.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetStatus(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetNextBlockState(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(ClientBackend).GetNextBlockState(ctx)
 	}
@@ -632,18 +657,18 @@ func handlerGetNextBlockState(
 		Server:     srv,
 		FullMethod: methodGetNextBlockState.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(ClientBackend).GetNextBlockState(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -655,18 +680,18 @@ func handlerGetParameters(
 		Server:     srv,
 		FullMethod: methodGetParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ClientBackend).GetParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerSubmitEvidence(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	rq := new(Evidence)
 	if err := dec(rq); err != nil {
 		return nil, err
@@ -678,13 +703,13 @@ func handlerSubmitEvidence(
 		Server:     srv,
 		FullMethod: methodSubmitEvidence.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(ClientBackend).SubmitEvidence(ctx, req.(*Evidence))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchBlocks(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -791,6 +816,14 @@ func (c *Client) GetLightBlock(ctx context.Context, height int64) (*LightBlock, 
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *Client) GetLatestHeight(ctx context.Context) (int64, error) {
+	var rsp int64
+	if err := c.conn.Invoke(ctx, methodGetLatestHeight.FullName(), nil, &rsp); err != nil {
+		return 0, err
+	}
+	return rsp, nil
 }
 
 func (c *Client) GetLastRetainedHeight(ctx context.Context) (int64, error) {

@@ -32,7 +32,7 @@ var (
 	serviceName = cmnGrpc.NewServiceName("PingService")
 	// MethodPing is the Ping method.
 	MethodPing = serviceName.NewMethod("Ping", PingQuery{}).
-			WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(_ context.Context, req any) (common.Namespace, error) {
 			r, ok := req.(*PingQuery)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -42,7 +42,7 @@ var (
 
 	// MethodWatchPings is the WatchPings method.
 	MethodWatchPings = serviceName.NewMethod("WatchPings", PingQuery{}).
-				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req any) (common.Namespace, error) {
 			r, ok := req.(*PingQuery)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -84,10 +84,10 @@ type PingServer interface {
 }
 
 type pingServer struct {
-	authFunc func(ctx context.Context, req interface{}) error
+	authFunc func(ctx context.Context, req any) error
 }
 
-func (s *pingServer) AuthFunc(ctx context.Context, req interface{}) error {
+func (s *pingServer) AuthFunc(ctx context.Context, req any) error {
 	return s.authFunc(ctx, req)
 }
 
@@ -120,7 +120,7 @@ func RegisterService(server *grpc.Server, service PingServer) {
 }
 
 // NewPingServer retruns a new Ping server.
-func NewPingServer(authFunc func(ctx context.Context, req interface{}) error) PingServer {
+func NewPingServer(authFunc func(ctx context.Context, req any) error) PingServer {
 	ps := &pingServer{authFunc}
 	return ps
 }
@@ -214,11 +214,11 @@ var ServiceDesc = grpc.ServiceDesc{
 }
 
 func pingHandler(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	pq := new(PingQuery)
 	if err := dec(pq); err != nil {
 		return nil, err
@@ -230,13 +230,13 @@ func pingHandler(
 		Server:     srv,
 		FullMethod: MethodPing.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(PingServer).Ping(ctx, req.(*PingQuery))
 	}
 	return interceptor(ctx, pq, info, handler)
 }
 
-func watchPingsHandler(srv interface{}, stream grpc.ServerStream) error {
+func watchPingsHandler(srv any, stream grpc.ServerStream) error {
 	pq := new(PingQuery)
 	if err := stream.RecvMsg(pq); err != nil {
 		return err

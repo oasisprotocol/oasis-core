@@ -226,7 +226,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 	return nil
 }
 
-func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) (interface{}, error) {
+func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, error) {
 	switch kind {
 	case registryApi.MessageNewRuntimeRegistered:
 		// A new runtime has been registered.

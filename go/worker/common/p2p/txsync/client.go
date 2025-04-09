@@ -42,7 +42,7 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 
 	var rsp GetTxsResponse
 	_, _, err := c.rc.CallMulti(ctx, c.mgr.GetBestPeers(), MethodGetTxs, request, rsp,
-		rpc.WithAggregateFn(func(rawRsp interface{}, pf rpc.PeerFeedback) bool {
+		rpc.WithAggregateFn(func(rawRsp any, pf rpc.PeerFeedback) bool {
 			rsp := rawRsp.(*GetTxsResponse)
 
 			// If we received more transactions than we requested, this is an error.

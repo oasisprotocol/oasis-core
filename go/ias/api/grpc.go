@@ -43,11 +43,11 @@ var (
 )
 
 func handlerVerifyEvidence(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req Evidence
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -59,18 +59,18 @@ func handlerVerifyEvidence(
 		Server:     srv,
 		FullMethod: methodVerifyEvidence.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Endpoint).VerifyEvidence(ctx, req.(*Evidence))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerGetSPIDInfo(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(Endpoint).GetSPIDInfo(ctx)
 	}
@@ -78,18 +78,18 @@ func handlerGetSPIDInfo(
 		Server:     srv,
 		FullMethod: methodGetSPIDInfo.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(Endpoint).GetSPIDInfo(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetSigRL(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var epidGID uint32
 	if err := dec(&epidGID); err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func handlerGetSigRL(
 		Server:     srv,
 		FullMethod: methodGetSigRL.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Endpoint).GetSigRL(ctx, req.(uint32))
 	}
 	return interceptor(ctx, epidGID, info, handler)

@@ -149,11 +149,11 @@ var multiServiceDesc = grpc.ServiceDesc{
 }
 
 func multiPingUnaryHandler(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	pq := new(MultiPingUnaryRequest)
 	if err := dec(pq); err != nil {
 		return nil, err
@@ -165,14 +165,14 @@ func multiPingUnaryHandler(
 		Server:     srv,
 		FullMethod: "/MultiPingService/Ping",
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(MultiPingServer).Ping(ctx)
 	}
 	return interceptor(ctx, pq, info, handler)
 }
 
 func multiPingStreamHandler(
-	srv interface{},
+	srv any,
 	stream grpc.ServerStream,
 ) error {
 	m := new(MultiPingStreamRequest)
@@ -286,7 +286,7 @@ func TestGrpcWrapper(t *testing.T) {
 	require.Equal(serverMultiPingCount, server.GetMultiPingCount(), "Server count should be unchanged")
 
 	// Test transparent forwarding.
-	var resp interface{}
+	var resp any
 	syncCh = callClient(ctx, 1, client.Ping)
 	req = <-serverCh
 	require.NotNil(req.Unary, "Forwarding server ping pull didn't get unary")

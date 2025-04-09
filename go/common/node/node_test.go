@@ -354,7 +354,7 @@ func TestNodeForTestSerializationV2(t *testing.T) {
 		err := cbor.Unmarshal(enc, &dec)
 		require.NoError(err, "Deserialization into Node v3 should work")
 
-		var t map[string]interface{}
+		var t map[string]any
 		err = cbor.Unmarshal(enc, &t)
 		require.NoError(err, "Unamarshal inter")
 	}
@@ -424,7 +424,7 @@ func TestNodeForTestSerialization(t *testing.T) {
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.node, dec, "Node serialization should round-trip")
 
-		var t map[string]interface{}
+		var t map[string]any
 		err = cbor.Unmarshal(enc, &t)
 		require.NoError(err, "Unamarshal inter")
 	}

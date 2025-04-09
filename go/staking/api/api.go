@@ -438,7 +438,7 @@ func (t Transfer) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 
 // PrettyType returns a representation of Transfer that can be used for pretty
 // printing.
-func (t Transfer) PrettyType() (interface{}, error) {
+func (t Transfer) PrettyType() (any, error) {
 	return t, nil
 }
 
@@ -462,7 +462,7 @@ func (b Burn) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 
 // PrettyType returns a representation of Burn that can be used for pretty
 // printing.
-func (b Burn) PrettyType() (interface{}, error) {
+func (b Burn) PrettyType() (any, error) {
 	return b, nil
 }
 
@@ -489,7 +489,7 @@ func (e Escrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 
 // PrettyType returns a representation of Escrow that can be used for pretty
 // printing.
-func (e Escrow) PrettyType() (interface{}, error) {
+func (e Escrow) PrettyType() (any, error) {
 	return e, nil
 }
 
@@ -514,7 +514,7 @@ func (re ReclaimEscrow) PrettyPrint(_ context.Context, prefix string, w io.Write
 
 // PrettyType returns a representation of Transfer that can be used for pretty
 // printing.
-func (re ReclaimEscrow) PrettyType() (interface{}, error) {
+func (re ReclaimEscrow) PrettyType() (any, error) {
 	return re, nil
 }
 
@@ -537,7 +537,7 @@ func (acs AmendCommissionSchedule) PrettyPrint(ctx context.Context, prefix strin
 
 // PrettyType returns a representation of AmendCommissionSchedule that can be
 // used for pretty printing.
-func (acs AmendCommissionSchedule) PrettyType() (interface{}, error) {
+func (acs AmendCommissionSchedule) PrettyType() (any, error) {
 	return acs, nil
 }
 
@@ -568,7 +568,7 @@ func (aw Allow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 }
 
 // PrettyType returns a representation of Allow that can be used for pretty printing.
-func (aw Allow) PrettyType() (interface{}, error) {
+func (aw Allow) PrettyType() (any, error) {
 	return aw, nil
 }
 
@@ -593,7 +593,7 @@ func (wt Withdraw) PrettyPrint(ctx context.Context, prefix string, w io.Writer) 
 }
 
 // PrettyType returns a representation of Withdraw that can be used for pretty printing.
-func (wt Withdraw) PrettyType() (interface{}, error) {
+func (wt Withdraw) PrettyType() (any, error) {
 	return wt, nil
 }
 
@@ -621,7 +621,7 @@ func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) 
 
 // PrettyType returns a representation of SharePool that can be used for pretty
 // printing.
-func (p SharePool) PrettyType() (interface{}, error) {
+func (p SharePool) PrettyType() (any, error) {
 	return p, nil
 }
 
@@ -852,7 +852,7 @@ func (st StakeThreshold) PrettyPrint(_ context.Context, prefix string, w io.Writ
 
 // PrettyType returns a representation of StakeThreshold that can be used for
 // pretty printing.
-func (st StakeThreshold) PrettyType() (interface{}, error) {
+func (st StakeThreshold) PrettyType() (any, error) {
 	return st, nil
 }
 
@@ -925,7 +925,7 @@ func (sa StakeAccumulator) PrettyPrint(ctx context.Context, prefix string, w io.
 
 // PrettyType returns a representation of StakeAccumulator that can be used for
 // pretty printing.
-func (sa StakeAccumulator) PrettyType() (interface{}, error) {
+func (sa StakeAccumulator) PrettyType() (any, error) {
 	return sa, nil
 }
 
@@ -1045,7 +1045,7 @@ func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 
 // PrettyType returns a representation of GeneralAccount that can be used for
 // pretty printing.
-func (ga GeneralAccount) PrettyType() (interface{}, error) {
+func (ga GeneralAccount) PrettyType() (any, error) {
 	return ga, nil
 }
 
@@ -1076,7 +1076,7 @@ func (e EscrowAccount) PrettyPrint(ctx context.Context, prefix string, w io.Writ
 
 // PrettyType returns a representation of EscrowAccount that can be used for
 // pretty printing.
-func (e EscrowAccount) PrettyType() (interface{}, error) {
+func (e EscrowAccount) PrettyType() (any, error) {
 	return e, nil
 }
 
@@ -1151,7 +1151,7 @@ func (a Account) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 
 // PrettyType returns a representation of Account that can be used for pretty
 // printing.
-func (a Account) PrettyType() (interface{}, error) {
+func (a Account) PrettyType() (any, error) {
 	return a, nil
 }
 

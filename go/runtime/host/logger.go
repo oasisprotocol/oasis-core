@@ -26,13 +26,13 @@ type RuntimeLogWrapper struct {
 	// Loggers for the runtime, one for each module inside the runtime.
 	rtLoggers map[string]*logging.Logger
 	// Key-value pairs to append to each log entry.
-	suffixes []interface{}
+	suffixes []any
 	// Buffer for accumulating incoming log entries from the runtime.
 	buf []byte
 }
 
 // NewRuntimeLogWrapper creates a new RuntimeLogWrapper.
-func NewRuntimeLogWrapper(logger *logging.Logger, suffixes ...interface{}) *RuntimeLogWrapper {
+func NewRuntimeLogWrapper(logger *logging.Logger, suffixes ...any) *RuntimeLogWrapper {
 	return &RuntimeLogWrapper{
 		logger:    logger,
 		suffixes:  suffixes,
@@ -81,7 +81,7 @@ func (w RuntimeLogWrapper) processLogLine(line []byte) {
 	line = bytes.TrimSpace(line)
 
 	// Interpret line as JSON.
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(line, &m); err != nil {
 		// If not valid JSON, forward line as normal log message with local timestamp.
 		w.rtLogger("runtime").With("ts", log.DefaultTimestampUTC).Warn(string(line))
@@ -89,7 +89,7 @@ func (w RuntimeLogWrapper) processLogLine(line []byte) {
 	}
 
 	// Destructure JSON into key-value pairs, parse common fields.
-	var kv []interface{}
+	var kv []any
 	var msg string
 	var level string
 	var module string

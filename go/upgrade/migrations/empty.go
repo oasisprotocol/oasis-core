@@ -19,7 +19,7 @@ func (th *emptyHandler) StartupUpgrade() error {
 	return nil
 }
 
-func (th *emptyHandler) ConsensusUpgrade(interface{}) error {
+func (th *emptyHandler) ConsensusUpgrade(any) error {
 	// Nothing to do.
 	return nil
 }

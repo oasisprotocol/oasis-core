@@ -139,14 +139,14 @@ type HostInfo struct {
 	//
 	// This configuration must not be used in any context which requires determinism across
 	// replicated runtime instances.
-	LocalConfig map[string]interface{}
+	LocalConfig map[string]any
 }
 
 // Clone returns a copy of the HostInfo structure.
 func (hi *HostInfo) Clone() *HostInfo {
-	var localConfig map[string]interface{}
+	var localConfig map[string]any
 	if hi.LocalConfig != nil {
-		localConfig = make(map[string]interface{})
+		localConfig = make(map[string]any)
 		for k, v := range hi.LocalConfig {
 			localConfig[k] = v
 		}

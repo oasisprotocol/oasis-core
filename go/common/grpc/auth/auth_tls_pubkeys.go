@@ -24,7 +24,7 @@ type PeerPubkeyAuthenticator struct {
 }
 
 // AuthFunc is an AuthenticationFunction backed by the PeerPubkeyAuthenticator.
-func (auth *PeerPubkeyAuthenticator) AuthFunc(ctx context.Context, _ interface{}) error {
+func (auth *PeerPubkeyAuthenticator) AuthFunc(ctx context.Context, _ any) error {
 	peer, ok := peer.FromContext(ctx)
 	if !ok {
 		return status.Errorf(codes.PermissionDenied, "grpc: failed to obtain connection peer from context")

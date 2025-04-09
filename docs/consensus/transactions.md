@@ -23,8 +23,8 @@ type Transaction struct {
     Nonce uint64 `json:"nonce"`
     Fee   *Fee   `json:"fee,omitempty"`
 
-    Method string      `json:"method"`
-    Body   interface{} `json:"body,omitempty"`
+    Method string `json:"method"`
+    Body   any    `json:"body,omitempty"`
 }
 ```
 

@@ -252,7 +252,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case governanceApi.MessageValidateParameterChanges:
 		// A change parameters proposal is about to be submitted. Validate changes.

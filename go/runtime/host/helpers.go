@@ -52,8 +52,8 @@ type RichRuntime interface {
 	LocalRPC(
 		ctx context.Context,
 		method string,
-		args interface{},
-		rsp interface{},
+		args any,
+		rsp any,
 	) error
 
 	// ConsensusSync requests the runtime to sync its light client up to the given consensus height.
@@ -134,8 +134,8 @@ func (r *richRuntime) Query(
 func (r *richRuntime) LocalRPC(
 	ctx context.Context,
 	method string,
-	args interface{},
-	rsp interface{},
+	args any,
+	rsp any,
 ) error {
 	resp, err := r.Call(ctx, &protocol.Body{
 		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{

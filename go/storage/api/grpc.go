@@ -22,7 +22,7 @@ var (
 
 	// MethodSyncGet is the SyncGet method.
 	MethodSyncGet = ServiceName.NewMethod("SyncGet", GetRequest{}).
-			WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(_ context.Context, req any) (common.Namespace, error) {
 			r, ok := req.(*GetRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -32,7 +32,7 @@ var (
 		WithAccessControl(cmnGrpc.AccessControlAlways)
 	// MethodSyncGetPrefixes is the SyncGetPrefixes method.
 	MethodSyncGetPrefixes = ServiceName.NewMethod("SyncGetPrefixes", GetPrefixesRequest{}).
-				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req any) (common.Namespace, error) {
 			r, ok := req.(*GetPrefixesRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -42,7 +42,7 @@ var (
 		WithAccessControl(cmnGrpc.AccessControlAlways)
 	// MethodSyncIterate is the SyncIterate method.
 	MethodSyncIterate = ServiceName.NewMethod("SyncIterate", IterateRequest{}).
-				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req any) (common.Namespace, error) {
 			r, ok := req.(*IterateRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -98,11 +98,11 @@ var (
 )
 
 func handlerSyncGet(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req GetRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -114,18 +114,18 @@ func handlerSyncGet(
 		Server:     srv,
 		FullMethod: MethodSyncGet.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).SyncGet(ctx, req.(*GetRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerSyncGetPrefixes(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req GetPrefixesRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -137,18 +137,18 @@ func handlerSyncGetPrefixes(
 		Server:     srv,
 		FullMethod: MethodSyncGetPrefixes.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).SyncGetPrefixes(ctx, req.(*GetPrefixesRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerSyncIterate(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req IterateRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -160,18 +160,18 @@ func handlerSyncIterate(
 		Server:     srv,
 		FullMethod: MethodSyncIterate.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).SyncIterate(ctx, req.(*IterateRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
 func handlerGetCheckpoints(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var req checkpoint.GetCheckpointsRequest
 	if err := dec(&req); err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func handlerGetCheckpoints(
 		Server:     srv,
 		FullMethod: MethodGetCheckpoints.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetCheckpoints(ctx, req.(*checkpoint.GetCheckpointsRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
@@ -251,7 +251,7 @@ func sendWriteLogIterator(it WriteLogIterator, opts *SyncOptions, stream grpc.Se
 	return nil
 }
 
-func handlerGetDiff(srv interface{}, stream grpc.ServerStream) error {
+func handlerGetDiff(srv any, stream grpc.ServerStream) error {
 	var req GetDiffRequest
 	if err := stream.RecvMsg(&req); err != nil {
 		return err
@@ -266,7 +266,7 @@ func handlerGetDiff(srv interface{}, stream grpc.ServerStream) error {
 	return sendWriteLogIterator(it, &req.Options, stream)
 }
 
-func handlerGetCheckpointChunk(srv interface{}, stream grpc.ServerStream) error {
+func handlerGetCheckpointChunk(srv any, stream grpc.ServerStream) error {
 	var md checkpoint.ChunkMetadata
 	if err := stream.RecvMsg(&md); err != nil {
 		return err

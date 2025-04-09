@@ -116,55 +116,55 @@ type grpcLogAdapter struct {
 	isDebug   bool
 }
 
-func (l *grpcLogAdapter) Info(args ...interface{}) {
+func (l *grpcLogAdapter) Info(args ...any) {
 	l.logger.Info(fmt.Sprint(args...))
 }
 
-func (l *grpcLogAdapter) Infoln(args ...interface{}) {
+func (l *grpcLogAdapter) Infoln(args ...any) {
 	l.logger.Info(fmt.Sprintln(args...))
 }
 
-func (l *grpcLogAdapter) Infof(format string, args ...interface{}) {
+func (l *grpcLogAdapter) Infof(format string, args ...any) {
 	l.logger.Info(fmt.Sprintf(format, args...))
 }
 
-func (l *grpcLogAdapter) Warning(args ...interface{}) {
+func (l *grpcLogAdapter) Warning(args ...any) {
 	l.logger.Warn(fmt.Sprint(args...))
 }
 
-func (l *grpcLogAdapter) Warningln(args ...interface{}) {
+func (l *grpcLogAdapter) Warningln(args ...any) {
 	l.logger.Warn(fmt.Sprintln(args...))
 }
 
-func (l *grpcLogAdapter) Warningf(format string, args ...interface{}) {
+func (l *grpcLogAdapter) Warningf(format string, args ...any) {
 	l.logger.Warn(fmt.Sprintf(format, args...))
 }
 
-func (l *grpcLogAdapter) Error(args ...interface{}) {
+func (l *grpcLogAdapter) Error(args ...any) {
 	l.logger.Error(fmt.Sprint(args...))
 }
 
-func (l *grpcLogAdapter) Errorln(args ...interface{}) {
+func (l *grpcLogAdapter) Errorln(args ...any) {
 	l.logger.Error(fmt.Sprintln(args...))
 }
 
-func (l *grpcLogAdapter) Errorf(format string, args ...interface{}) {
+func (l *grpcLogAdapter) Errorf(format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
-func (l *grpcLogAdapter) Fatal(args ...interface{}) {
+func (l *grpcLogAdapter) Fatal(args ...any) {
 	l.logger.Error(fmt.Sprint(args...),
 		"fatal", true,
 	)
 }
 
-func (l *grpcLogAdapter) Fatalln(args ...interface{}) {
+func (l *grpcLogAdapter) Fatalln(args ...any) {
 	l.logger.Error(fmt.Sprintln(args...),
 		"fatal", true,
 	)
 }
 
-func (l *grpcLogAdapter) Fatalf(format string, args ...interface{}) {
+func (l *grpcLogAdapter) Fatalf(format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...),
 		"fatal", true,
 	)
@@ -174,7 +174,7 @@ func (l *grpcLogAdapter) V(level int) bool {
 	return l.verbosity >= level
 }
 
-func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	// TODO: Pull useful things out of ctx for logging.
 	seq := atomic.AddUint64(&l.reqSeq, 1)
 	if l.isDebug {
@@ -212,7 +212,7 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 
 func (l *grpcLogAdapter) unaryClientLogger(ctx context.Context,
 	method string,
-	req, rsp interface{},
+	req, rsp any,
 	cc *grpc.ClientConn,
 	invoker grpc.UnaryInvoker,
 	opts ...grpc.CallOption,
@@ -281,7 +281,7 @@ func (l *grpcLogAdapter) streamClientLogger(ctx context.Context,
 	return csLog, err
 }
 
-func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (l *grpcLogAdapter) streamLogger(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	seq := atomic.AddUint64(&l.streamSeq, 1)
 	if l.isDebug {
 		l.reqLogger.Debug("stream",
@@ -346,7 +346,7 @@ type grpcClientStreamLogger struct {
 	seq    uint64
 }
 
-func (s *grpcClientStreamLogger) SendMsg(m interface{}) error {
+func (s *grpcClientStreamLogger) SendMsg(m any) error {
 	grpcClientStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
 	err := s.ClientStream.SendMsg(m)
 
@@ -380,7 +380,7 @@ type grpcStreamLogger struct {
 	seq    uint64
 }
 
-func (s *grpcStreamLogger) SendMsg(m interface{}) error {
+func (s *grpcStreamLogger) SendMsg(m any) error {
 	grpcServerStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
 	err := s.ServerStream.SendMsg(m)
 

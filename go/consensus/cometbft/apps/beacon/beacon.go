@@ -70,7 +70,7 @@ func (app *beaconApplication) BeginBlock(ctx *api.Context) error {
 	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
-func (app *beaconApplication) ExecuteMessage(*api.Context, interface{}, interface{}) (interface{}, error) {
+func (app *beaconApplication) ExecuteMessage(*api.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("beacon: unexpected message")
 }
 

@@ -93,11 +93,11 @@ var errorTestServiceDesc = grpc.ServiceDesc{
 }
 
 func handlerErrorTest(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	req := new(ErrorTestRequest)
 	if err := dec(req); err != nil {
 		return nil, err
@@ -109,18 +109,18 @@ func handlerErrorTest(
 		Server:     srv,
 		FullMethod: "/ErrorTestService/ErrorTest",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ErrorTestService).ErrorTest(ctx, req.(*ErrorTestRequest))
 	}
 	return interceptor(ctx, req, info, handler)
 }
 
 func handlerErrorTestWithContext(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	req := new(ErrorTestRequest)
 	if err := dec(req); err != nil {
 		return nil, err
@@ -132,18 +132,18 @@ func handlerErrorTestWithContext(
 		Server:     srv,
 		FullMethod: "/ErrorTestService/ErrorTestWithContext",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ErrorTestService).ErrorTestWithContext(ctx, req.(*ErrorTestRequest))
 	}
 	return interceptor(ctx, req, info, handler)
 }
 
 func handlerErrorStatusTest(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	req := new(ErrorTestRequest)
 	if err := dec(req); err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func handlerErrorStatusTest(
 		Server:     srv,
 		FullMethod: "/ErrorTestService/ErrorStatusTest",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ErrorTestService).ErrorStatusTest(ctx, req.(*ErrorTestRequest))
 	}
 	return interceptor(ctx, req, info, handler)
