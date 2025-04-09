@@ -4,7 +4,6 @@ import (
 	"context"
 
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -29,19 +28,11 @@ func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error
 	if err != nil {
 		return nil, err
 	}
-
-	// Some queries need access to the registry to give useful responses.
-	regState, err := registryState.NewImmutableStateAt(ctx, sf.state, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return &schedulerQuerier{state, regState}, nil
+	return &schedulerQuerier{state}, nil
 }
 
 type schedulerQuerier struct {
-	state    *schedulerState.ImmutableState
-	regState *registryState.ImmutableState
+	state *schedulerState.ImmutableState
 }
 
 func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
