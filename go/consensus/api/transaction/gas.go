@@ -49,7 +49,7 @@ func (f Fee) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 
 // PrettyType returns a representation of Fee that can be used for pretty
 // printing.
-func (f Fee) PrettyType() (interface{}, error) {
+func (f Fee) PrettyType() (any, error) {
 	return f, nil
 }
 

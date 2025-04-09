@@ -66,12 +66,12 @@ func (h chunkHeap) Len() int           { return h.length }
 func (h chunkHeap) Less(i, j int) bool { return h.array[i].Index < h.array[j].Index }
 func (h chunkHeap) Swap(i, j int)      { h.array[i], h.array[j] = h.array[j], h.array[i] }
 
-func (h *chunkHeap) Push(x interface{}) {
+func (h *chunkHeap) Push(x any) {
 	h.array[h.length] = x.(*chunk)
 	h.length++
 }
 
-func (h *chunkHeap) Pop() interface{} {
+func (h *chunkHeap) Pop() any {
 	h.length--
 	ret := h.array[h.length]
 	h.array[h.length] = nil
@@ -188,7 +188,7 @@ func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelReques
 
 	// Spawn the worker group to fetch and restore checkpoint chunks.
 	var workerGroup sync.WaitGroup
-	doneCh := make(chan interface{})
+	doneCh := make(chan any)
 	for i := uint(0); i < maxParallelRequests; i++ {
 		workerGroup.Add(1)
 		go func() {

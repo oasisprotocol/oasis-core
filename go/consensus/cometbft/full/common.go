@@ -360,18 +360,18 @@ func (n *commonNode) Checkpointer() checkpoint.Checkpointer {
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
-	blk, err := n.GetCometBFTBlock(ctx, blockHeight)
+func (n *commonNode) StateToGenesis(ctx context.Context, height int64) (*genesisAPI.Document, error) {
+	blk, err := n.GetCometBFTBlock(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 	if blk == nil {
 		return nil, consensusAPI.ErrNoCommittedBlocks
 	}
-	blockHeight = blk.Header.Height
+	height = blk.Header.Height
 
 	// Query root consensus parameters.
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), blockHeight)
+	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
 	if err != nil {
 		return nil, err
 	}
@@ -381,48 +381,48 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	}
 
 	// Call StateToGenesis on all backends and merge the results together.
-	beaconGenesis, err := n.Beacon().StateToGenesis(ctx, blockHeight)
+	beaconGenesis, err := n.Beacon().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	registryGenesis, err := n.Registry().StateToGenesis(ctx, blockHeight)
+	registryGenesis, err := n.Registry().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	roothashGenesis, err := n.RootHash().StateToGenesis(ctx, blockHeight)
+	roothashGenesis, err := n.RootHash().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	stakingGenesis, err := n.Staking().StateToGenesis(ctx, blockHeight)
+	stakingGenesis, err := n.Staking().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	keymanagerGenesis, err := n.KeyManager().StateToGenesis(ctx, blockHeight)
+	keymanagerGenesis, err := n.KeyManager().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	schedulerGenesis, err := n.Scheduler().StateToGenesis(ctx, blockHeight)
+	schedulerGenesis, err := n.Scheduler().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	governanceGenesis, err := n.Governance().StateToGenesis(ctx, blockHeight)
+	governanceGenesis, err := n.Governance().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	vaultGenesis, err := n.Vault().StateToGenesis(ctx, blockHeight)
+	vaultGenesis, err := n.Vault().StateToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
 	return &genesisAPI.Document{
-		Height:     blockHeight,
+		Height:     height,
 		ChainID:    n.chainID,
 		Time:       blk.Header.Time,
 		Beacon:     *beaconGenesis,

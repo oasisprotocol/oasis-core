@@ -10,21 +10,21 @@ import (
 var _ api.MessageDispatcher = (*messageDispatcher)(nil)
 
 type messageDispatcher struct {
-	subscriptions map[interface{}][]api.MessageSubscriber
+	subscriptions map[any][]api.MessageSubscriber
 }
 
 // Implements api.MessageDispatcher.
-func (md *messageDispatcher) Subscribe(kind interface{}, ms api.MessageSubscriber) {
+func (md *messageDispatcher) Subscribe(kind any, ms api.MessageSubscriber) {
 	if md.subscriptions == nil {
-		md.subscriptions = make(map[interface{}][]api.MessageSubscriber)
+		md.subscriptions = make(map[any][]api.MessageSubscriber)
 	}
 	md.subscriptions[kind] = append(md.subscriptions[kind], ms)
 }
 
 // Implements api.MessageDispatcher.
-func (md *messageDispatcher) Publish(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (md *messageDispatcher) Publish(ctx *api.Context, kind, msg any) (any, error) {
 	var (
-		result         interface{}
+		result         any
 		errs           error
 		numSubscribers int
 	)

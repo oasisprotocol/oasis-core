@@ -37,11 +37,11 @@ var (
 )
 
 func handlerSetEpoch(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var epoch beacon.EpochTime
 	if err := dec(&epoch); err != nil {
 		return nil, err
@@ -53,18 +53,18 @@ func handlerSetEpoch(
 		Server:     srv,
 		FullMethod: methodSetEpoch.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(DebugController).SetEpoch(ctx, req.(beacon.EpochTime))
 	}
 	return interceptor(ctx, epoch, info, handler)
 }
 
 func handlerWaitNodesRegistered(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var count int
 	if err := dec(&count); err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func handlerWaitNodesRegistered(
 		Server:     srv,
 		FullMethod: methodWaitNodesRegistered.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, srv.(DebugController).WaitNodesRegistered(ctx, req.(int))
 	}
 	return interceptor(ctx, count, info, handler)

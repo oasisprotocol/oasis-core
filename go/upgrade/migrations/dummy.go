@@ -46,7 +46,7 @@ func (th *dummyMigrationHandler) StartupUpgrade() error {
 	return nil
 }
 
-func (th *dummyMigrationHandler) ConsensusUpgrade(privateCtx interface{}) error {
+func (th *dummyMigrationHandler) ConsensusUpgrade(privateCtx any) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:

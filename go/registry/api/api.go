@@ -868,7 +868,7 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	return nil
 }
 
-func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresses interface{}) error {
+func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresses any) error {
 	switch addrs := addresses.(type) {
 	case []node.ConsensusAddress:
 		if len(addrs) == 0 && addressRequired {

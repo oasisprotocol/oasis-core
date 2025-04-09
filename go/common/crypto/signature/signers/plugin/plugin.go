@@ -67,7 +67,7 @@ func Serve(name string, impl Signer) {
 
 // NewFactory creates a new factory backed by the specified plugin
 // and plugin configuration.
-func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func NewFactory(config any, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	cfg, ok := config.(*FactoryConfig)
 	if !ok {
 		return nil, fmt.Errorf("signature/signer/plugin: invalid plugin signer configuration provided")
@@ -271,13 +271,13 @@ type signerPlugin struct {
 	impl Signer
 }
 
-func (p *signerPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+func (p *signerPlugin) Server(*plugin.MuxBroker) (any, error) {
 	return &rpcServer{
 		impl: p.impl,
 	}, nil
 }
 
-func (signerPlugin) Client(_ *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (signerPlugin) Client(_ *plugin.MuxBroker, c *rpc.Client) (any, error) {
 	return &rpcClient{
 		client: c,
 	}, nil

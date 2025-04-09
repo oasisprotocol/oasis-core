@@ -155,11 +155,11 @@ var (
 )
 
 func handlerTokenSymbol(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -171,18 +171,18 @@ func handlerTokenSymbol(
 		Server:     srv,
 		FullMethod: methodTokenSymbol.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).TokenSymbol(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerTokenValueExponent(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -194,18 +194,18 @@ func handlerTokenValueExponent(
 		Server:     srv,
 		FullMethod: methodTokenValueExponent.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).TokenValueExponent(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerTotalSupply(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -217,18 +217,18 @@ func handlerTotalSupply(
 		Server:     srv,
 		FullMethod: methodTotalSupply.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).TotalSupply(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerCommonPool(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -240,18 +240,18 @@ func handlerCommonPool(
 		Server:     srv,
 		FullMethod: methodCommonPool.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).CommonPool(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerLastBlockFees(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -263,18 +263,18 @@ func handlerLastBlockFees(
 		Server:     srv,
 		FullMethod: methodLastBlockFees.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).LastBlockFees(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGovernanceDeposits(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -286,18 +286,18 @@ func handlerGovernanceDeposits(
 		Server:     srv,
 		FullMethod: methodGovernanceDeposits.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GovernanceDeposits(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerThreshold(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query ThresholdQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -309,18 +309,18 @@ func handlerThreshold(
 		Server:     srv,
 		FullMethod: methodThreshold.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Threshold(ctx, req.(*ThresholdQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerAddresses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -332,18 +332,18 @@ func handlerAddresses(
 		Server:     srv,
 		FullMethod: methodAddresses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Addresses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerCommissionScheduleAddresses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -355,18 +355,18 @@ func handlerCommissionScheduleAddresses(
 		Server:     srv,
 		FullMethod: methodCommissionScheduleAddresses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).CommissionScheduleAddresses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerAccount(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -378,18 +378,18 @@ func handlerAccount(
 		Server:     srv,
 		FullMethod: methodAccount.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Account(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDelegationsFor(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -401,18 +401,18 @@ func handlerDelegationsFor(
 		Server:     srv,
 		FullMethod: methodDelegationsFor.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DelegationsFor(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDelegationInfosFor(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -424,18 +424,18 @@ func handlerDelegationInfosFor(
 		Server:     srv,
 		FullMethod: methodDelegationInfosFor.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DelegationInfosFor(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDelegationsTo(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -447,18 +447,18 @@ func handlerDelegationsTo(
 		Server:     srv,
 		FullMethod: methodDelegationsTo.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DelegationsTo(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDebondingDelegationsFor(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -470,18 +470,18 @@ func handlerDebondingDelegationsFor(
 		Server:     srv,
 		FullMethod: methodDebondingDelegationsFor.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DebondingDelegationsFor(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDebondingDelegationInfosFor(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -493,18 +493,18 @@ func handlerDebondingDelegationInfosFor(
 		Server:     srv,
 		FullMethod: methodDebondingDelegationInfosFor.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DebondingDelegationInfosFor(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerDebondingDelegationsTo(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query OwnerQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -516,18 +516,18 @@ func handlerDebondingDelegationsTo(
 		Server:     srv,
 		FullMethod: methodDebondingDelegationsTo.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).DebondingDelegationsTo(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerAllowance(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query AllowanceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -539,18 +539,18 @@ func handlerAllowance(
 		Server:     srv,
 		FullMethod: methodAllowance.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Allowance(ctx, req.(*AllowanceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -562,18 +562,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerConsensusParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -585,18 +585,18 @@ func handlerConsensusParameters(
 		Server:     srv,
 		FullMethod: methodConsensusParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetEvents(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -608,13 +608,13 @@ func handlerGetEvents(
 		Server:     srv,
 		FullMethod: methodGetEvents.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEvents(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchEvents(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}

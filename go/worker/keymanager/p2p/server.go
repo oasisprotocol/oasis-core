@@ -22,7 +22,7 @@ type service struct {
 	km KeyManager
 }
 
-func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error) {
 	enclaveRPCCount.With(prometheus.Labels{"method": method}).Inc()
 
 	switch method {

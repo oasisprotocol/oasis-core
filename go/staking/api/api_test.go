@@ -472,7 +472,7 @@ func TestTransferResultsSerialization(t *testing.T) {
 
 	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
 	for _, tc := range []struct {
-		rr             interface{}
+		rr             any
 		expectedBase64 string
 	}{
 		{TransferResult{}, "o2J0b1UAAAAAAAAAAAAAAAAAAAAAAAAAAABkZnJvbVUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QA=="},
@@ -505,7 +505,7 @@ func TestWithdrawResultsSerialization(t *testing.T) {
 
 	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
 	for _, tc := range []struct {
-		rr             interface{}
+		rr             any
 		expectedBase64 string
 	}{
 		{WithdrawResult{}, "pGVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWxsb3dhbmNlQGtiZW5lZmljaWFyeVUAAAAAAAAAAAAAAAAAAAAAAAAAAABtYW1vdW50X2NoYW5nZUA="},
@@ -539,7 +539,7 @@ func TestAddEscrowResultsSerialization(t *testing.T) {
 
 	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
 	for _, tc := range []struct {
-		rr             interface{}
+		rr             any
 		expectedBase64 string
 	}{
 		{AddEscrowResult{}, "pGVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QGZlc2Nyb3dVAAAAAAAAAAAAAAAAAAAAAAAAAAAAam5ld19zaGFyZXNA"},
@@ -573,7 +573,7 @@ func TestReclaimEscrowResultsSerialization(t *testing.T) {
 
 	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
 	for _, tc := range []struct {
-		rr             interface{}
+		rr             any
 		expectedBase64 string
 	}{
 		{ReclaimEscrowResult{}, "pmVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QGZlc2Nyb3dVAAAAAAAAAAAAAAAAAAAAAAAAAAAAb2RlYm9uZF9lbmRfdGltZQBwZGVib25kaW5nX3NoYXJlc0BwcmVtYWluaW5nX3NoYXJlc0A="},

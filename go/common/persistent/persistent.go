@@ -85,7 +85,7 @@ func (ss *ServiceStore) Close() {
 }
 
 // GetCBOR is a helper for retrieving CBOR-serialized values.
-func (ss *ServiceStore) GetCBOR(key []byte, value interface{}) error {
+func (ss *ServiceStore) GetCBOR(key []byte, value any) error {
 	return ss.store.db.View(func(tx *badger.Txn) error {
 		item, txErr := tx.Get(ss.dbKey(key))
 		switch txErr {
@@ -105,7 +105,7 @@ func (ss *ServiceStore) GetCBOR(key []byte, value interface{}) error {
 }
 
 // PutCBOR is a helper for storing CBOR-serialized values.
-func (ss *ServiceStore) PutCBOR(key []byte, value interface{}) error {
+func (ss *ServiceStore) PutCBOR(key []byte, value any) error {
 	return ss.store.db.Update(func(tx *badger.Txn) error {
 		return tx.Set(ss.dbKey(key), cbor.Marshal(value))
 	})

@@ -52,7 +52,7 @@ func (kq *keymanagerQuerier) Churp() churp.Query {
 	return churp.NewQuery(kq.churpState)
 }
 
-func (app *keymanagerApplication) QueryFactory() interface{} {
+func (app *keymanagerApplication) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

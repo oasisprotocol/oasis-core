@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 
-	any "github.com/golang/protobuf/ptypes/any"
+	apb "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -61,7 +61,7 @@ func errorToGrpc(err error) error {
 		// We keep any set gRPC error code (with fallback to codes.Unknown).
 		Code:    int32(status.Code(err)),
 		Message: err.Error(),
-		Details: []*any.Any{
+		Details: []*apb.Any{
 			{
 				// Double serialization seems ugly, but there is no way around
 				// it as the format for errors is predefined.
@@ -97,16 +97,16 @@ func errorFromGrpc(err error) error {
 
 func serverUnaryErrorMapper(
 	ctx context.Context,
-	req interface{},
+	req any,
 	_ *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
-) (interface{}, error) {
+) (any, error) {
 	rsp, err := handler(ctx, req)
 	return rsp, errorToGrpc(err)
 }
 
 func serverStreamErrorMapper(
-	srv interface{},
+	srv any,
 	ss grpc.ServerStream,
 	_ *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
@@ -118,7 +118,7 @@ func serverStreamErrorMapper(
 func clientUnaryErrorMapper(
 	ctx context.Context,
 	method string,
-	req, rsp interface{},
+	req, rsp any,
 	cc *grpc.ClientConn,
 	invoker grpc.UnaryInvoker,
 	opts ...grpc.CallOption,

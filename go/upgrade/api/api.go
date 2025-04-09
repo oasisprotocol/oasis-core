@@ -186,7 +186,7 @@ func (d Descriptor) PrettyPrint(ctx context.Context, prefix string, w io.Writer)
 
 // PrettyType returns a representation of Descriptor that can be used for pretty
 // printing.
-func (d Descriptor) PrettyType() (interface{}, error) {
+func (d Descriptor) PrettyType() (any, error) {
 	return d, nil
 }
 
@@ -258,7 +258,7 @@ type Backend interface {
 	// used to determine which part it is.
 	//
 	// It is idempotent with respect to the current upgrade descriptor.
-	ConsensusUpgrade(interface{}, beacon.EpochTime, int64) error
+	ConsensusUpgrade(any, beacon.EpochTime, int64) error
 
 	// Close cleans up any upgrader state and database handles.
 	Close()

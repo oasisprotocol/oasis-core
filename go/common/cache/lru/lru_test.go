@@ -16,12 +16,12 @@ func TestLRUCapacityEntries(t *testing.T) {
 
 	var (
 		nrEvictCallbacks         int
-		evictedKey, evictedValue interface{}
+		evictedKey, evictedValue any
 	)
 
 	cache := New(
 		Capacity(uint64(cacheSize), false),
-		OnEvict(func(k, v interface{}) {
+		OnEvict(func(k, v any) {
 			evictedKey, evictedValue = k, v
 			nrEvictCallbacks++
 		}),

@@ -214,7 +214,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	return resp.Response, nil
 }
 
-func (w *Worker) callEnclaveLocal(ctx context.Context, method string, args interface{}, rsp interface{}) error {
+func (w *Worker) callEnclaveLocal(ctx context.Context, method string, args any, rsp any) error {
 	rt := w.GetHostedRuntime()
 	if rt == nil {
 		return fmt.Errorf("not initialized")

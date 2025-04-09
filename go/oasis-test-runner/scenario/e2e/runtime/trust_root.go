@@ -183,7 +183,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 
 	// Run the test client again to verify that queries work correctly immediately after
 	// the transactions have been published.
-	queries := make([]interface{}, 0)
+	queries := make([]any, 0)
 	for i := 0; i < 5; i++ {
 		key := fmt.Sprintf("my_key_%d", i)
 		value := fmt.Sprintf("my_value_%d", i)

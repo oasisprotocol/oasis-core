@@ -141,7 +141,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	for _, txEvent := range txEvents {
 		var (
 			expectedEvents map[hash.Hash]int
-			event          interface{}
+			event          any
 		)
 		switch {
 		case txEvent.Registry != nil:

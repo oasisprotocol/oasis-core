@@ -21,7 +21,7 @@ type TxnCall struct {
 	// Method is the called method name.
 	Method string `json:"method"`
 	// Args are the method arguments.
-	Args interface{} `json:"args"`
+	Args any `json:"args"`
 }
 
 // TxnOutput is a transaction call output in the test runtime.
@@ -37,7 +37,7 @@ func (sc *Scenario) submitRuntimeTx(
 	id common.Namespace,
 	nonce uint64,
 	method string,
-	args interface{},
+	args any,
 ) (cbor.RawMessage, error) {
 	// Submit a transaction and check the result.
 	metaResp, err := sc.submitRuntimeTxMeta(ctx, id, nonce, method, args)
@@ -56,7 +56,7 @@ func (sc *Scenario) submitRuntimeQuery(
 	id common.Namespace,
 	round uint64,
 	method string,
-	args interface{},
+	args any,
 ) (cbor.RawMessage, error) {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
@@ -76,7 +76,7 @@ func (sc *Scenario) submitRuntimeTxMeta(
 	id common.Namespace,
 	nonce uint64,
 	method string,
-	args interface{},
+	args any,
 ) (*runtimeClient.SubmitTxMetaResponse, error) {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
@@ -125,7 +125,7 @@ func (sc *Scenario) submitConsensusXferTxMeta(
 	})
 }
 
-func (sc *Scenario) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args interface{}) error {
+func (sc *Scenario) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args any) error {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
 		return fmt.Errorf("client controller not available")

@@ -57,7 +57,7 @@ func NewStaticIterator(writeLog WriteLog) Iterator {
 // PipeIterator is a queue-backed writelog iterator which can be asynchronously
 // both pushed into and read from.
 type PipeIterator struct {
-	queue  chan interface{}
+	queue  chan any
 	cached *LogEntry
 	ctx    context.Context
 }
@@ -116,7 +116,7 @@ func (i *PipeIterator) Close() {
 // NewPipeIterator returns a new PipeIterator.
 func NewPipeIterator(ctx context.Context) PipeIterator {
 	return PipeIterator{
-		queue: make(chan interface{}, pipeIteratorQueueSize),
+		queue: make(chan any, pipeIteratorQueueSize),
 		ctx:   ctx,
 	}
 }

@@ -30,11 +30,11 @@ var (
 )
 
 func handlerGetAddresses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	_ func(interface{}) error,
+	_ func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	if interceptor == nil {
 		return srv.(Backend).GetAddresses(ctx)
 	}
@@ -42,7 +42,7 @@ func handlerGetAddresses(
 		Server:     srv,
 		FullMethod: methodGetAddresses.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		return srv.(Backend).GetAddresses(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

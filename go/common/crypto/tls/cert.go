@@ -152,7 +152,7 @@ func ImportCertificatePEM(certPEM []byte) (*tls.Certificate, error) {
 }
 
 // ImportKeyPEM loads a private key from an in-memory PEM blob.
-func ImportKeyPEM(keyPEM []byte) (interface{}, error) {
+func ImportKeyPEM(keyPEM []byte) (any, error) {
 	blk, _ := pem.Decode(keyPEM)
 	if blk == nil || blk.Type != keyPEMType {
 		return nil, fmt.Errorf("tls: failed to parse private key PEM")

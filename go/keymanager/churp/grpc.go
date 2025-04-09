@@ -65,11 +65,11 @@ var (
 )
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -81,18 +81,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerConsensusParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -104,18 +104,18 @@ func handlerConsensusParameters(
 		Server:     srv,
 		FullMethod: methodConsensusParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerStatus(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query StatusQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -127,18 +127,18 @@ func handlerStatus(
 		Server:     srv,
 		FullMethod: methodStatus.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Status(ctx, req.(*StatusQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerStatuses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query registry.NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -150,18 +150,18 @@ func handlerStatuses(
 		Server:     srv,
 		FullMethod: methodStatuses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).Statuses(ctx, req.(*registry.NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerAllStatuses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -173,13 +173,13 @@ func handlerAllStatuses(
 		Server:     srv,
 		FullMethod: methodAllStatuses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).AllStatuses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchStatuses(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchStatuses(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}

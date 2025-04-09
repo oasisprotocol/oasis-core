@@ -10,7 +10,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-func (app *registryApplication) changeParameters(ctx *api.Context, msg interface{}, apply bool) (interface{}, error) {
+func (app *registryApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

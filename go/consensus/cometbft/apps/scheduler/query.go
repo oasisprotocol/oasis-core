@@ -70,7 +70,7 @@ func (sq *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler
 	return sq.state.ConsensusParameters(ctx)
 }
 
-func (app *schedulerApplication) QueryFactory() interface{} {
+func (app *schedulerApplication) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

@@ -68,7 +68,7 @@ type Context struct { // nolint: maligned
 	isMessageExecution bool
 	isTransaction      bool
 
-	data           interface{}
+	data           any
 	events         []types.Event
 	eventsProvable []events.Provable
 	gasAccountant  GasAccountant
@@ -168,7 +168,7 @@ func (c *Context) Mode() ContextMode {
 }
 
 // Data returns the data to be serialized with this output.
-func (c *Context) Data() interface{} {
+func (c *Context) Data() any {
 	return c.data
 }
 
@@ -326,7 +326,7 @@ func (c *Context) IsMessageExecution() bool {
 //
 // Note: The use of this has mostly been replaced with EmitEvent, please
 // think really carefully if you want to use this.
-func (c *Context) EmitData(data interface{}) {
+func (c *Context) EmitData(data any) {
 	c.data = data
 }
 

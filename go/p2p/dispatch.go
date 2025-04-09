@@ -53,7 +53,7 @@ type topicHandler struct {
 type queuedMsg struct {
 	peerID core.PeerID
 	from   signature.PublicKey
-	msg    interface{}
+	msg    any
 }
 
 func (h *topicHandler) topicMessageValidator(_ context.Context, _ core.PeerID, envelope *pubsub.Message) bool {
@@ -75,7 +75,7 @@ func (h *topicHandler) topicMessageValidator(_ context.Context, _ core.PeerID, e
 		return false
 	}
 
-	var msg interface{}
+	var msg any
 	if msg, err = h.handler.DecodeMessage(envelope.GetData()); err != nil {
 		h.logger.Error("error while parsing message from peer",
 			"err", err,

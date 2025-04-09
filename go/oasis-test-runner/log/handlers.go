@@ -129,7 +129,7 @@ type assertJSONContainsHandler struct {
 }
 
 func (h *assertJSONContainsHandler) Line(line string) error {
-	var kvs map[string]interface{}
+	var kvs map[string]any
 	if err := json.Unmarshal([]byte(line), &kvs); err != nil {
 		return nil
 	}

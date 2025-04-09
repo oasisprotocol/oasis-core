@@ -121,7 +121,7 @@ func (rq *registryQuerier) ConsensusParameters(ctx context.Context) (*registry.C
 	return rq.state.ConsensusParameters(ctx)
 }
 
-func (app *registryApplication) QueryFactory() interface{} {
+func (app *registryApplication) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

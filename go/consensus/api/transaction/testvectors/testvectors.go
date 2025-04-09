@@ -15,7 +15,7 @@ const keySeedPrefix = "oasis-core test vectors: "
 type TestVector struct {
 	Kind             string                        `json:"kind"`
 	SignatureContext string                        `json:"signature_context"`
-	Tx               interface{}                   `json:"tx"`
+	Tx               any                           `json:"tx"`
 	SignedTx         transaction.SignedTransaction `json:"signed_tx"`
 	EncodedTx        []byte                        `json:"encoded_tx"`
 	EncodedSignedTx  []byte                        `json:"encoded_signed_tx"`

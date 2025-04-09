@@ -24,7 +24,7 @@ type service struct {
 	logger *logging.Logger
 }
 
-func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error) {
 	switch method {
 	case MethodGetLightBlock:
 		var rq int64

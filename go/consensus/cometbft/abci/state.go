@@ -609,7 +609,7 @@ func (s *applicationState) pruneWorker() {
 			s.logger.Debug("state pruner is terminating")
 			return
 		case <-ticker.C:
-			var v interface{}
+			var v any
 			select {
 			case v = <-s.prunerNotifyCh.Out():
 			case <-s.ctx.Done():

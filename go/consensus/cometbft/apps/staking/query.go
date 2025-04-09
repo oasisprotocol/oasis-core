@@ -190,7 +190,7 @@ func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.Con
 	return sq.state.ConsensusParameters(ctx)
 }
 
-func (app *stakingApplication) QueryFactory() interface{} {
+func (app *stakingApplication) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

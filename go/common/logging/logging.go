@@ -145,44 +145,44 @@ type Logger struct {
 }
 
 // Debug logs the message and key value pairs at the Debug log level.
-func (l *Logger) Debug(msg string, keyvals ...interface{}) {
+func (l *Logger) Debug(msg string, keyvals ...any) {
 	if l.level > LevelDebug {
 		return
 	}
-	keyvals = append([]interface{}{"msg", msg}, keyvals...)
+	keyvals = append([]any{"msg", msg}, keyvals...)
 	_ = level.Debug(l.logger).Log(keyvals...)
 }
 
 // Info logs the message and key value pairs at the Info log level.
-func (l *Logger) Info(msg string, keyvals ...interface{}) {
+func (l *Logger) Info(msg string, keyvals ...any) {
 	if l.level > LevelInfo {
 		return
 	}
-	keyvals = append([]interface{}{"msg", msg}, keyvals...)
+	keyvals = append([]any{"msg", msg}, keyvals...)
 	_ = level.Info(l.logger).Log(keyvals...)
 }
 
 // Warn logs the message and key value pairs at the Warn log level.
-func (l *Logger) Warn(msg string, keyvals ...interface{}) {
+func (l *Logger) Warn(msg string, keyvals ...any) {
 	if l.level > LevelWarn {
 		return
 	}
-	keyvals = append([]interface{}{"msg", msg}, keyvals...)
+	keyvals = append([]any{"msg", msg}, keyvals...)
 	_ = level.Warn(l.logger).Log(keyvals...)
 }
 
 // Error logs the message and key value pairs at the Error log level.
-func (l *Logger) Error(msg string, keyvals ...interface{}) {
+func (l *Logger) Error(msg string, keyvals ...any) {
 	if l.level > LevelError {
 		return
 	}
-	keyvals = append([]interface{}{"msg", msg}, keyvals...)
+	keyvals = append([]any{"msg", msg}, keyvals...)
 	_ = level.Error(l.logger).Log(keyvals...)
 }
 
 // With returns a clone of the logger with the provided key/value pairs
 // added via log.WithPrefix.
-func (l *Logger) With(keyvals ...interface{}) *Logger {
+func (l *Logger) With(keyvals ...any) *Logger {
 	return &Logger{
 		logger: log.With(l.logger, keyvals...),
 		level:  l.level,
@@ -342,7 +342,7 @@ func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
 		logger = &log.SwapLogger{}
 	}
 
-	prefixes := []interface{}{
+	prefixes := []any{
 		"ts", log.DefaultTimestampUTC,
 		"caller", log.Caller(defaultUnwind + extraUnwind),
 		"module", module,

@@ -80,7 +80,7 @@ func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context) error {
 }
 
 // ExecuteMessage implements api.Application.
-func (app *keymanagerApplication) ExecuteMessage(*tmapi.Context, interface{}, interface{}) (interface{}, error) {
+func (app *keymanagerApplication) ExecuteMessage(*tmapi.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("keymanager: unexpected message")
 }
 

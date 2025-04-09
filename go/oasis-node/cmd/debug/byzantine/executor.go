@@ -267,10 +267,10 @@ func (cbc *computeBatchContext) addResult(ctx context.Context, tx *transaction.T
 	return nil
 }
 
-func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res interface{}, tags transaction.Tags) error {
+func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res any, tags transaction.Tags) error {
 	// Hack: The actual TxnOutput struct doesn't serialize right.
 	return cbc.addResult(ctx, tx, cbor.Marshal(struct {
-		Success interface{}
+		Success any
 	}{
 		Success: res,
 	}), tags)

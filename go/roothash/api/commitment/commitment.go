@@ -22,5 +22,5 @@ type OpenCommitment interface {
 
 	// ToDDResult returns a commitment-specific result after discrepancy
 	// detection.
-	ToDDResult() interface{}
+	ToDDResult() any
 }

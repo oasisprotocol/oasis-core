@@ -220,7 +220,7 @@ func (pv ProtocolVersions) PrettyPrint(_ context.Context, prefix string, w io.Wr
 
 // PrettyType returns a representation of ProtocolVersions that can be used for
 // pretty printing.
-func (pv ProtocolVersions) PrettyType() (interface{}, error) {
+func (pv ProtocolVersions) PrettyType() (any, error) {
 	return pv, nil
 }
 

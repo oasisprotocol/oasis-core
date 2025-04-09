@@ -48,8 +48,8 @@ func Execute() {
 }
 
 func initVersions() {
-	cobra.AddTemplateFunc("nodeVersion", func() interface{} { return version.Versions })
-	cobra.AddTemplateFunc("toolchain", func() interface{} { return version.Toolchain })
+	cobra.AddTemplateFunc("nodeVersion", func() any { return version.Versions })
+	cobra.AddTemplateFunc("toolchain", func() any { return version.Toolchain })
 
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with nodeVersion }}

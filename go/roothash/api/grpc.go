@@ -118,11 +118,11 @@ var (
 )
 
 func handlerGetGenesisBlock(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -134,18 +134,18 @@ func handlerGetGenesisBlock(
 		Server:     srv,
 		FullMethod: methodGetGenesisBlock.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetGenesisBlock(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetLatestBlock(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -157,18 +157,18 @@ func handlerGetLatestBlock(
 		Server:     srv,
 		FullMethod: methodGetLatestBlock.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetLatestBlock(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetRuntimeState(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -180,18 +180,18 @@ func handlerGetRuntimeState(
 		Server:     srv,
 		FullMethod: methodGetRuntimeState.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetRuntimeState(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetLastRoundResults(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -203,18 +203,18 @@ func handlerGetLastRoundResults(
 		Server:     srv,
 		FullMethod: methodGetLastRoundResults.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetLastRoundResults(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetRoundRoots(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RoundRootsRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -226,18 +226,18 @@ func handlerGetRoundRoots(
 		Server:     srv,
 		FullMethod: methodGetRoundRoots.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetRoundRoots(ctx, req.(*RoundRootsRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetPastRoundRoots(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -249,18 +249,18 @@ func handlerGetPastRoundRoots(
 		Server:     srv,
 		FullMethod: methodGetPastRoundRoots.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetPastRoundRoots(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetIncomingMessageQueueMeta(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq RuntimeRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -272,18 +272,18 @@ func handlerGetIncomingMessageQueueMeta(
 		Server:     srv,
 		FullMethod: methodGetIncomingMessageQueueMeta.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetIncomingMessageQueueMeta(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerGetIncomingMessageQueue(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var rq InMessageQueueRequest
 	if err := dec(&rq); err != nil {
 		return nil, err
@@ -295,18 +295,18 @@ func handlerGetIncomingMessageQueue(
 		Server:     srv,
 		FullMethod: methodGetIncomingMessageQueue.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetIncomingMessageQueue(ctx, req.(*InMessageQueueRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -318,18 +318,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerConsensusParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -341,18 +341,18 @@ func handlerConsensusParameters(
 		Server:     srv,
 		FullMethod: methodConsensusParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetEvents(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -364,13 +364,13 @@ func handlerGetEvents(
 		Server:     srv,
 		FullMethod: methodGetEvents.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEvents(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchBlocks(srv any, stream grpc.ServerStream) error {
 	var runtimeID common.Namespace
 	if err := stream.RecvMsg(&runtimeID); err != nil {
 		return err
@@ -399,7 +399,7 @@ func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchEvents(srv any, stream grpc.ServerStream) error {
 	var runtimeID common.Namespace
 	if err := stream.RecvMsg(&runtimeID); err != nil {
 		return err
@@ -428,7 +428,7 @@ func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchExecutorCommitments(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchExecutorCommitments(srv any, stream grpc.ServerStream) error {
 	var runtimeID common.Namespace
 	if err := stream.RecvMsg(&runtimeID); err != nil {
 		return err

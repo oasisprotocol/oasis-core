@@ -23,7 +23,7 @@ const (
 )
 
 // rejectAll is an auth function that rejects all requests.
-func rejectAll(context.Context, interface{}) error {
+func rejectAll(context.Context, any) error {
 	return status.Errorf(codes.PermissionDenied, "rejecting all")
 }
 

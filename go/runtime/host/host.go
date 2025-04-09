@@ -25,13 +25,13 @@ type Config struct {
 	Component *bundle.ExplodedComponent
 
 	// Extra is an optional provisioner-specific configuration.
-	Extra interface{}
+	Extra any
 
 	// MessageHandler is the message handler for the Runtime Host Protocol messages.
 	MessageHandler RuntimeHandler
 
 	// LocalConfig is the node-local runtime configuration.
-	LocalConfig map[string]interface{}
+	LocalConfig map[string]any
 }
 
 // Provisioner is the runtime provisioner interface.

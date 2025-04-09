@@ -245,7 +245,7 @@ func (s SignedEntity) PrettyPrint(ctx context.Context, prefix string, w io.Write
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (s SignedEntity) PrettyType() (interface{}, error) {
+func (s SignedEntity) PrettyType() (any, error) {
 	var e Entity
 	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
 		return nil, fmt.Errorf("malformed signed blob: %w", err)

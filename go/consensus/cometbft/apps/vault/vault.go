@@ -94,7 +94,7 @@ func (app *vaultApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transac
 	}
 }
 
-func (app *vaultApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *vaultApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case stakingApi.MessageAccountHook:
 		// Account hook invocation.

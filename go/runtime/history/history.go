@@ -326,7 +326,7 @@ func (h *runtimeHistory) pruneWorker() {
 	for {
 		select {
 		case <-ticker.C:
-			var round interface{}
+			var round any
 			select {
 			case round = <-h.pruneCh.Out():
 			case <-h.stopCh:

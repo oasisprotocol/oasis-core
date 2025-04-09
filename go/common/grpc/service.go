@@ -20,14 +20,14 @@ var registeredMethods sync.Map
 type ServiceName string
 
 // NamespaceExtractorFunc extracts namespce from a method request.
-type NamespaceExtractorFunc func(ctx context.Context, req interface{}) (common.Namespace, error)
+type NamespaceExtractorFunc func(ctx context.Context, req any) (common.Namespace, error)
 
 // AccessControlFunc is a function that decides whether access control policy lookup is required for
 // a specific request. In case an error is returned the request is aborted.
-type AccessControlFunc func(req interface{}) (bool, error)
+type AccessControlFunc func(req any) (bool, error)
 
 // AccessControlAlways is a utility AccessControlFunc that enables access control for every request.
-func AccessControlAlways(interface{}) (bool, error) {
+func AccessControlAlways(any) (bool, error) {
 	return true, nil
 }
 
@@ -59,7 +59,7 @@ func GetRegisteredMethod(name string) (*MethodDesc, error) {
 }
 
 // NewMethod creates a new method name for the given service.
-func (sn ServiceName) NewMethod(name string, requestType interface{}) *MethodDesc {
+func (sn ServiceName) NewMethod(name string, requestType any) *MethodDesc {
 	if strings.Contains(name, "/") {
 		panic(fmt.Errorf("'/' not allowed in method name: %s", name))
 	}
@@ -94,7 +94,7 @@ func (m *MethodDesc) WithAccessControl(f AccessControlFunc) *MethodDesc {
 type MethodDesc struct {
 	short       string
 	full        string
-	requestType interface{}
+	requestType any
 
 	accessControl      AccessControlFunc
 	namespaceExtractor NamespaceExtractorFunc
@@ -111,7 +111,7 @@ func (m *MethodDesc) FullName() string {
 }
 
 // IsAccessControlled retruns if method is access controlled.
-func (m *MethodDesc) IsAccessControlled(req interface{}) (bool, error) {
+func (m *MethodDesc) IsAccessControlled(req any) (bool, error) {
 	if m.accessControl == nil {
 		return false, nil
 	}
@@ -119,7 +119,7 @@ func (m *MethodDesc) IsAccessControlled(req interface{}) (bool, error) {
 }
 
 // UnmarshalRawMessage unmarshals `cbor.RawMessage` request.
-func (m *MethodDesc) UnmarshalRawMessage(req *cbor.RawMessage) (interface{}, error) {
+func (m *MethodDesc) UnmarshalRawMessage(req *cbor.RawMessage) (any, error) {
 	v := reflect.New(reflect.TypeOf(m.requestType)).Interface()
 	if err := cbor.Unmarshal(*req, v); err != nil {
 		return nil, fmt.Errorf("unmarshal error: %w", err)
@@ -134,7 +134,7 @@ func (m *MethodDesc) HasNamespaceExtractor() bool {
 }
 
 // ExtractNamespace extracts the from the method request.
-func (m *MethodDesc) ExtractNamespace(ctx context.Context, req interface{}) (common.Namespace, error) {
+func (m *MethodDesc) ExtractNamespace(ctx context.Context, req any) (common.Namespace, error) {
 	if m.namespaceExtractor == nil {
 		return common.Namespace{}, fmt.Errorf("method not namespaced")
 	}

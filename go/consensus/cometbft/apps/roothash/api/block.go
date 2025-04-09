@@ -11,7 +11,7 @@ import (
 // finalizationPendingRuntimesKey is the block context key.
 type finalizationPendingRuntimesKey struct{}
 
-func (pk finalizationPendingRuntimesKey) NewDefault() interface{} {
+func (pk finalizationPendingRuntimesKey) NewDefault() any {
 	return make(map[common.Namespace]struct{})
 }
 

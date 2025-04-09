@@ -256,9 +256,9 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				RuntimeProvisioner: runtimeProvisioner,
 				Entity:             1,
 				Runtimes:           []int{1},
-				RuntimeConfig: map[int]map[string]interface{}{
+				RuntimeConfig: map[int]map[string]any{
 					1: {
-						"core": map[string]interface{}{
+						"core": map[string]any{
 							"min_gas_price": 1, // Just to test support for runtime configuration.
 						},
 					},

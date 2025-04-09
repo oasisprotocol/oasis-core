@@ -130,11 +130,11 @@ var (
 )
 
 func handlerGetEntity(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query IDQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -146,18 +146,18 @@ func handlerGetEntity(
 		Server:     srv,
 		FullMethod: methodGetEntity.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEntity(ctx, req.(*IDQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetEntities(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -169,18 +169,18 @@ func handlerGetEntities(
 		Server:     srv,
 		FullMethod: methodGetEntities.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEntities(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetNode(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query IDQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -192,18 +192,18 @@ func handlerGetNode(
 		Server:     srv,
 		FullMethod: methodGetNode.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetNode(ctx, req.(*IDQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetNodeByConsensusAddress(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query ConsensusAddressQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -215,18 +215,18 @@ func handlerGetNodeByConsensusAddress(
 		Server:     srv,
 		FullMethod: methodGetNodeByConsensusAddress.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetNodeByConsensusAddress(ctx, req.(*ConsensusAddressQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetNodeStatus(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query IDQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -238,18 +238,18 @@ func handlerGetNodeStatus(
 		Server:     srv,
 		FullMethod: methodGetNodeStatus.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetNodeStatus(ctx, req.(*IDQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetNodes(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -261,18 +261,18 @@ func handlerGetNodes(
 		Server:     srv,
 		FullMethod: methodGetNodes.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetNodes(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetRuntime(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query GetRuntimeQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -284,18 +284,18 @@ func handlerGetRuntime(
 		Server:     srv,
 		FullMethod: methodGetRuntime.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetRuntime(ctx, req.(*GetRuntimeQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetRuntimes(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query GetRuntimesQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -307,18 +307,18 @@ func handlerGetRuntimes(
 		Server:     srv,
 		FullMethod: methodGetRuntimes.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetRuntimes(ctx, req.(*GetRuntimesQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -330,18 +330,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetEvents(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -353,18 +353,18 @@ func handlerGetEvents(
 		Server:     srv,
 		FullMethod: methodGetEvents.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEvents(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerConsensusParameters(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -376,13 +376,13 @@ func handlerConsensusParameters(
 		Server:     srv,
 		FullMethod: methodConsensusParameters.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchEntities(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchEntities(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func handlerWatchEntities(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchNodes(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchNodes(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -438,7 +438,7 @@ func handlerWatchNodes(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchNodeList(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchNodeList(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -466,7 +466,7 @@ func handlerWatchNodeList(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchRuntimes(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchRuntimes(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -494,7 +494,7 @@ func handlerWatchRuntimes(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchEvents(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}

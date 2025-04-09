@@ -142,6 +142,6 @@ func (a Authority) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 }
 
 // PrettyType returns a representation of Authority that can be used for pretty printing.
-func (a Authority) PrettyType() (interface{}, error) {
+func (a Authority) PrettyType() (any, error) {
 	return a, nil
 }

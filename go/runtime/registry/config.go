@@ -16,7 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 )
 
-func getLocalConfig(runtimeID common.Namespace) map[string]interface{} {
+func getLocalConfig(runtimeID common.Namespace) map[string]any {
 	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
 }
 

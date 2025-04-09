@@ -88,7 +88,7 @@ func (h *Hash) UnmarshalHex(text string) error {
 }
 
 // From sets the hash to that of an arbitrary CBOR serializeable interface.
-func (h *Hash) From(v interface{}) {
+func (h *Hash) From(v any) {
 	h.FromBytes(cbor.Marshal(v))
 }
 
@@ -139,7 +139,7 @@ func (h Hash) Truncate(n int) ([]byte, error) {
 }
 
 // NewFrom creates a new hash by hashing the CBOR representation of the given type.
-func NewFrom(v interface{}) (h Hash) {
+func NewFrom(v any) (h Hash) {
 	h.From(v)
 	return
 }

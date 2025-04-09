@@ -16,7 +16,7 @@ type txMsgHandler struct {
 	n *Node
 }
 
-func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
+func (h *txMsgHandler) DecodeMessage(msg []byte) (any, error) {
 	var tx []byte
 	if err := cbor.Unmarshal(msg, &tx); err != nil {
 		return nil, err
@@ -24,12 +24,12 @@ func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return tx, nil
 }
 
-func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
+func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, any) error {
 	// Everyone is allowed to publish transactions.
 	return nil
 }
 
-func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey, msg any, isOwn bool) error {
 	// Ignore own messages as those are handled separately.
 	if isOwn {
 		return nil

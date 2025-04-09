@@ -32,7 +32,7 @@ func newSeedService(s *peerstore.Store) rpc.Service {
 }
 
 // HandleRequest implements rpc.Service.
-func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error) {
 	switch method {
 	case MethodAdvertise:
 		addr, ok := rpc.PeerAddrInfoFromContext(ctx)

@@ -51,8 +51,8 @@ func (c *nopClient) Call(
 	context.Context,
 	peer.ID,
 	string,
-	interface{},
-	interface{},
+	any,
+	any,
 	...CallOption,
 ) (PeerFeedback, error) {
 	return nil, errUnsupported
@@ -63,8 +63,8 @@ func (c *nopClient) CallOne(
 	context.Context,
 	[]peer.ID,
 	string,
-	interface{},
-	interface{},
+	any,
+	any,
 	...CallOption,
 ) (PeerFeedback, error) {
 	return nil, errUnsupported
@@ -75,10 +75,10 @@ func (c *nopClient) CallMulti(
 	context.Context,
 	[]peer.ID,
 	string,
-	interface{},
-	interface{},
+	any,
+	any,
 	...CallMultiOption,
-) ([]interface{}, []PeerFeedback, error) {
+) ([]any, []PeerFeedback, error) {
 	return nil, nil, errUnsupported
 }
 

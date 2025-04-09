@@ -76,7 +76,7 @@ type CustomStartFeature interface {
 
 type hostedRuntime struct {
 	runtime     *Runtime
-	localConfig map[string]interface{}
+	localConfig map[string]any
 }
 
 // Node defines the common fields for all node types.
@@ -137,7 +137,7 @@ func (n *Node) getProvisionedPort(portName string) uint16 {
 	return port
 }
 
-func (n *Node) addHostedRuntime(rt *Runtime, localConfig map[string]interface{}) {
+func (n *Node) addHostedRuntime(rt *Runtime, localConfig map[string]any) {
 	if _, ok := n.hostedRuntimes[rt.ID()]; !ok {
 		n.hostedRuntimes[rt.ID()] = &hostedRuntime{
 			runtime:     rt,

@@ -194,7 +194,7 @@ func prettyPrintDelegationsTo(
 	ctx context.Context,
 	addr api.Address,
 	sharePool api.SharePool,
-	delegations interface{},
+	delegations any,
 	prefix string,
 	w io.Writer,
 ) {

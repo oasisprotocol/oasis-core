@@ -37,7 +37,7 @@ type Handler interface {
 	//
 	// This method will be called twice, once in BeginBlock and once in
 	// EndBlock.
-	ConsensusUpgrade(interface{}) error
+	ConsensusUpgrade(any) error
 }
 
 // Context defines the common context used by migration handlers.

@@ -54,17 +54,17 @@ func (t turduckens) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 func TestObjectEncoder(t *testing.T) {
 	// Ensure our custom encoder encodes all types as expected.
 
-	expectedTur := []interface{}{
+	expectedTur := []any{
 		"ducks",
-		[]interface{}{
-			[]interface{}{"in", "chicken"},
-			[]interface{}{"in", "chicken"},
+		[]any{
+			[]any{"in", "chicken"},
+			[]any{"in", "chicken"},
 		},
 	}
 	tests := []struct {
 		desc     string
 		f        func(zapcore.ObjectEncoder)
-		expected interface{}
+		expected any
 	}{
 		{
 			desc: "AddArray",
@@ -76,136 +76,136 @@ func TestObjectEncoder(t *testing.T) {
 					return nil
 				})), "Expected AddArray to succeed.")
 			},
-			expected: []interface{}{"k", []interface{}{true, false, true}},
+			expected: []any{"k", []any{true, false, true}},
 		},
 		{
 			desc: "AddArray (nested)",
 			f: func(e zapcore.ObjectEncoder) {
 				assert.NoError(t, e.AddArray("k", turduckens(2)), "Expected AddArray to succeed.")
 			},
-			expected: []interface{}{"k", []interface{}{expectedTur, expectedTur}},
+			expected: []any{"k", []any{expectedTur, expectedTur}},
 		},
 		{
 			desc: "AddArray (empty)",
 			f: func(e zapcore.ObjectEncoder) {
 				assert.NoError(t, e.AddArray("k", turduckens(0)), "Expected AddArray to succeed.")
 			},
-			expected: []interface{}{"k", []interface{}{}},
+			expected: []any{"k", []any{}},
 		},
 		{
 			desc:     "AddBinary",
 			f:        func(e zapcore.ObjectEncoder) { e.AddBinary("k", []byte("foo")) },
-			expected: []interface{}{"k", []byte("foo")},
+			expected: []any{"k", []byte("foo")},
 		},
 		{
 			desc:     "AddByteString",
 			f:        func(e zapcore.ObjectEncoder) { e.AddByteString("k", []byte("foo")) },
-			expected: []interface{}{"k", "foo"},
+			expected: []any{"k", "foo"},
 		},
 		{
 			desc:     "AddBool",
 			f:        func(e zapcore.ObjectEncoder) { e.AddBool("k", true) },
-			expected: []interface{}{"k", true},
+			expected: []any{"k", true},
 		},
 		{
 			desc:     "AddComplex128",
 			f:        func(e zapcore.ObjectEncoder) { e.AddComplex128("k", 1+2i) },
-			expected: []interface{}{"k", 1 + 2i},
+			expected: []any{"k", 1 + 2i},
 		},
 		{
 			desc:     "AddComplex64",
 			f:        func(e zapcore.ObjectEncoder) { e.AddComplex64("k", 1+2i) },
-			expected: []interface{}{"k", complex64(1 + 2i)},
+			expected: []any{"k", complex64(1 + 2i)},
 		},
 		{
 			desc:     "AddDuration",
 			f:        func(e zapcore.ObjectEncoder) { e.AddDuration("k", time.Millisecond) },
-			expected: []interface{}{"k", time.Millisecond},
+			expected: []any{"k", time.Millisecond},
 		},
 		{
 			desc:     "AddFloat64",
 			f:        func(e zapcore.ObjectEncoder) { e.AddFloat64("k", 3.14) },
-			expected: []interface{}{"k", 3.14},
+			expected: []any{"k", 3.14},
 		},
 		{
 			desc:     "AddFloat32",
 			f:        func(e zapcore.ObjectEncoder) { e.AddFloat32("k", 3.14) },
-			expected: []interface{}{"k", float32(3.14)},
+			expected: []any{"k", float32(3.14)},
 		},
 		{
 			desc:     "AddInt",
 			f:        func(e zapcore.ObjectEncoder) { e.AddInt("k", 42) },
-			expected: []interface{}{"k", 42},
+			expected: []any{"k", 42},
 		},
 
 		{
 			desc:     "AddInt64",
 			f:        func(e zapcore.ObjectEncoder) { e.AddInt64("k", 42) },
-			expected: []interface{}{"k", int64(42)},
+			expected: []any{"k", int64(42)},
 		},
 		{
 			desc:     "AddInt32",
 			f:        func(e zapcore.ObjectEncoder) { e.AddInt32("k", 42) },
-			expected: []interface{}{"k", int32(42)},
+			expected: []any{"k", int32(42)},
 		},
 
 		{
 			desc:     "AddInt16",
 			f:        func(e zapcore.ObjectEncoder) { e.AddInt16("k", 42) },
-			expected: []interface{}{"k", int16(42)},
+			expected: []any{"k", int16(42)},
 		},
 		{
 			desc:     "AddInt8",
 			f:        func(e zapcore.ObjectEncoder) { e.AddInt8("k", 42) },
-			expected: []interface{}{"k", int8(42)},
+			expected: []any{"k", int8(42)},
 		},
 
 		{
 			desc:     "AddString",
 			f:        func(e zapcore.ObjectEncoder) { e.AddString("k", "v") },
-			expected: []interface{}{"k", "v"},
+			expected: []any{"k", "v"},
 		},
 		{
 			desc:     "AddTime",
 			f:        func(e zapcore.ObjectEncoder) { e.AddTime("k", time.Unix(0, 100)) },
-			expected: []interface{}{"k", time.Unix(0, 100)},
+			expected: []any{"k", time.Unix(0, 100)},
 		},
 		{
 			desc:     "AddUint",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUint("k", 42) },
-			expected: []interface{}{"k", uint(42)},
+			expected: []any{"k", uint(42)},
 		},
 		{
 			desc:     "AddUint64",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUint64("k", 42) },
-			expected: []interface{}{"k", uint64(42)},
+			expected: []any{"k", uint64(42)},
 		},
 		{
 			desc:     "AddUint32",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUint32("k", 42) },
-			expected: []interface{}{"k", uint32(42)},
+			expected: []any{"k", uint32(42)},
 		},
 		{
 			desc:     "AddUint16",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUint16("k", 42) },
-			expected: []interface{}{"k", uint16(42)},
+			expected: []any{"k", uint16(42)},
 		},
 		{
 			desc:     "AddUint8",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUint8("k", 42) },
-			expected: []interface{}{"k", uint8(42)},
+			expected: []any{"k", uint8(42)},
 		},
 		{
 			desc:     "AddUintptr",
 			f:        func(e zapcore.ObjectEncoder) { e.AddUintptr("k", 42) },
-			expected: []interface{}{"k", uintptr(42)},
+			expected: []any{"k", uintptr(42)},
 		},
 		{
 			desc: "AddReflected",
 			f: func(e zapcore.ObjectEncoder) {
-				assert.NoError(t, e.AddReflected("k", map[string]interface{}{"foo": 5}), "Expected AddReflected to succeed.")
+				assert.NoError(t, e.AddReflected("k", map[string]any{"foo": 5}), "Expected AddReflected to succeed.")
 			},
-			expected: []interface{}{"k", map[string]interface{}{"foo": 5}},
+			expected: []any{"k", map[string]any{"foo": 5}},
 		},
 		{
 			desc: "OpenNamespace",
@@ -217,7 +217,7 @@ func TestObjectEncoder(t *testing.T) {
 				e.OpenNamespace("inner")
 				e.AddInt("foo", 3)
 			},
-			expected: []interface{}{"k_foo", 1, "k_middle_foo", 2, "k_middle_inner_foo", 3},
+			expected: []any{"k_foo", 1, "k_middle_foo", 2, "k_middle_inner_foo", 3},
 		},
 		{
 			desc: "object (no nested namespace) then string",
@@ -226,7 +226,7 @@ func TestObjectEncoder(t *testing.T) {
 				_ = e.AddObject("obj", maybeNamespace{false})
 				e.AddString("not-obj", "should-be-outside-obj")
 			},
-			expected: []interface{}{"k_obj", []interface{}{"obj-out", "obj-outside-namespace"}, "k_not-obj", "should-be-outside-obj"},
+			expected: []any{"k_obj", []any{"obj-out", "obj-outside-namespace"}, "k_not-obj", "should-be-outside-obj"},
 		},
 		{
 			desc: "object (with nested namespace) then string",
@@ -235,7 +235,7 @@ func TestObjectEncoder(t *testing.T) {
 				_ = e.AddObject("obj", maybeNamespace{true})
 				e.AddString("not-obj", "should-be-outside-obj")
 			},
-			expected: []interface{}{"k_obj", []interface{}{"obj-out", "obj-outside-namespace", "obj-namespace_obj-in", "obj-inside-namespace"}, "k_not-obj", "should-be-outside-obj"},
+			expected: []any{"k_obj", []any{"obj-out", "obj-outside-namespace", "obj-namespace_obj-in", "obj-inside-namespace"}, "k_not-obj", "should-be-outside-obj"},
 		},
 	}
 

@@ -38,8 +38,8 @@ type Frame struct {
 
 // Request is an EnclaveRPC request.
 type Request struct {
-	Method string      `json:"method"`
-	Args   interface{} `json:"args"`
+	Method string `json:"method"`
+	Args   any    `json:"args"`
 }
 
 // Body is an EnclaveRPC response body.

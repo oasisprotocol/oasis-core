@@ -105,7 +105,7 @@ func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (t *Transaction) PrettyType() (interface{}, error) {
+func (t *Transaction) PrettyType() (any, error) {
 	bodyType := t.Method.BodyType()
 	if bodyType == nil {
 		return nil, fmt.Errorf("unknown method body type")
@@ -139,7 +139,7 @@ func (t *Transaction) SanityCheck() error {
 }
 
 // NewTransaction creates a new transaction.
-func NewTransaction(nonce uint64, fee *Fee, method MethodName, body interface{}) *Transaction {
+func NewTransaction(nonce uint64, fee *Fee, method MethodName, body any) *Transaction {
 	var rawBody []byte
 	if body != nil {
 		rawBody = cbor.Marshal(body)
@@ -158,10 +158,10 @@ func NewTransaction(nonce uint64, fee *Fee, method MethodName, body interface{})
 //
 // It should only be used for pretty printing.
 type PrettyTransaction struct {
-	Nonce  uint64      `json:"nonce"`
-	Fee    *Fee        `json:"fee,omitempty"`
-	Method MethodName  `json:"method"`
-	Body   interface{} `json:"body,omitempty"`
+	Nonce  uint64     `json:"nonce"`
+	Fee    *Fee       `json:"fee,omitempty"`
+	Method MethodName `json:"method"`
+	Body   any        `json:"body,omitempty"`
 }
 
 // SignedTransaction is a signed consensus transaction.
@@ -201,7 +201,7 @@ func (s SignedTransaction) PrettyPrint(ctx context.Context, prefix string, w io.
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
-func (s SignedTransaction) PrettyType() (interface{}, error) {
+func (s SignedTransaction) PrettyType() (any, error) {
 	var tx Transaction
 	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
 		return nil, fmt.Errorf("malformed signed blob: %w", err)
@@ -309,7 +309,7 @@ func (m MethodName) SanityCheck() error {
 }
 
 // BodyType returns the registered body type associated with this method.
-func (m MethodName) BodyType() interface{} {
+func (m MethodName) BodyType() any {
 	bodyType, _ := registeredMethods.Load(string(m))
 	return bodyType
 }
@@ -335,7 +335,7 @@ func (m MethodName) IsCritical() bool {
 //
 // Module and method pair must be unique. If they are not, this method
 // will panic.
-func NewMethodName(module, method string, bodyType interface{}) MethodName {
+func NewMethodName(module, method string, bodyType any) MethodName {
 	// Check for duplicate method names.
 	name := module + MethodSeparator + method
 	if _, isRegistered := registeredMethods.LoadOrStore(name, bodyType); isRegistered {

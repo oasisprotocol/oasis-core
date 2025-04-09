@@ -35,11 +35,11 @@ import (
 type testMsgDispatcher struct{}
 
 // Implements MessageDispatcher.
-func (nd *testMsgDispatcher) Subscribe(interface{}, abciAPI.MessageSubscriber) {
+func (nd *testMsgDispatcher) Subscribe(any, abciAPI.MessageSubscriber) {
 }
 
 // Implements MessageDispatcher.
-func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}) (interface{}, error) {
+func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg any) (any, error) {
 	// Either we need to be in simulation mode or the gas accountant must be a no-op one.
 	if !ctx.IsSimulation() && ctx.Gas() != abciAPI.NewNopGasAccountant() {
 		panic("gas estimation should always use simulation mode")

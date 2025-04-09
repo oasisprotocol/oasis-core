@@ -60,7 +60,7 @@ var (
 
 // NewFactory creates a new factory with the specified roles, with the
 // specified dataDir.
-func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func NewFactory(config any, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	dataDir, ok := config.(string)
 	if !ok {
 		return nil, errors.New("signature/signer/file: invalid file signer configuration provided")

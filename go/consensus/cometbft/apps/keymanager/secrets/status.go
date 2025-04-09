@@ -89,7 +89,7 @@ nextNode:
 				continue
 			}
 
-			vars := []interface{}{
+			vars := []any{
 				"id", kmrt.ID,
 				"node_id", n.ID,
 				"version", nodeRt.Version,

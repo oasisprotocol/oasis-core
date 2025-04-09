@@ -15,7 +15,7 @@ type committeeMsgHandler struct {
 	n *Node
 }
 
-func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
+func (h *committeeMsgHandler) DecodeMessage(msg []byte) (any, error) {
 	var dec p2p.CommitteeMessage
 	if err := cbor.Unmarshal(msg, &dec); err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return &dec, nil
 }
 
-func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signature.PublicKey, msg interface{}) error {
+func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signature.PublicKey, msg any) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
 	epoch := h.n.commonNode.Group.GetEpochSnapshot()
@@ -56,7 +56,7 @@ func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signatu
 	return nil
 }
 
-func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.PublicKey, msg any, isOwn bool) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
 	switch {

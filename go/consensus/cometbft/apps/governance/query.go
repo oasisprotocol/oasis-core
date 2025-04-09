@@ -62,7 +62,7 @@ func (gq *governanceQuerier) ConsensusParameters(ctx context.Context) (*governan
 	return gq.state.ConsensusParameters(ctx)
 }
 
-func (app *governanceApplication) QueryFactory() interface{} {
+func (app *governanceApplication) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

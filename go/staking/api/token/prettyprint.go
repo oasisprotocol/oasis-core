@@ -31,7 +31,7 @@ func ConvertToTokenAmount(amount quantity.Quantity, tokenValueExponent uint8) (s
 // of base units.
 // If the context carries appropriate value for the token's value sign, then the
 // amount is prefixed with the sign.
-func PrettyPrintAmount(ctx context.Context, amount interface{}, w io.Writer) {
+func PrettyPrintAmount(ctx context.Context, amount any, w io.Writer) {
 	useBaseUnits := false
 	validAmount := true
 

@@ -34,7 +34,7 @@ type testService struct {
 	id int
 }
 
-func (s *testService) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *testService) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (any, error) {
 	if method != testMethod {
 		return nil, fmt.Errorf("unsupported method")
 	}

@@ -14,7 +14,7 @@ import (
 var ErrServiceClosed = errors.New("grpc/wrapper: received message for wrapped service with deregistered wrapper")
 
 type wrappedResponse struct {
-	resp interface{}
+	resp any
 	err  error
 }
 
@@ -28,13 +28,13 @@ type WrappedUnaryRequest struct {
 	WrappedRequestCommon
 
 	Context context.Context
-	Request interface{}
+	Request any
 	Info    *grpc.UnaryServerInfo
 	Handler grpc.UnaryHandler
 }
 
 // Forward forwards the wrapped request further down the GRPC stack, potentially to the original server implementation.
-func (u *WrappedUnaryRequest) Forward() (interface{}, error) {
+func (u *WrappedUnaryRequest) Forward() (any, error) {
 	return u.Handler(u.Context, u.Request)
 }
 
@@ -42,7 +42,7 @@ func (u *WrappedUnaryRequest) Forward() (interface{}, error) {
 type WrappedStreamRequest struct {
 	WrappedRequestCommon
 
-	Server  interface{}
+	Server  any
 	Stream  grpc.ServerStream
 	Info    *grpc.StreamServerInfo
 	Handler grpc.StreamHandler
@@ -64,7 +64,7 @@ type WrappedRequest struct {
 }
 
 // Respond sends the given response back to the GRPC wrapper.
-func (req *WrappedRequest) Respond(resp interface{}, err error) {
+func (req *WrappedRequest) Respond(resp any, err error) {
 	req.returnCh <- &wrappedResponse{
 		resp: resp,
 		err:  err,
@@ -72,7 +72,7 @@ func (req *WrappedRequest) Respond(resp interface{}, err error) {
 }
 
 // Forward forwards the request to the original handler and returns its return values.
-func (req *WrappedRequest) Forward() (interface{}, error) {
+func (req *WrappedRequest) Forward() (any, error) {
 	if req.Unary != nil {
 		return req.Unary.Forward()
 	}
@@ -106,10 +106,10 @@ func (w *grpcWrapper) getApplicable(fullMethod string) *wrapperSpec {
 
 func (w *grpcWrapper) unaryInterceptor(
 	ctx context.Context,
-	req interface{},
+	req any,
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
-) (interface{}, error) {
+) (any, error) {
 	wrapper := w.getApplicable(info.FullMethod)
 	if wrapper != nil {
 		if wrapper == nilWrapper {
@@ -139,7 +139,7 @@ func (w *grpcWrapper) unaryInterceptor(
 }
 
 func (w *grpcWrapper) streamInterceptor(
-	srv interface{},
+	srv any,
 	ss grpc.ServerStream,
 	info *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,

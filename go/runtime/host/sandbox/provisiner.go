@@ -84,7 +84,7 @@ func (p *sandboxProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		rtCfg:                       cfg,
 		id:                          cfg.ID,
 		startOne:                    cmSync.NewOne(),
-		ctrlCh:                      make(chan interface{}, ctrlChannelBufferSize),
+		ctrlCh:                      make(chan any, ctrlChannelBufferSize),
 		notifier:                    pubsub.NewBroker(false),
 		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
 		logger:                      p.cfg.Logger.With("runtime_id", cfg.ID),

@@ -13,5 +13,5 @@ type PrettyPrinter interface {
 	PrettyPrint(ctx context.Context, prefix string, w io.Writer)
 
 	// PrettyType returns a representation of the type that can be used for pretty printing.
-	PrettyType() (interface{}, error)
+	PrettyType() (any, error)
 }

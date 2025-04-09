@@ -130,7 +130,7 @@ func (a Action) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 }
 
 // PrettyType returns a representation of Action that can be used for pretty printing.
-func (a Action) PrettyType() (interface{}, error) {
+func (a Action) PrettyType() (any, error) {
 	return a, nil
 }
 
@@ -219,7 +219,7 @@ func (am ActionExecuteMessage) PrettyPrint(ctx context.Context, prefix string, w
 }
 
 // PrettyType returns a representation of ActionExecuteMessage that can be used for pretty printing.
-func (am ActionExecuteMessage) PrettyType() (interface{}, error) {
+func (am ActionExecuteMessage) PrettyType() (any, error) {
 	bodyType := am.Method.BodyType()
 	if bodyType == nil {
 		return nil, fmt.Errorf("unknown method body type")
@@ -251,7 +251,7 @@ func (am ActionExecuteMessage) PrettyType() (interface{}, error) {
 // It should only be used for pretty printing.
 type PrettyActionExecuteMessage struct {
 	Method transaction.MethodName `json:"method"`
-	Body   interface{}            `json:"body,omitempty"`
+	Body   any                    `json:"body,omitempty"`
 }
 
 // ActionUpdateWithdrawPolicy is the action to update the withdraw policy for a given address.
@@ -290,7 +290,7 @@ func (au ActionUpdateWithdrawPolicy) PrettyPrint(ctx context.Context, prefix str
 
 // PrettyType returns a representation of ActionUpdateWithdrawPolicy that can be used for pretty
 // printing.
-func (au ActionUpdateWithdrawPolicy) PrettyType() (interface{}, error) {
+func (au ActionUpdateWithdrawPolicy) PrettyType() (any, error) {
 	return au, nil
 }
 
@@ -355,6 +355,6 @@ func (au ActionUpdateAuthority) PrettyPrint(ctx context.Context, prefix string, 
 
 // PrettyType returns a representation of ActionUpdateAuthority that can be used for pretty
 // printing.
-func (au ActionUpdateAuthority) PrettyType() (interface{}, error) {
+func (au ActionUpdateAuthority) PrettyType() (any, error) {
 	return au, nil
 }

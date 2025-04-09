@@ -79,11 +79,11 @@ var (
 )
 
 func handlerStateToGenesis(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -95,18 +95,18 @@ func handlerStateToGenesis(
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetStatus(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query registry.NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -118,18 +118,18 @@ func handlerGetStatus(
 		Server:     srv,
 		FullMethod: methodGetStatus.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetStatus(ctx, req.(*registry.NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetStatuses(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var height int64
 	if err := dec(&height); err != nil {
 		return nil, err
@@ -141,18 +141,18 @@ func handlerGetStatuses(
 		Server:     srv,
 		FullMethod: methodGetStatuses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetStatuses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetMasterSecret(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query registry.NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -164,18 +164,18 @@ func handlerGetMasterSecret(
 		Server:     srv,
 		FullMethod: methodGetMasterSecret.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetMasterSecret(ctx, req.(*registry.NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerGetEphemeralSecret(
-	srv interface{},
+	srv any,
 	ctx context.Context,
-	dec func(interface{}) error,
+	dec func(any) error,
 	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
+) (any, error) {
 	var query registry.NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
@@ -187,13 +187,13 @@ func handlerGetEphemeralSecret(
 		Server:     srv,
 		FullMethod: methodGetEphemeralSecret.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEphemeralSecret(ctx, req.(*registry.NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerWatchStatuses(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchStatuses(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func handlerWatchStatuses(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerWatchMasterSecrets(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchMasterSecrets(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func handlerWatchMasterSecrets(srv interface{}, stream grpc.ServerStream) error 
 	}
 }
 
-func handlerWatchEphemeralSecrets(srv interface{}, stream grpc.ServerStream) error {
+func handlerWatchEphemeralSecrets(srv any, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
 	}

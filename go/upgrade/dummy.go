@@ -33,7 +33,7 @@ func (u *dummyUpgradeManager) StartupUpgrade() error {
 	return nil
 }
 
-func (u *dummyUpgradeManager) ConsensusUpgrade(interface{}, beacon.EpochTime, int64) error {
+func (u *dummyUpgradeManager) ConsensusUpgrade(any, beacon.EpochTime, int64) error {
 	return nil
 }
 

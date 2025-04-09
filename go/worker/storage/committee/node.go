@@ -76,12 +76,12 @@ func (q outOfOrderRoundQueue) Less(i, j int) bool { return q[i].GetRound() < q[j
 func (q outOfOrderRoundQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
 
 // Push appends x as the last element in the heap's array.
-func (q *outOfOrderRoundQueue) Push(x interface{}) {
+func (q *outOfOrderRoundQueue) Push(x any) {
 	*q = append(*q, x.(roundItem))
 }
 
 // Pop removes and returns the last element in the heap's array.
-func (q *outOfOrderRoundQueue) Pop() interface{} {
+func (q *outOfOrderRoundQueue) Pop() any {
 	old := *q
 	n := len(old)
 	x := old[n-1]

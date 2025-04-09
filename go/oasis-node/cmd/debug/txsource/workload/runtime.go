@@ -81,7 +81,7 @@ type TxnCall struct {
 	// Method is the called method name.
 	Method string `json:"method"`
 	// Args are the method arguments.
-	Args interface{} `json:"args"`
+	Args any `json:"args"`
 }
 
 // TxnOutput is a transaction call output in the test runtime.

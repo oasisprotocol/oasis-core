@@ -14,7 +14,7 @@ import (
 // feeAccumulatorKey is the block context key.
 type feeAccumulatorKey struct{}
 
-func (fak feeAccumulatorKey) NewDefault() interface{} {
+func (fak feeAccumulatorKey) NewDefault() any {
 	return &feeAccumulator{}
 }
 
@@ -145,7 +145,7 @@ func BlockFees(ctx *abciAPI.Context) quantity.Quantity {
 // proposerKey is the block context key.
 type proposerKey struct{}
 
-func (pk proposerKey) NewDefault() interface{} {
+func (pk proposerKey) NewDefault() any {
 	var empty *signature.PublicKey
 	return empty
 }

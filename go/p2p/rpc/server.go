@@ -22,7 +22,7 @@ const (
 // Service is an RPC service implementation.
 type Service interface {
 	// HandleRequest handles an incoming RPC request.
-	HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error)
+	HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error)
 }
 
 // Server is an RPC server for the given protocol.

@@ -6,7 +6,7 @@ import (
 )
 
 // PrettyJSONMarshal returns pretty-printed JSON encoding of v.
-func PrettyJSONMarshal(v interface{}) ([]byte, error) {
+func PrettyJSONMarshal(v any) ([]byte, error) {
 	formatted, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal to pretty JSON: %w", err)
