@@ -34,10 +34,10 @@ rand = "0.8.5"
 futures = "0.3.31"
 tokio = { version = "1.44", features = ["rt", "rt-multi-thread", "sync", "time"] }
 tokio-retry = "0.3.0"
-tendermint = "0.39.1"
-tendermint-proto = "0.39.1"
-tendermint-light-client = { version = "0.39.1", features = ["rust-crypto"], default-features = false }
-tendermint-rpc = { version = "0.39.1", default-features = false }
+tendermint = "0.40.3"
+tendermint-proto = "0.40.3"
+tendermint-light-client = { version = "0.40.3", features = ["rust-crypto"], default-features = false }
+tendermint-rpc = { version = "0.40.3", default-features = false }
 curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core", "digest"] }
@@ -76,7 +76,7 @@ features = ["full"]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.18.0", features = ["simple_uds"] }
 tempfile = "3.13.0"
-tendermint-testgen = "0.39.1"
+tendermint-testgen = "0.40.3"
 
 [features]
 default = []
