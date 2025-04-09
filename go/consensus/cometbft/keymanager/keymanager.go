@@ -4,7 +4,6 @@ package keymanager
 
 import (
 	"context"
-	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
@@ -70,21 +69,9 @@ func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx,
 
 // New constructs a new CometBFT backed key manager management Backend
 // instance.
-func New(ctx context.Context, querier *app.QueryFactory) (*ServiceClient, error) {
-	secretsClient, err := secrets.New(ctx, querier)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/keymanager: failed to create secrets client: %w", err)
+func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		secretsClient: secrets.New(ctx, querier),
+		churpClient:   churp.New(ctx, querier),
 	}
-
-	churpClient, err := churp.New(ctx, querier)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/keymanager: failed to create churp client: %w", err)
-	}
-
-	sc := ServiceClient{
-		secretsClient: secretsClient,
-		churpClient:   churpClient,
-	}
-
-	return &sc, nil
 }

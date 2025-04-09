@@ -433,11 +433,11 @@ func EventsFromCometBFT(
 }
 
 // New constructs a new CometBFT backed staking backend instance.
-func New(backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		backend:       backend,
 		querier:       querier,
 		eventNotifier: pubsub.NewBroker(false),
-	}, nil
+	}
 }

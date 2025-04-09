@@ -384,7 +384,7 @@ func (sc *ServiceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 }
 
 // New constructs a new CometBFT backed beacon and epochtime backend instance.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
+func New(ctx context.Context, baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
 
 	sc := &ServiceClient{
@@ -394,6 +394,8 @@ func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) 
 		ctx:               ctx,
 		epochLastNotified: beaconAPI.EpochInvalid,
 		epochCache:        epochCache,
+		baseEpoch:         baseEpoch,
+		baseBlock:         baseBlock,
 	}
 	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()
@@ -412,13 +414,5 @@ func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) 
 		}
 	})
 
-	genDoc, err := backend.GetGenesisDocument(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sc.baseEpoch = genDoc.Beacon.Base
-	sc.baseBlock = genDoc.Height
-
-	return sc, nil
+	return sc
 }

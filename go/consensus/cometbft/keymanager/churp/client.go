@@ -114,7 +114,7 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 
 // New constructs a new CometBFT backed key manager CHURP management Backend
 // instance.
-func New(ctx context.Context, querier *app.QueryFactory) (*ServiceClient, error) {
+func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
 	sc := ServiceClient{
 		logger:  logging.GetLogger("cometbft/keymanager/churp"),
 		querier: querier,
@@ -134,5 +134,5 @@ func New(ctx context.Context, querier *app.QueryFactory) (*ServiceClient, error)
 		}
 	})
 
-	return &sc, nil
+	return &sc
 }

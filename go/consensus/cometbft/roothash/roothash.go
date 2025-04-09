@@ -601,7 +601,7 @@ EventLoop:
 }
 
 // New constructs a new CometBFT-based root hash backend.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		ctx:              ctx,
 		logger:           logging.GetLogger("cometbft/roothash"),
@@ -612,7 +612,7 @@ func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) 
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
 		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
-	}, nil
+	}
 }
 
 func init() {

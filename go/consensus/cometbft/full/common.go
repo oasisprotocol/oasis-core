@@ -94,6 +94,10 @@ type CommonConfig struct {
 	// GenesisHeight is the block height at which the genesis document
 	// was generated.
 	GenesisHeight int64
+	// BaseEpoch is the starting epoch.
+	BaseEpoch beaconAPI.EpochTime
+	// BaseHeight is the starting height.
+	BaseHeight int64
 	// PublicKeyBlacklist is the network-wide public key blacklist.
 	PublicKeyBlacklist []signature.PublicKey
 }
@@ -119,6 +123,8 @@ type commonNode struct {
 	genesis            genesisAPI.Provider
 	genesisDoc         *cmttypes.GenesisDoc
 	genesisHeight      int64
+	baseEpoch          beaconAPI.EpochTime
+	baseHeight         int64
 	publicKeyBlacklist []signature.PublicKey
 
 	mux     *abci.ApplicationServer
@@ -227,89 +233,40 @@ func (n *commonNode) initialize() error {
 	n.querier = abci.NewQueryFactory(n.mux.State())
 
 	// Initialize the beacon/epochtime backend.
-	var err error
-	n.beacon, err = tmbeacon.New(n.ctx, n.parentNode, beaconApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("initialize: failed to initialize beapoch backend",
-			"err", err,
-		)
-		return err
-	}
+	n.beacon = tmbeacon.New(n.ctx, n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.beacon)
-	if err = n.mux.SetEpochtime(n.beacon); err != nil {
+	if err := n.mux.SetEpochtime(n.beacon); err != nil {
 		return err
 	}
 
 	// Initialize the rest of backends.
-	n.keymanager, err = tmkeymanager.New(n.ctx, keymanagerApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("initialize: failed to initialize keymanager backend",
-			"err", err,
-		)
-		return err
-	}
+	n.keymanager = tmkeymanager.New(n.ctx, keymanagerApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.keymanager)
 
-	n.registry, err = tmregistry.New(n.ctx, n.parentNode, registryApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("initialize: failed to initialize registry backend",
-			"err", err,
-		)
-		return err
-	}
+	n.registry = tmregistry.New(n.ctx, n.parentNode, registryApp.NewQueryFactory(n.mux.State()))
 	if cmmetrics.Enabled() {
 		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
 	}
 	n.serviceClients = append(n.serviceClients, n.registry)
 	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
 
-	n.staking, err = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("staking: failed to initialize staking backend",
-			"err", err,
-		)
-		return err
-	}
+	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.staking)
 	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
 
-	n.scheduler, err = tmscheduler.New(schedulerApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("scheduler: failed to initialize scheduler backend",
-			"err", err,
-		)
-		return err
-	}
+	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.scheduler)
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
-	n.roothash, err = tmroothash.New(n.ctx, n.parentNode, roothashApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("roothash: failed to initialize roothash backend",
-			"err", err,
-		)
-		return err
-	}
+	n.roothash = tmroothash.New(n.ctx, n.parentNode, roothashApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.roothash)
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 
-	n.governance, err = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("governance: failed to initialize governance backend",
-			"err", err,
-		)
-		return err
-	}
+	n.governance = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.governance)
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
-	n.vault, err = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(n.mux.State()))
-	if err != nil {
-		n.Logger.Error("vault: failed to initialize vault backend",
-			"err", err,
-		)
-		return err
-	}
+	n.vault = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(n.mux.State()))
 	n.serviceClients = append(n.serviceClients, n.vault)
 	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
 
@@ -334,7 +291,7 @@ func (n *commonNode) initialize() error {
 		vaultApp,
 	}
 	for _, app := range apps {
-		if err = n.mux.Register(app); err != nil {
+		if err := n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register app: %w", err)
 		}
 	}
@@ -342,7 +299,7 @@ func (n *commonNode) initialize() error {
 	// Enable supplementary sanity checks when enabled.
 	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
 		app := supplementarysanityApp.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
-		if err = n.mux.Register(app); err != nil {
+		if err := n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
 		}
 	}
@@ -1014,6 +971,8 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 		genesis:               cfg.Genesis,
 		genesisDoc:            cfg.GenesisDoc,
 		genesisHeight:         cfg.GenesisHeight,
+		baseEpoch:             cfg.BaseEpoch,
+		baseHeight:            cfg.BaseHeight,
 		publicKeyBlacklist:    cfg.PublicKeyBlacklist,
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("cometbft/servicemanager")),
 		dbCloser:              db.NewCloser(),

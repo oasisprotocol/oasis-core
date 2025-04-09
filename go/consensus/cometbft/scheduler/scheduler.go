@@ -137,7 +137,7 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmtty
 }
 
 // New constructs a new CometBFT-based scheduler backend instance.
-func New(querier *app.QueryFactory) (*ServiceClient, error) {
+func New(querier *app.QueryFactory) *ServiceClient {
 	sc := &ServiceClient{
 		logger:  logging.GetLogger("cometbft/scheduler"),
 		querier: querier,
@@ -155,5 +155,5 @@ func New(querier *app.QueryFactory) (*ServiceClient, error) {
 		}
 	})
 
-	return sc, nil
+	return sc
 }
