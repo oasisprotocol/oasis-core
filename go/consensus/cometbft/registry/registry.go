@@ -24,13 +24,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// ServiceClient is the registry service client interface.
-type ServiceClient interface {
-	api.Backend
-	tmapi.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the registry service client.
+type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	logger *logging.Logger
@@ -50,7 +45,7 @@ type NodeListEpochInternalEvent struct {
 	Height int64 `json:"height"`
 }
 
-func (sc *serviceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
+func (sc *ServiceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -59,7 +54,7 @@ func (sc *serviceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*en
 	return q.Entity(ctx, query.ID)
 }
 
-func (sc *serviceClient) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
+func (sc *ServiceClient) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -68,7 +63,7 @@ func (sc *serviceClient) GetEntities(ctx context.Context, height int64) ([]*enti
 	return q.Entities(ctx)
 }
 
-func (sc *serviceClient) WatchEntities(context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEntities(context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.EntityEvent)
 	sub := sc.entityNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -76,7 +71,7 @@ func (sc *serviceClient) WatchEntities(context.Context) (<-chan *api.EntityEvent
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
+func (sc *ServiceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -85,7 +80,7 @@ func (sc *serviceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node
 	return q.Node(ctx, query.ID)
 }
 
-func (sc *serviceClient) GetNodeStatus(ctx context.Context, query *api.IDQuery) (*api.NodeStatus, error) {
+func (sc *ServiceClient) GetNodeStatus(ctx context.Context, query *api.IDQuery) (*api.NodeStatus, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -94,7 +89,7 @@ func (sc *serviceClient) GetNodeStatus(ctx context.Context, query *api.IDQuery) 
 	return q.NodeStatus(ctx, query.ID)
 }
 
-func (sc *serviceClient) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
+func (sc *ServiceClient) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -103,7 +98,7 @@ func (sc *serviceClient) GetNodes(ctx context.Context, height int64) ([]*node.No
 	return q.Nodes(ctx)
 }
 
-func (sc *serviceClient) GetNodeByConsensusAddress(ctx context.Context, query *api.ConsensusAddressQuery) (*node.Node, error) {
+func (sc *ServiceClient) GetNodeByConsensusAddress(ctx context.Context, query *api.ConsensusAddressQuery) (*node.Node, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -112,7 +107,7 @@ func (sc *serviceClient) GetNodeByConsensusAddress(ctx context.Context, query *a
 	return q.NodeByConsensusAddress(ctx, query.Address)
 }
 
-func (sc *serviceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.NodeEvent)
 	sub := sc.nodeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -120,7 +115,7 @@ func (sc *serviceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pub
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) WatchNodeList(context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchNodeList(context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.NodeList)
 	sub := sc.nodeListNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -128,7 +123,7 @@ func (sc *serviceClient) WatchNodeList(context.Context) (<-chan *api.NodeList, p
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQuery) (*api.Runtime, error) {
+func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQuery) (*api.Runtime, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -137,7 +132,7 @@ func (sc *serviceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQu
 	return q.Runtime(ctx, query.ID, query.IncludeSuspended)
 }
 
-func (sc *serviceClient) WatchRuntimes(_ context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchRuntimes(_ context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Runtime)
 	sub := sc.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -145,10 +140,10 @@ func (sc *serviceClient) WatchRuntimes(_ context.Context) (<-chan *api.Runtime, 
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) Cleanup() {
+func (sc *ServiceClient) Cleanup() {
 }
 
-func (sc *serviceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
+func (sc *ServiceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -156,7 +151,7 @@ func (sc *serviceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimes
 	return q.Runtimes(ctx, query.IncludeSuspended)
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -165,7 +160,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
@@ -217,7 +212,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 }
 
 // WatchEvents implements api.Backend.
-func (sc *serviceClient) WatchEvents(_ context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEvents(_ context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -225,7 +220,7 @@ func (sc *serviceClient) WatchEvents(_ context.Context) (<-chan *api.Event, pubs
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -234,12 +229,12 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, nodeListEvents, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("scheduler: failed to process cometbft events: %w", err)
@@ -356,7 +351,7 @@ func EventsFromCometBFT(
 	return events, nodeListEvents, errs
 }
 
-func (sc *serviceClient) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	// Generate the nodelist.
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -376,14 +371,14 @@ func (sc *serviceClient) getNodeList(ctx context.Context, height int64) (*api.No
 }
 
 // New constructs a new CometBFT backed registry backend instance.
-func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (*ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()
 	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	sc := &serviceClient{
+	sc := &ServiceClient{
 		logger:         logging.GetLogger("cometbft/registry"),
 		backend:        backend,
 		querier:        a.QueryFactory().(*app.QueryFactory),

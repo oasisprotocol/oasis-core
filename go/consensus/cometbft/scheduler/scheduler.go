@@ -19,13 +19,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-// ServiceClient is the scheduler service client interface.
-type ServiceClient interface {
-	api.Backend
-	tmapi.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the scheduler service client.
+type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	logger *logging.Logger
@@ -34,7 +29,7 @@ type serviceClient struct {
 	notifier *pubsub.Broker
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: genesis query failed: %w", err)
@@ -42,7 +37,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: genesis query failed: %w", err)
@@ -50,10 +45,10 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) Cleanup() {
+func (sc *ServiceClient) Cleanup() {
 }
 
-func (sc *serviceClient) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
+func (sc *ServiceClient) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -62,7 +57,7 @@ func (sc *serviceClient) GetValidators(ctx context.Context, height int64) ([]*ap
 	return q.Validators(ctx)
 }
 
-func (sc *serviceClient) GetCommittees(ctx context.Context, request *api.GetCommitteesRequest) ([]*api.Committee, error) {
+func (sc *ServiceClient) GetCommittees(ctx context.Context, request *api.GetCommitteesRequest) ([]*api.Committee, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -83,7 +78,7 @@ func (sc *serviceClient) GetCommittees(ctx context.Context, request *api.GetComm
 	return runtimeCommittees, nil
 }
 
-func (sc *serviceClient) WatchCommittees(_ context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchCommittees(_ context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Committee)
 	sub := sc.notifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -91,7 +86,7 @@ func (sc *serviceClient) WatchCommittees(_ context.Context) (<-chan *api.Committ
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) getCurrentCommittees() ([]*api.Committee, error) {
+func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {
 	q, err := sc.querier.QueryAt(context.TODO(), consensus.HeightLatest)
 	if err != nil {
 		return nil, err
@@ -101,12 +96,12 @@ func (sc *serviceClient) getCurrentCommittees() ([]*api.Committee, error) {
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
 			var e api.ElectedEvent
@@ -142,14 +137,14 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, _ cmtty
 }
 
 // New constructs a new CometBFT-based scheduler backend instance.
-func New(backend tmapi.Backend) (ServiceClient, error) {
+func New(backend tmapi.Backend) (*ServiceClient, error) {
 	// Initialze and register the CometBFT service component.
 	a := app.New()
 	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	sc := &serviceClient{
+	sc := &ServiceClient{
 		logger:  logging.GetLogger("cometbft/scheduler"),
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}

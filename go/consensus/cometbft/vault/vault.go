@@ -20,13 +20,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-// ServiceClient is the vault service client interface.
-type ServiceClient interface {
-	api.Backend
-	tmapi.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the vault service client.
+type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	logger *logging.Logger
@@ -37,7 +32,7 @@ type serviceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
-func (sc *serviceClient) Vaults(ctx context.Context, height int64) ([]*api.Vault, error) {
+func (sc *ServiceClient) Vaults(ctx context.Context, height int64) ([]*api.Vault, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -46,7 +41,7 @@ func (sc *serviceClient) Vaults(ctx context.Context, height int64) ([]*api.Vault
 	return q.Vaults(ctx)
 }
 
-func (sc *serviceClient) Vault(ctx context.Context, query *api.VaultQuery) (*api.Vault, error) {
+func (sc *ServiceClient) Vault(ctx context.Context, query *api.VaultQuery) (*api.Vault, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -55,7 +50,7 @@ func (sc *serviceClient) Vault(ctx context.Context, query *api.VaultQuery) (*api
 	return q.Vault(ctx, query.Address)
 }
 
-func (sc *serviceClient) AddressState(ctx context.Context, query *api.AddressQuery) (*api.AddressState, error) {
+func (sc *ServiceClient) AddressState(ctx context.Context, query *api.AddressQuery) (*api.AddressState, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -64,7 +59,7 @@ func (sc *serviceClient) AddressState(ctx context.Context, query *api.AddressQue
 	return q.AddressState(ctx, query.Vault, query.Address)
 }
 
-func (sc *serviceClient) PendingActions(ctx context.Context, query *api.VaultQuery) ([]*api.PendingAction, error) {
+func (sc *ServiceClient) PendingActions(ctx context.Context, query *api.VaultQuery) ([]*api.PendingAction, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -73,7 +68,7 @@ func (sc *serviceClient) PendingActions(ctx context.Context, query *api.VaultQue
 	return q.PendingActions(ctx, query.Address)
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -82,7 +77,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
@@ -134,7 +129,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
-func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -142,7 +137,7 @@ func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -151,16 +146,16 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) Cleanup() {
+func (sc *ServiceClient) Cleanup() {
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("vault: failed to process cometbft events: %w", err)
@@ -269,14 +264,14 @@ func EventsFromCometBFT(
 }
 
 // New constructs a new CometBFT backed vault backend instance.
-func New(backend tmapi.Backend) (ServiceClient, error) {
+func New(backend tmapi.Backend) (*ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()
 	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	return &serviceClient{
+	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/vault"),
 		backend:       backend,
 		querier:       a.QueryFactory().(*app.QueryFactory),

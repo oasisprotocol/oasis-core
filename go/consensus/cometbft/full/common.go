@@ -116,14 +116,14 @@ type commonNode struct {
 	mux     *abci.ApplicationServer
 	querier *abci.QueryFactory
 
-	beacon     beaconAPI.Backend
-	governance governanceAPI.Backend
-	keymanager keymanagerAPI.Backend
-	registry   registryAPI.Backend
-	roothash   roothashAPI.Backend
-	scheduler  schedulerAPI.Backend
-	staking    stakingAPI.Backend
-	vault      vaultAPI.Backend
+	beacon     *tmbeacon.ServiceClient
+	governance *tmgovernance.ServiceClient
+	keymanager *tmkeymanager.ServiceClient
+	registry   *tmregistry.ServiceClient
+	roothash   *tmroothash.ServiceClient
+	scheduler  *tmscheduler.ServiceClient
+	staking    *tmstaking.ServiceClient
+	vault      *tmvault.ServiceClient
 
 	// These stores must be populated by the parent before the node is deemed ready.
 	blockStoreDB dbm.DB
@@ -219,101 +219,90 @@ func (n *commonNode) initialize() error {
 	n.querier = abci.NewQueryFactory(n.mux.State())
 
 	// Initialize the beacon/epochtime backend.
-	var (
-		err error
-
-		scBeacon tmbeacon.ServiceClient
-	)
-	if scBeacon, err = tmbeacon.New(n.ctx, n.parentNode); err != nil {
+	var err error
+	n.beacon, err = tmbeacon.New(n.ctx, n.parentNode)
+	if err != nil {
 		n.Logger.Error("initialize: failed to initialize beapoch backend",
 			"err", err,
 		)
 		return err
 	}
-	n.beacon = scBeacon
-	n.serviceClients = append(n.serviceClients, scBeacon)
+	n.serviceClients = append(n.serviceClients, n.beacon)
 	if err = n.mux.SetEpochtime(n.beacon); err != nil {
 		return err
 	}
 
 	// Initialize the rest of backends.
-	var scKeyManager tmkeymanager.ServiceClient
-	if scKeyManager, err = tmkeymanager.New(n.ctx, n.parentNode); err != nil {
+	n.keymanager, err = tmkeymanager.New(n.ctx, n.parentNode)
+	if err != nil {
 		n.Logger.Error("initialize: failed to initialize keymanager backend",
 			"err", err,
 		)
 		return err
 	}
-	n.keymanager = scKeyManager
-	n.serviceClients = append(n.serviceClients, scKeyManager)
+	n.serviceClients = append(n.serviceClients, n.keymanager)
 
-	var scRegistry tmregistry.ServiceClient
-	if scRegistry, err = tmregistry.New(n.ctx, n.parentNode); err != nil {
+	n.registry, err = tmregistry.New(n.ctx, n.parentNode)
+	if err != nil {
 		n.Logger.Error("initialize: failed to initialize registry backend",
 			"err", err,
 		)
 		return err
 	}
-	n.registry = scRegistry
 	if cmmetrics.Enabled() {
 		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
 	}
-	n.serviceClients = append(n.serviceClients, scRegistry)
+	n.serviceClients = append(n.serviceClients, n.registry)
 	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
 
-	var scStaking tmstaking.ServiceClient
-	if scStaking, err = tmstaking.New(n.parentNode); err != nil {
+	n.staking, err = tmstaking.New(n.parentNode)
+	if err != nil {
 		n.Logger.Error("staking: failed to initialize staking backend",
 			"err", err,
 		)
 		return err
 	}
-	n.staking = scStaking
-	n.serviceClients = append(n.serviceClients, scStaking)
+	n.serviceClients = append(n.serviceClients, n.staking)
 	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
 
-	var scScheduler tmscheduler.ServiceClient
-	if scScheduler, err = tmscheduler.New(n.parentNode); err != nil {
+	n.scheduler, err = tmscheduler.New(n.parentNode)
+	if err != nil {
 		n.Logger.Error("scheduler: failed to initialize scheduler backend",
 			"err", err,
 		)
 		return err
 	}
-	n.scheduler = scScheduler
-	n.serviceClients = append(n.serviceClients, scScheduler)
+	n.serviceClients = append(n.serviceClients, n.scheduler)
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
-	var scRootHash tmroothash.ServiceClient
-	if scRootHash, err = tmroothash.New(n.ctx, n.parentNode); err != nil {
+	n.roothash, err = tmroothash.New(n.ctx, n.parentNode)
+	if err != nil {
 		n.Logger.Error("roothash: failed to initialize roothash backend",
 			"err", err,
 		)
 		return err
 	}
-	n.roothash = scRootHash
-	n.serviceClients = append(n.serviceClients, scRootHash)
+	n.serviceClients = append(n.serviceClients, n.roothash)
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 
-	var scGovernance tmgovernance.ServiceClient
-	if scGovernance, err = tmgovernance.New(n.parentNode); err != nil {
+	n.governance, err = tmgovernance.New(n.parentNode)
+	if err != nil {
 		n.Logger.Error("governance: failed to initialize governance backend",
 			"err", err,
 		)
 		return err
 	}
-	n.governance = scGovernance
-	n.serviceClients = append(n.serviceClients, scGovernance)
+	n.serviceClients = append(n.serviceClients, n.governance)
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
-	var scVault tmvault.ServiceClient
-	if scVault, err = tmvault.New(n.parentNode); err != nil {
+	n.vault, err = tmvault.New(n.parentNode)
+	if err != nil {
 		n.Logger.Error("vault: failed to initialize vault backend",
 			"err", err,
 		)
 		return err
 	}
-	n.vault = scVault
-	n.serviceClients = append(n.serviceClients, scVault)
+	n.serviceClients = append(n.serviceClients, n.vault)
 	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
 
 	// Enable supplementary sanity checks when enabled.
