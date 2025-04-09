@@ -252,18 +252,10 @@ func (srv *archiveService) serviceClientWorker(ctx context.Context, svc api.Serv
 		return
 	}
 
-	// Archive only handles commands.
-	cmdCh := sd.Commands()
-	if cmdCh == nil {
-		// Services without commands do not need a worker.
-		return
-	}
-
 	logger := srv.Logger.With("service", sd.Name())
 	logger.Info("starting command dispatcher")
 
-	// Fetch and remember the latest block. This won't change on an archive node.
-	latestBlock, err := srv.commonNode.GetBlock(ctx, consensusAPI.HeightLatest)
+	latestBlock, err := srv.GetCometBFTBlock(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		logger.Error("failed to fetch latest block",
 			"err", err,
@@ -271,18 +263,9 @@ func (srv *archiveService) serviceClientWorker(ctx context.Context, svc api.Serv
 		return
 	}
 
-	// Service client event loop.
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case cmd := <-cmdCh:
-			if err := svc.DeliverCommand(ctx, latestBlock.Height, cmd); err != nil {
-				logger.Error("failed to deliver command to service client",
-					"err", err,
-				)
-				continue
-			}
-		}
+	if err := svc.DeliverBlock(ctx, latestBlock); err != nil {
+		logger.Error("failed to deliver block to service client",
+			"err", err,
+		)
 	}
 }

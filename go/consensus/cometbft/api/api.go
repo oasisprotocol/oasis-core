@@ -257,16 +257,12 @@ type ServiceDescriptor interface {
 
 	// Queries returns a channel that emits queries that need to be subscribed to.
 	Queries() <-chan cmtpubsub.Query
-
-	// Commands returns a channel that emits commands for the service client.
-	Commands() <-chan interface{}
 }
 
 type serviceDescriptor struct {
 	name      string
 	eventType string
 	queryCh   <-chan cmtpubsub.Query
-	cmdCh     <-chan interface{}
 }
 
 func (sd *serviceDescriptor) Name() string {
@@ -281,17 +277,12 @@ func (sd *serviceDescriptor) Queries() <-chan cmtpubsub.Query {
 	return sd.queryCh
 }
 
-func (sd *serviceDescriptor) Commands() <-chan interface{} {
-	return sd.cmdCh
-}
-
 // NewServiceDescriptor creates a new consensus service descriptor.
-func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query, cmdCh <-chan interface{}) ServiceDescriptor {
+func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query) ServiceDescriptor {
 	return &serviceDescriptor{
 		name:      name,
 		eventType: eventType,
 		queryCh:   queryCh,
-		cmdCh:     cmdCh,
 	}
 }
 
@@ -299,13 +290,11 @@ func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query
 func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) ServiceDescriptor {
 	ch := make(chan cmtpubsub.Query)
 	go func() {
-		defer close(ch)
-
 		for _, q := range queries {
 			ch <- q
 		}
 	}()
-	return NewServiceDescriptor(name, eventType, ch, nil)
+	return NewServiceDescriptor(name, eventType, ch)
 }
 
 // ServiceClient is a consensus service client.
@@ -314,15 +303,10 @@ type ServiceClient interface {
 	ServiceDescriptor() ServiceDescriptor
 
 	// DeliverBlock delivers a new block.
-	//
-	// Execution of this method will block delivery of further events.
-	DeliverBlock(ctx context.Context, height int64) error
+	DeliverBlock(ctx context.Context, blk *cmttypes.Block) error
 
 	// DeliverEvent delivers an event emitted by the consensus service.
 	DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error
-
-	// DeliverCommand delivers a command emitted via the command channel.
-	DeliverCommand(ctx context.Context, height int64, cmd interface{}) error
 }
 
 // BaseServiceClient is a default ServiceClient implementation that provides noop implementations of
@@ -330,17 +314,12 @@ type ServiceClient interface {
 type BaseServiceClient struct{}
 
 // DeliverBlock implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverBlock(context.Context, int64) error {
+func (bsc *BaseServiceClient) DeliverBlock(context.Context, *cmttypes.Block) error {
 	return nil
 }
 
 // DeliverEvent implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverEvent(context.Context, int64, cmttypes.Tx, *types.Event) error {
-	return nil
-}
-
-// DeliverCommand implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverCommand(context.Context, int64, interface{}) error {
 	return nil
 }
 

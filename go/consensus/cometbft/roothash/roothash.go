@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
@@ -47,13 +49,10 @@ type trackedRuntime struct {
 	round     uint64
 }
 
-type cmdTrackRuntime struct {
-	runtimeID common.Namespace
-}
-
 type serviceClient struct {
 	tmapi.BaseServiceClient
-	sync.RWMutex
+
+	mu sync.RWMutex
 
 	ctx    context.Context
 	logger *logging.Logger
@@ -65,21 +64,20 @@ type serviceClient struct {
 	runtimeNotifiers map[common.Namespace]*runtimeBrokers
 	genesisBlocks    map[common.Namespace]*block.Block
 
-	queryCh        chan cmtpubsub.Query
-	cmdCh          chan interface{}
-	trackedRuntime map[common.Namespace]*trackedRuntime
+	queryCh         chan cmtpubsub.Query
+	trackedRuntimes map[common.Namespace]*trackedRuntime
 }
 
 // Implements api.Backend.
 func (sc *serviceClient) GetGenesisBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the CometBFT app.
-	sc.RLock()
+	sc.mu.RLock()
 	if blk := sc.genesisBlocks[request.RuntimeID]; blk != nil {
-		sc.RUnlock()
+		sc.mu.RUnlock()
 		return blk, nil
 	}
-	sc.RUnlock()
+	sc.mu.RUnlock()
 
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
@@ -92,9 +90,9 @@ func (sc *serviceClient) GetGenesisBlock(ctx context.Context, request *api.Runti
 	}
 
 	// Update the genesis block cache.
-	sc.Lock()
+	sc.mu.Lock()
 	sc.genesisBlocks[request.RuntimeID] = blk
-	sc.Unlock()
+	sc.mu.Unlock()
 
 	return blk, nil
 }
@@ -178,12 +176,7 @@ func (sc *serviceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-
 	ch := make(chan *api.AnnotatedBlock)
 	sub.Unwrap(ch)
 
-	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id); err != nil {
-		sub.Close()
-		return nil, nil, err
-	}
-
+	sc.trackRuntime(id)
 	return ch, sub, nil
 }
 
@@ -202,12 +195,7 @@ func (sc *serviceClient) WatchEvents(_ context.Context, id common.Namespace) (<-
 	ch := make(chan *api.Event)
 	sub.Unwrap(ch)
 
-	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id); err != nil {
-		sub.Close()
-		return nil, nil, err
-	}
-
+	sc.trackRuntime(id)
 	return ch, sub, nil
 }
 
@@ -218,26 +206,29 @@ func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.N
 	ch := make(chan *commitment.ExecutorCommitment)
 	sub.Unwrap(ch)
 
-	// Start tracking this runtime if we are not tracking it yet.
-	if err := sc.trackRuntime(sc.ctx, id); err != nil {
-		sub.Close()
-		return nil, nil, err
-	}
-
+	sc.trackRuntime(id)
 	return ch, sub, nil
 }
 
-func (sc *serviceClient) trackRuntime(ctx context.Context, id common.Namespace) error {
-	cmd := &cmdTrackRuntime{
-		runtimeID: id,
+func (sc *serviceClient) trackRuntime(id common.Namespace) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	if _, ok := sc.trackedRuntimes[id]; ok {
+		return
 	}
 
-	select {
-	case sc.cmdCh <- cmd:
-	case <-ctx.Done():
-		return ctx.Err()
+	sc.logger.Debug("tracking new runtime",
+		"runtime_id", id,
+	)
+
+	sc.trackedRuntimes[id] = &trackedRuntime{
+		runtimeID: id,
+		round:     api.RoundInvalid,
 	}
-	return nil
+
+	// Request subscription to events for this runtime.
+	sc.queryCh <- app.QueryForRuntime(id)
 }
 
 // Implements api.Backend.
@@ -325,8 +316,8 @@ func (sc *serviceClient) Cleanup() {
 }
 
 func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBrokers {
-	sc.Lock()
-	defer sc.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 
 	notifiers := sc.runtimeNotifiers[id]
 	if notifiers == nil {
@@ -343,64 +334,47 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh, sc.cmdCh)
+	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
-	switch c := cmd.(type) {
-	case *cmdTrackRuntime:
-		// Request to track a new runtime.
-		if _, ok := sc.trackedRuntime[c.runtimeID]; ok {
-			// Ignore duplicate runtime tracking requests.
-			return nil
+func (sc *serviceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+	sc.mu.RLock()
+	trs := slices.Collect(maps.Values(sc.trackedRuntimes))
+	sc.mu.RUnlock()
+
+	for _, tr := range trs {
+		// Emit the latest block immediately, unless a finalized event for
+		// one of the blocks has already been received. Subsequent blocks
+		// will be emitted upon receiving new finalized events.
+		if tr.round != api.RoundInvalid {
+			continue
 		}
-
-		sc.logger.Debug("tracking new runtime",
-			"runtime_id", c.runtimeID,
-			"height", height,
-		)
-
-		tr := &trackedRuntime{
-			runtimeID: c.runtimeID,
-			round:     api.RoundInvalid,
-		}
-		sc.trackedRuntime[c.runtimeID] = tr
-
-		// Request subscription to events for this runtime.
-		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
-
-		// Resolve the correct block finalization height to use for the latest block at the current
-		// height as the current height may not correspond to the latest block finalization height.
 		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
 			RuntimeID: tr.runtimeID,
-			Height:    height,
+			Height:    blk.Height,
 		})
 		if err != nil {
 			sc.logger.Warn("failed to get runtime state",
 				"err", err,
 				"runtime_id", tr.runtimeID,
-				"height", height,
+				"height", blk.Height,
 			)
 			return fmt.Errorf("roothash: failed to get runtime state: %w", err)
 		}
-		annBlk := &api.AnnotatedBlock{
+		blk := &api.AnnotatedBlock{
 			Height: rs.LastBlockHeight,
 			Block:  rs.LastBlock,
 		}
-
-		// Emit the latest block.
-		if err := sc.emitLatestBlock(tr, annBlk); err != nil {
+		if err := sc.emitBlock(tr, blk); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
 				"runtime_id", tr.runtimeID,
-				"height", height,
 			)
 			return fmt.Errorf("roothash: failed to emit latest block: %w", err)
 		}
-	default:
-		return fmt.Errorf("roothash: unknown command: %T", cmd)
 	}
+
 	return nil
 }
 
@@ -420,13 +394,15 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 		}
 
 		// Only process finalized events for tracked runtimes.
-		tr, ok := sc.trackedRuntime[ev.RuntimeID]
+		sc.mu.RLock()
+		tr, ok := sc.trackedRuntimes[ev.RuntimeID]
+		sc.mu.RUnlock()
 		if !ok {
 			continue
 		}
 
-		// Fetch the latest block.
-		blk, err := sc.getLatestBlockAt(ctx, tr.runtimeID, height)
+		// Emit the latest block and any missing blocks.
+		blk, err := sc.fetchBlock(ctx, tr.runtimeID, height)
 		if err != nil {
 			sc.logger.Error("failed to fetch latest block",
 				"err", err,
@@ -435,21 +411,39 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 			)
 			return fmt.Errorf("roothash: failed to fetch latest block: %w", err)
 		}
-		if blk.Header.Round != ev.Finalized.Round {
+		if blk.Block.Header.Round != ev.Finalized.Round {
 			sc.logger.Error("block round mismatch",
 				"height", height,
-				"round", blk.Header.Round,
+				"round", blk.Block.Header.Round,
 				"expected_round", ev.Finalized.Round,
 			)
 			return fmt.Errorf("roothash: block round mismatch")
 		}
-		annBlk := &api.AnnotatedBlock{
-			Height: height,
-			Block:  blk,
+
+		if tr.round != api.RoundInvalid && blk.Block.Header.Round > tr.round+1 {
+			// Catch up. This may emit the same block multiple times, e.g.,
+			// if no new blocks were produced due to slow compute nodes
+			// or a suspended runtime.
+			for h := tr.height + 1; h < blk.Height; h++ {
+				oldBlk, err := sc.fetchBlock(ctx, tr.runtimeID, h)
+				if err != nil {
+					sc.logger.Error("failed to fetch block",
+						"err", err,
+						"height", h,
+						"runtime_id", tr.runtimeID,
+					)
+					return fmt.Errorf("roothash: failed to fetch block: %w", err)
+				}
+				if err := sc.emitBlock(tr, oldBlk); err != nil {
+					return fmt.Errorf("roothash: failed to emit block: %w", err)
+				}
+				if oldBlk.Block.Header.Round+1 == blk.Block.Header.Round {
+					break
+				}
+			}
 		}
 
-		// Emit the latest block.
-		if err = sc.emitLatestBlock(tr, annBlk); err != nil {
+		if err = sc.emitBlock(tr, blk); err != nil {
 			return fmt.Errorf("roothash: failed to emit latest block: %w", err)
 		}
 	}
@@ -457,43 +451,54 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 	return nil
 }
 
-func (sc *serviceClient) emitLatestBlock(tr *trackedRuntime, annBlk *api.AnnotatedBlock) error {
-	if tr.round != api.RoundInvalid {
-		switch {
-		case annBlk.Block.Header.Round <= tr.round:
-			// This can occur if a block is finalized immediately after we
-			// subscribe to runtime events.
-			sc.logger.Warn("skipping outdated block",
-				"height", annBlk.Height,
-				"round", annBlk.Block.Header.Round,
-				"last_height", tr.height,
-				"last_round", tr.round,
-			)
-			return nil
-		case annBlk.Block.Header.Round == tr.round+1:
-			// Blocks should be processed sequentially.
-		default:
-			// Detected a gap in block rounds. While recovery might be possible
-			// by fetching the missing blocks, it's unlikely we can fully recover.
-			// For now, enforce strict error handling and address if necessary later.
-			sc.logger.Error("unexpected block round",
-				"height", annBlk.Height,
-				"round", annBlk.Block.Header.Round,
-				"last_height", tr.height,
-				"last_round", tr.round,
-			)
-			return fmt.Errorf("unexpected block round")
-		}
+func (sc *serviceClient) emitBlock(tr *trackedRuntime, blk *api.AnnotatedBlock) error {
+	switch {
+	case tr.round == api.RoundInvalid:
+		// First block.
+	case blk.Block.Header.Round <= tr.round:
+		// Outdated block can be ignored. This can happen if we also receive
+		// a finalize event for the first emitted block, or if we're catching
+		// up and no new blocks were generated.
+		sc.logger.Warn("skipping outdated block",
+			"height", blk.Height,
+			"round", blk.Block.Header.Round,
+			"last_height", tr.height,
+			"last_round", tr.round,
+		)
+		return nil
+	case blk.Block.Header.Round == tr.round+1:
+		// Valid block.
+	default:
+		// Invalid block. Blocks must be emitted sequentially with no skipped
+		// rounds.
+		sc.logger.Error("unexpected block round",
+			"height", blk.Height,
+			"round", blk.Block.Header.Round,
+			"last_height", tr.height,
+			"last_round", tr.round,
+		)
+		return fmt.Errorf("unexpected block round")
 	}
 
 	notifiers := sc.getRuntimeNotifiers(tr.runtimeID)
-	notifiers.blockNotifier.Broadcast(annBlk)
-	sc.allBlockNotifier.Broadcast(annBlk.Block)
+	notifiers.blockNotifier.Broadcast(blk)
+	sc.allBlockNotifier.Broadcast(blk.Block)
 
-	tr.height = annBlk.Height
-	tr.round = annBlk.Block.Header.Round
+	tr.height = blk.Height
+	tr.round = blk.Block.Header.Round
 
 	return nil
+}
+
+func (sc *serviceClient) fetchBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*api.AnnotatedBlock, error) {
+	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
+	if err != nil {
+		return nil, err
+	}
+	return &api.AnnotatedBlock{
+		Height: height,
+		Block:  blk,
+	}, nil
 }
 
 // Implements api.ExecutorCommitmentNotifier.
@@ -613,8 +618,7 @@ func New(
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
 		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
-		cmdCh:            make(chan interface{}, runtimeRegistry.MaxRuntimeCount),
-		trackedRuntime:   make(map[common.Namespace]*trackedRuntime),
+		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
 	}
 
 	// Initialize and register the CometBFT service component.

@@ -861,29 +861,16 @@ func (t *fullService) syncWorker() {
 }
 
 func (t *fullService) blockNotifierWorker() {
-	sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, tmSubscriberID, cmttypes.EventQueryNewBlock)
-	if err != nil {
-		t.Logger.Error("failed to subscribe to new block events",
-			"err", err,
-		)
-		return
-	}
-	// Oh yes, this can actually return a nil subscription even though the error was also
-	// nil if the node is just shutting down.
-	if sub == (*cmtpubsub.Subscription)(nil) {
-		return
-	}
-	defer t.node.EventBus().Unsubscribe(t.ctx, tmSubscriberID, cmttypes.EventQueryNewBlock) // nolint: errcheck
-
-	for {
-		select {
-		// Should not return on t.ctx.Done()/t.node.Quit() as that could lead to a deadlock.
-		case <-sub.Cancelled():
-			return
-		case v := <-sub.Out():
-			ev := v.Data().(cmttypes.EventDataNewBlock)
+	subscriber := newEventSubscriber(cmttypes.EventQueryNewBlock, t.node.EventBus())
+	handle := func(_ context.Context, msg cmtpubsub.Message) {
+		switch ev := msg.Data().(type) {
+		case cmttypes.EventDataNewBlock:
 			t.blockNotifier.Broadcast(ev.Block)
+		default:
 		}
+	}
+	if err := subscriber.process(t.ctx, handle); err != nil {
+		t.Logger.Error("event processing failed", "err", err)
 	}
 }
 
