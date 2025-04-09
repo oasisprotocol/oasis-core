@@ -371,17 +371,11 @@ func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.No
 }
 
 // New constructs a new CometBFT backed registry backend instance.
-func New(ctx context.Context, backend tmapi.Backend) (*ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
 	sc := &ServiceClient{
 		logger:         logging.GetLogger("cometbft/registry"),
 		backend:        backend,
-		querier:        a.QueryFactory().(*app.QueryFactory),
+		querier:        querier,
 		entityNotifier: pubsub.NewBroker(false),
 		nodeNotifier:   pubsub.NewBroker(false),
 		eventNotifier:  pubsub.NewBroker(false),

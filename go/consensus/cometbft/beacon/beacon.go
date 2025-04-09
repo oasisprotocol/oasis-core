@@ -22,7 +22,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tmAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
 )
 
@@ -34,12 +34,12 @@ const epochCacheCapacity = 128
 // ServiceClient is the beacon service client.
 type ServiceClient struct {
 	sync.RWMutex
-	tmAPI.BaseServiceClient
+	tmapi.BaseServiceClient
 
-	logger  *logging.Logger
+	logger *logging.Logger
+
+	backend tmapi.Backend
 	querier *app.QueryFactory
-
-	backend tmAPI.Backend
 	ctx     context.Context
 
 	epochNotifier     *pubsub.Broker
@@ -261,8 +261,8 @@ func (sc *ServiceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 	}
 }
 
-func (sc *ServiceClient) ServiceDescriptor() tmAPI.ServiceDescriptor {
-	return tmAPI.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
@@ -384,19 +384,13 @@ func (sc *ServiceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 }
 
 // New constructs a new CometBFT backed beacon and epochtime backend instance.
-func New(ctx context.Context, backend tmAPI.Backend) (*ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
 	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
 
 	sc := &ServiceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
-		querier:           a.QueryFactory().(*app.QueryFactory),
 		backend:           backend,
+		querier:           querier,
 		ctx:               ctx,
 		epochLastNotified: beaconAPI.EpochInvalid,
 		epochCache:        epochCache,

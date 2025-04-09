@@ -32,7 +32,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/supplementarysanity"
+	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
+	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
+	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
+	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
+	supplementarysanityApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/supplementarysanity"
+	vaultApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
@@ -220,7 +228,7 @@ func (n *commonNode) initialize() error {
 
 	// Initialize the beacon/epochtime backend.
 	var err error
-	n.beacon, err = tmbeacon.New(n.ctx, n.parentNode)
+	n.beacon, err = tmbeacon.New(n.ctx, n.parentNode, beaconApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("initialize: failed to initialize beapoch backend",
 			"err", err,
@@ -233,7 +241,7 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Initialize the rest of backends.
-	n.keymanager, err = tmkeymanager.New(n.ctx, n.parentNode)
+	n.keymanager, err = tmkeymanager.New(n.ctx, keymanagerApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("initialize: failed to initialize keymanager backend",
 			"err", err,
@@ -242,7 +250,7 @@ func (n *commonNode) initialize() error {
 	}
 	n.serviceClients = append(n.serviceClients, n.keymanager)
 
-	n.registry, err = tmregistry.New(n.ctx, n.parentNode)
+	n.registry, err = tmregistry.New(n.ctx, n.parentNode, registryApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("initialize: failed to initialize registry backend",
 			"err", err,
@@ -255,7 +263,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.registry)
 	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
 
-	n.staking, err = tmstaking.New(n.parentNode)
+	n.staking, err = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("staking: failed to initialize staking backend",
 			"err", err,
@@ -265,7 +273,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.staking)
 	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
 
-	n.scheduler, err = tmscheduler.New(n.parentNode)
+	n.scheduler, err = tmscheduler.New(schedulerApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("scheduler: failed to initialize scheduler backend",
 			"err", err,
@@ -275,7 +283,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.scheduler)
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
-	n.roothash, err = tmroothash.New(n.ctx, n.parentNode)
+	n.roothash, err = tmroothash.New(n.ctx, n.parentNode, roothashApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("roothash: failed to initialize roothash backend",
 			"err", err,
@@ -285,7 +293,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.roothash)
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 
-	n.governance, err = tmgovernance.New(n.parentNode)
+	n.governance, err = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("governance: failed to initialize governance backend",
 			"err", err,
@@ -295,7 +303,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.governance)
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
-	n.vault, err = tmvault.New(n.parentNode)
+	n.vault, err = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(n.mux.State()))
 	if err != nil {
 		n.Logger.Error("vault: failed to initialize vault backend",
 			"err", err,
@@ -305,12 +313,43 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.vault)
 	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
 
+	// Register CometBFT applications.
+	beaconApp := beaconApp.New()
+	governanceApp := governanceApp.New()
+	keymanagerApp := keymanagerApp.New()
+	registryApp := registryApp.New()
+	roothashApp := roothashApp.New(n.roothash)
+	schedulerApp := schedulerApp.New()
+	stakingApp := stakingApp.New()
+	vaultApp := vaultApp.New()
+
+	apps := []api.Application{
+		beaconApp,
+		governanceApp,
+		keymanagerApp,
+		registryApp,
+		roothashApp,
+		schedulerApp,
+		stakingApp,
+		vaultApp,
+	}
+	for _, app := range apps {
+		if err = n.mux.Register(app); err != nil {
+			return fmt.Errorf("failed to register app: %w", err)
+		}
+	}
+
 	// Enable supplementary sanity checks when enabled.
 	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
-		ssa := supplementarysanity.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
-		if err = n.RegisterApplication(ssa); err != nil {
+		app := supplementarysanityApp.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
+		if err = n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
 		}
+	}
+
+	// Configure the staking application as a fee handler.
+	if err := n.parentNode.SetTransactionAuthHandler(stakingApp.(api.TransactionAuthHandler)); err != nil {
+		return err
 	}
 
 	atomic.StoreUint32(&n.state, stateInitialized)
@@ -480,11 +519,6 @@ func (n *commonNode) Governance() governanceAPI.Backend {
 // Implements consensusAPI.Backend.
 func (n *commonNode) Vault() vaultAPI.Backend {
 	return n.vault
-}
-
-// Implements consensusAPI.Backend.
-func (n *commonNode) RegisterApplication(app api.Application) error {
-	return n.mux.Register(app)
 }
 
 // Implements consensusAPI.Backend.

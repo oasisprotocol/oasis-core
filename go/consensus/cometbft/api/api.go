@@ -202,11 +202,6 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 type Backend interface {
 	consensus.Backend
 
-	// RegisterApplication registers an ABCI multiplexer application
-	// with this service instance and check that its dependencies are
-	// registered.
-	RegisterApplication(Application) error
-
 	// SetTransactionAuthHandler configures the transaction fee handler for the
 	// ABCI multiplexer.
 	SetTransactionAuthHandler(TransactionAuthHandler) error

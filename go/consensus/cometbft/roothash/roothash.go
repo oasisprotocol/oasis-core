@@ -601,29 +601,18 @@ EventLoop:
 }
 
 // New constructs a new CometBFT-based root hash backend.
-func New(
-	ctx context.Context,
-	backend tmapi.Backend,
-) (*ServiceClient, error) {
-	sc := ServiceClient{
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
+	return &ServiceClient{
 		ctx:              ctx,
 		logger:           logging.GetLogger("cometbft/roothash"),
 		backend:          backend,
+		querier:          querier,
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
 		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
-	}
-
-	// Initialize and register the CometBFT service component.
-	a := app.New(&sc)
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-	sc.querier = a.QueryFactory().(*app.QueryFactory)
-
-	return &sc, nil
+	}, nil
 }
 
 func init() {

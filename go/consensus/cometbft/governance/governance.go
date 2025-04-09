@@ -256,17 +256,11 @@ func EventsFromCometBFT(
 }
 
 // New constructs a new CometBFT backed governance backend instance.
-func New(backend tmapi.Backend) (*ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
+func New(backend tmapi.Backend, querier *app.QueryFactory) (*ServiceClient, error) {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		backend:       backend,
-		querier:       a.QueryFactory().(*app.QueryFactory),
+		querier:       querier,
 		eventNotifier: pubsub.NewBroker(false),
 	}, nil
 }

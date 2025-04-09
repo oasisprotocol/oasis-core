@@ -70,14 +70,7 @@ func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx,
 
 // New constructs a new CometBFT backed key manager management Backend
 // instance.
-func New(ctx context.Context, backend tmapi.Backend) (*ServiceClient, error) {
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, fmt.Errorf("cometbft/keymanager: failed to register app: %w", err)
-	}
-
-	querier := a.QueryFactory().(*app.QueryFactory)
-
+func New(ctx context.Context, querier *app.QueryFactory) (*ServiceClient, error) {
 	secretsClient, err := secrets.New(ctx, querier)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/keymanager: failed to create secrets client: %w", err)

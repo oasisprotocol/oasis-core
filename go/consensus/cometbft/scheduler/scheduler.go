@@ -137,16 +137,10 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmtty
 }
 
 // New constructs a new CometBFT-based scheduler backend instance.
-func New(backend tmapi.Backend) (*ServiceClient, error) {
-	// Initialze and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
+func New(querier *app.QueryFactory) (*ServiceClient, error) {
 	sc := &ServiceClient{
 		logger:  logging.GetLogger("cometbft/scheduler"),
-		querier: a.QueryFactory().(*app.QueryFactory),
+		querier: querier,
 	}
 	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		currentCommittees, err := sc.getCurrentCommittees()
