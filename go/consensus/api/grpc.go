@@ -43,6 +43,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
+	// methodGetLatestHeight is the GetLatestHeight method.
+	methodGetLatestHeight = serviceName.NewMethod("GetLatestHeight", nil)
 	// methodGetLastRetainedHeight is the GetLastRetainedHeight method.
 	methodGetLastRetainedHeight = serviceName.NewMethod("GetLastRetainedHeight", nil)
 	// methodGetTransactions is the GetTransactions method.
@@ -115,6 +117,10 @@ var (
 			{
 				MethodName: methodGetLightBlock.ShortName(),
 				Handler:    handlerGetLightBlock,
+			},
+			{
+				MethodName: methodGetLatestHeight.ShortName(),
+				Handler:    handlerGetLatestHeight,
 			},
 			{
 				MethodName: methodGetLastRetainedHeight.ShortName(),
@@ -384,6 +390,25 @@ func handlerGetLightBlock(
 		return srv.(ClientBackend).GetLightBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetLatestHeight(
+	srv interface{},
+	ctx context.Context,
+	_ func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetLatestHeight(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetLatestHeight.FullName(),
+	}
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetLatestHeight(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetLastRetainedHeight(
@@ -791,6 +816,14 @@ func (c *Client) GetLightBlock(ctx context.Context, height int64) (*LightBlock, 
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *Client) GetLatestHeight(ctx context.Context) (int64, error) {
+	var rsp int64
+	if err := c.conn.Invoke(ctx, methodGetLatestHeight.FullName(), nil, &rsp); err != nil {
+		return 0, err
+	}
+	return rsp, nil
 }
 
 func (c *Client) GetLastRetainedHeight(ctx context.Context) (int64, error) {

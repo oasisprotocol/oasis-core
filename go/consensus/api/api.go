@@ -139,6 +139,9 @@ type ClientBackend interface {
 	// client verification.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
 
+	// GetLatestHeight returns the height of the latest consensus block.
+	GetLatestHeight(ctx context.Context) (int64, error)
+
 	// GetLastRetainedHeight returns the height of the oldest retained consensus block.
 	GetLastRetainedHeight(ctx context.Context) (int64, error)
 

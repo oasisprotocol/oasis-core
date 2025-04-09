@@ -797,15 +797,15 @@ func (q *queries) doControlQueries(ctx context.Context, _ *rand.Rand) error {
 }
 
 func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
-	block, err := q.consensus.GetBlock(ctx, consensus.HeightLatest)
+	latestHeight, err := q.consensus.GetLatestHeight(ctx)
 	if err != nil {
 		return fmt.Errorf("consensus.GetBlock error: %w", err)
 	}
 
 	// Determine the earliest height that we can query.
 	earliestHeight := int64(1)
-	if numKept := viper.GetInt64(CfgConsensusNumKeptVersions); numKept < block.Height {
-		earliestHeight = block.Height - numKept
+	if numKept := viper.GetInt64(CfgConsensusNumKeptVersions); numKept < latestHeight {
+		earliestHeight = latestHeight - numKept
 	}
 
 	// Select height at which queries should be done. Earliest and latest
@@ -818,15 +818,15 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 		height = earliestHeight
 		q.queryingEarliest = true
 	case p < queriesEarliestHeightRatio+queriesLatestHeightRatio:
-		height = block.Height
+		height = latestHeight
 	default:
-		// [earliestHeight, block.Height]
-		height = rng.Int63n(block.Height-earliestHeight+1) + earliestHeight
+		// [earliestHeight, latestHeight]
+		height = rng.Int63n(latestHeight-earliestHeight+1) + earliestHeight
 	}
 
 	q.logger.Debug("doing queries",
 		"height", height,
-		"height_latest", block.Height,
+		"height_latest", latestHeight,
 	)
 
 	if err := q.doControlQueries(ctx, rng); err != nil {
@@ -858,7 +858,7 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 
 	q.logger.Debug("queries done",
 		"height", height,
-		"height_latest", block.Height,
+		"height_latest", latestHeight,
 	)
 
 	return nil

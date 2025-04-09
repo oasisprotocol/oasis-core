@@ -665,6 +665,19 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) GetLatestHeight(ctx context.Context) (int64, error) {
+	blk, err := n.GetCometBFTBlock(ctx, consensusAPI.HeightLatest)
+	if err != nil {
+		return 0, err
+	}
+	if blk == nil {
+		return 0, consensusAPI.ErrNoCommittedBlocks
+	}
+
+	return blk.Height, nil
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetLastRetainedHeight(ctx context.Context) (int64, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return 0, err
