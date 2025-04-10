@@ -11,7 +11,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-func (app *stakingApplication) resolveEntityIDsFromVotes(
+func (app *Application) resolveEntityIDsFromVotes(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
 	lastCommitInfo types.CommitInfo,

@@ -17,7 +17,7 @@ type debugForceElectState struct {
 	elected map[signature.PublicKey]bool
 }
 
-func (app *schedulerApplication) debugForceElect(
+func (app *Application) debugForceElect(
 	ctx *api.Context,
 	schedulerParameters *scheduler.ConsensusParameters,
 	rt *registry.Runtime,
@@ -95,7 +95,7 @@ forceLoop:
 	return true, elected, state
 }
 
-func (app *schedulerApplication) debugForceRoles(
+func (app *Application) debugForceRoles(
 	ctx *api.Context,
 	state *debugForceElectState,
 	elected []*scheduler.CommitteeNode,

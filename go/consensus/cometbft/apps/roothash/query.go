@@ -31,63 +31,65 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the roothash query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := roothashState.NewImmutableStateAt(ctx, sf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &rootHashQuerier{state}, nil
+	return &rootHashQuerier{
+		state: roothashState.NewImmutableState(state),
+	}, nil
 }
 
 type rootHashQuerier struct {
 	state *roothashState.ImmutableState
 }
 
-func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
-	runtime, err := rq.state.RuntimeState(ctx, id)
+func (q *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
+	runtime, err := q.state.RuntimeState(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return runtime.LastBlock, nil
 }
 
-func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
-	runtime, err := rq.state.RuntimeState(ctx, id)
+func (q *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
+	runtime, err := q.state.RuntimeState(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return runtime.GenesisBlock, nil
 }
 
-func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
-	return rq.state.RuntimeState(ctx, id)
+func (q *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
+	return q.state.RuntimeState(ctx, id)
 }
 
-func (rq *rootHashQuerier) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
-	return rq.state.LastRoundResults(ctx, id)
+func (q *rootHashQuerier) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
+	return q.state.LastRoundResults(ctx, id)
 }
 
-func (rq *rootHashQuerier) RoundRoots(ctx context.Context, id common.Namespace, round uint64) (*roothash.RoundRoots, error) {
-	return rq.state.RoundRoots(ctx, id, round)
+func (q *rootHashQuerier) RoundRoots(ctx context.Context, id common.Namespace, round uint64) (*roothash.RoundRoots, error) {
+	return q.state.RoundRoots(ctx, id, round)
 }
 
-func (rq *rootHashQuerier) PastRoundRoots(ctx context.Context, id common.Namespace) (map[uint64]roothash.RoundRoots, error) {
-	return rq.state.PastRoundRoots(ctx, id)
+func (q *rootHashQuerier) PastRoundRoots(ctx context.Context, id common.Namespace) (map[uint64]roothash.RoundRoots, error) {
+	return q.state.PastRoundRoots(ctx, id)
 }
 
-func (rq *rootHashQuerier) IncomingMessageQueueMeta(ctx context.Context, id common.Namespace) (*message.IncomingMessageQueueMeta, error) {
-	return rq.state.IncomingMessageQueueMeta(ctx, id)
+func (q *rootHashQuerier) IncomingMessageQueueMeta(ctx context.Context, id common.Namespace) (*message.IncomingMessageQueueMeta, error) {
+	return q.state.IncomingMessageQueueMeta(ctx, id)
 }
 
-func (rq *rootHashQuerier) IncomingMessageQueue(ctx context.Context, id common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
-	return rq.state.IncomingMessageQueue(ctx, id, offset, limit)
+func (q *rootHashQuerier) IncomingMessageQueue(ctx context.Context, id common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
+	return q.state.IncomingMessageQueue(ctx, id, offset, limit)
 }
 
-func (rq *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
-	return rq.state.ConsensusParameters(ctx)
+func (q *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *rootHashApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

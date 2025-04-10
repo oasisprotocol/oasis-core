@@ -22,7 +22,7 @@ import (
 var vrfAlphaDomainsep = []byte("oasis-core:vrf/alpha")
 
 type backendVRF struct {
-	app *beaconApplication
+	app *Application
 }
 
 func (impl *backendVRF) OnInitChain(

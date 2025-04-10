@@ -21,13 +21,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// ServiceClient is the scheduler service client interface.
-type ServiceClient interface {
-	api.Backend
-	tmapi.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the scheduler service client.
+type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	logger *logging.Logger
@@ -38,7 +33,7 @@ type serviceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
-func (sc *serviceClient) TokenSymbol(ctx context.Context, height int64) (string, error) {
+func (sc *ServiceClient) TokenSymbol(ctx context.Context, height int64) (string, error) {
 	params, err := sc.ConsensusParameters(ctx, height)
 	if err != nil {
 		return "", err
@@ -57,7 +52,7 @@ func (sc *serviceClient) TokenSymbol(ctx context.Context, height int64) (string,
 	return genesis.Staking.TokenSymbol, nil
 }
 
-func (sc *serviceClient) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
+func (sc *ServiceClient) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
 	params, err := sc.ConsensusParameters(ctx, height)
 	if err != nil {
 		return 0, err
@@ -76,7 +71,7 @@ func (sc *serviceClient) TokenValueExponent(ctx context.Context, height int64) (
 	return genesis.Staking.TokenValueExponent, nil
 }
 
-func (sc *serviceClient) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (sc *ServiceClient) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -85,7 +80,7 @@ func (sc *serviceClient) TotalSupply(ctx context.Context, height int64) (*quanti
 	return q.TotalSupply(ctx)
 }
 
-func (sc *serviceClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (sc *ServiceClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -94,7 +89,7 @@ func (sc *serviceClient) CommonPool(ctx context.Context, height int64) (*quantit
 	return q.CommonPool(ctx)
 }
 
-func (sc *serviceClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (sc *ServiceClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -103,7 +98,7 @@ func (sc *serviceClient) LastBlockFees(ctx context.Context, height int64) (*quan
 	return q.LastBlockFees(ctx)
 }
 
-func (sc *serviceClient) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
+func (sc *ServiceClient) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -112,7 +107,7 @@ func (sc *serviceClient) GovernanceDeposits(ctx context.Context, height int64) (
 	return q.GovernanceDeposits(ctx)
 }
 
-func (sc *serviceClient) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
+func (sc *ServiceClient) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -121,7 +116,7 @@ func (sc *serviceClient) Threshold(ctx context.Context, query *api.ThresholdQuer
 	return q.Threshold(ctx, query.Kind)
 }
 
-func (sc *serviceClient) Addresses(ctx context.Context, height int64) ([]api.Address, error) {
+func (sc *ServiceClient) Addresses(ctx context.Context, height int64) ([]api.Address, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -130,7 +125,7 @@ func (sc *serviceClient) Addresses(ctx context.Context, height int64) ([]api.Add
 	return q.Addresses(ctx)
 }
 
-func (sc *serviceClient) CommissionScheduleAddresses(ctx context.Context, height int64) ([]api.Address, error) {
+func (sc *ServiceClient) CommissionScheduleAddresses(ctx context.Context, height int64) ([]api.Address, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -139,7 +134,7 @@ func (sc *serviceClient) CommissionScheduleAddresses(ctx context.Context, height
 	return q.CommissionScheduleAddresses(ctx)
 }
 
-func (sc *serviceClient) Account(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
+func (sc *ServiceClient) Account(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -148,7 +143,7 @@ func (sc *serviceClient) Account(ctx context.Context, query *api.OwnerQuery) (*a
 	return q.Account(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
+func (sc *ServiceClient) DelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -157,7 +152,7 @@ func (sc *serviceClient) DelegationsFor(ctx context.Context, query *api.OwnerQue
 	return q.DelegationsFor(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DelegationInfosFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.DelegationInfo, error) {
+func (sc *ServiceClient) DelegationInfosFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.DelegationInfo, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -166,7 +161,7 @@ func (sc *serviceClient) DelegationInfosFor(ctx context.Context, query *api.Owne
 	return q.DelegationInfosFor(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
+func (sc *ServiceClient) DelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -175,7 +170,7 @@ func (sc *serviceClient) DelegationsTo(ctx context.Context, query *api.OwnerQuer
 	return q.DelegationsTo(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DebondingDelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
+func (sc *ServiceClient) DebondingDelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -184,7 +179,7 @@ func (sc *serviceClient) DebondingDelegationsFor(ctx context.Context, query *api
 	return q.DebondingDelegationsFor(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DebondingDelegationInfosFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegationInfo, error) {
+func (sc *ServiceClient) DebondingDelegationInfosFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegationInfo, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -193,7 +188,7 @@ func (sc *serviceClient) DebondingDelegationInfosFor(ctx context.Context, query 
 	return q.DebondingDelegationInfosFor(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DebondingDelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
+func (sc *ServiceClient) DebondingDelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -202,7 +197,7 @@ func (sc *serviceClient) DebondingDelegationsTo(ctx context.Context, query *api.
 	return q.DebondingDelegationsTo(ctx, query.Owner)
 }
 
-func (sc *serviceClient) Allowance(ctx context.Context, query *api.AllowanceQuery) (*quantity.Quantity, error) {
+func (sc *ServiceClient) Allowance(ctx context.Context, query *api.AllowanceQuery) (*quantity.Quantity, error) {
 	acct, err := sc.Account(ctx, &api.OwnerQuery{
 		Height: query.Height,
 		Owner:  query.Owner,
@@ -215,7 +210,7 @@ func (sc *serviceClient) Allowance(ctx context.Context, query *api.AllowanceQuer
 	return &allowance, nil
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	// Query the staking genesis state.
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -239,7 +234,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return genesis, nil
 }
 
-func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
@@ -291,7 +286,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
-func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -299,7 +294,7 @@ func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -308,16 +303,16 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) Cleanup() {
+func (sc *ServiceClient) Cleanup() {
 }
 
-// Implements api.ServiceClient.
-func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+// ServiceDescriptor implements api.ServiceClient.
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-// Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+// DeliverEvent implements api.ServiceClient.
+func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("staking: failed to process cometbft events: %w", err)
@@ -437,23 +432,12 @@ func EventsFromCometBFT(
 	return events, errs
 }
 
-// New constructs a new CometBFT backed staking Backend instance.
-func New(backend tmapi.Backend) (ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
-	// Configure the staking application as a fee handler.
-	if err := backend.SetTransactionAuthHandler(a.(tmapi.TransactionAuthHandler)); err != nil {
-		return nil, err
-	}
-
-	return &serviceClient{
+// New constructs a new CometBFT backed staking backend instance.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		backend:       backend,
-		querier:       a.QueryFactory().(*app.QueryFactory),
+		querier:       querier,
 		eventNotifier: pubsub.NewBroker(false),
-	}, nil
+	}
 }

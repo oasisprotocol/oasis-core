@@ -32,7 +32,7 @@ func TestRegisterNode(t *testing.T) {
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
-	app := registryApplication{appState, &md}
+	app := Application{appState, &md}
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 	beaconState := beaconState.NewMutableState(ctx.State())
@@ -677,7 +677,7 @@ func TestRegisterRuntime(t *testing.T) {
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
-	app := registryApplication{appState, &md}
+	app := Application{appState, &md}
 
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -856,7 +856,7 @@ func TestProofFreshness(t *testing.T) {
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
-	app := registryApplication{appState, &md}
+	app := Application{appState, &md}
 	state := registryState.NewMutableState(ctx.State())
 
 	setTEEFeaturesFn := func(TEEFeatures *node.TEEFeatures) {

@@ -23,7 +23,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := roothashState.NewMutableState(ctx.State())
-	app := &rootHashApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &roothash.ConsensusParameters{
@@ -139,7 +139,7 @@ func advanceRuntimeState(require *require.Assertions, ctx *abciAPI.Context, gene
 	return blk
 }
 
-func changeMaxPastRootsStored(require *require.Assertions, app *rootHashApplication, ctx *abciAPI.Context, state *roothashState.MutableState, newMaxPRS uint64) {
+func changeMaxPastRootsStored(require *require.Assertions, app *Application, ctx *abciAPI.Context, state *roothashState.MutableState, newMaxPRS uint64) {
 	// Prepare proposal for changing the number of roots stored.
 	changes := roothash.ConsensusParameterChanges{
 		MaxPastRootsStored: &newMaxPRS,
@@ -168,7 +168,7 @@ func TestMaxPastRootsStoredMulti(t *testing.T) {
 
 	// Setup state.
 	state := roothashState.NewMutableState(ctx.State())
-	_ = &rootHashApplication{
+	_ = &Application{
 		state: appState,
 	}
 	params := &roothash.ConsensusParameters{
@@ -288,7 +288,7 @@ func TestChangeMaxPastRootsStored(t *testing.T) {
 
 	// Setup state.
 	state := roothashState.NewMutableState(ctx.State())
-	app := &rootHashApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &roothash.ConsensusParameters{

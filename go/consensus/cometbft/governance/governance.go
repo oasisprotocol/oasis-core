@@ -21,13 +21,8 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-// ServiceClient is the governance service client interface.
-type ServiceClient interface {
-	api.Backend
-	tmapi.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the governance service client.
+type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	logger *logging.Logger
@@ -38,7 +33,7 @@ type serviceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
-func (sc *serviceClient) ActiveProposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
+func (sc *ServiceClient) ActiveProposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -47,7 +42,7 @@ func (sc *serviceClient) ActiveProposals(ctx context.Context, height int64) ([]*
 	return q.ActiveProposals(ctx)
 }
 
-func (sc *serviceClient) Proposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
+func (sc *ServiceClient) Proposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -56,7 +51,7 @@ func (sc *serviceClient) Proposals(ctx context.Context, height int64) ([]*api.Pr
 	return q.Proposals(ctx)
 }
 
-func (sc *serviceClient) Proposal(ctx context.Context, query *api.ProposalQuery) (*api.Proposal, error) {
+func (sc *ServiceClient) Proposal(ctx context.Context, query *api.ProposalQuery) (*api.Proposal, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -65,7 +60,7 @@ func (sc *serviceClient) Proposal(ctx context.Context, query *api.ProposalQuery)
 	return q.Proposal(ctx, query.ProposalID)
 }
 
-func (sc *serviceClient) Votes(ctx context.Context, query *api.ProposalQuery) ([]*api.VoteEntry, error) {
+func (sc *ServiceClient) Votes(ctx context.Context, query *api.ProposalQuery) ([]*api.VoteEntry, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
@@ -74,7 +69,7 @@ func (sc *serviceClient) Votes(ctx context.Context, query *api.ProposalQuery) ([
 	return q.Votes(ctx, query.ProposalID)
 }
 
-func (sc *serviceClient) PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error) {
+func (sc *ServiceClient) PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -83,7 +78,7 @@ func (sc *serviceClient) PendingUpgrades(ctx context.Context, height int64) ([]*
 	return q.PendingUpgrades(ctx)
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -92,7 +87,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
@@ -144,7 +139,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
-func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -152,7 +147,7 @@ func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -161,16 +156,16 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) Cleanup() {
+func (sc *ServiceClient) Cleanup() {
 }
 
-// Implements api.ServiceClient.
-func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+// ServiceDescriptor implements api.ServiceClient.
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-// Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+// DeliverEvent implements api.ServiceClient.
+func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("governance: failed to process cometbft events: %w", err)
@@ -260,18 +255,12 @@ func EventsFromCometBFT(
 	return events, errs
 }
 
-// New constructs a new CometBFT backed governance Backend instance.
-func New(backend tmapi.Backend) (ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
-	return &serviceClient{
+// New constructs a new CometBFT backed governance backend instance.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		backend:       backend,
-		querier:       a.QueryFactory().(*app.QueryFactory),
+		querier:       querier,
 		eventNotifier: pubsub.NewBroker(false),
-	}, nil
+	}
 }

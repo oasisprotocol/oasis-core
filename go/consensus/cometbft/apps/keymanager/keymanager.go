@@ -15,7 +15,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-type keymanagerApplication struct {
+type Application struct {
 	state tmapi.ApplicationState
 
 	exts         []tmapi.Extension
@@ -24,32 +24,32 @@ type keymanagerApplication struct {
 }
 
 // Name implements api.Application.
-func (app *keymanagerApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
 // ID implements api.Application.
-func (app *keymanagerApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
 // Methods implements api.Application.
-func (app *keymanagerApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return app.methods
 }
 
 // Blessed implements api.Application.
-func (app *keymanagerApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
 // Dependencies implements api.Application.
-func (app *keymanagerApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
 // OnRegister implements api.Application.
-func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
+func (app *Application) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
 	app.state = state
 
 	for _, ext := range app.exts {
@@ -58,10 +58,10 @@ func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState, md tm
 }
 
 // OnCleanup implements api.Application.
-func (app *keymanagerApplication) OnCleanup() {}
+func (app *Application) OnCleanup() {}
 
 // BeginBlock implements api.Application.
-func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context) error {
+func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	// Prioritize application-specific logic.
 	if changed, _ := app.state.EpochChanged(ctx); changed {
 		if err := suspendRuntimes(ctx); err != nil {
@@ -80,12 +80,12 @@ func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context) error {
 }
 
 // ExecuteMessage implements api.Application.
-func (app *keymanagerApplication) ExecuteMessage(*tmapi.Context, any, any) (any, error) {
+func (app *Application) ExecuteMessage(*tmapi.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("keymanager: unexpected message")
 }
 
 // ExecuteTx implements api.Application.
-func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	ctx.SetPriority(AppPriority)
 
 	ext, ok := app.extsByMethod[tx.Method]
@@ -97,7 +97,7 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 }
 
 // EndBlock implements api.Application.
-func (app *keymanagerApplication) EndBlock(*tmapi.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(*tmapi.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
@@ -159,7 +159,7 @@ func suspendRuntimes(ctx *tmapi.Context) error {
 	return nil
 }
 
-func (app *keymanagerApplication) registerExtensions(exts ...tmapi.Extension) {
+func (app *Application) registerExtensions(exts ...tmapi.Extension) {
 	for _, ext := range exts {
 		for _, m := range ext.Methods() {
 			if _, ok := app.extsByMethod[m]; ok {
@@ -173,8 +173,8 @@ func (app *keymanagerApplication) registerExtensions(exts ...tmapi.Extension) {
 }
 
 // New constructs a new keymanager application instance.
-func New() tmapi.Application {
-	app := keymanagerApplication{
+func New() *Application {
+	app := Application{
 		exts:         make([]tmapi.Extension, 0),
 		methods:      make([]transaction.MethodName, 0),
 		extsByMethod: make(map[transaction.MethodName]tmapi.Extension),

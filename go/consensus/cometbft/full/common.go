@@ -31,9 +31,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
-	coreState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/supplementarysanity"
+	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
+	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
+	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
+	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
+	supplementarysanityApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/supplementarysanity"
+	vaultApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
@@ -87,6 +94,10 @@ type CommonConfig struct {
 	// GenesisHeight is the block height at which the genesis document
 	// was generated.
 	GenesisHeight int64
+	// BaseEpoch is the starting epoch.
+	BaseEpoch beaconAPI.EpochTime
+	// BaseHeight is the starting height.
+	BaseHeight int64
 	// PublicKeyBlacklist is the network-wide public key blacklist.
 	PublicKeyBlacklist []signature.PublicKey
 }
@@ -112,18 +123,21 @@ type commonNode struct {
 	genesis            genesisAPI.Provider
 	genesisDoc         *cmttypes.GenesisDoc
 	genesisHeight      int64
+	baseEpoch          beaconAPI.EpochTime
+	baseHeight         int64
 	publicKeyBlacklist []signature.PublicKey
 
-	mux *abci.ApplicationServer
+	mux     *abci.ApplicationServer
+	querier *abci.QueryFactory
 
-	beacon     beaconAPI.Backend
-	governance governanceAPI.Backend
-	keymanager keymanagerAPI.Backend
-	registry   registryAPI.Backend
-	roothash   roothashAPI.Backend
-	scheduler  schedulerAPI.Backend
-	staking    stakingAPI.Backend
-	vault      vaultAPI.Backend
+	beacon     *tmbeacon.ServiceClient
+	governance *tmgovernance.ServiceClient
+	keymanager *tmkeymanager.ServiceClient
+	registry   *tmregistry.ServiceClient
+	roothash   *tmroothash.ServiceClient
+	scheduler  *tmscheduler.ServiceClient
+	staking    *tmstaking.ServiceClient
+	vault      *tmvault.ServiceClient
 
 	// These stores must be populated by the parent before the node is deemed ready.
 	blockStoreDB dbm.DB
@@ -215,110 +229,84 @@ func (n *commonNode) initialize() error {
 		}
 	}
 
-	// Initialize the beacon/epochtime backend.
-	var (
-		err error
+	// Initialize consensus backend querier.
+	n.querier = abci.NewQueryFactory(n.mux.State())
 
-		scBeacon tmbeacon.ServiceClient
-	)
-	if scBeacon, err = tmbeacon.New(n.ctx, n.parentNode); err != nil {
-		n.Logger.Error("initialize: failed to initialize beapoch backend",
-			"err", err,
-		)
-		return err
-	}
-	n.beacon = scBeacon
-	n.serviceClients = append(n.serviceClients, scBeacon)
-	if err = n.mux.SetEpochtime(n.beacon); err != nil {
+	// Initialize the beacon/epochtime backend.
+	n.beacon = tmbeacon.New(n.ctx, n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.beacon)
+	if err := n.mux.SetEpochtime(n.beacon); err != nil {
 		return err
 	}
 
 	// Initialize the rest of backends.
-	var scKeyManager tmkeymanager.ServiceClient
-	if scKeyManager, err = tmkeymanager.New(n.ctx, n.parentNode); err != nil {
-		n.Logger.Error("initialize: failed to initialize keymanager backend",
-			"err", err,
-		)
-		return err
-	}
-	n.keymanager = scKeyManager
-	n.serviceClients = append(n.serviceClients, scKeyManager)
+	n.keymanager = tmkeymanager.New(n.ctx, keymanagerApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.keymanager)
 
-	var scRegistry tmregistry.ServiceClient
-	if scRegistry, err = tmregistry.New(n.ctx, n.parentNode); err != nil {
-		n.Logger.Error("initialize: failed to initialize registry backend",
-			"err", err,
-		)
-		return err
-	}
-	n.registry = scRegistry
+	n.registry = tmregistry.New(n.ctx, n.parentNode, registryApp.NewQueryFactory(n.mux.State()))
 	if cmmetrics.Enabled() {
 		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
 	}
-	n.serviceClients = append(n.serviceClients, scRegistry)
+	n.serviceClients = append(n.serviceClients, n.registry)
 	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
 
-	var scStaking tmstaking.ServiceClient
-	if scStaking, err = tmstaking.New(n.parentNode); err != nil {
-		n.Logger.Error("staking: failed to initialize staking backend",
-			"err", err,
-		)
-		return err
-	}
-	n.staking = scStaking
-	n.serviceClients = append(n.serviceClients, scStaking)
+	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.staking)
 	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
 
-	var scScheduler tmscheduler.ServiceClient
-	if scScheduler, err = tmscheduler.New(n.parentNode); err != nil {
-		n.Logger.Error("scheduler: failed to initialize scheduler backend",
-			"err", err,
-		)
-		return err
-	}
-	n.scheduler = scScheduler
-	n.serviceClients = append(n.serviceClients, scScheduler)
+	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.scheduler)
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
-	var scRootHash tmroothash.ServiceClient
-	if scRootHash, err = tmroothash.New(n.ctx, n.parentNode); err != nil {
-		n.Logger.Error("roothash: failed to initialize roothash backend",
-			"err", err,
-		)
-		return err
-	}
-	n.roothash = scRootHash
-	n.serviceClients = append(n.serviceClients, scRootHash)
+	n.roothash = tmroothash.New(n.ctx, n.parentNode, roothashApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.roothash)
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 
-	var scGovernance tmgovernance.ServiceClient
-	if scGovernance, err = tmgovernance.New(n.parentNode); err != nil {
-		n.Logger.Error("governance: failed to initialize governance backend",
-			"err", err,
-		)
-		return err
-	}
-	n.governance = scGovernance
-	n.serviceClients = append(n.serviceClients, scGovernance)
+	n.governance = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.governance)
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
-	var scVault tmvault.ServiceClient
-	if scVault, err = tmvault.New(n.parentNode); err != nil {
-		n.Logger.Error("vault: failed to initialize vault backend",
-			"err", err,
-		)
-		return err
-	}
-	n.vault = scVault
-	n.serviceClients = append(n.serviceClients, scVault)
+	n.vault = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(n.mux.State()))
+	n.serviceClients = append(n.serviceClients, n.vault)
 	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
+
+	// Register CometBFT applications.
+	beaconApp := beaconApp.New()
+	governanceApp := governanceApp.New()
+	keymanagerApp := keymanagerApp.New()
+	registryApp := registryApp.New()
+	roothashApp := roothashApp.New(n.roothash)
+	schedulerApp := schedulerApp.New()
+	stakingApp := stakingApp.New()
+	vaultApp := vaultApp.New()
+
+	apps := []api.Application{
+		beaconApp,
+		governanceApp,
+		keymanagerApp,
+		registryApp,
+		roothashApp,
+		schedulerApp,
+		stakingApp,
+		vaultApp,
+	}
+	for _, app := range apps {
+		if err := n.mux.Register(app); err != nil {
+			return fmt.Errorf("failed to register app: %w", err)
+		}
+	}
 
 	// Enable supplementary sanity checks when enabled.
 	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
-		ssa := supplementarysanity.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
-		if err = n.RegisterApplication(ssa); err != nil {
+		app := supplementarysanityApp.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
+		if err := n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
 		}
+	}
+
+	// Configure the staking application as a fee handler.
+	if err := n.parentNode.SetTransactionAuthHandler(stakingApp); err != nil {
+		return err
 	}
 
 	atomic.StoreUint32(&n.state, stateInitialized)
@@ -371,11 +359,11 @@ func (n *commonNode) StateToGenesis(ctx context.Context, height int64) (*genesis
 	height = blk.Header.Height
 
 	// Query root consensus parameters.
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
+	q, err := n.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -491,11 +479,6 @@ func (n *commonNode) Vault() vaultAPI.Backend {
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) RegisterApplication(app api.Application) error {
-	return n.mux.Register(app)
-}
-
-// Implements consensusAPI.Backend.
 func (n *commonNode) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
 	return n.mux.SetTransactionAuthHandler(handler)
 }
@@ -507,11 +490,11 @@ func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGa
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), consensusAPI.HeightLatest)
+	q, err := n.querier.QueryAt(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return nil, err
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -829,11 +812,11 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, fmt.Errorf("cometbft: failed to marshal consensus params: %w", err)
 	}
 
-	cs, err := coreState.NewImmutableStateAt(ctx, n.mux.State(), height)
+	q, err := n.querier.QueryAt(ctx, height)
 	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to initialize core consensus state: %w", err)
+		return nil, fmt.Errorf("cometbft: failed to create consensus query: %w", err)
 	}
-	cp, err := cs.ConsensusParameters(ctx)
+	cp, err := q.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: failed to fetch core consensus parameters: %w", err)
 	}
@@ -988,6 +971,8 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 		genesis:               cfg.Genesis,
 		genesisDoc:            cfg.GenesisDoc,
 		genesisHeight:         cfg.GenesisHeight,
+		baseEpoch:             cfg.BaseEpoch,
+		baseHeight:            cfg.BaseHeight,
 		publicKeyBlacklist:    cfg.PublicKeyBlacklist,
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("cometbft/servicemanager")),
 		dbCloser:              db.NewCloser(),

@@ -9,7 +9,7 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
-func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, req types.RequestInitChain, doc *genesis.Document) error {
+func (app *Application) InitChain(ctx *tmapi.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	b, _ := json.Marshal(doc.KeyManager)
 	ctx.Logger().Debug("InitChain: Genesis state",
 		"state", string(b),

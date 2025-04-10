@@ -38,7 +38,7 @@ func (b *backend) GetAddresses(context.Context) (*api.SentryAddresses, error) {
 	}, nil
 }
 
-// New constructs a new sentry Backend instance.
+// New constructs a new sentry backend instance.
 func New(
 	consensusBackend consensus.Backend,
 	identity *identity.Identity,

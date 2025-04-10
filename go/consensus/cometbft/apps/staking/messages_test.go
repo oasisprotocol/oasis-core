@@ -21,7 +21,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := stakingState.NewMutableState(ctx.State())
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &staking.ConsensusParameters{

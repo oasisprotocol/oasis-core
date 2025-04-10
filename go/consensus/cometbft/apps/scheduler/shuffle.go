@@ -146,7 +146,7 @@ func shuffleValidatorsByEntropy(
 	return shuffled, nil
 }
 
-func (app *schedulerApplication) electCommittee( //nolint: gocyclo
+func (app *Application) electCommittee( //nolint: gocyclo
 	ctx *api.Context,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,

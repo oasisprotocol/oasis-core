@@ -47,17 +47,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable scheduler state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := abciAPI.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // Committee returns a specific elected committee.
 func (s *ImmutableState) Committee(ctx context.Context, kind api.CommitteeKind, runtimeID common.Namespace) (*api.Committee, error) {
 	raw, err := s.state.Get(ctx, committeeKeyFmt.Encode(uint8(kind), &runtimeID))

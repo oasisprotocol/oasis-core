@@ -24,39 +24,41 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the beacon query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := beaconState.NewImmutableStateAt(ctx, sf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &beaconQuerier{state}, nil
+	return &beaconQuerier{
+		state: beaconState.NewImmutableState(state),
+	}, nil
 }
 
 type beaconQuerier struct {
 	state *beaconState.ImmutableState
 }
 
-func (bq *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
-	return bq.state.Beacon(ctx)
+func (q *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
+	return q.state.Beacon(ctx)
 }
 
-func (bq *beaconQuerier) Epoch(ctx context.Context) (beacon.EpochTime, int64, error) {
-	return bq.state.GetEpoch(ctx)
+func (q *beaconQuerier) Epoch(ctx context.Context) (beacon.EpochTime, int64, error) {
+	return q.state.GetEpoch(ctx)
 }
 
-func (bq *beaconQuerier) FutureEpoch(ctx context.Context) (*beacon.EpochTimeState, error) {
-	return bq.state.GetFutureEpoch(ctx)
+func (q *beaconQuerier) FutureEpoch(ctx context.Context) (*beacon.EpochTimeState, error) {
+	return q.state.GetFutureEpoch(ctx)
 }
 
-func (bq *beaconQuerier) ConsensusParameters(ctx context.Context) (*beacon.ConsensusParameters, error) {
-	return bq.state.ConsensusParameters(ctx)
+func (q *beaconQuerier) ConsensusParameters(ctx context.Context) (*beacon.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
-func (bq *beaconQuerier) VRFState(ctx context.Context) (*beacon.VRFState, error) {
-	return bq.state.VRFState(ctx)
+func (q *beaconQuerier) VRFState(ctx context.Context) (*beacon.VRFState, error) {
+	return q.state.VRFState(ctx)
 }
 
-func (app *beaconApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

@@ -36,6 +36,8 @@ func New(
 		Genesis:            genesis,
 		GenesisDoc:         genesisDoc,
 		GenesisHeight:      doc.Height,
+		BaseEpoch:          doc.Beacon.Base,
+		BaseHeight:         doc.Height,
 		PublicKeyBlacklist: doc.Consensus.Parameters.PublicKeyBlacklist,
 	}
 

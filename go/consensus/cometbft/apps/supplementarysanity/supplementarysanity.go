@@ -17,72 +17,72 @@ import (
 var (
 	logger = logging.GetLogger("supplementarysanity")
 
-	_ api.Application = (*supplementarySanityApplication)(nil)
+	_ api.Application = (*Application)(nil)
 )
 
-// supplementarySanityApplication is a non-normative mux app that performs additional checks on the consensus state.
+// Application is a non-normative mux app that performs additional checks on the consensus state.
 // It should not alter the CometBFT application state.
 // It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
 // in consensus.
-type supplementarySanityApplication struct {
+type Application struct {
 	state           api.ApplicationState
 	interval        int64
 	currentInterval int64
 	checkHeight     int64
 }
 
-func (app *supplementarySanityApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *supplementarySanityApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *supplementarySanityApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return nil
 }
 
-func (app *supplementarySanityApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *supplementarySanityApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *supplementarySanityApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
 	app.state = state
 }
 
-func (app *supplementarySanityApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteMessage(*api.Context, any, any) (any, error) {
+func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("supplementarysanity: unexpected message")
 }
 
-func (app *supplementarySanityApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {
+func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("supplementarysanity: unexpected transaction")
 }
 
-func (app *supplementarySanityApplication) InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error {
+func (app *Application) InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) BeginBlock(*api.Context) error {
+func (app *Application) BeginBlock(*api.Context) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, app.endBlockImpl(ctx)
 }
 
-func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context) error {
+func (app *Application) endBlockImpl(ctx *api.Context) error {
 	height := ctx.BlockHeight()
 
 	if height == 1 {
@@ -136,8 +136,8 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context) error 
 	return nil
 }
 
-func New(interval uint64) api.Application {
-	return &supplementarySanityApplication{
+func New(interval uint64) *Application {
+	return &Application{
 		interval: int64(interval),
 	}
 }

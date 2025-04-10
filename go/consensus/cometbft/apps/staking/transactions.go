@@ -22,7 +22,7 @@ func isTransferPermitted(params *staking.ConsensusParameters, fromAddr staking.A
 	return
 }
 
-func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.MutableState, xfer *staking.Transfer) (*staking.TransferResult, error) {
+func (app *Application) transfer(ctx *api.Context, state *stakingState.MutableState, xfer *staking.Transfer) (*staking.TransferResult, error) {
 	if ctx.IsCheckOnly() {
 		return nil, nil
 	}
@@ -74,7 +74,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 	}, nil
 }
 
-func (app *stakingApplication) transferImpl(
+func (app *Application) transferImpl(
 	ctx *api.Context,
 	state *stakingState.MutableState,
 	params *staking.ConsensusParameters,
@@ -160,7 +160,7 @@ func (app *stakingApplication) transferImpl(
 	return nil
 }
 
-func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.MutableState, burn *staking.Burn) error {
+func (app *Application) burn(ctx *api.Context, state *stakingState.MutableState, burn *staking.Burn) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -187,7 +187,7 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 	return app.burnImpl(ctx, state, params, fromAddr, &burn.Amount)
 }
 
-func (app *stakingApplication) burnImpl(
+func (app *Application) burnImpl(
 	ctx *api.Context,
 	state *stakingState.MutableState,
 	params *staking.ConsensusParameters,
@@ -255,7 +255,7 @@ func (app *stakingApplication) burnImpl(
 	return nil
 }
 
-func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.MutableState, escrow *staking.Escrow) (*staking.AddEscrowResult, error) {
+func (app *Application) addEscrow(ctx *api.Context, state *stakingState.MutableState, escrow *staking.Escrow) (*staking.AddEscrowResult, error) {
 	if ctx.IsCheckOnly() {
 		return nil, nil
 	}
@@ -374,7 +374,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	}, nil
 }
 
-func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingState.MutableState, reclaim *staking.ReclaimEscrow) (*staking.ReclaimEscrowResult, error) {
+func (app *Application) reclaimEscrow(ctx *api.Context, state *stakingState.MutableState, reclaim *staking.ReclaimEscrow) (*staking.ReclaimEscrowResult, error) {
 	// No sense if there is nothing to reclaim.
 	if reclaim.Shares.IsZero() {
 		return nil, staking.ErrInvalidArgument
@@ -531,7 +531,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}, nil
 }
 
-func (app *stakingApplication) amendCommissionSchedule(
+func (app *Application) amendCommissionSchedule(
 	ctx *api.Context,
 	state *stakingState.MutableState,
 	amendCommissionSchedule *staking.AmendCommissionSchedule,
@@ -601,7 +601,7 @@ func (app *stakingApplication) amendCommissionSchedule(
 	return nil
 }
 
-func (app *stakingApplication) allow(
+func (app *Application) allow(
 	ctx *api.Context,
 	state *stakingState.MutableState,
 	allow *staking.Allow,
@@ -699,7 +699,7 @@ func (app *stakingApplication) allow(
 	return nil
 }
 
-func (app *stakingApplication) withdraw(
+func (app *Application) withdraw(
 	ctx *api.Context,
 	state *stakingState.MutableState,
 	withdraw *staking.Withdraw,

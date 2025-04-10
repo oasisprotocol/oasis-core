@@ -22,7 +22,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tmAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
 )
 
@@ -31,20 +31,15 @@ var TestSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed"
 // epochCacheCapacity is the capacity of the epoch LRU cache.
 const epochCacheCapacity = 128
 
-// ServiceClient is the beacon service client interface.
-type ServiceClient interface {
-	beaconAPI.Backend
-	tmAPI.ServiceClient
-}
-
-type serviceClient struct {
+// ServiceClient is the beacon service client.
+type ServiceClient struct {
 	sync.RWMutex
-	tmAPI.BaseServiceClient
+	tmapi.BaseServiceClient
 
-	logger  *logging.Logger
+	logger *logging.Logger
+
+	backend tmapi.Backend
 	querier *app.QueryFactory
-
-	backend tmAPI.Backend
 	ctx     context.Context
 
 	epochNotifier     *pubsub.Broker
@@ -63,7 +58,7 @@ type serviceClient struct {
 	baseBlock int64
 }
 
-func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*beaconAPI.Genesis, error) {
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*beaconAPI.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -72,7 +67,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*bea
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*beaconAPI.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*beaconAPI.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("beacon: genesis query failed: %w", err)
@@ -81,11 +76,11 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) GetBaseEpoch(context.Context) (beaconAPI.EpochTime, error) {
+func (sc *ServiceClient) GetBaseEpoch(context.Context) (beaconAPI.EpochTime, error) {
 	return sc.baseEpoch, nil
 }
 
-func (sc *serviceClient) GetEpoch(ctx context.Context, height int64) (beaconAPI.EpochTime, error) {
+func (sc *ServiceClient) GetEpoch(ctx context.Context, height int64) (beaconAPI.EpochTime, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return beaconAPI.EpochInvalid, err
@@ -95,7 +90,7 @@ func (sc *serviceClient) GetEpoch(ctx context.Context, height int64) (beaconAPI.
 	return epoch, err
 }
 
-func (sc *serviceClient) GetFutureEpoch(ctx context.Context, height int64) (*beaconAPI.EpochTimeState, error) {
+func (sc *ServiceClient) GetFutureEpoch(ctx context.Context, height int64) (*beaconAPI.EpochTimeState, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -104,7 +99,7 @@ func (sc *serviceClient) GetFutureEpoch(ctx context.Context, height int64) (*bea
 	return q.FutureEpoch(ctx)
 }
 
-func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.EpochTime) (int64, error) {
+func (sc *ServiceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.EpochTime) (int64, error) {
 	now, currentBlk := sc.currentEpochBlock()
 	switch {
 	case epoch == now:
@@ -171,7 +166,7 @@ func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.Epoc
 	return 0, fmt.Errorf("failed to find historic epoch")
 }
 
-func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
+func (sc *ServiceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
 	ch, sub, err := sc.WatchEpochs(ctx)
 	if err != nil {
 		return err
@@ -195,7 +190,7 @@ func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 	}
 }
 
-func (sc *serviceClient) WatchEpochs(_ context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchEpochs(_ context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -203,7 +198,7 @@ func (sc *serviceClient) WatchEpochs(_ context.Context) (<-chan beaconAPI.EpochT
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.SubscribeBuffered(1)
 	sub.Unwrap(typedCh)
@@ -211,7 +206,7 @@ func (sc *serviceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.Epo
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+func (sc *ServiceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -220,7 +215,7 @@ func (sc *serviceClient) GetBeacon(ctx context.Context, height int64) ([]byte, e
 	return q.Beacon(ctx)
 }
 
-func (sc *serviceClient) GetVRFState(ctx context.Context, height int64) (*beaconAPI.VRFState, error) {
+func (sc *ServiceClient) GetVRFState(ctx context.Context, height int64) (*beaconAPI.VRFState, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -229,7 +224,7 @@ func (sc *serviceClient) GetVRFState(ctx context.Context, height int64) (*beacon
 	return q.VRFState(ctx)
 }
 
-func (sc *serviceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
+func (sc *ServiceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
 	typedCh := make(chan *beaconAPI.VRFEvent)
 	sub := sc.vrfNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -237,7 +232,7 @@ func (sc *serviceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
+func (sc *ServiceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
 	ch, sub, err := sc.WatchEpochs(ctx)
 	if err != nil {
 		return fmt.Errorf("epochtime: watch epochs failed: %w", err)
@@ -266,11 +261,11 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 	}
 }
 
-func (sc *serviceClient) ServiceDescriptor() tmAPI.ServiceDescriptor {
-	return tmAPI.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
+func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-func (sc *serviceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
 	if sc.initialNotify {
 		return nil
 	}
@@ -307,7 +302,7 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) 
 	return nil
 }
 
-func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		key := pair.GetKey()
 		val := pair.GetValue()
@@ -341,7 +336,7 @@ func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, _ cmttype
 	return nil
 }
 
-func (sc *serviceClient) updateCachedEpoch(height int64, epoch beaconAPI.EpochTime) bool {
+func (sc *ServiceClient) updateCachedEpoch(height int64, epoch beaconAPI.EpochTime) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
@@ -361,7 +356,7 @@ func (sc *serviceClient) updateCachedEpoch(height int64, epoch beaconAPI.EpochTi
 	return false
 }
 
-func (sc *serviceClient) updateCachedVRFEvent(event *beaconAPI.VRFEvent) bool {
+func (sc *ServiceClient) updateCachedVRFEvent(event *beaconAPI.VRFEvent) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
@@ -381,30 +376,26 @@ func (sc *serviceClient) updateCachedVRFEvent(event *beaconAPI.VRFEvent) bool {
 	return false
 }
 
-func (sc *serviceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
+func (sc *ServiceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 	sc.RLock()
 	defer sc.RUnlock()
 
 	return sc.epoch, sc.epochCurrentBlock
 }
 
-// New constructs a new CometBFT backed beacon and epochtime Backend instance.
-func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
-	// Initialize and register the CometBFT service component.
-	a := app.New()
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
+// New constructs a new CometBFT backed beacon and epochtime backend instance.
+func New(ctx context.Context, baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
 
-	sc := &serviceClient{
+	sc := &ServiceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
-		querier:           a.QueryFactory().(*app.QueryFactory),
 		backend:           backend,
+		querier:           querier,
 		ctx:               ctx,
 		epochLastNotified: beaconAPI.EpochInvalid,
 		epochCache:        epochCache,
+		baseEpoch:         baseEpoch,
+		baseBlock:         baseBlock,
 	}
 	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()
@@ -423,13 +414,5 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 		}
 	})
 
-	genDoc, err := backend.GetGenesisDocument(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sc.baseEpoch = genDoc.Beacon.Base
-	sc.baseBlock = genDoc.Height
-
-	return sc, nil
+	return sc
 }

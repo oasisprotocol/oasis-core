@@ -4,7 +4,6 @@ import (
 	"context"
 
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -24,28 +23,22 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the scheduler query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := schedulerState.NewImmutableStateAt(ctx, sf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-
-	// Some queries need access to the registry to give useful responses.
-	regState, err := registryState.NewImmutableStateAt(ctx, sf.state, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return &schedulerQuerier{state, regState}, nil
+	return &schedulerQuerier{
+		state: schedulerState.NewImmutableState(state),
+	}, nil
 }
 
 type schedulerQuerier struct {
-	state    *schedulerState.ImmutableState
-	regState *registryState.ImmutableState
+	state *schedulerState.ImmutableState
 }
 
-func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
-	vals, err := sq.state.CurrentValidators(ctx)
+func (q *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
+	vals, err := q.state.CurrentValidators(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -58,19 +51,19 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 	return ret, nil
 }
 
-func (sq *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Committee, error) {
-	return sq.state.AllCommittees(ctx)
+func (q *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Committee, error) {
+	return q.state.AllCommittees(ctx)
 }
 
-func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
-	return sq.state.KindsCommittees(ctx, kinds)
+func (q *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
+	return q.state.KindsCommittees(ctx, kinds)
 }
 
-func (sq *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler.ConsensusParameters, error) {
-	return sq.state.ConsensusParameters(ctx)
+func (q *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *schedulerApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

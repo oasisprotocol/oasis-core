@@ -23,34 +23,32 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ api.Application = (*registryApplication)(nil)
-
-type registryApplication struct {
+type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
-func (app *registryApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *registryApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *registryApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return registry.Methods
 }
 
-func (app *registryApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *registryApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *registryApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -60,10 +58,10 @@ func (app *registryApplication) OnRegister(state api.ApplicationState, md api.Me
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *registryApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *registryApplication) BeginBlock(ctx *api.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
@@ -71,7 +69,7 @@ func (app *registryApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageRegistry:
 		m := msg.(*message.RegistryMessage)
@@ -94,7 +92,7 @@ func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg any) 
 	}
 }
 
-func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := registryState.NewMutableState(ctx.State())
 
 	ctx.SetPriority(AppPriority)
@@ -153,11 +151,11 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	}
 }
 
-func (app *registryApplication) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch beacon.EpochTime) (err error) {
+func (app *Application) onRegistryEpochChanged(ctx *api.Context, registryEpoch beacon.EpochTime) (err error) {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -260,6 +258,6 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 }
 
 // New constructs a new registry application instance.
-func New() api.Application {
-	return &registryApplication{}
+func New() *Application {
+	return &Application{}
 }

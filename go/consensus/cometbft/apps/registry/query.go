@@ -33,12 +33,16 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the registry query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := registryState.NewImmutableStateAt(ctx, sf.state, height)
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &registryQuerier{sf.state, state, height}, nil
+	return &registryQuerier{
+		queryState: f.state,
+		state:      registryState.NewImmutableState(state),
+		height:     height,
+	}, nil
 }
 
 type registryQuerier struct {
@@ -47,21 +51,21 @@ type registryQuerier struct {
 	height     int64
 }
 
-func (rq *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	return rq.state.Entity(ctx, id)
+func (q *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
+	return q.state.Entity(ctx, id)
 }
 
-func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, error) {
-	return rq.state.Entities(ctx)
+func (q *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, error) {
+	return q.state.Entities(ctx)
 }
 
-func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	epoch, err := rq.queryState.GetEpoch(ctx, rq.height)
+func (q *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+	epoch, err := q.queryState.GetEpoch(ctx, q.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
 
-	node, err := rq.state.Node(ctx, id)
+	node, err := q.state.Node(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -73,21 +77,21 @@ func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*n
 	return node, nil
 }
 
-func (rq *registryQuerier) NodeByConsensusAddress(ctx context.Context, address []byte) (*node.Node, error) {
-	return rq.state.NodeByConsensusAddress(ctx, address)
+func (q *registryQuerier) NodeByConsensusAddress(ctx context.Context, address []byte) (*node.Node, error) {
+	return q.state.NodeByConsensusAddress(ctx, address)
 }
 
-func (rq *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
-	return rq.state.NodeStatus(ctx, id)
+func (q *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
+	return q.state.NodeStatus(ctx, id)
 }
 
-func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
-	epoch, err := rq.queryState.GetEpoch(ctx, rq.height)
+func (q *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
+	epoch, err := q.queryState.GetEpoch(ctx, q.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
 
-	nodes, err := rq.state.Nodes(ctx)
+	nodes, err := q.state.Nodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -103,25 +107,25 @@ func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
 	return filteredNodes, nil
 }
 
-func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace, includeSuspended bool) (*registry.Runtime, error) {
+func (q *registryQuerier) Runtime(ctx context.Context, id common.Namespace, includeSuspended bool) (*registry.Runtime, error) {
 	if includeSuspended {
-		return rq.state.AnyRuntime(ctx, id)
+		return q.state.AnyRuntime(ctx, id)
 	}
-	return rq.state.Runtime(ctx, id)
+	return q.state.Runtime(ctx, id)
 }
 
-func (rq *registryQuerier) Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error) {
+func (q *registryQuerier) Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error) {
 	if includeSuspended {
-		return rq.state.AllRuntimes(ctx)
+		return q.state.AllRuntimes(ctx)
 	}
-	return rq.state.Runtimes(ctx)
+	return q.state.Runtimes(ctx)
 }
 
-func (rq *registryQuerier) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
-	return rq.state.ConsensusParameters(ctx)
+func (q *registryQuerier) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
+	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *registryApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

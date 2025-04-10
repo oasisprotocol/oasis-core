@@ -19,34 +19,32 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ api.Application = (*stakingApplication)(nil)
-
-type stakingApplication struct {
+type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
-func (app *stakingApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *stakingApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *stakingApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return staking.Methods
 }
 
-func (app *stakingApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *stakingApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -56,10 +54,10 @@ func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.Mes
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *stakingApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -121,7 +119,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageStaking:
 		state := stakingState.NewMutableState(ctx.State())
@@ -150,7 +148,7 @@ func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (
 	}
 }
 
-func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := stakingState.NewMutableState(ctx.State())
 
 	ctx.SetPriority(AppPriority)
@@ -214,7 +212,7 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	}
 }
 
-func (app *stakingApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	fees := stakingState.BlockFees(ctx)
 	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {
 		return types.ResponseEndBlock{}, fmt.Errorf("disburse fees proposer: %w", err)
@@ -226,7 +224,7 @@ func (app *stakingApplication) EndBlock(ctx *api.Context) (types.ResponseEndBloc
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) error {
+func (app *Application) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) error {
 	state := stakingState.NewMutableState(ctx.State())
 
 	// Delegation unbonding after debonding period elapses.
@@ -319,6 +317,6 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch beacon.Epoc
 }
 
 // New constructs a new staking application instance.
-func New() api.Application {
-	return &stakingApplication{}
+func New() *Application {
+	return &Application{}
 }

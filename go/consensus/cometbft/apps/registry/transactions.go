@@ -16,7 +16,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *registryApplication) registerEntity(
+func (app *Application) registerEntity(
 	ctx *api.Context,
 	state *registryState.MutableState,
 	sigEnt *entity.SignedEntity,
@@ -96,7 +96,7 @@ func (app *registryApplication) registerEntity(
 	return nil
 }
 
-func (app *registryApplication) deregisterEntity(ctx *api.Context, state *registryState.MutableState) error {
+func (app *Application) deregisterEntity(ctx *api.Context, state *registryState.MutableState) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -183,7 +183,7 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	return nil
 }
 
-func (app *registryApplication) registerNode( // nolint: gocyclo
+func (app *Application) registerNode( // nolint: gocyclo
 	ctx *api.Context,
 	state *registryState.MutableState,
 	sigNode *node.MultiSignedNode,
@@ -482,7 +482,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	return nil
 }
 
-func (app *registryApplication) unfreezeNode(
+func (app *Application) unfreezeNode(
 	ctx *api.Context,
 	state *registryState.MutableState,
 	unfreeze *registry.UnfreezeNode,
@@ -557,7 +557,7 @@ func (app *registryApplication) unfreezeNode(
 	return nil
 }
 
-func (app *registryApplication) registerRuntime( // nolint: gocyclo
+func (app *Application) registerRuntime( // nolint: gocyclo
 	ctx *api.Context,
 	state *registryState.MutableState,
 	rt *registry.Runtime,
@@ -760,7 +760,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	return rt, nil
 }
 
-func (app *registryApplication) proveFreshness(
+func (app *Application) proveFreshness(
 	ctx *api.Context,
 	state *registryState.MutableState,
 ) error {

@@ -41,7 +41,7 @@ func TestInitChain(t *testing.T) {
 	defer ctx.Close()
 
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 

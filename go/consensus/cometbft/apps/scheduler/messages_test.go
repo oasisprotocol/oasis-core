@@ -20,7 +20,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := schedulerState.NewMutableState(ctx.State())
-	app := &schedulerApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &scheduler.ConsensusParameters{

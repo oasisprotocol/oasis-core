@@ -34,17 +34,6 @@ func NewImmutableState(tree mkvs.ImmutableKeyValueTree) *ImmutableState {
 	}
 }
 
-// NewImmutableStateAt creates a new immutable consensus backend state wrapper
-// using the provided application query state and version.
-func NewImmutableStateAt(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
-	is, err := api.NewImmutableStateAt(ctx, state, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImmutableState{is}, nil
-}
-
 // ChainContext returns the stored chain context.
 func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
 	chainContext, err := s.state.Get(ctx, chainContextKeyFmt.Encode())

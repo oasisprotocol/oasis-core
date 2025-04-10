@@ -11,7 +11,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {
 		return nil, fmt.Errorf("staking: failed to type assert change parameters proposal")

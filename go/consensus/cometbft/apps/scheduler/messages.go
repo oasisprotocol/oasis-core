@@ -10,7 +10,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-func (app *schedulerApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {
