@@ -310,7 +310,7 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Configure the staking application as a fee handler.
-	if err := n.parentNode.SetTransactionAuthHandler(stakingApp); err != nil {
+	if err := n.mux.SetTransactionAuthHandler(stakingApp); err != nil {
 		return err
 	}
 
@@ -481,11 +481,6 @@ func (n *commonNode) Governance() governanceAPI.Backend {
 // Implements consensusAPI.Backend.
 func (n *commonNode) Vault() vaultAPI.Backend {
 	return n.vault
-}
-
-// Implements consensusAPI.Backend.
-func (n *commonNode) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
-	return n.mux.SetTransactionAuthHandler(handler)
 }
 
 // Implements consensusAPI.Backend.
