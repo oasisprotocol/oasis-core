@@ -184,6 +184,7 @@ func createProvisioner(
 		PCS:                   qs,
 		Consensus:             consensus,
 		Identity:              identity,
+		InsecureMock:          insecureMock,
 		RuntimeAttestInterval: attestInterval,
 	})
 	if err != nil {
