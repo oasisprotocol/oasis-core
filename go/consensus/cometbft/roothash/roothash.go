@@ -245,12 +245,23 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *ServiceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
+// GetEvents implements api.Backend.
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	// Get transactions at given height.
+	txns, err := sc.backend.GetTransactions(ctx, height)
+	if err != nil {
+		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,
 			"height", height,
 		)
@@ -289,21 +300,6 @@ func (sc *ServiceClient) getEvents(ctx context.Context, height int64, txns [][]b
 	events = append(events, blockEvs...)
 
 	return events, nil
-}
-
-// GetEvents implements api.Backend.
-func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
-	// Get transactions at given height.
-	txns, err := sc.backend.GetTransactions(ctx, height)
-	if err != nil {
-		sc.logger.Error("failed to get cometbft transactions",
-			"err", err,
-			"height", height,
-		)
-		return nil, err
-	}
-
-	return sc.getEvents(ctx, height, txns)
 }
 
 // Cleanup implements api.Backend.
