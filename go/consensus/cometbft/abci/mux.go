@@ -183,6 +183,11 @@ func (a *ApplicationServer) State() api.ApplicationState {
 	return a.mux.state
 }
 
+// MessageDispatcher returns the message dispatcher.
+func (a *ApplicationServer) MessageDispatcher() api.MessageDispatcher {
+	return a.mux.md
+}
+
 // Pruner returns the state pruner.
 func (a *ApplicationServer) Pruner() consensus.StatePruner {
 	return a.mux.state.statePruner
@@ -225,7 +230,7 @@ type abciMux struct {
 	// waiting for that transaction to become invalid.
 	invalidatedTxs sync.Map
 
-	md messageDispatcher
+	md *messageDispatcher
 }
 
 type invalidatedTxSubscription struct {
@@ -869,7 +874,6 @@ func (mux *abciMux) doRegister(app api.Application) error {
 	}
 	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
-	app.OnRegister(&mux.md)
 	mux.logger.Debug("Registered new application",
 		"app", app.Name(),
 	)
@@ -984,6 +988,7 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		state:        state,
 		appsByName:   make(map[string]api.Application),
 		appsByMethod: make(map[transaction.MethodName]api.Application),
+		md:           newMessageDispatcher(),
 	}
 
 	// Subscribe message handlers.

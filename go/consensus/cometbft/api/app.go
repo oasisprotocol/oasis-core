@@ -76,9 +76,8 @@ type Application interface {
 	// depends on.
 	Dependencies() []string
 
-	// OnRegister is the function that is called when the Application
-	// is registered with the multiplexer instance.
-	OnRegister(MessageDispatcher)
+	// Subscribe subscribes to messages from other applications.
+	Subscribe()
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -112,10 +111,6 @@ type Application interface {
 type Extension interface {
 	// Methods returns the list of supported methods.
 	Methods() []transaction.MethodName
-
-	// OnRegister is the function that is called when the Application
-	// is registered with the multiplexer instance.
-	OnRegister(MessageDispatcher)
 
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error

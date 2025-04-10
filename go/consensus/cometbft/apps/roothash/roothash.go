@@ -27,48 +27,64 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
+// Application is a roothash application.
 type Application struct {
 	state tmapi.ApplicationState
-	md    tmapi.MessageDispatcher
+	md    api.MessageDispatcher
 	ecn   tmapi.ExecutorCommitmentNotifier
 }
 
+// New constructs a new roothash application.
+func New(state api.ApplicationState, md tmapi.MessageDispatcher, ecn tmapi.ExecutorCommitmentNotifier) *Application {
+	return &Application{
+		state: state,
+		md:    md,
+		ecn:   ecn,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return roothash.Methods
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(md tmapi.MessageDispatcher) {
-	app.md = md
-
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 	// Subscribe to messages emitted by other apps.
-	md.Subscribe(registryApi.MessageNewRuntimeRegistered, app)
-	md.Subscribe(registryApi.MessageRuntimeUpdated, app)
-	md.Subscribe(registryApi.MessageRuntimeResumed, app)
-	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
-	md.Subscribe(schedulerApi.MessageBeforeSchedule, app)
-	md.Subscribe(governanceApi.MessageChangeParameters, app)
-	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
+	app.md.Subscribe(registryApi.MessageNewRuntimeRegistered, app)
+	app.md.Subscribe(registryApi.MessageRuntimeUpdated, app)
+	app.md.Subscribe(registryApi.MessageRuntimeResumed, app)
+	app.md.Subscribe(roothashApi.RuntimeMessageNoop, app)
+	app.md.Subscribe(schedulerApi.MessageBeforeSchedule, app)
+	app.md.Subscribe(governanceApi.MessageChangeParameters, app)
+	app.md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
@@ -224,6 +240,7 @@ func (app *Application) onCommitteeChanged(ctx *tmapi.Context, state *roothashSt
 	return nil
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, error) {
 	switch kind {
 	case registryApi.MessageNewRuntimeRegistered:
@@ -279,6 +296,7 @@ func (app *Application) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Run
 	return roothash.VerifyRuntimeParameters(rt, params)
 }
 
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
@@ -385,6 +403,7 @@ func (app *Application) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runti
 	return nil
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
 	if err := app.tryFinalizeRounds(ctx); err != nil {
 		return types.ResponseEndBlock{}, err
@@ -395,12 +414,4 @@ func (app *Application) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, er
 	}
 
 	return types.ResponseEndBlock{}, nil
-}
-
-// New constructs a new roothash application instance.
-func New(state api.ApplicationState, ecn tmapi.ExecutorCommitmentNotifier) *Application {
-	return &Application{
-		state: state,
-		ecn:   ecn,
-	}
 }

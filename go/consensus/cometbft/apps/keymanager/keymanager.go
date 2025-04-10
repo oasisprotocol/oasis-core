@@ -16,12 +16,28 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+// Application is a key manager application.
 type Application struct {
 	state tmapi.ApplicationState
 
 	exts         []tmapi.Extension
 	methods      []transaction.MethodName
 	extsByMethod map[transaction.MethodName]tmapi.Extension
+}
+
+// New constructs a new key manager application.
+func New(state api.ApplicationState) *Application {
+	app := Application{
+		state:        state,
+		exts:         make([]tmapi.Extension, 0),
+		methods:      make([]transaction.MethodName, 0),
+		extsByMethod: make(map[transaction.MethodName]tmapi.Extension),
+	}
+
+	app.registerExtensions(secrets.New(app.Name(), state))
+	app.registerExtensions(churp.New(app.Name(), state))
+
+	return &app
 }
 
 // Name implements api.Application.
@@ -49,11 +65,8 @@ func (app *Application) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-// OnRegister implements api.Application.
-func (app *Application) OnRegister(md tmapi.MessageDispatcher) {
-	for _, ext := range app.exts {
-		ext.OnRegister(md)
-	}
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 }
 
 // OnCleanup implements api.Application.
@@ -78,7 +91,7 @@ func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	return nil
 }
 
-// ExecuteMessage implements api.Application.
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(*tmapi.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("keymanager: unexpected message")
 }
@@ -169,19 +182,4 @@ func (app *Application) registerExtensions(exts ...tmapi.Extension) {
 		}
 		app.exts = append(app.exts, ext)
 	}
-}
-
-// New constructs a new keymanager application instance.
-func New(state api.ApplicationState) *Application {
-	app := Application{
-		state:        state,
-		exts:         make([]tmapi.Extension, 0),
-		methods:      make([]transaction.MethodName, 0),
-		extsByMethod: make(map[transaction.MethodName]tmapi.Extension),
-	}
-
-	app.registerExtensions(secrets.New(app.Name(), state))
-	app.registerExtensions(churp.New(app.Name(), state))
-
-	return &app
 }

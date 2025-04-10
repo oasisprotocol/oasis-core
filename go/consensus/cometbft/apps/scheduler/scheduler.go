@@ -42,41 +42,56 @@ var (
 	RNGContextRoleBackupWorker = []byte("Backup-Worker")
 )
 
+// Application is a scheduler application.
 type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
+// New constructs a new scheduler application.
+func New(state api.ApplicationState, md api.MessageDispatcher) *Application {
+	return &Application{
+		state: state,
+		md:    md,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return nil
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return true
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(md api.MessageDispatcher) {
-	app.md = md
-
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 	// Subscribe to messages emitted by other apps.
-	md.Subscribe(governanceApi.MessageChangeParameters, app)
-	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
+	app.md.Subscribe(governanceApi.MessageChangeParameters, app)
+	app.md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {}
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
@@ -249,6 +264,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case governanceApi.MessageValidateParameterChanges:
@@ -263,6 +279,7 @@ func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, er
 	}
 }
 
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("cometbft/scheduler: unexpected transaction")
 }
@@ -297,6 +314,7 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 	return updates
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
@@ -625,11 +643,4 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
 	})
 	return sorted
-}
-
-// New constructs a new scheduler application instance.
-func New(state api.ApplicationState) *Application {
-	return &Application{
-		state: state,
-	}
 }

@@ -31,10 +31,6 @@ func (ext *churpExt) Methods() []transaction.MethodName {
 	return churp.Methods
 }
 
-// OnRegister implements api.Extension.
-func (ext *churpExt) OnRegister(tmapi.MessageDispatcher) {
-}
-
 // ExecuteTx implements api.Extension.
 func (ext *churpExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	switch tx.Method {

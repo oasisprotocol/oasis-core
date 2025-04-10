@@ -7,17 +7,20 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 )
 
-var _ api.MessageDispatcher = (*messageDispatcher)(nil)
-
+// messageDispatcher dispatches messages to registered subscribers.
 type messageDispatcher struct {
 	subscriptions map[any][]api.MessageSubscriber
 }
 
+// newMessageDispatcher creates a new message dispatcher.
+func newMessageDispatcher() *messageDispatcher {
+	return &messageDispatcher{
+		subscriptions: make(map[any][]api.MessageSubscriber),
+	}
+}
+
 // Implements api.MessageDispatcher.
 func (md *messageDispatcher) Subscribe(kind any, ms api.MessageSubscriber) {
-	if md.subscriptions == nil {
-		md.subscriptions = make(map[any][]api.MessageSubscriber)
-	}
 	md.subscriptions[kind] = append(md.subscriptions[kind], ms)
 }
 

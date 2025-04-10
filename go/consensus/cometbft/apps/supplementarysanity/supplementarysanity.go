@@ -14,11 +14,7 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
-var (
-	logger = logging.GetLogger("supplementarysanity")
-
-	_ api.Application = (*Application)(nil)
-)
+var logger = logging.GetLogger("supplementarysanity")
 
 // Application is a non-normative mux app that performs additional checks on the consensus state.
 // It should not alter the CometBFT application state.
@@ -31,48 +27,68 @@ type Application struct {
 	checkHeight     int64
 }
 
+// New constructs a new supplementarysanity application.
+func New(state api.ApplicationState, interval int64) *Application {
+	return &Application{
+		state:    state,
+		interval: interval,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return nil
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *Application) OnRegister(api.MessageDispatcher) {
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("supplementarysanity: unexpected message")
 }
 
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("supplementarysanity: unexpected transaction")
 }
 
+// InitChain implements api.Application.
 func (app *Application) InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(*api.Context) error {
 	return nil
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, app.endBlockImpl(ctx)
 }
@@ -129,11 +145,4 @@ func (app *Application) endBlockImpl(ctx *api.Context) error {
 	}
 
 	return nil
-}
-
-func New(state api.ApplicationState, interval int64) *Application {
-	return &Application{
-		state:    state,
-		interval: interval,
-	}
 }

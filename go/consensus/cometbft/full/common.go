@@ -231,6 +231,7 @@ func (n *commonNode) initialize() error {
 
 	// Fetch the application state.
 	state := n.mux.State()
+	md := n.mux.MessageDispatcher()
 
 	// Initialize consensus backend querier.
 	n.querier = abci.NewQueryFactory(state)
@@ -275,13 +276,13 @@ func (n *commonNode) initialize() error {
 
 	// Register CometBFT applications.
 	beaconApp := beaconApp.New()
-	governanceApp := governanceApp.New(state)
+	governanceApp := governanceApp.New(state, md)
 	keymanagerApp := keymanagerApp.New(state)
-	registryApp := registryApp.New(state)
-	roothashApp := roothashApp.New(state, n.roothash)
-	schedulerApp := schedulerApp.New(state)
-	stakingApp := stakingApp.New(state)
-	vaultApp := vaultApp.New(state)
+	registryApp := registryApp.New(state, md)
+	roothashApp := roothashApp.New(state, md, n.roothash)
+	schedulerApp := schedulerApp.New(state, md)
+	stakingApp := stakingApp.New(state, md)
+	vaultApp := vaultApp.New(state, md)
 
 	apps := []api.Application{
 		beaconApp,
@@ -297,6 +298,7 @@ func (n *commonNode) initialize() error {
 		if err := n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register app: %w", err)
 		}
+		app.Subscribe()
 	}
 
 	// Enable supplementary sanity checks when enabled.

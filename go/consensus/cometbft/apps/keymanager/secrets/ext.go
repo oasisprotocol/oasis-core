@@ -31,10 +31,6 @@ func (ext *secretsExt) Methods() []transaction.MethodName {
 	return secrets.Methods
 }
 
-// OnRegister implements api.Extension.
-func (ext *secretsExt) OnRegister(_ tmapi.MessageDispatcher) {
-}
-
 // ExecuteTx implements api.Extension.
 func (ext *secretsExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := state.NewMutableState(ctx.State())

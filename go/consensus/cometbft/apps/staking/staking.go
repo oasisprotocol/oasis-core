@@ -19,43 +19,58 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+// Application is a staking application.
 type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
+// New constructs a new staking application.
+func New(state api.ApplicationState, md api.MessageDispatcher) *Application {
+	return &Application{
+		state: state,
+		md:    md,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return staking.Methods
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *Application) OnRegister(md api.MessageDispatcher) {
-	app.md = md
-
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 	// Subscribe to messages emitted by other apps.
-	md.Subscribe(roothashApi.RuntimeMessageStaking, app)
-	md.Subscribe(governanceApi.MessageChangeParameters, app)
-	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
+	app.md.Subscribe(roothashApi.RuntimeMessageStaking, app)
+	app.md.Subscribe(governanceApi.MessageChangeParameters, app)
+	app.md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -118,6 +133,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageStaking:
@@ -147,6 +163,7 @@ func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, er
 	}
 }
 
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := stakingState.NewMutableState(ctx.State())
 
@@ -211,6 +228,7 @@ func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction)
 	}
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	fees := stakingState.BlockFees(ctx)
 	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {
@@ -313,11 +331,4 @@ func (app *Application) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) 
 	}
 
 	return nil
-}
-
-// New constructs a new staking application instance.
-func New(state api.ApplicationState) *Application {
-	return &Application{
-		state: state,
-	}
 }
