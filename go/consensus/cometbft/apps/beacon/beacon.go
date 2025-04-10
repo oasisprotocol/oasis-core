@@ -16,46 +16,42 @@ import (
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 )
 
-var (
-	prodEntropyCtx = []byte("EkB-tmnt")
+var prodEntropyCtx = []byte("EkB-tmnt")
 
-	_ api.Application = (*beaconApplication)(nil)
-)
-
-type beaconApplication struct {
+type Application struct {
 	state api.ApplicationState
 
 	backend internalBackend
 }
 
-func (app *beaconApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *beaconApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *beaconApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return Methods
 }
 
-func (app *beaconApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *beaconApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *beaconApplication) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
 	app.state = state
 }
 
-func (app *beaconApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *beaconApplication) BeginBlock(ctx *api.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	state := beaconState.NewMutableState(ctx.State())
 
 	params, err := state.ConsensusParameters(ctx)
@@ -70,11 +66,11 @@ func (app *beaconApplication) BeginBlock(ctx *api.Context) error {
 	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
-func (app *beaconApplication) ExecuteMessage(*api.Context, any, any) (any, error) {
+func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
 	return nil, fmt.Errorf("beacon: unexpected message")
 }
 
-func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	if app.backend == nil {
 		// Executing a transaction before BeginBlock -- likely during transaction simulation or
 		// checks. Fail the transaction, it may be retried.
@@ -93,15 +89,15 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 	return app.backend.ExecuteTx(ctx, state, params, tx)
 }
 
-func (app *beaconApplication) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) doEmitEpochEvent(ctx *api.Context, epoch beacon.EpochTime) {
+func (app *Application) doEmitEpochEvent(ctx *api.Context, epoch beacon.EpochTime) {
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&beacon.EpochEvent{Epoch: epoch}))
 }
 
-func (app *beaconApplication) scheduleEpochTransitionBlock(
+func (app *Application) scheduleEpochTransitionBlock(
 	ctx *api.Context,
 	state *beaconState.MutableState,
 	nextEpoch beacon.EpochTime,
@@ -119,7 +115,7 @@ func (app *beaconApplication) scheduleEpochTransitionBlock(
 	return nil
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *api.Context, value []byte) error {
+func (app *Application) onNewBeacon(ctx *api.Context, value []byte) error {
 	state := beaconState.NewMutableState(ctx.State())
 
 	if err := state.SetBeacon(ctx, value); err != nil {
@@ -135,8 +131,8 @@ func (app *beaconApplication) onNewBeacon(ctx *api.Context, value []byte) error 
 }
 
 // New constructs a new beacon application instance.
-func New() api.Application {
-	return &beaconApplication{}
+func New() *Application {
+	return &Application{}
 }
 
 // insecureBlockEntropy returns insecure entropy based on deterministic block data.

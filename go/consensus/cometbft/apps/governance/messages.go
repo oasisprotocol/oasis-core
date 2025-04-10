@@ -10,7 +10,7 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-func (app *governanceApplication) completeStateSync(ctx *api.Context) (any, error) {
+func (app *Application) completeStateSync(ctx *api.Context) (any, error) {
 	// State sync has just completed, check whether there are any pending upgrades to make
 	// sure we don't miss them after the sync.
 	state := governanceState.NewMutableState(ctx.State())
@@ -36,7 +36,7 @@ func (app *governanceApplication) completeStateSync(ctx *api.Context) (any, erro
 	return nil, nil
 }
 
-func (app *governanceApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

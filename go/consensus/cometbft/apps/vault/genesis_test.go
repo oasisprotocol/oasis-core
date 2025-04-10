@@ -91,7 +91,7 @@ func TestInitChain(t *testing.T) {
 	defer ctx.Close()
 
 	state := vaultState.NewMutableState(ctx.State())
-	app := &vaultApplication{
+	app := &Application{
 		state: appState,
 	}
 

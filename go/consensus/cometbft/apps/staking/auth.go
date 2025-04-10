@@ -9,15 +9,15 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ api.TransactionAuthHandler = (*stakingApplication)(nil)
+var _ api.TransactionAuthHandler = (*Application)(nil)
 
 // Implements api.TransactionAuthHandler.
-func (app *stakingApplication) AuthenticateTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) AuthenticateTx(ctx *api.Context, tx *transaction.Transaction) error {
 	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee)
 }
 
 // Implements api.TransactionAuthHandler.
-func (app *stakingApplication) PostExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) PostExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	if !ctx.IsCheckOnly() {
 		// Do not do anything outside CheckTx.
 		return nil

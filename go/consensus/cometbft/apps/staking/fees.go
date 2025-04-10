@@ -13,7 +13,7 @@ import (
 // disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares of the fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFeesP(
+func (app *Application) disburseFeesP(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
 	proposerEntity *signature.PublicKey,
@@ -111,7 +111,7 @@ func (app *stakingApplication) disburseFeesP(
 // disburseFeesVQ disburses persisted fees to the voters and next proposer.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFeesVQ(
+func (app *Application) disburseFeesVQ(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
 	proposerEntity *signature.PublicKey,

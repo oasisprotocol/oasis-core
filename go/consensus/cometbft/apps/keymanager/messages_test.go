@@ -22,7 +22,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := secretsState.NewMutableState(ctx.State())
-	app := &keymanagerApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &secrets.ConsensusParameters{

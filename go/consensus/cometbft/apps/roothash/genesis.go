@@ -15,7 +15,7 @@ import (
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
-func (app *rootHashApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesisAPI.Document) error {
+func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesisAPI.Document) error {
 	st := doc.RootHash
 
 	state := roothashState.NewMutableState(ctx.State())

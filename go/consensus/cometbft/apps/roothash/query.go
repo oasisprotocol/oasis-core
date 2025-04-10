@@ -89,7 +89,7 @@ func (q *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.Co
 	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *rootHashApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

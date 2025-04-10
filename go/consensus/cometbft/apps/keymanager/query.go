@@ -46,7 +46,7 @@ func (q *keymanagerQuerier) Churp() churp.Query {
 	return churp.NewQuery(q.churpState)
 }
 
-func (app *keymanagerApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

@@ -12,7 +12,7 @@ import (
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 )
 
-func (app *governanceApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
+func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.Governance
 
 	epoch, err := app.state.GetCurrentEpoch(ctx)

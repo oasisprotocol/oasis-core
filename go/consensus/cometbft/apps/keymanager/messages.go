@@ -11,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
-func (app *keymanagerApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

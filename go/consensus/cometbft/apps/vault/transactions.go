@@ -10,7 +10,7 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-func (app *vaultApplication) create(ctx *api.Context, create *vault.Create) error {
+func (app *Application) create(ctx *api.Context, create *vault.Create) error {
 	state := vaultState.NewMutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
@@ -64,7 +64,7 @@ func (app *vaultApplication) create(ctx *api.Context, create *vault.Create) erro
 	return nil
 }
 
-func (app *vaultApplication) authorizeAction(ctx *api.Context, authAction *vault.AuthorizeAction) error {
+func (app *Application) authorizeAction(ctx *api.Context, authAction *vault.AuthorizeAction) error {
 	state := vaultState.NewMutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
@@ -190,7 +190,7 @@ func (app *vaultApplication) authorizeAction(ctx *api.Context, authAction *vault
 	return nil
 }
 
-func (app *vaultApplication) cancelAction(ctx *api.Context, cancelAction *vault.CancelAction) error {
+func (app *Application) cancelAction(ctx *api.Context, cancelAction *vault.CancelAction) error {
 	// Validate arguments.
 	if err := cancelAction.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", vault.ErrInvalidArgument, err)

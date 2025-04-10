@@ -24,34 +24,32 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-var _ api.Application = (*governanceApplication)(nil)
-
-type governanceApplication struct {
+type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
-func (app *governanceApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *governanceApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *governanceApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return governance.Methods
 }
 
-func (app *governanceApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *governanceApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{registryapp.AppName, schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *governanceApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -62,10 +60,10 @@ func (app *governanceApplication) OnRegister(state api.ApplicationState, md api.
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *governanceApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := governanceState.NewMutableState(ctx.State())
 
 	ctx.Logger().Debug("executing governance tx",
@@ -99,7 +97,7 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 	}
 }
 
-func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageGovernance:
 		m := msg.(*message.GovernanceMessage)
@@ -127,7 +125,7 @@ func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg any
 	}
 }
 
-func (app *governanceApplication) BeginBlock(ctx *api.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if epoch has changed.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if !epochChanged {
@@ -209,7 +207,7 @@ func (app *governanceApplication) BeginBlock(ctx *api.Context) error {
 // executeProposal executed the proposal.
 //
 // The method modifies the passed proposal.
-func (app *governanceApplication) executeProposal(ctx *api.Context, state *governanceState.MutableState, proposal *governance.Proposal) error {
+func (app *Application) executeProposal(ctx *api.Context, state *governanceState.MutableState, proposal *governance.Proposal) error {
 	// If proposal execution fails, the proposal's state is changed to StateFailed.
 	proposal.State = governance.StateFailed
 
@@ -355,7 +353,7 @@ func validatorsEscrow(
 // closeProposal closes an active proposal.
 //
 // This method modifies the passed proposal.
-func (app *governanceApplication) closeProposal(
+func (app *Application) closeProposal(
 	ctx *api.Context,
 	state *governanceState.MutableState,
 	stakingState *stakingState.ImmutableState,
@@ -498,7 +496,7 @@ func subShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote g
 	return nil
 }
 
-func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	// Check if epoch has changed.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if !epochChanged {
@@ -639,6 +637,6 @@ func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndB
 }
 
 // New constructs a new governance application instance.
-func New() api.Application {
-	return &governanceApplication{}
+func New() *Application {
+	return &Application{}
 }

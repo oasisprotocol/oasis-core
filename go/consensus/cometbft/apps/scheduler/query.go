@@ -63,7 +63,7 @@ func (q *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler.
 	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *schedulerApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

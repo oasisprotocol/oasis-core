@@ -90,7 +90,7 @@ func TestElectCommittee(t *testing.T) {
 	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
 
-	app := &schedulerApplication{
+	app := &Application{
 		state: appState,
 	}
 

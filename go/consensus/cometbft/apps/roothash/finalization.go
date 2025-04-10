@@ -18,7 +18,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *rootHashApplication) tryFinalizeRounds(
+func (app *Application) tryFinalizeRounds(
 	ctx *tmapi.Context,
 ) error {
 	for _, runtimeID := range roothashApi.RuntimesToFinalize(ctx) {
@@ -33,7 +33,7 @@ func (app *rootHashApplication) tryFinalizeRounds(
 	return nil
 }
 
-func (app *rootHashApplication) tryFinalizeRound(
+func (app *Application) tryFinalizeRound(
 	ctx *tmapi.Context,
 	runtimeID common.Namespace,
 	timeout bool,
@@ -64,7 +64,7 @@ func (app *rootHashApplication) tryFinalizeRound(
 	return nil
 }
 
-func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
+func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	timeout bool,
@@ -279,7 +279,7 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	return app.finalizeBlock(ctx, rtState, block.Normal, &sc.Commitment.Header.Header)
 }
 
-func (app *rootHashApplication) finalizeBlock(ctx *tmapi.Context, rtState *roothash.RuntimeState, hdrType block.HeaderType, hdr *commitment.ComputeResultsHeader) error {
+func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.RuntimeState, hdrType block.HeaderType, hdr *commitment.ComputeResultsHeader) error {
 	// Generate a new block.
 	blk := block.NewEmptyBlock(rtState.LastBlock, uint64(ctx.Now().Unix()), hdrType)
 
@@ -331,7 +331,7 @@ func (app *rootHashApplication) finalizeBlock(ctx *tmapi.Context, rtState *rooth
 	return rearmRoundTimeout(ctx, rtState.Runtime.ID, blk.Header.Round, prevTimeout, rtState.NextTimeout)
 }
 
-func (app *rootHashApplication) failRound(
+func (app *Application) failRound(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	err error,

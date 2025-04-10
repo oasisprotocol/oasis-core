@@ -18,7 +18,7 @@ import (
 
 // getRuntimeState fetches the current runtime state and performs common
 // processing and error handling.
-func (app *rootHashApplication) getRuntimeState(
+func (app *Application) getRuntimeState(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
@@ -41,7 +41,7 @@ func (app *rootHashApplication) getRuntimeState(
 	return rtState, nil
 }
 
-func (app *rootHashApplication) executorCommit(
+func (app *Application) executorCommit(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	cc *roothash.ExecutorCommit,
@@ -173,7 +173,7 @@ func (app *rootHashApplication) executorCommit(
 	return nil
 }
 
-func (app *rootHashApplication) submitEvidence(
+func (app *Application) submitEvidence(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	evidence *roothash.Evidence,
@@ -292,7 +292,7 @@ func (app *rootHashApplication) submitEvidence(
 	return nil
 }
 
-func (app *rootHashApplication) submitMsg(
+func (app *Application) submitMsg(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	msg *roothash.SubmitMsg,

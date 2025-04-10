@@ -20,7 +20,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := registryState.NewMutableState(ctx.State())
-	app := &registryApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &registry.ConsensusParameters{

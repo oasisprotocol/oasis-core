@@ -13,7 +13,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) resolveEntityIDFromProposer(
+func (app *Application) resolveEntityIDFromProposer(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
 ) (*signature.PublicKey, error) {
@@ -33,7 +33,7 @@ func (app *stakingApplication) resolveEntityIDFromProposer(
 	return &proposerNode.EntityID, nil
 }
 
-func (app *stakingApplication) rewardBlockProposing(
+func (app *Application) rewardBlockProposing(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
 	proposingEntity *signature.PublicKey,

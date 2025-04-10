@@ -44,7 +44,7 @@ func TestSubmitProposal(t *testing.T) {
 
 	// Setup governance state.
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -305,7 +305,7 @@ func TestCastVote(t *testing.T) {
 
 	// Setup governance state.
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &governance.ConsensusParameters{

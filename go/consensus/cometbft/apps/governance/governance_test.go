@@ -216,7 +216,7 @@ func TestCloseProposal(t *testing.T) {
 
 	// Setup governance state.
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -472,7 +472,7 @@ func TestExecuteProposal(t *testing.T) {
 
 	// Setup governance state.
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 	// Consensus parameters.
@@ -630,7 +630,7 @@ func TestBeginBlock(t *testing.T) {
 	defer ctx.Close()
 	state := governanceState.NewMutableState(ctx.State())
 
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -743,7 +743,7 @@ func TestEndBlock(t *testing.T) {
 	defer ctx.Close()
 	state := governanceState.NewMutableState(ctx.State())
 
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 

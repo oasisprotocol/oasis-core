@@ -34,8 +34,6 @@ import (
 )
 
 var (
-	_ api.Application = (*schedulerApplication)(nil)
-
 	RNGContextExecutor   = []byte("EkS-ABCI-Compute")
 	RNGContextValidators = []byte("EkS-ABCI-Validators")
 	RNGContextEntities   = []byte("EkS-ABCI-Entities")
@@ -44,32 +42,32 @@ var (
 	RNGContextRoleBackupWorker = []byte("Backup-Worker")
 )
 
-type schedulerApplication struct {
+type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
-func (app *schedulerApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *schedulerApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *schedulerApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return nil
 }
 
-func (app *schedulerApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return true
 }
 
-func (app *schedulerApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -78,9 +76,9 @@ func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.M
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *schedulerApplication) OnCleanup() {}
+func (app *Application) OnCleanup() {}
 
-func (app *schedulerApplication) BeginBlock(ctx *api.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
@@ -252,7 +250,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
-func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case governanceApi.MessageValidateParameterChanges:
 		// A change parameters proposal is about to be submitted. Validate changes.
@@ -266,7 +264,7 @@ func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg any)
 	}
 }
 
-func (app *schedulerApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {
+func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("cometbft/scheduler: unexpected transaction")
 }
 
@@ -300,7 +298,7 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 	return updates
 }
 
-func (app *schedulerApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
 	state := schedulerState.NewMutableState(ctx.State())
@@ -338,7 +336,7 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context) (types.ResponseEndBl
 	return resp, nil
 }
 
-func (app *schedulerApplication) isSuitableExecutorWorker(
+func (app *Application) isSuitableExecutorWorker(
 	ctx *api.Context,
 	n *nodeWithStatus,
 	rt *registry.Runtime,
@@ -410,7 +408,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAllCommittees(
+func (app *Application) electAllCommittees(
 	ctx *api.Context,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
@@ -443,7 +441,7 @@ func (app *schedulerApplication) electAllCommittees(
 	return nil
 }
 
-func (app *schedulerApplication) electValidators(
+func (app *Application) electValidators(
 	ctx *api.Context,
 	appState api.ApplicationQueryState,
 	beaconState *beaconState.MutableState,
@@ -631,6 +629,6 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 }
 
 // New constructs a new scheduler application instance.
-func New() api.Application {
-	return &schedulerApplication{}
+func New() *Application {
+	return &Application{}
 }

@@ -26,35 +26,33 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-var _ tmapi.Application = (*rootHashApplication)(nil)
-
-type rootHashApplication struct {
+type Application struct {
 	state tmapi.ApplicationState
 	md    tmapi.MessageDispatcher
 	ecn   tmapi.ExecutorCommitmentNotifier
 }
 
-func (app *rootHashApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *rootHashApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *rootHashApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return roothash.Methods
 }
 
-func (app *rootHashApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *rootHashApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
+func (app *Application) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -68,10 +66,10 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *rootHashApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context) error {
+func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
 	// Check if there was an epoch transition.
@@ -87,7 +85,7 @@ func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context) error {
 	return nil
 }
 
-func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
+func (app *Application) onCommitteeChanged(ctx *tmapi.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
 	schedState := schedulerState.NewMutableState(ctx.State())
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes(ctx)
@@ -226,7 +224,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 	return nil
 }
 
-func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, error) {
 	switch kind {
 	case registryApi.MessageNewRuntimeRegistered:
 		// A new runtime has been registered.
@@ -270,7 +268,7 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg any
 	}
 }
 
-func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Runtime) error {
+func (app *Application) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Runtime) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	params, err := state.ConsensusParameters(ctx)
@@ -281,7 +279,7 @@ func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *regi
 	return roothash.VerifyRuntimeParameters(rt, params)
 }
 
-func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	ctx.SetPriority(AppPriority)
@@ -313,7 +311,7 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 	}
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
+func (app *Application) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
 	if !runtime.IsCompute() {
 		ctx.Logger().Debug("onNewRuntime: ignoring non-compute runtime",
 			"runtime", runtime,
@@ -387,7 +385,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	return nil
 }
 
-func (app *rootHashApplication) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
 	if err := app.tryFinalizeRounds(ctx); err != nil {
 		return types.ResponseEndBlock{}, err
 	}
@@ -400,8 +398,8 @@ func (app *rootHashApplication) EndBlock(ctx *tmapi.Context) (types.ResponseEndB
 }
 
 // New constructs a new roothash application instance.
-func New(ecn tmapi.ExecutorCommitmentNotifier) tmapi.Application {
-	return &rootHashApplication{
+func New(ecn tmapi.ExecutorCommitmentNotifier) *Application {
+	return &Application{
 		ecn: ecn,
 	}
 }

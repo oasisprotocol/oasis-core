@@ -8,7 +8,7 @@ import (
 
 // executeAction executes a given action in the context of a vault. Assumes the action has already
 // been validated before execution.
-func (app *vaultApplication) executeAction(ctx *api.Context, vlt *vault.Vault, action *vault.Action) error {
+func (app *Application) executeAction(ctx *api.Context, vlt *vault.Vault, action *vault.Action) error {
 	switch {
 	case action.Suspend != nil:
 		// Suspend a vault.

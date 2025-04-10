@@ -16,7 +16,7 @@ const (
 	backupWorkerTimeoutFactorDenominator = 10
 )
 
-func (app *rootHashApplication) processRoundTimeouts(ctx *tmapi.Context) error {
+func (app *Application) processRoundTimeouts(ctx *tmapi.Context) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	roundTimeouts, err := state.RuntimesWithRoundTimeouts(ctx, ctx.BlockHeight()+1) // Current height is ctx.BlockHeight() + 1
@@ -33,7 +33,7 @@ func (app *rootHashApplication) processRoundTimeouts(ctx *tmapi.Context) error {
 	return nil
 }
 
-func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace) error {
+func (app *Application) processRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace) error {
 	ctx.Logger().Warn("round timeout expired, forcing finalization",
 		"runtime_id", runtimeID,
 		logging.LogEvent, roothash.LogEventTimerFired,

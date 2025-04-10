@@ -29,7 +29,7 @@ func TestCreate(t *testing.T) {
 	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
-	app := &vaultApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -222,7 +222,7 @@ func TestAuthorizeCancelAction(t *testing.T) {
 	defer ctx.Close()
 
 	md := &testMsgDispatcher{}
-	app := &vaultApplication{
+	app := &Application{
 		state: appState,
 		md:    md,
 	}

@@ -59,7 +59,7 @@ func (q *vaultQuerier) ConsensusParameters(ctx context.Context) (*vault.Consensu
 	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *vaultApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

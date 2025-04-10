@@ -13,7 +13,7 @@ import (
 )
 
 type backendInsecure struct {
-	app *beaconApplication
+	app *Application
 }
 
 func (impl *backendInsecure) OnInitChain(

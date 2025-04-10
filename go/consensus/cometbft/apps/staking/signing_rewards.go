@@ -10,7 +10,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) updateEpochSigning(
+func (app *Application) updateEpochSigning(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
 	signingEntities []signature.PublicKey,
@@ -31,7 +31,7 @@ func (app *stakingApplication) updateEpochSigning(
 	return nil
 }
 
-func (app *stakingApplication) rewardEpochSigning(ctx *abciAPI.Context, time beacon.EpochTime) error {
+func (app *Application) rewardEpochSigning(ctx *abciAPI.Context, time beacon.EpochTime) error {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	params, err := stakeState.ConsensusParameters(ctx)

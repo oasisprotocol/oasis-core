@@ -13,7 +13,7 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-func (app *vaultApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
+func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.Vault
 	if st == nil {
 		return nil

@@ -13,31 +13,25 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-var (
-	_ api.Application                = (*vaultApplication)(nil)
-	_ api.TogglableApplication       = (*vaultApplication)(nil)
-	_ api.TogglableMessageSubscriber = (*vaultApplication)(nil)
-)
-
-type vaultApplication struct {
+type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
-func (app *vaultApplication) Name() string {
+func (app *Application) Name() string {
 	return AppName
 }
 
-func (app *vaultApplication) ID() uint8 {
+func (app *Application) ID() uint8 {
 	return AppID
 }
 
-func (app *vaultApplication) Methods() []transaction.MethodName {
+func (app *Application) Methods() []transaction.MethodName {
 	return vault.Methods
 }
 
 // Enabled implements api.TogglableApplication and api.TogglableMessageSubscriber.
-func (app *vaultApplication) Enabled(ctx *api.Context) (bool, error) {
+func (app *Application) Enabled(ctx *api.Context) (bool, error) {
 	state := vaultState.NewImmutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
@@ -46,15 +40,15 @@ func (app *vaultApplication) Enabled(ctx *api.Context) (bool, error) {
 	return params.Enabled, nil
 }
 
-func (app *vaultApplication) Blessed() bool {
+func (app *Application) Blessed() bool {
 	return false
 }
 
-func (app *vaultApplication) Dependencies() []string {
+func (app *Application) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *vaultApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
 
@@ -64,10 +58,10 @@ func (app *vaultApplication) OnRegister(state api.ApplicationState, md api.Messa
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
-func (app *vaultApplication) OnCleanup() {
+func (app *Application) OnCleanup() {
 }
 
-func (app *vaultApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	ctx.SetPriority(AppPriority)
 
 	switch tx.Method {
@@ -94,7 +88,7 @@ func (app *vaultApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transac
 	}
 }
 
-func (app *vaultApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case stakingApi.MessageAccountHook:
 		// Account hook invocation.
@@ -111,15 +105,15 @@ func (app *vaultApplication) ExecuteMessage(ctx *api.Context, kind, msg any) (an
 	}
 }
 
-func (app *vaultApplication) BeginBlock(_ *api.Context) error {
+func (app *Application) BeginBlock(_ *api.Context) error {
 	return nil
 }
 
-func (app *vaultApplication) EndBlock(_ *api.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(_ *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
 // New constructs a new vault application instance.
-func New() api.Application {
-	return &vaultApplication{}
+func New() *Application {
+	return &Application{}
 }

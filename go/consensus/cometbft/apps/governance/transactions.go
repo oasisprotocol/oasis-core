@@ -17,7 +17,7 @@ import (
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-func (app *governanceApplication) submitProposal(
+func (app *Application) submitProposal(
 	ctx *api.Context,
 	state *governanceState.MutableState,
 	proposalContent *governance.ProposalContent,
@@ -215,7 +215,7 @@ func (app *governanceApplication) submitProposal(
 	return proposal, nil
 }
 
-func (app *governanceApplication) castVote(
+func (app *Application) castVote(
 	ctx *api.Context,
 	state *governanceState.MutableState,
 	proposalVote *governance.ProposalVote,

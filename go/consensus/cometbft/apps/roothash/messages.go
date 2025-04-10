@@ -53,7 +53,7 @@ func verifyRuntimeMessages(
 	return nil
 }
 
-func (app *rootHashApplication) removeRuntimeMessages(
+func (app *Application) removeRuntimeMessages(
 	ctx *tmapi.Context,
 	state *roothashState.MutableState,
 	runtimeID common.Namespace,
@@ -103,7 +103,7 @@ func (app *rootHashApplication) removeRuntimeMessages(
 	return nil
 }
 
-func (app *rootHashApplication) processRuntimeMessages(
+func (app *Application) processRuntimeMessages(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	msgs []message.Message,
@@ -168,7 +168,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 	return events, nil
 }
 
-func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg any) (any, error) {
+func (app *Application) doBeforeSchedule(ctx *tmapi.Context, msg any) (any, error) {
 	epoch := msg.(beacon.EpochTime)
 
 	ctx.Logger().Debug("processing liveness statistics before scheduling",
@@ -195,7 +195,7 @@ func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg any) (a
 	return nil, nil
 }
 
-func (app *rootHashApplication) changeParameters(ctx *tmapi.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *tmapi.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

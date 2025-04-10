@@ -305,7 +305,7 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Configure the staking application as a fee handler.
-	if err := n.parentNode.SetTransactionAuthHandler(stakingApp.(api.TransactionAuthHandler)); err != nil {
+	if err := n.parentNode.SetTransactionAuthHandler(stakingApp); err != nil {
 		return err
 	}
 

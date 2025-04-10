@@ -19,7 +19,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
+func (app *Application) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	var err error
 	state := schedulerState.NewMutableState(ctx.State())
 	if err = state.SetConsensusParameters(ctx, &doc.Scheduler.Parameters); err != nil {

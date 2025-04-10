@@ -13,7 +13,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) initParameters(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *Application) initParameters(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	if err := st.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("cometbft/staking: sanity check failed: %w", err)
 	}
@@ -24,7 +24,7 @@ func (app *stakingApplication) initParameters(ctx *abciAPI.Context, state *staki
 	return nil
 }
 
-func (app *stakingApplication) initCommonPool(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *Application) initCommonPool(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.CommonPool.IsValid() {
 		return fmt.Errorf("cometbft/staking: invalid genesis state CommonPool")
 	}
@@ -38,7 +38,7 @@ func (app *stakingApplication) initCommonPool(ctx *abciAPI.Context, st *staking.
 	return nil
 }
 
-func (app *stakingApplication) initLastBlockFees(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *Application) initLastBlockFees(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.LastBlockFees.IsValid() {
 		return fmt.Errorf("cometbft/staking: invalid genesis state LastBlockFees")
 	}
@@ -63,7 +63,7 @@ func (app *stakingApplication) initLastBlockFees(ctx *abciAPI.Context, st *staki
 	return nil
 }
 
-func (app *stakingApplication) initGovernanceDeposits(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *Application) initGovernanceDeposits(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.GovernanceDeposits.IsValid() {
 		return fmt.Errorf("cometbft/staking: invalid genesis state GovernanceDeposits")
 	}
@@ -80,7 +80,7 @@ func (app *stakingApplication) initGovernanceDeposits(ctx *abciAPI.Context, stat
 	return nil
 }
 
-func (app *stakingApplication) initLedger(
+func (app *Application) initLedger(
 	ctx *abciAPI.Context,
 	state *stakingState.MutableState,
 	st *staking.Genesis,
@@ -150,7 +150,7 @@ func (app *stakingApplication) initLedger(
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(
+func (app *Application) initTotalSupply(
 	ctx *abciAPI.Context,
 	state *stakingState.MutableState,
 	st *staking.Genesis,
@@ -174,7 +174,7 @@ func (app *stakingApplication) initTotalSupply(
 	return nil
 }
 
-func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *Application) initDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowAddr, delegations := range st.Delegations {
 		if !escrowAddr.IsValid() {
 			return fmt.Errorf("cometbft/staking: failed to set genesis delegations to %s: address is invalid",
@@ -227,7 +227,7 @@ func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stak
 	return nil
 }
 
-func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *Application) initDebondingDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowAddr, delegators := range st.DebondingDelegations {
 		if !escrowAddr.IsValid() {
 			return fmt.Errorf("cometbft/staking: failed to set genesis debonding delegations to %s: address is invalid",
@@ -286,7 +286,7 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, st
 }
 
 // InitChain initializes the chain from genesis.
-func (app *stakingApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
+func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
 
 	var (

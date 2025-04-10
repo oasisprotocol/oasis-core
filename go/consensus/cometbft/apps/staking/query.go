@@ -192,7 +192,7 @@ func (q *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.Cons
 	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *stakingApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

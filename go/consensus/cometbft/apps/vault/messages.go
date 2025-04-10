@@ -12,7 +12,7 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-func (app *vaultApplication) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
+func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {
@@ -56,7 +56,7 @@ func (app *vaultApplication) changeParameters(ctx *api.Context, msg any, apply b
 }
 
 // invokeAccountHook processes an account hook invocation.
-func (app *vaultApplication) invokeAccountHook(ctx *api.Context, msg any) (any, error) {
+func (app *Application) invokeAccountHook(ctx *api.Context, msg any) (any, error) {
 	ahi, ok := msg.(stakingApi.AccountHookInvocation)
 	if !ok {
 		return nil, nil

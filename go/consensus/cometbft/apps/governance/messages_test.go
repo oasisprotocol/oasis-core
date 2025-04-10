@@ -20,7 +20,7 @@ func TestChangeParameters(t *testing.T) {
 
 	// Setup state.
 	state := governanceState.NewMutableState(ctx.State())
-	app := &governanceApplication{
+	app := &Application{
 		state: appState,
 	}
 	params := &governance.ConsensusParameters{

@@ -58,7 +58,7 @@ func (q *beaconQuerier) VRFState(ctx context.Context) (*beacon.VRFState, error) 
 	return q.state.VRFState(ctx)
 }
 
-func (app *beaconApplication) QueryFactory() any {
+func (app *Application) QueryFactory() any {
 	return &QueryFactory{app.state}
 }
 

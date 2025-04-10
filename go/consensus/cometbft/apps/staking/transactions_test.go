@@ -76,7 +76,7 @@ func TestReservedAddresses(t *testing.T) {
 	})
 	require.NoError(err, "setting staking consensus parameters should not error")
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -130,7 +130,7 @@ func TestAllow(t *testing.T) {
 
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -322,7 +322,7 @@ func TestWithdraw(t *testing.T) {
 
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -638,7 +638,7 @@ func TestAddEscrow(t *testing.T) {
 
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -772,7 +772,7 @@ func TestAllowEscrowMessages(t *testing.T) {
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
@@ -864,7 +864,7 @@ func TestTransfer(t *testing.T) {
 
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -976,7 +976,7 @@ func TestBurn(t *testing.T) {
 
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
@@ -1075,7 +1075,7 @@ func TestAmendCommissionSchedule(t *testing.T) {
 	})
 	require.NoError(err, "setting staking consensus parameters should not error")
 
-	app := &stakingApplication{
+	app := &Application{
 		state: appState,
 	}
 
