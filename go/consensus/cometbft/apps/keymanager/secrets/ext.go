@@ -19,9 +19,10 @@ type secretsExt struct {
 }
 
 // New creates a new master and ephemeral secrets extension for the key manager application.
-func New(appName string) tmapi.Extension {
+func New(appName string, state tmapi.ApplicationState) tmapi.Extension {
 	return &secretsExt{
 		appName: appName,
+		state:   state,
 	}
 }
 
@@ -31,8 +32,7 @@ func (ext *secretsExt) Methods() []transaction.MethodName {
 }
 
 // OnRegister implements api.Extension.
-func (ext *secretsExt) OnRegister(state tmapi.ApplicationState, _ tmapi.MessageDispatcher) {
-	ext.state = state
+func (ext *secretsExt) OnRegister(_ tmapi.MessageDispatcher) {
 }
 
 // ExecuteTx implements api.Extension.

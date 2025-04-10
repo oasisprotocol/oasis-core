@@ -6,6 +6,7 @@ import (
 	"github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	api "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
@@ -49,11 +50,9 @@ func (app *Application) Dependencies() []string {
 }
 
 // OnRegister implements api.Application.
-func (app *Application) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
-	app.state = state
-
+func (app *Application) OnRegister(md tmapi.MessageDispatcher) {
 	for _, ext := range app.exts {
-		ext.OnRegister(state, md)
+		ext.OnRegister(md)
 	}
 }
 
@@ -173,15 +172,16 @@ func (app *Application) registerExtensions(exts ...tmapi.Extension) {
 }
 
 // New constructs a new keymanager application instance.
-func New() *Application {
+func New(state api.ApplicationState) *Application {
 	app := Application{
+		state:        state,
 		exts:         make([]tmapi.Extension, 0),
 		methods:      make([]transaction.MethodName, 0),
 		extsByMethod: make(map[transaction.MethodName]tmapi.Extension),
 	}
 
-	app.registerExtensions(secrets.New(app.Name()))
-	app.registerExtensions(churp.New(app.Name()))
+	app.registerExtensions(secrets.New(app.Name(), state))
+	app.registerExtensions(churp.New(app.Name(), state))
 
 	return &app
 }

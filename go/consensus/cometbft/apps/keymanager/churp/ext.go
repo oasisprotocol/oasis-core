@@ -19,9 +19,10 @@ type churpExt struct {
 }
 
 // New creates a new CHRUP extension for the key manager application.
-func New(appName string) tmapi.Extension {
+func New(appName string, state tmapi.ApplicationState) tmapi.Extension {
 	return &churpExt{
 		appName: appName,
+		state:   state,
 	}
 }
 
@@ -31,8 +32,7 @@ func (ext *churpExt) Methods() []transaction.MethodName {
 }
 
 // OnRegister implements api.Extension.
-func (ext *churpExt) OnRegister(state tmapi.ApplicationState, _ tmapi.MessageDispatcher) {
-	ext.state = state
+func (ext *churpExt) OnRegister(tmapi.MessageDispatcher) {
 }
 
 // ExecuteTx implements api.Extension.

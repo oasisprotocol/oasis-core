@@ -67,8 +67,7 @@ func (app *Application) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(md api.MessageDispatcher) {
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
@@ -629,6 +628,8 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 }
 
 // New constructs a new scheduler application instance.
-func New() *Application {
-	return &Application{}
+func New(state api.ApplicationState) *Application {
+	return &Application{
+		state: state,
+	}
 }

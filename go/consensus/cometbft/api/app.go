@@ -78,7 +78,7 @@ type Application interface {
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(ApplicationState, MessageDispatcher)
+	OnRegister(MessageDispatcher)
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -115,7 +115,7 @@ type Extension interface {
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(ApplicationState, MessageDispatcher)
+	OnRegister(MessageDispatcher)
 
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error

@@ -19,8 +19,6 @@ import (
 var prodEntropyCtx = []byte("EkB-tmnt")
 
 type Application struct {
-	state api.ApplicationState
-
 	backend internalBackend
 }
 
@@ -44,8 +42,7 @@ func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(api.MessageDispatcher) {
 }
 
 func (app *Application) OnCleanup() {

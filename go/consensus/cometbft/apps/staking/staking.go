@@ -44,8 +44,7 @@ func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(md api.MessageDispatcher) {
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
@@ -317,6 +316,8 @@ func (app *Application) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) 
 }
 
 // New constructs a new staking application instance.
-func New() *Application {
-	return &Application{}
+func New(state api.ApplicationState) *Application {
+	return &Application{
+		state: state,
+	}
 }

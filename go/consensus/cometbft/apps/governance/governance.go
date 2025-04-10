@@ -49,8 +49,7 @@ func (app *Application) Dependencies() []string {
 	return []string{registryapp.AppName, schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(md api.MessageDispatcher) {
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
@@ -637,6 +636,8 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 }
 
 // New constructs a new governance application instance.
-func New() *Application {
-	return &Application{}
+func New(state api.ApplicationState) *Application {
+	return &Application{
+		state: state,
+	}
 }

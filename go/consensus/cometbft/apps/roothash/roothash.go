@@ -9,6 +9,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/api"
@@ -52,8 +53,7 @@ func (app *Application) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(md tmapi.MessageDispatcher) {
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
@@ -398,8 +398,9 @@ func (app *Application) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, er
 }
 
 // New constructs a new roothash application instance.
-func New(ecn tmapi.ExecutorCommitmentNotifier) *Application {
+func New(state api.ApplicationState, ecn tmapi.ExecutorCommitmentNotifier) *Application {
 	return &Application{
-		ecn: ecn,
+		state: state,
+		ecn:   ecn,
 	}
 }

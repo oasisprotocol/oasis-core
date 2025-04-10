@@ -51,8 +51,7 @@ func (app *Application) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(api.MessageDispatcher) {
 }
 
 func (app *Application) OnCleanup() {
@@ -132,8 +131,9 @@ func (app *Application) endBlockImpl(ctx *api.Context) error {
 	return nil
 }
 
-func New(interval uint64) *Application {
+func New(state api.ApplicationState, interval int64) *Application {
 	return &Application{
-		interval: int64(interval),
+		state:    state,
+		interval: interval,
 	}
 }

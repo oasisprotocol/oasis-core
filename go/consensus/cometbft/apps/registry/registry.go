@@ -48,8 +48,7 @@ func (app *Application) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
+func (app *Application) OnRegister(md api.MessageDispatcher) {
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
@@ -258,6 +257,8 @@ func (app *Application) onRegistryEpochChanged(ctx *api.Context, registryEpoch b
 }
 
 // New constructs a new registry application instance.
-func New() *Application {
-	return &Application{}
+func New(state api.ApplicationState) *Application {
+	return &Application{
+		state: state,
+	}
 }

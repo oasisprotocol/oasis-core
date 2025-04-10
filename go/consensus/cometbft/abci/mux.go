@@ -179,7 +179,7 @@ func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transact
 }
 
 // State returns the application state.
-func (a *ApplicationServer) State() api.ApplicationQueryState {
+func (a *ApplicationServer) State() api.ApplicationState {
 	return a.mux.state
 }
 
@@ -869,7 +869,7 @@ func (mux *abciMux) doRegister(app api.Application) error {
 	}
 	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
-	app.OnRegister(mux.state, &mux.md)
+	app.OnRegister(&mux.md)
 	mux.logger.Debug("Registered new application",
 		"app", app.Name(),
 	)
