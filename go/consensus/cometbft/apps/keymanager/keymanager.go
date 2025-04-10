@@ -91,11 +91,6 @@ func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	return nil
 }
 
-// ExecuteMessage implements api.MessageSubscriber.
-func (app *Application) ExecuteMessage(*tmapi.Context, any, any) (any, error) {
-	return nil, fmt.Errorf("keymanager: unexpected message")
-}
-
 // ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	ctx.SetPriority(AppPriority)

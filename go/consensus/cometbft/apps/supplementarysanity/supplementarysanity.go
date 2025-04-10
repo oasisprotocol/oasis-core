@@ -68,11 +68,6 @@ func (app *Application) Subscribe() {
 func (app *Application) OnCleanup() {
 }
 
-// ExecuteMessage implements api.MessageSubscriber.
-func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
-	return nil, fmt.Errorf("supplementarysanity: unexpected message")
-}
-
 // ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("supplementarysanity: unexpected transaction")

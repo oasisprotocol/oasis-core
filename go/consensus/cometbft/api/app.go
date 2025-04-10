@@ -53,8 +53,6 @@ func (nd *NoopMessageDispatcher) Publish(*Context, any, any) (any, error) {
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
 type Application interface {
-	MessageSubscriber
-
 	// Name returns the name of the Application.
 	Name() string
 

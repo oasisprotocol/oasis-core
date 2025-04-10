@@ -77,11 +77,6 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
-// ExecuteMessage implements api.MessageSubscriber.
-func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
-	return nil, fmt.Errorf("beacon: unexpected message")
-}
-
 // ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	if app.backend == nil {
