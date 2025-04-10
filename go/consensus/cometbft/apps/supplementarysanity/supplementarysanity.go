@@ -51,10 +51,6 @@ func (app *Application) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *Application) QueryFactory() any {
-	return nil
-}
-
 func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
 	app.state = state
 }

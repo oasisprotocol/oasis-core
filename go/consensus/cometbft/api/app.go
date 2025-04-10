@@ -76,10 +76,6 @@ type Application interface {
 	// depends on.
 	Dependencies() []string
 
-	// QueryFactory returns an application-specific query factory that
-	// can be used to construct new queries at specific block heights.
-	QueryFactory() any
-
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
 	OnRegister(ApplicationState, MessageDispatcher)

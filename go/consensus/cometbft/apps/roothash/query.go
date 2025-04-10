@@ -89,10 +89,6 @@ func (q *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.Co
 	return q.state.ConsensusParameters(ctx)
 }
 
-func (app *Application) QueryFactory() any {
-	return &QueryFactory{app.state}
-}
-
 // NewQueryFactory returns a new QueryFactory backed by the given state
 // instance.
 func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
