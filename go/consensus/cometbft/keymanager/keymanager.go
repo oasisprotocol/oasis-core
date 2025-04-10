@@ -26,7 +26,7 @@ type ServiceClient struct {
 	churpClient   *churp.ServiceClient
 }
 
-// Implements api.Backend.
+// StateToGenesis implements api.Backend.
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	secretsGenesis, err := sc.secretsClient.StateToGenesis(ctx, height)
 	if err != nil {
@@ -44,22 +44,22 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	}, nil
 }
 
-// Implements api.Backend.
+// Secrets implements api.Backend.
 func (sc *ServiceClient) Secrets() secretsAPI.Backend {
 	return sc.secretsClient
 }
 
-// Implements api.Backend.
+// Churp implements api.Backend.
 func (sc *ServiceClient) Churp() churpAPI.Backend {
 	return sc.churpClient
 }
 
-// Implements api.ServiceClient.
+// ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-// Implements api.ServiceClient.
+// DeliverEvent implements api.ServiceClient.
 func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	if err := sc.secretsClient.DeliverEvent(ev); err != nil {
 		return err

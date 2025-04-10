@@ -149,12 +149,12 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 func (sc *ServiceClient) Cleanup() {
 }
 
-// Implements api.ServiceClient.
+// ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(vault.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-// Implements api.ServiceClient.
+// DeliverEvent implements api.ServiceClient.
 func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {

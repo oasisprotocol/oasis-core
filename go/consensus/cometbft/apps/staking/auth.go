@@ -11,12 +11,12 @@ import (
 
 var _ api.TransactionAuthHandler = (*Application)(nil)
 
-// Implements api.TransactionAuthHandler.
+// AuthenticateTx implements api.TransactionAuthHandler.
 func (app *Application) AuthenticateTx(ctx *api.Context, tx *transaction.Transaction) error {
 	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee)
 }
 
-// Implements api.TransactionAuthHandler.
+// PostExecuteTx implements api.TransactionAuthHandler.
 func (app *Application) PostExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	if !ctx.IsCheckOnly() {
 		// Do not do anything outside CheckTx.

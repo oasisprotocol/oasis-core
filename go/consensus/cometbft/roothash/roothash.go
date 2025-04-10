@@ -63,7 +63,7 @@ type ServiceClient struct {
 	trackedRuntimes map[common.Namespace]*trackedRuntime
 }
 
-// Implements api.Backend.
+// GetGenesisBlock implements api.Backend.
 func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the CometBFT app.
@@ -92,7 +92,7 @@ func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *api.Runti
 	return blk, nil
 }
 
-// Implements api.Backend.
+// GetLatestBlock implements api.Backend.
 func (sc *ServiceClient) GetLatestBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
 	return sc.getLatestBlockAt(ctx, request.RuntimeID, request.Height)
 }
@@ -106,7 +106,7 @@ func (sc *ServiceClient) getLatestBlockAt(ctx context.Context, runtimeID common.
 	return q.LatestBlock(ctx, runtimeID)
 }
 
-// Implements api.Backend.
+// GetRuntimeState implements api.Backend.
 func (sc *ServiceClient) GetRuntimeState(ctx context.Context, request *api.RuntimeRequest) (*api.RuntimeState, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
@@ -116,7 +116,7 @@ func (sc *ServiceClient) GetRuntimeState(ctx context.Context, request *api.Runti
 	return q.RuntimeState(ctx, request.RuntimeID)
 }
 
-// Implements api.Backend.
+// GetLastRoundResults implements api.Backend.
 func (sc *ServiceClient) GetLastRoundResults(ctx context.Context, request *api.RuntimeRequest) (*api.RoundResults, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
@@ -144,7 +144,7 @@ func (sc *ServiceClient) GetPastRoundRoots(ctx context.Context, request *api.Run
 	return q.PastRoundRoots(ctx, request.RuntimeID)
 }
 
-// Implements api.Backend.
+// GetIncomingMessageQueueMeta implements api.Backend.
 func (sc *ServiceClient) GetIncomingMessageQueueMeta(ctx context.Context, request *api.RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
@@ -154,7 +154,7 @@ func (sc *ServiceClient) GetIncomingMessageQueueMeta(ctx context.Context, reques
 	return q.IncomingMessageQueueMeta(ctx, request.RuntimeID)
 }
 
-// Implements api.Backend.
+// GetIncomingMessageQueue implements api.Backend.
 func (sc *ServiceClient) GetIncomingMessageQueue(ctx context.Context, request *api.InMessageQueueRequest) ([]*message.IncomingMessage, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
@@ -164,7 +164,7 @@ func (sc *ServiceClient) GetIncomingMessageQueue(ctx context.Context, request *a
 	return q.IncomingMessageQueue(ctx, request.RuntimeID, request.Offset, request.Limit)
 }
 
-// Implements api.Backend.
+// WatchBlocks implements api.Backend.
 func (sc *ServiceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.blockNotifier.Subscribe()
@@ -183,7 +183,7 @@ func (sc *ServiceClient) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 	return ch, sub
 }
 
-// Implements api.Backend.
+// WatchEvents implements api.Backend.
 func (sc *ServiceClient) WatchEvents(_ context.Context, id common.Namespace) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
@@ -194,7 +194,7 @@ func (sc *ServiceClient) WatchEvents(_ context.Context, id common.Namespace) (<-
 	return ch, sub, nil
 }
 
-// Implements api.Backend.
+// WatchExecutorCommitments implements api.Backend.
 func (sc *ServiceClient) WatchExecutorCommitments(_ context.Context, id common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.ecNotifier.Subscribe()
@@ -226,7 +226,7 @@ func (sc *ServiceClient) trackRuntime(id common.Namespace) {
 	sc.queryCh <- app.QueryForRuntime(id)
 }
 
-// Implements api.Backend.
+// StateToGenesis implements api.Backend.
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -291,7 +291,7 @@ func (sc *ServiceClient) getEvents(ctx context.Context, height int64, txns [][]b
 	return events, nil
 }
 
-// Implements api.Backend.
+// GetEvents implements api.Backend.
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get transactions at given height.
 	txns, err := sc.backend.GetTransactions(ctx, height)
@@ -306,7 +306,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return sc.getEvents(ctx, height, txns)
 }
 
-// Implements api.Backend.
+// Cleanup implements api.Backend.
 func (sc *ServiceClient) Cleanup() {
 }
 
@@ -327,12 +327,12 @@ func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-// Implements api.ServiceClient.
+// ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
 }
 
-// Implements api.ServiceClient.
+// DeliverBlock implements api.ServiceClient.
 func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
 	sc.mu.RLock()
 	trs := slices.Collect(maps.Values(sc.trackedRuntimes))
@@ -373,7 +373,7 @@ func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) 
 	return nil
 }
 
-// Implements api.ServiceClient.
+// DeliverEvent implements api.ServiceClient.
 func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
@@ -496,7 +496,7 @@ func (sc *ServiceClient) fetchBlock(ctx context.Context, runtimeID common.Namesp
 	}, nil
 }
 
-// Implements api.ExecutorCommitmentNotifier.
+// DeliverExecutorCommitment implements api.ExecutorCommitmentNotifier.
 func (sc *ServiceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.ecNotifier.Broadcast(ec)

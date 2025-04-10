@@ -95,12 +95,12 @@ func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {
 	return q.AllCommittees(context.TODO())
 }
 
-// Implements api.ServiceClient.
+// ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-// Implements api.ServiceClient.
+// DeliverEvent implements api.ServiceClient.
 func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
