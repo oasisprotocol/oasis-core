@@ -234,6 +234,9 @@ type ComponentConfig struct {
 
 	// Permissions is the list of permissions for this component.
 	Permissions []ComponentPermission `yaml:"permissions,omitempty"`
+
+	// Config contains component local configuration.
+	Config map[string]any `yaml:"config,omitempty"`
 }
 
 // Validate validates the component configuration.
