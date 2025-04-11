@@ -759,22 +759,34 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleRuntimeHostEventLocked(ev)
 			}()
-		case comp := <-compCh:
-			// Received a new version of a runtime component.
-			if err := n.ProvisionHostedRuntimeComponent(comp); err != nil {
-				n.logger.Error("failed to provision hosted runtime",
-					"err", err,
-					"id", comp.ID(),
-					"version", comp.Version,
-				)
-				return
-			}
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.updateHostedRuntimeVersionLocked()
-			}()
+		case compNotify := <-compCh:
+			switch {
+			case compNotify.Added != nil:
+				// Received a new version of a runtime component.
+				if err := n.ProvisionHostedRuntimeComponent(compNotify.Added); err != nil {
+					n.logger.Error("failed to provision hosted runtime",
+						"err", err,
+						"id", compNotify.Added.ID(),
+						"version", compNotify.Added.Version,
+					)
+					return
+				}
 
+				func() {
+					n.CrossNode.Lock()
+					defer n.CrossNode.Unlock()
+					n.updateHostedRuntimeVersionLocked()
+				}()
+			case compNotify.Removed != nil:
+				// Received removal of a component.
+				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
+					n.logger.Error("failed to remove hosted runtime component",
+						"err", err,
+						"id", *compNotify.Removed,
+					)
+					return
+				}
+			}
 		}
 	}
 }
