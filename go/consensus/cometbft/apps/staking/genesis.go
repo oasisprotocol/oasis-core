@@ -334,36 +334,36 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 	return nil
 }
 
-// Genesis exports current state in genesis format.
-func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error) {
-	totalSupply, err := sq.state.TotalSupply(ctx)
+// Genesis implements staking.Query.
+func (q *Query) Genesis(ctx context.Context) (*staking.Genesis, error) {
+	totalSupply, err := q.state.TotalSupply(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	commonPool, err := sq.state.CommonPool(ctx)
+	commonPool, err := q.state.CommonPool(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	lastBlockFees, err := sq.state.LastBlockFees(ctx)
+	lastBlockFees, err := q.state.LastBlockFees(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	governanceDeposits, err := sq.state.GovernanceDeposits(ctx)
+	governanceDeposits, err := q.state.GovernanceDeposits(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	addresses, err := sq.state.Addresses(ctx)
+	addresses, err := q.state.Addresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 	ledger := make(map[staking.Address]*staking.Account)
 	for _, addr := range addresses {
 		var acct *staking.Account
-		acct, err = sq.state.Account(ctx, addr)
+		acct, err = q.state.Account(ctx, addr)
 		if err != nil {
 			return nil, fmt.Errorf("cometbft/staking: failed to fetch account: %w", err)
 		}
@@ -373,16 +373,16 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		ledger[addr] = acct
 	}
 
-	delegations, err := sq.state.Delegations(ctx)
+	delegations, err := q.state.Delegations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	debondingDelegations, err := sq.state.DebondingDelegations(ctx)
+	debondingDelegations, err := q.state.DebondingDelegations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	params, err := sq.state.ConsensusParameters(ctx)
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}

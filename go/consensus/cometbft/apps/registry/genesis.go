@@ -125,21 +125,22 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 	return nil
 }
 
-func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, error) {
+// Genesis implements registry.Query.
+func (q *Query) Genesis(ctx context.Context) (*registry.Genesis, error) {
 	// Fetch entities, runtimes, and nodes from state.
-	signedEntities, err := rq.state.SignedEntities(ctx)
+	signedEntities, err := q.state.SignedEntities(ctx)
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := rq.state.Runtimes(ctx)
+	runtimes, err := q.state.Runtimes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	suspendedRuntimes, err := rq.state.SuspendedRuntimes(ctx)
+	suspendedRuntimes, err := q.state.SuspendedRuntimes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	signedNodes, err := rq.state.SignedNodes(ctx)
+	signedNodes, err := q.state.SignedNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 		}
 
 		var status *registry.NodeStatus
-		status, err = rq.state.NodeStatus(ctx, n.ID)
+		status, err = q.state.NodeStatus(ctx, n.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +171,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 		nodeStatuses[n.ID] = status
 	}
 
-	params, err := rq.state.ConsensusParameters(ctx)
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}

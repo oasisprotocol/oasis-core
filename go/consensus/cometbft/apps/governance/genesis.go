@@ -64,14 +64,14 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 	return nil
 }
 
-// Genesis exports current state in genesis format.
-func (gq *governanceQuerier) Genesis(ctx context.Context) (*governance.Genesis, error) {
-	params, err := gq.state.ConsensusParameters(ctx)
+// Genesis implements governance.Query.
+func (q *Query) Genesis(ctx context.Context) (*governance.Genesis, error) {
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	proposals, err := gq.state.Proposals(ctx)
+	proposals, err := q.state.Proposals(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (gq *governanceQuerier) Genesis(ctx context.Context) (*governance.Genesis, 
 	voteEntries := make(map[uint64][]*governance.VoteEntry)
 	for _, proposal := range proposals {
 		var votes []*governance.VoteEntry
-		votes, err = gq.state.Votes(ctx, proposal.ID)
+		votes, err = q.state.Votes(ctx, proposal.ID)
 		if err != nil {
 			return nil, err
 		}

@@ -150,7 +150,7 @@ type Backend interface {
 	// owner (delegator).
 	DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
-	// DelegationsInfosFor returns (outgoing) delegations with additional
+	// DelegationInfosFor returns (outgoing) delegations with additional
 	// information for the given owner (delegator).
 	DelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address]*DelegationInfo, error)
 
@@ -162,7 +162,7 @@ type Backend interface {
 	// delegations for the given owner (delegator).
 	DebondingDelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
-	// DebondingDelegationsInfosFor returns (outgoing) debonding delegations
+	// DebondingDelegationInfosFor returns (outgoing) debonding delegations
 	// with additional information for the given owner (delegator).
 	DebondingDelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegationInfo, error)
 

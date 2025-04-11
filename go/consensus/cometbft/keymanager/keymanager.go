@@ -28,14 +28,14 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed key manager service client.
-func New(querier *app.QueryFactory) *ServiceClient {
+func New(secretsQuerier secrets.QueryFactory, churpQuerier churp.QueryFactory) *ServiceClient {
 	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
 	descriptor.AddQuery(app.QueryApp)
 
 	return &ServiceClient{
 		descriptor:    descriptor,
-		secretsClient: secrets.New(querier),
-		churpClient:   churp.New(querier),
+		secretsClient: secrets.New(secretsQuerier),
+		churpClient:   churp.New(churpQuerier),
 	}
 }
 

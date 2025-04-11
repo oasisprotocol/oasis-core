@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
-	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -21,14 +20,14 @@ import (
 type ServiceClient struct {
 	logger *logging.Logger
 
-	querier           *app.QueryFactory
+	querier           QueryFactory
 	statusNotifier    *pubsub.Broker
 	mstSecretNotifier *pubsub.Broker
 	ephSecretNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed key manager secrets service client.
-func New(querier *app.QueryFactory) *ServiceClient {
+func New(querier QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:            logging.GetLogger("cometbft/keymanager/secrets"),
 		querier:           querier,
@@ -44,7 +43,7 @@ func (sc *ServiceClient) GetStatus(ctx context.Context, query *registry.Namespac
 		return nil, err
 	}
 
-	return q.Secrets().Status(ctx, query.ID)
+	return q.Status(ctx, query.ID)
 }
 
 func (sc *ServiceClient) GetStatuses(ctx context.Context, height int64) ([]*secrets.Status, error) {
@@ -53,7 +52,7 @@ func (sc *ServiceClient) GetStatuses(ctx context.Context, height int64) ([]*secr
 		return nil, err
 	}
 
-	return q.Secrets().Statuses(ctx)
+	return q.Statuses(ctx)
 }
 
 func (sc *ServiceClient) WatchStatuses(ctx context.Context) (<-chan *secrets.Status, pubsub.ClosableSubscription, error) {
@@ -71,7 +70,7 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*sec
 		return nil, err
 	}
 
-	return q.Secrets().Genesis(ctx)
+	return q.Genesis(ctx)
 }
 
 func (sc *ServiceClient) GetMasterSecret(ctx context.Context, query *registry.NamespaceQuery) (*secrets.SignedEncryptedMasterSecret, error) {
@@ -80,7 +79,7 @@ func (sc *ServiceClient) GetMasterSecret(ctx context.Context, query *registry.Na
 		return nil, err
 	}
 
-	return q.Secrets().MasterSecret(ctx, query.ID)
+	return q.MasterSecret(ctx, query.ID)
 }
 
 func (sc *ServiceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceQuery) (*secrets.SignedEncryptedEphemeralSecret, error) {
@@ -89,7 +88,7 @@ func (sc *ServiceClient) GetEphemeralSecret(ctx context.Context, query *registry
 		return nil, err
 	}
 
-	return q.Secrets().EphemeralSecret(ctx, query.ID)
+	return q.EphemeralSecret(ctx, query.ID)
 }
 
 func (sc *ServiceClient) WatchMasterSecrets(context.Context) (<-chan *secrets.SignedEncryptedMasterSecret, pubsub.ClosableSubscription, error) {

@@ -15,10 +15,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmtapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
@@ -48,7 +49,7 @@ type ServiceClient struct {
 	logger *logging.Logger
 
 	consensus  consensus.Backend
-	querier    *app.QueryFactory
+	querier    QueryFactory
 	descriptor *cmtapi.ServiceDescriptor
 
 	allBlockNotifier *pubsub.Broker
@@ -58,8 +59,8 @@ type ServiceClient struct {
 	trackedRuntimes map[common.Namespace]*trackedRuntime
 }
 
-// New constructs a new CometBFT-based roothash service client.
-func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+// New constructs a new CometBFT backed roothash service client.
+func New(consensus consensus.Backend, querier QueryFactory) *ServiceClient {
 	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, registry.MaxRuntimeCount)
 
 	return &ServiceClient{
@@ -74,8 +75,8 @@ func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient 
 	}
 }
 
-// GetGenesisBlock implements api.Backend.
-func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
+// GetGenesisBlock implements roothash.Backend.
+func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *roothash.RuntimeRequest) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the CometBFT app.
 	sc.mu.RLock()
@@ -103,8 +104,8 @@ func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *api.Runti
 	return blk, nil
 }
 
-// GetLatestBlock implements api.Backend.
-func (sc *ServiceClient) GetLatestBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
+// GetLatestBlock implements roothash.Backend.
+func (sc *ServiceClient) GetLatestBlock(ctx context.Context, request *roothash.RuntimeRequest) (*block.Block, error) {
 	return sc.getLatestBlockAt(ctx, request.RuntimeID, request.Height)
 }
 
@@ -117,8 +118,8 @@ func (sc *ServiceClient) getLatestBlockAt(ctx context.Context, runtimeID common.
 	return q.LatestBlock(ctx, runtimeID)
 }
 
-// GetRuntimeState implements api.Backend.
-func (sc *ServiceClient) GetRuntimeState(ctx context.Context, request *api.RuntimeRequest) (*api.RuntimeState, error) {
+// GetRuntimeState implements roothash.Backend.
+func (sc *ServiceClient) GetRuntimeState(ctx context.Context, request *roothash.RuntimeRequest) (*roothash.RuntimeState, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -127,8 +128,8 @@ func (sc *ServiceClient) GetRuntimeState(ctx context.Context, request *api.Runti
 	return q.RuntimeState(ctx, request.RuntimeID)
 }
 
-// GetLastRoundResults implements api.Backend.
-func (sc *ServiceClient) GetLastRoundResults(ctx context.Context, request *api.RuntimeRequest) (*api.RoundResults, error) {
+// GetLastRoundResults implements roothash.Backend.
+func (sc *ServiceClient) GetLastRoundResults(ctx context.Context, request *roothash.RuntimeRequest) (*roothash.RoundResults, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -137,7 +138,7 @@ func (sc *ServiceClient) GetLastRoundResults(ctx context.Context, request *api.R
 	return q.LastRoundResults(ctx, request.RuntimeID)
 }
 
-func (sc *ServiceClient) GetRoundRoots(ctx context.Context, request *api.RoundRootsRequest) (*api.RoundRoots, error) {
+func (sc *ServiceClient) GetRoundRoots(ctx context.Context, request *roothash.RoundRootsRequest) (*roothash.RoundRoots, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func (sc *ServiceClient) GetRoundRoots(ctx context.Context, request *api.RoundRo
 	return q.RoundRoots(ctx, request.RuntimeID, request.Round)
 }
 
-func (sc *ServiceClient) GetPastRoundRoots(ctx context.Context, request *api.RuntimeRequest) (map[uint64]api.RoundRoots, error) {
+func (sc *ServiceClient) GetPastRoundRoots(ctx context.Context, request *roothash.RuntimeRequest) (map[uint64]roothash.RoundRoots, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -155,8 +156,8 @@ func (sc *ServiceClient) GetPastRoundRoots(ctx context.Context, request *api.Run
 	return q.PastRoundRoots(ctx, request.RuntimeID)
 }
 
-// GetIncomingMessageQueueMeta implements api.Backend.
-func (sc *ServiceClient) GetIncomingMessageQueueMeta(ctx context.Context, request *api.RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
+// GetIncomingMessageQueueMeta implements roothash.Backend.
+func (sc *ServiceClient) GetIncomingMessageQueueMeta(ctx context.Context, request *roothash.RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -165,8 +166,8 @@ func (sc *ServiceClient) GetIncomingMessageQueueMeta(ctx context.Context, reques
 	return q.IncomingMessageQueueMeta(ctx, request.RuntimeID)
 }
 
-// GetIncomingMessageQueue implements api.Backend.
-func (sc *ServiceClient) GetIncomingMessageQueue(ctx context.Context, request *api.InMessageQueueRequest) ([]*message.IncomingMessage, error) {
+// GetIncomingMessageQueue implements roothash.Backend.
+func (sc *ServiceClient) GetIncomingMessageQueue(ctx context.Context, request *roothash.InMessageQueueRequest) ([]*message.IncomingMessage, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
@@ -175,11 +176,11 @@ func (sc *ServiceClient) GetIncomingMessageQueue(ctx context.Context, request *a
 	return q.IncomingMessageQueue(ctx, request.RuntimeID, request.Offset, request.Limit)
 }
 
-// WatchBlocks implements api.Backend.
-func (sc *ServiceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+// WatchBlocks implements roothash.Backend.
+func (sc *ServiceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.blockNotifier.Subscribe()
-	ch := make(chan *api.AnnotatedBlock)
+	ch := make(chan *roothash.AnnotatedBlock)
 	sub.Unwrap(ch)
 
 	sc.trackRuntime(id)
@@ -194,18 +195,18 @@ func (sc *ServiceClient) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 	return ch, sub
 }
 
-// WatchEvents implements api.Backend.
-func (sc *ServiceClient) WatchEvents(_ context.Context, id common.Namespace) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+// WatchEvents implements roothash.Backend.
+func (sc *ServiceClient) WatchEvents(_ context.Context, id common.Namespace) (<-chan *roothash.Event, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
-	ch := make(chan *api.Event)
+	ch := make(chan *roothash.Event)
 	sub.Unwrap(ch)
 
 	sc.trackRuntime(id)
 	return ch, sub, nil
 }
 
-// WatchExecutorCommitments implements api.Backend.
+// WatchExecutorCommitments implements roothash.Backend.
 func (sc *ServiceClient) WatchExecutorCommitments(_ context.Context, id common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.ecNotifier.Subscribe()
@@ -230,7 +231,7 @@ func (sc *ServiceClient) trackRuntime(id common.Namespace) {
 
 	sc.trackedRuntimes[id] = &trackedRuntime{
 		runtimeID: id,
-		round:     api.RoundInvalid,
+		round:     roothash.RoundInvalid,
 	}
 
 	// Request subscription to events for this runtime.
@@ -238,8 +239,8 @@ func (sc *ServiceClient) trackRuntime(id common.Namespace) {
 	sc.descriptor.AddQuery(query)
 }
 
-// StateToGenesis implements api.Backend.
-func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+// StateToGenesis implements roothash.Backend.
+func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*roothash.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -248,7 +249,7 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*roothash.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -257,8 +258,8 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-// GetEvents implements api.Backend.
-func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+// GetEvents implements roothash.Backend.
+func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*roothash.Event, error) {
 	// Get block results at given height.
 	results, err := cmtapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
@@ -279,7 +280,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		return nil, err
 	}
 
-	var events []*api.Event
+	var events []*roothash.Event
 	// Decode events from block results (at the beginning of the block).
 	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
@@ -330,7 +331,7 @@ func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-// ServiceDescriptor implements api.ServiceClient.
+// ServiceDescriptor implements roothash.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() *cmtapi.ServiceDescriptor {
 	return sc.descriptor
 }
@@ -345,10 +346,10 @@ func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error 
 		// Emit the latest block immediately, unless a finalized event for
 		// one of the blocks has already been received. Subsequent blocks
 		// will be emitted upon receiving new finalized events.
-		if tr.round != api.RoundInvalid {
+		if tr.round != roothash.RoundInvalid {
 			continue
 		}
-		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
+		rs, err := sc.GetRuntimeState(ctx, &roothash.RuntimeRequest{
 			RuntimeID: tr.runtimeID,
 			Height:    height,
 		})
@@ -360,7 +361,7 @@ func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error 
 			)
 			return fmt.Errorf("roothash: failed to get runtime state: %w", err)
 		}
-		blk := &api.AnnotatedBlock{
+		blk := &roothash.AnnotatedBlock{
 			Height: rs.LastBlockHeight,
 			Block:  rs.LastBlock,
 		}
@@ -376,7 +377,7 @@ func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error 
 	return nil
 }
 
-// DeliverEvent implements api.ServiceClient.
+// DeliverEvent implements roothash.ServiceClient.
 func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
@@ -418,7 +419,7 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 			return fmt.Errorf("roothash: block round mismatch")
 		}
 
-		if tr.round != api.RoundInvalid && blk.Block.Header.Round > tr.round+1 {
+		if tr.round != roothash.RoundInvalid && blk.Block.Header.Round > tr.round+1 {
 			// Catch up. This may emit the same block multiple times, e.g.,
 			// if no new blocks were produced due to slow compute nodes
 			// or a suspended runtime.
@@ -449,9 +450,9 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 	return nil
 }
 
-func (sc *ServiceClient) emitBlock(tr *trackedRuntime, blk *api.AnnotatedBlock) error {
+func (sc *ServiceClient) emitBlock(tr *trackedRuntime, blk *roothash.AnnotatedBlock) error {
 	switch {
-	case tr.round == api.RoundInvalid:
+	case tr.round == roothash.RoundInvalid:
 		// First block.
 	case blk.Block.Header.Round <= tr.round:
 		// Outdated block can be ignored. This can happen if we also receive
@@ -488,18 +489,18 @@ func (sc *ServiceClient) emitBlock(tr *trackedRuntime, blk *api.AnnotatedBlock) 
 	return nil
 }
 
-func (sc *ServiceClient) fetchBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*api.AnnotatedBlock, error) {
+func (sc *ServiceClient) fetchBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*roothash.AnnotatedBlock, error) {
 	blk, err := sc.getLatestBlockAt(ctx, runtimeID, height)
 	if err != nil {
 		return nil, err
 	}
-	return &api.AnnotatedBlock{
+	return &roothash.AnnotatedBlock{
 		Height: height,
 		Block:  blk,
 	}, nil
 }
 
-// DeliverExecutorCommitment implements api.ExecutorCommitmentNotifier.
+// DeliverExecutorCommitment implements roothash.ExecutorCommitmentNotifier.
 func (sc *ServiceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.ecNotifier.Broadcast(ec)

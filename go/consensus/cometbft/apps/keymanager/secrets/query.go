@@ -4,51 +4,72 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
-// Query is the key manager secrets query interface.
-type Query interface {
-	ConsensusParameters(context.Context) (*secrets.ConsensusParameters, error)
-	Status(context.Context, common.Namespace) (*secrets.Status, error)
-	Statuses(context.Context) ([]*secrets.Status, error)
-	MasterSecret(context.Context, common.Namespace) (*secrets.SignedEncryptedMasterSecret, error)
-	EphemeralSecret(context.Context, common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error)
-	Genesis(context.Context) (*secrets.Genesis, error)
+// QueryFactory is the key manager secrets query factory.
+type QueryFactory struct {
+	state abciAPI.ApplicationQueryState
 }
 
-type querier struct {
+// NewQueryFactory returns a new key manager secrets query factory
+// backed by the given application state.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{
+		state: state,
+	}
+}
+
+// QueryAt returns a key manager secrets query for a specific height.
+func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
+	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
+	if err != nil {
+		return nil, err
+	}
+	return NewQuery(secretsState.NewImmutableState(state)), nil
+}
+
+// Query is the key manager secrets query.
+type Query struct {
 	state *secretsState.ImmutableState
 }
 
-// ConsensusParameters implements Query.
-func (q *querier) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
+// NewQuery creates a new key manager secrets query.
+func NewQuery(state *secretsState.ImmutableState) *Query {
+	return &Query{
+		state: state,
+	}
+}
+
+// ConsensusParameters implements secrets.Query.
+func (q *Query) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
 	return q.state.ConsensusParameters(ctx)
 }
 
-// Status implements Query.
-func (q *querier) Status(ctx context.Context, runtimeID common.Namespace) (*secrets.Status, error) {
+// Status implements secrets.Query.
+func (q *Query) Status(ctx context.Context, runtimeID common.Namespace) (*secrets.Status, error) {
 	return q.state.Status(ctx, runtimeID)
 }
 
-// Statuses implements Query.
-func (q *querier) Statuses(ctx context.Context) ([]*secrets.Status, error) {
+// Statuses implements secrets.Query.
+func (q *Query) Statuses(ctx context.Context) ([]*secrets.Status, error) {
 	return q.state.Statuses(ctx)
 }
 
-// MasterSecret implements Query.
-func (q *querier) MasterSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
+// MasterSecret implements secrets.Query.
+func (q *Query) MasterSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
 	return q.state.MasterSecret(ctx, runtimeID)
 }
 
-// EphemeralSecret implements Query.
-func (q *querier) EphemeralSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
+// EphemeralSecret implements secrets.Query.
+func (q *Query) EphemeralSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
 	return q.state.EphemeralSecret(ctx, runtimeID)
 }
 
-// Genesis implements Query.
-func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
+// Genesis implements secrets.Query.
+func (q *Query) Genesis(ctx context.Context) (*secrets.Genesis, error) {
 	parameters, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
@@ -59,7 +80,6 @@ func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
 		return nil, err
 	}
 
-	// Remove the Nodes field of each Status.
 	for _, status := range statuses {
 		status.Nodes = nil
 	}
@@ -69,9 +89,4 @@ func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
 		Statuses:   statuses,
 	}
 	return &gen, nil
-}
-
-// NewQuery creates a new key manager secrets query.
-func NewQuery(state *secretsState.ImmutableState) Query {
-	return &querier{state}
 }

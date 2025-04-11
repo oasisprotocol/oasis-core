@@ -33,7 +33,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
-	consensusApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus"
 	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
 	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
@@ -44,10 +43,13 @@ import (
 	vaultApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	tmconsensus "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/consensus"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/governance"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager"
+	tmchurp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager/churp"
+	tmsecrets "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager/secrets"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/scheduler"
@@ -128,7 +130,7 @@ type commonNode struct {
 	publicKeyBlacklist []signature.PublicKey
 
 	mux     *abci.ApplicationServer
-	querier *consensusApp.QueryFactory
+	querier tmconsensus.QueryFactory
 
 	beacon     *tmbeacon.ServiceClient
 	governance *tmgovernance.ServiceClient
@@ -234,17 +236,17 @@ func (n *commonNode) initialize() error {
 	md := n.mux.MessageDispatcher()
 
 	// Initialize consensus backend querier.
-	n.querier = consensusApp.NewQueryFactory(state)
+	n.querier = tmconsensus.NewStateQueryFactory(state)
 
 	// Initialize backends.
-	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))
-	n.governance = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(state))
-	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
-	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
-	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
-	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(state))
-	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(state))
-	n.vault = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(state))
+	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, tmbeacon.NewStateQueryFactory(state))
+	n.governance = tmgovernance.New(n.parentNode, tmgovernance.NewStateQueryFactory(state))
+	n.keymanager = tmkeymanager.New(tmsecrets.NewStateQueryFactory(state), tmchurp.NewStateQueryFactory(state))
+	n.registry = tmregistry.New(n.parentNode, tmregistry.NewStateQueryFactory(state))
+	n.roothash = tmroothash.New(n.parentNode, tmroothash.NewStateQueryFactory(state))
+	n.scheduler = tmscheduler.New(tmscheduler.NewStateQueryFactory(state))
+	n.staking = tmstaking.New(n.parentNode, tmstaking.NewStateQueryFactory(state))
+	n.vault = tmvault.New(n.parentNode, tmvault.NewStateQueryFactory(state))
 
 	n.serviceClients = []api.ServiceClient{
 		n.beacon,
