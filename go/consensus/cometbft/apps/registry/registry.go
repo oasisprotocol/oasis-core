@@ -23,44 +23,58 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+// Application is a registry application.
 type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
+// New constructs a new registry application.
+func New(state api.ApplicationState, md api.MessageDispatcher) *Application {
+	return &Application{
+		state: state,
+		md:    md,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return registry.Methods
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
-	app.md = md
-
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 	// Subscribe to messages emitted by other apps.
-	md.Subscribe(roothashApi.RuntimeMessageRegistry, app)
-	md.Subscribe(governanceApi.MessageChangeParameters, app)
-	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
+	app.md.Subscribe(roothashApi.RuntimeMessageRegistry, app)
+	app.md.Subscribe(governanceApi.MessageChangeParameters, app)
+	app.md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
@@ -69,6 +83,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 	return nil
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case roothashApi.RuntimeMessageRegistry:
@@ -255,9 +270,4 @@ func (app *Application) onRegistryEpochChanged(ctx *api.Context, registryEpoch b
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.NodeListEpochEvent{}))
 
 	return nil
-}
-
-// New constructs a new registry application instance.
-func New() *Application {
-	return &Application{}
 }

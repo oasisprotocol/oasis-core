@@ -58,10 +58,6 @@ func (q *beaconQuerier) VRFState(ctx context.Context) (*beacon.VRFState, error) 
 	return q.state.VRFState(ctx)
 }
 
-func (app *Application) QueryFactory() any {
-	return &QueryFactory{app.state}
-}
-
 // NewQueryFactory returns a new QueryFactory backed by the given state
 // instance.
 func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {

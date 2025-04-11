@@ -202,10 +202,6 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 type Backend interface {
 	consensus.Backend
 
-	// SetTransactionAuthHandler configures the transaction fee handler for the
-	// ABCI multiplexer.
-	SetTransactionAuthHandler(TransactionAuthHandler) error
-
 	// GetCometBFTBlock returns the CometBFT block at the specified height.
 	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
 

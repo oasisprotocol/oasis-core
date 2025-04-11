@@ -53,8 +53,6 @@ func (nd *NoopMessageDispatcher) Publish(*Context, any, any) (any, error) {
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
 type Application interface {
-	MessageSubscriber
-
 	// Name returns the name of the Application.
 	Name() string
 
@@ -76,13 +74,8 @@ type Application interface {
 	// depends on.
 	Dependencies() []string
 
-	// QueryFactory returns an application-specific query factory that
-	// can be used to construct new queries at specific block heights.
-	QueryFactory() any
-
-	// OnRegister is the function that is called when the Application
-	// is registered with the multiplexer instance.
-	OnRegister(ApplicationState, MessageDispatcher)
+	// Subscribe subscribes to messages from other applications.
+	Subscribe()
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -116,10 +109,6 @@ type Application interface {
 type Extension interface {
 	// Methods returns the list of supported methods.
 	Methods() []transaction.MethodName
-
-	// OnRegister is the function that is called when the Application
-	// is registered with the multiplexer instance.
-	OnRegister(ApplicationState, MessageDispatcher)
 
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error

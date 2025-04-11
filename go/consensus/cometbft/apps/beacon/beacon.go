@@ -18,39 +18,50 @@ import (
 
 var prodEntropyCtx = []byte("EkB-tmnt")
 
+// Application is a beacon application.
 type Application struct {
-	state api.ApplicationState
-
 	backend internalBackend
 }
 
+// New constructs a new beacon application.
+func New() *Application {
+	return &Application{}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return Methods
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return nil
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
-	app.state = state
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	state := beaconState.NewMutableState(ctx.State())
 
@@ -66,10 +77,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
-func (app *Application) ExecuteMessage(*api.Context, any, any) (any, error) {
-	return nil, fmt.Errorf("beacon: unexpected message")
-}
-
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	if app.backend == nil {
 		// Executing a transaction before BeginBlock -- likely during transaction simulation or
@@ -89,6 +97,7 @@ func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction)
 	return app.backend.ExecuteTx(ctx, state, params, tx)
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
@@ -128,11 +137,6 @@ func (app *Application) onNewBeacon(ctx *api.Context, value []byte) error {
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&beacon.BeaconEvent{Beacon: value}))
 
 	return nil
-}
-
-// New constructs a new beacon application instance.
-func New() *Application {
-	return &Application{}
 }
 
 // insecureBlockEntropy returns insecure entropy based on deterministic block data.

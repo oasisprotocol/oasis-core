@@ -171,6 +171,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		)
 		return nil, err
 	}
+
 	// Get transactions at given height.
 	txns, err := sc.backend.GetTransactions(ctx, height)
 	if err != nil {

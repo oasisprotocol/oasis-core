@@ -46,10 +46,6 @@ func (q *keymanagerQuerier) Churp() churp.Query {
 	return churp.NewQuery(q.churpState)
 }
 
-func (app *Application) QueryFactory() any {
-	return &QueryFactory{app.state}
-}
-
 // NewQueryFactory returns a new QueryFactory backed by the given state
 // instance.
 func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {

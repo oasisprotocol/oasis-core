@@ -63,7 +63,7 @@ func TestMessageDispatcher(t *testing.T) {
 	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
 
-	var md messageDispatcher
+	md := newMessageDispatcher()
 
 	// Publish without subscribers should work.
 	res, err := md.Publish(ctx, testMessageA, &testMessage{foo: 42})

@@ -13,19 +13,31 @@ import (
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
+// Application is a vault application.
 type Application struct {
 	state api.ApplicationState
 	md    api.MessageDispatcher
 }
 
+// New constructs a new vault application.
+func New(state api.ApplicationState, md api.MessageDispatcher) *Application {
+	return &Application{
+		state: state,
+		md:    md,
+	}
+}
+
+// Name implements api.Application.
 func (app *Application) Name() string {
 	return AppName
 }
 
+// ID implements api.Application.
 func (app *Application) ID() uint8 {
 	return AppID
 }
 
+// Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
 	return vault.Methods
 }
@@ -40,27 +52,29 @@ func (app *Application) Enabled(ctx *api.Context) (bool, error) {
 	return params.Enabled, nil
 }
 
+// Blessed implements api.Application.
 func (app *Application) Blessed() bool {
 	return false
 }
 
+// Dependencies implements api.Application.
 func (app *Application) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *Application) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
-	app.state = state
-	app.md = md
-
+// Subscribe implements api.Application.
+func (app *Application) Subscribe() {
 	// Subscribe to messages emitted by other apps.
-	md.Subscribe(stakingApi.MessageAccountHook, app)
-	md.Subscribe(governanceApi.MessageChangeParameters, app)
-	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
+	app.md.Subscribe(stakingApi.MessageAccountHook, app)
+	app.md.Subscribe(governanceApi.MessageChangeParameters, app)
+	app.md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
+// OnCleanup implements api.Application.
 func (app *Application) OnCleanup() {
 }
 
+// ExecuteTx implements api.Application.
 func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	ctx.SetPriority(AppPriority)
 
@@ -88,6 +102,7 @@ func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction)
 	}
 }
 
+// ExecuteMessage implements api.MessageSubscriber.
 func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case stakingApi.MessageAccountHook:
@@ -105,15 +120,12 @@ func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, er
 	}
 }
 
+// BeginBlock implements api.Application.
 func (app *Application) BeginBlock(_ *api.Context) error {
 	return nil
 }
 
+// EndBlock implements api.Application.
 func (app *Application) EndBlock(_ *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
-}
-
-// New constructs a new vault application instance.
-func New() *Application {
-	return &Application{}
 }
