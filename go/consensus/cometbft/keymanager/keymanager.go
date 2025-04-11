@@ -18,12 +18,20 @@ import (
 	secretsAPI "github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
-// ServiceClient is the registry service client.
+// ServiceClient is the key manager service client.
 type ServiceClient struct {
 	tmapi.BaseServiceClient
 
 	secretsClient *secrets.ServiceClient
 	churpClient   *churp.ServiceClient
+}
+
+// New constructs a new CometBFT backed key manager service client.
+func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		secretsClient: secrets.New(ctx, querier),
+		churpClient:   churp.New(ctx, querier),
+	}
 }
 
 // StateToGenesis implements api.Backend.
@@ -65,13 +73,4 @@ func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx,
 		return err
 	}
 	return sc.churpClient.DeliverEvent(ev)
-}
-
-// New constructs a new CometBFT backed key manager management Backend
-// instance.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
-	return &ServiceClient{
-		secretsClient: secrets.New(ctx, querier),
-		churpClient:   churp.New(ctx, querier),
-	}
 }

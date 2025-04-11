@@ -40,6 +40,46 @@ type ServiceClient struct {
 	eventNotifier    *pubsub.Broker
 }
 
+// New constructs a new CometBFT backed registry service client.
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	sc := &ServiceClient{
+		logger:         logging.GetLogger("cometbft/registry"),
+		backend:        backend,
+		querier:        querier,
+		entityNotifier: pubsub.NewBroker(false),
+		nodeNotifier:   pubsub.NewBroker(false),
+		eventNotifier:  pubsub.NewBroker(false),
+	}
+	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		wr := ch.In()
+		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("node list notifier: unable to get a list of nodes",
+				"err", err,
+			)
+			return
+		}
+
+		wr <- nodeList
+	})
+	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		wr := ch.In()
+		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
+		if err != nil {
+			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
+				"err", err,
+			)
+			return
+		}
+
+		for _, v := range runtimes {
+			wr <- v
+		}
+	})
+
+	return sc
+}
+
 // NodeListEpochInternalEvent is the per-epoch node list event.
 type NodeListEpochInternalEvent struct {
 	Height int64 `json:"height"`
@@ -369,44 +409,4 @@ func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.No
 	return &api.NodeList{
 		Nodes: nodes,
 	}, nil
-}
-
-// New constructs a new CometBFT backed registry backend instance.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	sc := &ServiceClient{
-		logger:         logging.GetLogger("cometbft/registry"),
-		backend:        backend,
-		querier:        querier,
-		entityNotifier: pubsub.NewBroker(false),
-		nodeNotifier:   pubsub.NewBroker(false),
-		eventNotifier:  pubsub.NewBroker(false),
-	}
-	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
-		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
-		if err != nil {
-			sc.logger.Error("node list notifier: unable to get a list of nodes",
-				"err", err,
-			)
-			return
-		}
-
-		wr <- nodeList
-	})
-	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
-		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
-		if err != nil {
-			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
-				"err", err,
-			)
-			return
-		}
-
-		for _, v := range runtimes {
-			wr <- v
-		}
-	})
-
-	return sc
 }

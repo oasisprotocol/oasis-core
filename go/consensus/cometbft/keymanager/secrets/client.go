@@ -17,6 +17,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+// ServiceClient is the key manager secrets service client.
 type ServiceClient struct {
 	logger *logging.Logger
 
@@ -24,6 +25,32 @@ type ServiceClient struct {
 	statusNotifier    *pubsub.Broker
 	mstSecretNotifier *pubsub.Broker
 	ephSecretNotifier *pubsub.Broker
+}
+
+// New constructs a new CometBFT backed key manager secrets service client.
+func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
+	sc := ServiceClient{
+		logger:            logging.GetLogger("cometbft/keymanager/secrets"),
+		querier:           querier,
+		mstSecretNotifier: pubsub.NewBroker(false),
+		ephSecretNotifier: pubsub.NewBroker(false),
+	}
+	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("status notifier: unable to get a list of statuses",
+				"err", err,
+			)
+			return
+		}
+
+		wr := ch.In()
+		for _, v := range statuses {
+			wr <- v
+		}
+	})
+
+	return &sc
 }
 
 func (sc *ServiceClient) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*secrets.Status, error) {
@@ -134,31 +161,4 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 		}
 	}
 	return nil
-}
-
-// New constructs a new CometBFT backed key manager secrets management Backend
-// instance.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
-	sc := ServiceClient{
-		logger:            logging.GetLogger("cometbft/keymanager/secrets"),
-		querier:           querier,
-		mstSecretNotifier: pubsub.NewBroker(false),
-		ephSecretNotifier: pubsub.NewBroker(false),
-	}
-	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
-		if err != nil {
-			sc.logger.Error("status notifier: unable to get a list of statuses",
-				"err", err,
-			)
-			return
-		}
-
-		wr := ch.In()
-		for _, v := range statuses {
-			wr <- v
-		}
-	})
-
-	return &sc
 }

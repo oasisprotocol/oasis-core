@@ -53,6 +53,40 @@ type ServiceClient struct {
 	baseBlock int64
 }
 
+// New constructs a new CometBFT backed beacon service client.
+func New(ctx context.Context, baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
+
+	sc := &ServiceClient{
+		logger:            logging.GetLogger("cometbft/beacon"),
+		backend:           backend,
+		querier:           querier,
+		ctx:               ctx,
+		epochLastNotified: beaconAPI.EpochInvalid,
+		epochCache:        epochCache,
+		baseEpoch:         baseEpoch,
+		baseBlock:         baseBlock,
+	}
+	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		sc.RLock()
+		defer sc.RUnlock()
+
+		if sc.epochLastNotified == sc.epoch {
+			ch.In() <- sc.epoch
+		}
+	})
+	sc.vrfNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		sc.RLock()
+		defer sc.RUnlock()
+
+		if sc.vrfEvent != nil {
+			ch.In() <- sc.vrfEvent
+		}
+	})
+
+	return sc
+}
+
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*beaconAPI.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -347,38 +381,4 @@ func (sc *ServiceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 	defer sc.RUnlock()
 
 	return sc.epoch, sc.epochCurrentBlock
-}
-
-// New constructs a new CometBFT backed beacon and epochtime backend instance.
-func New(ctx context.Context, baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
-
-	sc := &ServiceClient{
-		logger:            logging.GetLogger("cometbft/beacon"),
-		backend:           backend,
-		querier:           querier,
-		ctx:               ctx,
-		epochLastNotified: beaconAPI.EpochInvalid,
-		epochCache:        epochCache,
-		baseEpoch:         baseEpoch,
-		baseBlock:         baseBlock,
-	}
-	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		sc.RLock()
-		defer sc.RUnlock()
-
-		if sc.epochLastNotified == sc.epoch {
-			ch.In() <- sc.epoch
-		}
-	})
-	sc.vrfNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		sc.RLock()
-		defer sc.RUnlock()
-
-		if sc.vrfEvent != nil {
-			ch.In() <- sc.vrfEvent
-		}
-	})
-
-	return sc
 }

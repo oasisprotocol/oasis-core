@@ -29,6 +29,28 @@ type ServiceClient struct {
 	notifier *pubsub.Broker
 }
 
+// New constructs a new CometBFT-based scheduler service client.
+func New(querier *app.QueryFactory) *ServiceClient {
+	sc := &ServiceClient{
+		logger:  logging.GetLogger("cometbft/scheduler"),
+		querier: querier,
+	}
+	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		currentCommittees, err := sc.getCurrentCommittees()
+		if err != nil {
+			sc.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
+				"err", err,
+			)
+			return
+		}
+		for _, c := range currentCommittees {
+			ch.In() <- c
+		}
+	})
+
+	return sc
+}
+
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -134,26 +156,4 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmtty
 		}
 	}
 	return nil
-}
-
-// New constructs a new CometBFT-based scheduler backend instance.
-func New(querier *app.QueryFactory) *ServiceClient {
-	sc := &ServiceClient{
-		logger:  logging.GetLogger("cometbft/scheduler"),
-		querier: querier,
-	}
-	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		currentCommittees, err := sc.getCurrentCommittees()
-		if err != nil {
-			sc.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
-				"err", err,
-			)
-			return
-		}
-		for _, c := range currentCommittees {
-			ch.In() <- c
-		}
-	})
-
-	return sc
 }

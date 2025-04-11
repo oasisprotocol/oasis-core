@@ -15,11 +15,36 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+// ServiceClient is the key manager CHURP service client.
 type ServiceClient struct {
 	logger *logging.Logger
 
 	querier        *app.QueryFactory
 	statusNotifier *pubsub.Broker
+}
+
+// New constructs a new CometBFT backed key manager CHURP service client.
+func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
+	sc := ServiceClient{
+		logger:  logging.GetLogger("cometbft/keymanager/churp"),
+		querier: querier,
+	}
+	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		statuses, err := sc.AllStatuses(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("status notifier: unable to get a list of statuses",
+				"err", err,
+			)
+			return
+		}
+
+		wr := ch.In()
+		for _, v := range statuses {
+			wr <- v
+		}
+	})
+
+	return &sc
 }
 
 // ConsensusParameters implements churp.Backend.
@@ -110,29 +135,4 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 		}
 	}
 	return nil
-}
-
-// New constructs a new CometBFT backed key manager CHURP management Backend
-// instance.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
-	sc := ServiceClient{
-		logger:  logging.GetLogger("cometbft/keymanager/churp"),
-		querier: querier,
-	}
-	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		statuses, err := sc.AllStatuses(ctx, consensus.HeightLatest)
-		if err != nil {
-			sc.logger.Error("status notifier: unable to get a list of statuses",
-				"err", err,
-			)
-			return
-		}
-
-		wr := ch.In()
-		for _, v := range statuses {
-			wr <- v
-		}
-	})
-
-	return &sc
 }

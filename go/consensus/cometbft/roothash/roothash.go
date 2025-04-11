@@ -63,6 +63,21 @@ type ServiceClient struct {
 	trackedRuntimes map[common.Namespace]*trackedRuntime
 }
 
+// New constructs a new CometBFT-based roothash service client.
+func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		ctx:              ctx,
+		logger:           logging.GetLogger("cometbft/roothash"),
+		backend:          backend,
+		querier:          querier,
+		allBlockNotifier: pubsub.NewBroker(false),
+		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
+		genesisBlocks:    make(map[common.Namespace]*block.Block),
+		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
+		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
+	}
+}
+
 // GetGenesisBlock implements api.Backend.
 func (sc *ServiceClient) GetGenesisBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
@@ -594,21 +609,6 @@ EventLoop:
 		}
 	}
 	return events, errs
-}
-
-// New constructs a new CometBFT-based root hash backend.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	return &ServiceClient{
-		ctx:              ctx,
-		logger:           logging.GetLogger("cometbft/roothash"),
-		backend:          backend,
-		querier:          querier,
-		allBlockNotifier: pubsub.NewBroker(false),
-		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
-		genesisBlocks:    make(map[common.Namespace]*block.Block),
-		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
-		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
-	}
 }
 
 func init() {
