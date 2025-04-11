@@ -215,6 +215,7 @@ type RuntimeConfig struct {
 	Components []ComponentConfig `yaml:"components,omitempty"`
 
 	// Config contains runtime local configuration.
+	// NOTE: This may go away in the future, use `Components.Config` instead.
 	Config map[string]any `yaml:"config,omitempty"`
 
 	// Registries is the list of base URLs used to fetch runtime bundle metadata.
@@ -255,6 +256,9 @@ type ComponentConfig struct {
 
 	// Permissions is the list of permissions for this component.
 	Permissions []ComponentPermission `yaml:"permissions,omitempty"`
+
+	// Config contains component local configuration.
+	Config map[string]any `yaml:"config,omitempty"`
 }
 
 // Validate validates the component configuration.

@@ -13,11 +13,17 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 )
 
-func getLocalConfig(runtimeID common.Namespace) map[string]any {
-	return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
+func getLocalConfig(runtimeID common.Namespace, compID component.ID) map[string]any {
+	compCfg, ok := config.GlobalConfig.Runtime.GetComponent(runtimeID, compID)
+	// Support legacy RONL configuration defined at the top level.
+	if !ok && compID == component.ID_RONL {
+		return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
+	}
+	return compCfg.Config
 }
 
 func getConfiguredRuntimeIDs() ([]common.Namespace, error) {

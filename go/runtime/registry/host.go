@@ -64,7 +64,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 		ID:             n.runtime.ID(),
 		Component:      comp,
 		MessageHandler: handler,
-		LocalConfig:    getLocalConfig(n.runtime.ID()),
+		LocalConfig:    getLocalConfig(n.runtime.ID(), comp.ID()),
 	}
 
 	rt, err := n.provisioner.NewRuntime(cfg)
