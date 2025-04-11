@@ -54,7 +54,7 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 }
 
 func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, error) {
-	runtimes, err := rq.state.Runtimes(ctx)
+	runtimes, err := rq.state.RuntimeStates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch runtimes: %w", err)
 	}
