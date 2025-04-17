@@ -72,6 +72,13 @@ type QemuConfig struct {
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
 	RuntimeAttestInterval time.Duration
+
+	// InsecureMock runs non-TDX binaries but treats it as if it would be running in an enclave,
+	// using mock quotes and reports.
+	//
+	// This is useful in tests so most TDX code can be tested even on machines that lack TDX. Note
+	// that this also requires quote verification to be skipped.
+	InsecureMock bool
 }
 
 // QemuExtraConfig is the per-runtime QEMU-specific extra configuration.
@@ -153,7 +160,7 @@ func (p *qemuProvisioner) Name() string {
 }
 
 func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
-	if cfg.Component.TDX == nil {
+	if cfg.Component.TDX == nil && !p.cfg.InsecureMock {
 		return process.Config{}, fmt.Errorf("component '%s' is not a TDX component", cfg.Component.ID())
 	}
 
@@ -170,18 +177,24 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			"-smp", fmt.Sprintf("%d", resources.CPUCount),
 			"-name", fmt.Sprintf("oasis-%s-%s", cfg.ID, cfg.Component.ID()),
 			"-cpu", "host",
-			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
-			"-bios", firmware,
 			"-nographic",
 			"-nodefaults",
 			// Serial port.
 			"-serial", "stdio",
 			"-device", "virtio-serial,max_ports=1",
+		},
+	}
+
+	if !p.cfg.InsecureMock {
+		// TDX mode.
+		pcfg.Args = append(pcfg.Args,
+			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
+			"-bios", firmware,
 			// TDX remote attestation via VSOCK.
 			"-object", `{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`,
 			// VSOCK.
 			"-device", fmt.Sprintf("vhost-vsock-pci,guest-cid=%d", cid),
-		},
+		)
 	}
 
 	// Configure kernel when one is available. We can set up TDs that only include the virtual
