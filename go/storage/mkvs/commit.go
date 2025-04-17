@@ -89,9 +89,6 @@ func (t *tree) commitWithHooks(
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
-	if err := subtree.Commit(); err != nil {
-		return nil, hash.Hash{}, err
-	}
 
 	// Perform pre-commit validation if configured.
 	if beforeDbCommit != nil {
@@ -202,11 +199,6 @@ func doCommit(
 			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
 			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode, ptr); err != nil {
 				return
-			}
-			if newSubtree != subtree {
-				if err = newSubtree.Commit(); err != nil {
-					return
-				}
 			}
 		}
 

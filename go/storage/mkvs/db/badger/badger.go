@@ -1161,7 +1161,3 @@ func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer)
 func (s *badgerSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
 	return nil
 }
-
-func (s *badgerSubtree) Commit() error {
-	return nil
-}

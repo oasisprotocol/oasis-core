@@ -211,9 +211,6 @@ type Subtree interface {
 	//
 	// Depth is the node depth not bit depth.
 	VisitDirtyNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error
-
-	// Commit marks the subtree as complete.
-	Commit() error
 }
 
 // Batch is a NodeDB-specific batch implementation.
@@ -353,9 +350,5 @@ func (s *nopSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer) er
 }
 
 func (s *nopSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
-	return nil
-}
-
-func (s *nopSubtree) Commit() error {
 	return nil
 }

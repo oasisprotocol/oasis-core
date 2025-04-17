@@ -119,11 +119,6 @@ type badgerSubtree struct {
 }
 
 // Implements api.Subtree.
-func (s *badgerSubtree) Commit() error {
-	return nil
-}
-
-// Implements api.Subtree.
 func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error {
 	var needsPutNode bool
 	if parent == nil && ptr.DBInternal == nil {
