@@ -92,16 +92,16 @@ func TestRegistry(t *testing.T) {
 
 	// Add manifests to the registry.
 	for i := 0; i < 3; i++ {
-		err = registry.AddManifest(&ExplodedManifest{bnds[i].Manifest, ""})
+		err = registry.AddManifest(&ExplodedManifest{Manifest: bnds[i].Manifest})
 		require.NoError(t, err)
 	}
 
 	// Attempt to add the first manifest again (duplicate hash).
-	err = registry.AddManifest(&ExplodedManifest{bnds[0].Manifest, ""})
+	err = registry.AddManifest(&ExplodedManifest{Manifest: bnds[0].Manifest})
 	require.NoError(t, err)
 
 	// Attempt to add the fourth manifest (duplicate RONL component).
-	err = registry.AddManifest(&ExplodedManifest{bnds[3].Manifest, ""})
+	err = registry.AddManifest(&ExplodedManifest{Manifest: bnds[3].Manifest})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "duplicate component 'ronl', version '1.0.0', for runtime '8000000000000000000000000000000000000000000000000000000000000001'")
 

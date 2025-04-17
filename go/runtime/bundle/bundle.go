@@ -396,11 +396,6 @@ func (bnd *Bundle) Write(fn string) error {
 	return nil
 }
 
-// ExplodedPath returns the path under the data directory that contains all of the exploded bundles.
-func ExplodedPath(dataDir string) string {
-	return filepath.Join(dataDir, "runtimes", "bundles")
-}
-
 // ExplodedPath returns the path under the data directory that contains the exploded bundle assets.
 func (bnd *Bundle) ExplodedPath(dataDir string) string {
 	return filepath.Join(ExplodedPath(dataDir), bnd.manifestHash.String())
@@ -487,6 +482,24 @@ func (bnd *Bundle) WriteExploded(dir string) error {
 	}
 
 	return nil
+}
+
+// Rewrite invokes the passed manifest rewriter function to rewrite the manifest then reserializes
+// it and recomputes its hash.
+//
+// Passing a nil rewriter will result in no changes to the manifest.
+//
+// Note that this can result in generating a malformed manifest.
+func (bnd *Bundle) Rewrite(manifestRewriter ManifestRewriterFunc) {
+	if manifestRewriter == nil {
+		return
+	}
+	manifestRewriter(bnd.Manifest)
+
+	// Recompute the manifest hash and change the underlying serialized manifest.
+	bnd.manifestHash = bnd.Manifest.Hash()
+	rawManifest, _ := json.Marshal(bnd.Manifest)
+	bnd.Data[manifestName] = NewBytesData(rawManifest)
 }
 
 // Close closes the bundle, releasing resources.
@@ -619,6 +632,9 @@ func HashAllData(d Data) (hash.Hash, error) {
 	defer f.Close()
 	return hash.NewFromReader(f)
 }
+
+// ManifestRewriterFunc is a function which is passed the manifest for modification.
+type ManifestRewriterFunc func(*Manifest)
 
 // OpenOptions are options for opening bundle files.
 type OpenOptions struct {

@@ -412,10 +412,18 @@ func (w *Worker) worker() {
 		case 0:
 			w.logger.Info("waiting runtime component to be discovered")
 
-			select {
-			case comp = <-compCh:
-			case <-w.ctx.Done():
-				return false
+		Loop:
+			for {
+				select {
+				case compNotify := <-compCh:
+					if compNotify.Added == nil {
+						continue
+					}
+					comp = compNotify.Added
+					break Loop
+				case <-w.ctx.Done():
+					return false
+				}
 			}
 		case 1:
 			comp = comps[0]

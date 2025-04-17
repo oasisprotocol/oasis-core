@@ -97,6 +97,17 @@ func TestBundle(t *testing.T) {
 		require.ErrorContains(t, err, "invalid manifest (got: eaf1a8c7362dfd3381b2a0e6c63c1ec25732563a4ab180751acb9717435c5eef, expected: 0000000000000000000000000000000000000000000000000000000000000000)")
 	})
 
+	t.Run("Rewrite", func(t *testing.T) {
+		bnd, err := Open(bundleFn)
+		require.NoError(t, err, "Open")
+		bnd.Rewrite(func(m *Manifest) {
+			m.Name = "test-rewritten"
+		})
+		require.EqualValues(t, "test-rewritten", bnd.Manifest.Name)
+		require.EqualValues(t, "15bcc438d29a86028f702b873b103c4d8108b2bdd2c907d38604546c026f12c7", bnd.Manifest.Hash().String())
+		require.EqualValues(t, "15bcc438d29a86028f702b873b103c4d8108b2bdd2c907d38604546c026f12c7.orc", bnd.GenerateFilename())
+	})
+
 	t.Run("ResetManifest", func(t *testing.T) {
 		bundle2, err := Open(bundleFn)
 		require.NoError(t, err, "Open")

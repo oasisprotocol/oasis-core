@@ -64,7 +64,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 		ID:             n.runtime.ID(),
 		Component:      comp,
 		MessageHandler: handler,
-		LocalConfig:    getLocalConfig(n.runtime.ID()),
+		LocalConfig:    getLocalConfig(n.runtime.ID(), comp.ID()),
 	}
 
 	rt, err := n.provisioner.NewRuntime(cfg)
@@ -82,6 +82,24 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 
 	if comp.Kind == component.ROFL && comp.Version.Cmp(n.rofls[comp.ID()]) >= 0 {
 		n.rofls[comp.ID()] = comp.Version
+	}
+
+	return nil
+}
+
+// RemoveHostedRuntimeComponent removes the given runtime component.
+//
+// Attempting to remove the RONL component will result in an error.
+func (n *RuntimeHostNode) RemoveHostedRuntimeComponent(id component.ID) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if err := n.host.RemoveComponent(id); err != nil {
+		return err
+	}
+
+	if id.Kind == component.ROFL {
+		delete(n.rofls, id)
 	}
 
 	return nil
