@@ -32,6 +32,9 @@ type Config struct {
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]any
+
+	// Cleanup is an optional function that is called when the runtime is stopped.
+	Cleanup func()
 }
 
 // Provisioner is the runtime provisioner interface.

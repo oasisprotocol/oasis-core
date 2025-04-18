@@ -98,7 +98,8 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			// Support legacy configuration where the runtime environment determines
 			// whether the client node should run the runtime in an SGX environment.
 			isEnvAuto := config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentAuto
-			hasSGXLoader := config.GlobalConfig.Runtime.SGXLoader != ""
+			hasSGXLoader := config.GlobalConfig.Runtime.SGX.Loader != ""
+			hasSGXLoader = hasSGXLoader || config.GlobalConfig.Runtime.SGXLoader != ""
 			insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
 			if comp.ID().IsRONL() && config.GlobalConfig.Mode.IsClientOnly() && isEnvAuto && !hasSGXLoader && !insecureMock {
 				teeKind = component.TEEKindNone
