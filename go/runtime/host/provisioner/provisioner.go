@@ -104,7 +104,10 @@ func createProvisioner(
 
 	attestInterval := config.GlobalConfig.Runtime.AttestInterval
 	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
-	sgxLoader := config.GlobalConfig.Runtime.SGXLoader
+	sgxLoader := config.GlobalConfig.Runtime.SGX.Loader
+	if sgxLoader == "" {
+		sgxLoader = config.GlobalConfig.Runtime.SGXLoader
+	}
 	insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
 
 	// Support legacy configuration where the runtime environment determines
@@ -177,6 +180,14 @@ func createProvisioner(
 
 	// Configure TDX provisioner.
 	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
+	cidPool, err := hostTdx.NewCidPool(
+		config.GlobalConfig.Runtime.TDX.CidStart,
+		config.GlobalConfig.Runtime.TDX.CidCount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CID pool: %w", err)
+	}
+
 	provisioners[component.TEEKindTDX], err = hostTdx.NewQemuProvisioner(hostTdx.QemuConfig{
 		DataDir:               filepath.Join(dataDir, registry.RuntimesDir),
 		HostInfo:              hostInfo,
@@ -184,6 +195,7 @@ func createProvisioner(
 		PCS:                   qs,
 		Consensus:             consensus,
 		Identity:              identity,
+		CidPool:               cidPool,
 		RuntimeAttestInterval: attestInterval,
 	})
 	if err != nil {

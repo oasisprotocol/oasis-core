@@ -445,6 +445,10 @@ func (h *sandboxHost) manager(ctx context.Context) {
 
 		// Notify subscribers that the runtime has stopped.
 		h.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
+
+		if h.rtCfg.Cleanup != nil {
+			h.rtCfg.Cleanup()
+		}
 	}()
 
 	// Subscribe to own events to make sure the cached CapabilityTEE remains up-to-date.
@@ -457,6 +461,13 @@ func (h *sandboxHost) manager(ctx context.Context) {
 		watchdogCh   <-chan time.Time
 	)
 	for {
+		// Terminate immediately when requested.
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		// Make sure to restart the process if terminated.
 		if h.process == nil {
 			firstTickCh := make(chan struct{}, 1)
