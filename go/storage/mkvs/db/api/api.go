@@ -217,9 +217,7 @@ type Subtree interface {
 type Batch interface {
 	// MaybeStartSubtree returns a new subtree instance that can be used for
 	// persisting nodes under a given root.
-	//
-	// Depth is the depth of the node that subtreeRoot points to.
-	MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree
+	MaybeStartSubtree(subtree Subtree) Subtree
 
 	// OnCommit registers a hook to run after a successful commit.
 	OnCommit(hook func())
@@ -323,7 +321,7 @@ func (d *nopNodeDB) NewBatch(node.Root, uint64, bool) (Batch, error) {
 	return &nopBatch{}, nil
 }
 
-func (b *nopBatch) MaybeStartSubtree(Subtree, node.Depth, *node.Pointer) Subtree {
+func (b *nopBatch) MaybeStartSubtree(Subtree) Subtree {
 	return &nopSubtree{}
 }
 

@@ -83,7 +83,7 @@ func (t *tree) commitWithHooks(
 	}
 	defer batch.Reset()
 
-	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
+	subtree := batch.MaybeStartSubtree(nil)
 
 	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot, nil)
 	if err != nil {
@@ -196,7 +196,7 @@ func doCommit(
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
+			newSubtree := batch.MaybeStartSubtree(subtree)
 			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode, ptr); err != nil {
 				return
 			}

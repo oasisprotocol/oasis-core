@@ -145,7 +145,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	defer batch.Reset()
 
-	subtree := batch.MaybeStartSubtree(nil, 0, ptr)
+	subtree := batch.MaybeStartSubtree(nil)
 	if err = doRestoreChunk(ctx, batch, subtree, 0, ptr, nil); err != nil {
 		return fmt.Errorf("chunk: node import failed: %w", err)
 	}
@@ -184,7 +184,7 @@ func doRestoreChunk(
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
+			newSubtree := batch.MaybeStartSubtree(subtree)
 			if err = doRestoreChunk(ctx, batch, newSubtree, depth+1, subNode, ptr); err != nil {
 				return
 			}
