@@ -50,13 +50,18 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	if err := d.checkRootExists(tx, root); err != nil {
 		return nil, err
 	}
-	rootHash := api.TypedHashFromRoot(root)
 
+	return d.getNode(root, ptr, tx)
+}
+
+func (d *badgerNodeDB) getNode(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {
 	var (
 		item  *badger.Item
 		dbKey []byte
 		err   error
 	)
+	rootHash := api.TypedHashFromRoot(root)
+
 	switch {
 	case ptr.Hash.Equal(&root.Hash):
 		// Requesting the root node which is special.
