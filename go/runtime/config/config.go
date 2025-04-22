@@ -101,6 +101,7 @@ type Config struct {
 	SandboxBinary string `yaml:"sandbox_binary,omitempty"`
 
 	// Path to SGX runtime loader binary (for SGX runtimes).
+	// NOTE: This may go away in the future, use `SGX.Loader` instead.
 	SGXLoader string `yaml:"sgx_loader,omitempty"`
 
 	// The runtime environment (sgx, elf, auto).
@@ -151,6 +152,12 @@ type Config struct {
 	//
 	// This flag can only be used if the DebugDontBlameOasis flag is set.
 	DebugMockTEE bool `yaml:"debug_mock_tee,omitempty"`
+
+	// SGX is configuration specific to Intel SGX.
+	SGX SgxConfig `yaml:"sgx,omitempty"`
+
+	// TDX is configuration specific to Intel TDX.
+	TDX TdxConfig `yaml:"tdx,omitempty"`
 }
 
 // GetComponent returns the configuration for the given component
@@ -182,6 +189,20 @@ func (c *Config) GetLocalConfig(runtimeID common.Namespace) map[string]any {
 	// Support legacy configuration where the runtime configuration is defined
 	// at the top level.
 	return c.RuntimeConfig[runtimeID.String()]
+}
+
+// SgxConfig is configuration specific to Intel SGX.
+type SgxConfig struct {
+	// Loader is the path to the SGX runtime loader binary.
+	Loader string `yaml:"loader,omitempty"`
+}
+
+// TdxConfig is configuration specific to Intel TDX.
+type TdxConfig struct {
+	// CidStart is the start of the CID range allocated to VMs.
+	CidStart uint32 `yaml:"cid_start,omitempty"`
+	// CidCount is the number of CIDs allocated to VMs.
+	CidCount uint32 `yaml:"cid_count,omitempty"`
 }
 
 // RuntimeConfig is the runtime configuration.
@@ -335,8 +356,11 @@ func (c *Config) Validate() error {
 
 	switch c.Environment {
 	case RuntimeEnvironmentSGX:
-		if c.SGXLoader == "" {
-			return fmt.Errorf("sgx_loader must be set when using sgx environment")
+		if c.SGXLoader == "" && c.SGX.Loader == "" {
+			return fmt.Errorf("sgx.loader must be set when using sgx environment")
+		}
+		if c.SGXLoader != "" && c.SGX.Loader != "" {
+			return fmt.Errorf("only one of sgx_loader and sgx.loader must be set")
 		}
 	case RuntimeEnvironmentSGXMock:
 	case RuntimeEnvironmentAuto:
@@ -363,7 +387,10 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+	return c.validateNetworking()
+}
 
+func (c *Config) validateNetworking() error {
 	// Validate combined network configurations to quickly check there is no overlap.
 	type usedPort struct {
 		proto string
@@ -456,5 +483,12 @@ func DefaultConfig() Config {
 			NumInstances: 0,
 		},
 		Registries: []string{oasisBundleRegistryURL},
+		SGX: SgxConfig{
+			Loader: "",
+		},
+		TDX: TdxConfig{
+			CidStart: 0xA5150000,
+			CidCount: 1024,
+		},
 	}
 }

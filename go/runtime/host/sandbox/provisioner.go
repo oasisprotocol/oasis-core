@@ -16,6 +16,9 @@ import (
 // GetSandboxConfigFunc is the function used to generate the sandbox configuration.
 type GetSandboxConfigFunc func(cfg host.Config, conn Connector, runtimeDir string) (process.Config, error)
 
+// CleanupFunc is the runtime cleanup function.
+type CleanupFunc func(cfg host.Config)
+
 // Config contains the sandbox provisioner configuration options.
 type Config struct {
 	// Connector is the runtime connector factory that is used to establish a connection with the
@@ -25,6 +28,9 @@ type Config struct {
 	// GetSandboxConfig is a function that generates the sandbox configuration. In case it is not
 	// specified a default function is used.
 	GetSandboxConfig GetSandboxConfigFunc
+
+	// Cleanup is a function that gets called when the runtime is cleaned up.
+	Cleanup CleanupFunc
 
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
@@ -61,6 +67,10 @@ func NewProvisioner(cfg Config) (host.Provisioner, error) {
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
 		cfg.GetSandboxConfig = DefaultGetSandboxConfig(cfg.Logger, cfg.SandboxBinaryPath)
+	}
+	// Use a default Cleanup if none was provided.
+	if cfg.Cleanup == nil {
+		cfg.Cleanup = func(host.Config) {}
 	}
 	// Make sure host environment information was provided in HostInfo.
 	if cfg.HostInfo == nil {

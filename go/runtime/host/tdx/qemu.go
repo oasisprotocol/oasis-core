@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mdlayher/vsock"
@@ -38,8 +37,6 @@ const (
 	defaultQemuSystemPath = "/usr/bin/qemu-system-x86_64"
 	// defaultQemuImgPath is the default qemu-bin binary path.
 	defaultQemuImgPath = "/usr/bin/qemu-img"
-	// defaultStartCid is the default start CID.
-	defaultStartCid = 0xA5150000
 	// defaultRuntimeAttestInterval is the default runtime (re-)attestation interval.
 	defaultRuntimeAttestInterval = 2 * time.Hour
 	// persistentImageDir is the name of the directory within the runtime data directory
@@ -69,6 +66,9 @@ type QemuConfig struct {
 	// Identity is the node identity.
 	Identity *identity.Identity
 
+	// CidPool is a pool of CIDs to allocate from.
+	CidPool *CidPool
+
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
 	RuntimeAttestInterval time.Duration
@@ -87,9 +87,7 @@ type qemuProvisioner struct {
 	pcs       pcs.QuoteService
 	consensus consensus.Backend
 	identity  *identity.Identity
-
-	l       sync.Mutex
-	nextCid uint32
+	cidPool   *CidPool
 
 	logger *logging.Logger
 }
@@ -108,12 +106,13 @@ func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
 		pcs:       cfg.PCS,
 		consensus: cfg.Consensus,
 		identity:  cfg.Identity,
-		nextCid:   defaultStartCid, // TODO: Could also include the local PID.
+		cidPool:   cfg.CidPool,
 		logger:    logging.GetLogger("runtime/host/tdx/qemu"),
 	}
 	sp, err := sandbox.NewProvisioner(sandbox.Config{
 		Connector:         newVsockConnector,
 		GetSandboxConfig:  p.getSandboxConfig,
+		Cleanup:           p.cleanup,
 		HostInfo:          cfg.HostInfo,
 		HostInitializer:   p.hostInitializer,
 		InsecureNoSandbox: true, // No sandbox is needed for TDX.
@@ -129,18 +128,24 @@ func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
 
 // Implements host.Provisioner.
 func (p *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
-	// Assign CID if not explicitly configured.
-	if cfg.Extra == nil {
-		p.l.Lock()
-		cfg.Extra = &QemuExtraConfig{
-			CID: p.nextCid,
+	switch extraCfg := cfg.Extra.(type) {
+	case nil:
+		// Assign CID if not explicitly configured.
+		cid, err := p.cidPool.Allocate()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate CID: %w", err)
 		}
-		p.nextCid++
-		p.l.Unlock()
-	}
 
-	// Ensure any extra configuration is of the correct type.
-	if _, ok := cfg.Extra.(*QemuExtraConfig); !ok {
+		cfg.Extra = &QemuExtraConfig{
+			CID: cid,
+		}
+	case *QemuExtraConfig:
+		// Otherwise just allocate the configured CID to ensure it is free and in range.
+		err := p.cidPool.AllocateExact(extraCfg.CID)
+		if err != nil {
+			return nil, err
+		}
+	default:
 		return nil, fmt.Errorf("invalid provisioner configuration")
 	}
 
@@ -150,6 +155,13 @@ func (p *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 // Implements host.Provisioner.
 func (p *qemuProvisioner) Name() string {
 	return "tdx-qemu"
+}
+
+func (p *qemuProvisioner) cleanup(cfg host.Config) {
+	cid := cfg.Extra.(*QemuExtraConfig).CID // Ensured above.
+	if !p.cidPool.Release(cid) {
+		p.logger.Error("previously allocated CID was already released")
+	}
 }
 
 func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector, _ string) (process.Config, error) {
@@ -236,8 +248,6 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			)
 		}
 	}
-
-	// compCfg, ok := config.GlobalConfig.Runtime.GetComponent(rh.parent.runtime.ID(), rh.id)
 
 	// Configure network access.
 	switch cfg.Component.IsNetworkAllowed() {
