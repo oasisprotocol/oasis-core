@@ -3,6 +3,7 @@ package mkvs
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
@@ -202,7 +203,7 @@ func (it *treeIterator) Seek(key node.Key) {
 	err := it.doNext(it.tree.cache.pendingRoot, 0, node.Key{}, key, visitBefore)
 	if err != nil {
 		// Make sure to invalidate the iterator on error.
-		it.setError(err)
+		it.setError(fmt.Errorf("failed to seek (key: %q): %w", key, err))
 	}
 }
 
@@ -250,7 +251,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
-		return err
+		return fmt.Errorf("dereferencing node pointer (hash: %.8s...): %w", ptr.Hash, err)
 	}
 
 	// Include nodes in proof if we have a proof builder.

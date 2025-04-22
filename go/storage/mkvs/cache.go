@@ -356,12 +356,12 @@ func (c *cache) derefNodePtr(
 
 	// First, attempt to fetch from the local node database.
 	n, err := c.db.GetNode(c.syncRoot, ptr)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		ptr.Node = n
 		// Commit node to cache.
 		c.commitNode(ptr)
-	case db.ErrNodeNotFound:
+	case errors.Is(err, db.ErrNodeNotFound):
 		// Node not found in local node database, try the syncer if available.
 		if c.rs == syncer.NopReadSyncer {
 			return nil, err

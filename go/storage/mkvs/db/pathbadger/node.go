@@ -93,7 +93,8 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	case badger.ErrKeyNotFound:
 		return nil, api.ErrNodeNotFound
 	default:
-		d.logger.Error("failed to Get node from backing store",
+		d.logger.Error("mkvs/pathbadger: failed to Get node from backing store",
+			"ptr", ptr,
 			"err", err,
 		)
 		return nil, fmt.Errorf("mkvs/pathbadger: failed to Get node from backing store: %w", err)
@@ -105,7 +106,8 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 		n, vErr = nodeFromDb(val)
 		return vErr
 	}); err != nil {
-		d.logger.Error("failed to unmarshal node",
+		d.logger.Error("mkvs/pathbadger: failed to unmarshal node",
+			"ptr", ptr,
 			"err", err,
 		)
 		return nil, fmt.Errorf("mkvs/pathbadger: failed to unmarshal node: %w", err)
