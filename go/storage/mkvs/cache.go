@@ -360,7 +360,22 @@ func (c *cache) derefNodePtr(
 	case err == nil:
 		ptr.Node = n
 		// Commit node to cache.
-		c.commitNode(ptr)
+		var commitNodes func(*node.Pointer)
+		commitNodes = func(pt *node.Pointer) {
+			if pt == nil || pt.Node == nil {
+				return
+			}
+			c.commitNode(pt)
+			switch n := pt.Node.(type) {
+			case nil, *node.LeafNode:
+				return
+			case *node.InternalNode:
+				commitNodes(n.Left)
+				// commitNodes(n.LeafNode) // TODO: Leaf nodes are always(??) part of internal nodes internally.
+				commitNodes(n.Right)
+			}
+		}
+		commitNodes(ptr)
 	case errors.Is(err, db.ErrNodeNotFound):
 		// Node not found in local node database, try the syncer if available.
 		if c.rs == syncer.NopReadSyncer {

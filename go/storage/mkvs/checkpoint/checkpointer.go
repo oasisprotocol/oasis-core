@@ -172,11 +172,6 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 	)
 
 	for _, root := range roots {
-		c.logger.Info("creating new checkpoint",
-			"root", root,
-			"chunk_size", params.ChunkSize,
-		)
-
 		_, err = c.creator.CreateCheckpoint(ctx, root, params.ChunkSize)
 		if err != nil {
 			c.logger.Error("failed to create checkpoint",
