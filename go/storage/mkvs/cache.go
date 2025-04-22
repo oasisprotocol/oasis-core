@@ -326,6 +326,7 @@ func (c *cache) derefNodePtr(
 	ctx context.Context,
 	ptr *node.Pointer,
 	fetcher readSyncFetcher,
+	localPrefetch int,
 ) (node.Node, error) {
 	if ptr == nil {
 		return nil, nil
@@ -355,7 +356,7 @@ func (c *cache) derefNodePtr(
 	}
 
 	// First, attempt to fetch from the local node database.
-	n, err := c.db.GetNode(c.syncRoot, ptr)
+	n, err := c.db.GetNode(c.syncRoot, ptr, localPrefetch)
 	switch {
 	case err == nil:
 		ptr.Node = n

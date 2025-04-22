@@ -30,7 +30,11 @@ const (
 )
 
 // Implements api.NodeDB.
-func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
+func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer, maxPrefetched int) (node.Node, error) {
+	if maxPrefetched < 1 {
+		return nil, fmt.Errorf("mkvs/pathbadger: number of nodes to prefetch must be greater than 1")
+	}
+
 	if ptr == nil || !ptr.IsClean() {
 		return nil, fmt.Errorf("mkvs/pathbadger: invalid node pointer")
 	}
@@ -51,7 +55,6 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 		return nil, err
 	}
 
-	const maxPrefetched int = 1000
 	var prefetched int
 	var prefetch func(node.Root, *node.Pointer, *badger.Txn) (node.Node, error)
 	prefetch = func(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {

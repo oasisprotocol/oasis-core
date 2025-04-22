@@ -108,7 +108,7 @@ func (t *tree) doGet(
 	}
 
 	// Dereference the node, possibly making a remote request.
-	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, opts.includeSiblings))
+	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, opts.includeSiblings), 1)
 	if err != nil {
 		return nil, err
 	}
