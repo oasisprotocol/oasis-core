@@ -45,7 +45,7 @@ func (c *ClientService) TrustedLightBlock(int64) (*consensus.LightBlock, error) 
 
 // LightBlock implements the LightProvider interface.
 func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
-	lb, _, err := tryProvidersFrom(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+	lb, _, err := tryProviders(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 		return p.GetLightBlock(ctx, height)
 	})
 	if err != nil {

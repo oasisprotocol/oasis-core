@@ -32,25 +32,13 @@ type Config struct {
 // Client is a CometBFT consensus light client that talks with remote oasis-nodes that are using
 // the CometBFT consensus backend and verifies responses.
 type Client struct {
+	providers []*p2pLight.LightClientProvider
+
 	// lightClient is a wrapped CometBFT light client used for verifying headers.
 	lightClient *lazyClient
 }
 
 func tryProviders[R any](
-	ctx context.Context,
-	c *Client,
-	fn func(*p2pLight.LightClientProvider) (R, rpc.PeerFeedback, error),
-) (R, rpc.PeerFeedback, error) {
-	// Primary provider.
-	providers := append([]*p2pLight.LightClientProvider{}, c.lightClient.Primary().(*p2pLight.LightClientProvider))
-	// Additional providers.
-	for _, provider := range c.lightClient.Witnesses() {
-		providers = append(providers, provider.(*p2pLight.LightClientProvider))
-	}
-	return tryProvidersFrom(ctx, providers, fn)
-}
-
-func tryProvidersFrom[R any](
 	ctx context.Context,
 	providers []*p2pLight.LightClientProvider,
 	fn func(*p2pLight.LightClientProvider) (R, rpc.PeerFeedback, error),
@@ -79,14 +67,14 @@ func tryProvidersFrom[R any](
 
 // GetLightBlock queries peers for a specific light block.
 func (c *Client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, c, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+	return tryProviders(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 		return p.GetLightBlock(ctx, height)
 	})
 }
 
 // GetParameters queries peers for consensus parameters for a specific height.
 func (c *Client) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, c, func(p *p2pLight.LightClientProvider) (*consensus.Parameters, rpc.PeerFeedback, error) {
+	return tryProviders(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.Parameters, rpc.PeerFeedback, error) {
 		return p.GetParameters(ctx, height)
 	})
 }
@@ -144,10 +132,15 @@ func (c *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtp
 // and is used internally for CometBFT's state sync protocol.
 func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config) (*Client, error) {
 	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, p2p)
-	primary := pool.NewLightClientProvider()
+	providers := make([]*p2pLight.LightClientProvider, 0, numWitnesses+1)
+	for range numWitnesses + 1 {
+		providers = append(providers, pool.NewLightClientProvider())
+	}
+
+	primary := providers[0]
 	witnesses := make([]cmtlightprovider.Provider, 0, numWitnesses)
-	for range numWitnesses {
-		witnesses = append(witnesses, pool.NewLightClientProvider())
+	for _, provider := range providers[1:] {
+		witnesses = append(witnesses, provider)
 	}
 
 	lightClient, err := newLazyClient(
@@ -165,6 +158,7 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 	}
 
 	return &Client{
+		providers:   providers,
 		lightClient: lightClient,
 	}, nil
 }
