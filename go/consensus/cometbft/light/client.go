@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
@@ -33,19 +32,19 @@ type Config struct {
 // Client is a CometBFT consensus light client that talks with remote oasis-nodes that are using
 // the CometBFT consensus backend and verifies responses.
 type Client struct {
-	// tmc is the CometBFT light client used for verifying headers.
-	tmc *cmtlight.Client
+	// lightClient is a wrapped CometBFT light client used for verifying headers.
+	lightClient *lazyClient
 }
 
 func tryProviders[R any](
 	ctx context.Context,
-	lc *Client,
+	c *Client,
 	fn func(*p2pLight.LightClientProvider) (R, rpc.PeerFeedback, error),
 ) (R, rpc.PeerFeedback, error) {
 	// Primary provider.
-	providers := append([]*p2pLight.LightClientProvider{}, lc.tmc.Primary().(*p2pLight.LightClientProvider))
+	providers := append([]*p2pLight.LightClientProvider{}, c.lightClient.Primary().(*p2pLight.LightClientProvider))
 	// Additional providers.
-	for _, provider := range lc.tmc.Witnesses() {
+	for _, provider := range c.lightClient.Witnesses() {
 		providers = append(providers, provider.(*p2pLight.LightClientProvider))
 	}
 	return tryProvidersFrom(ctx, providers, fn)
@@ -79,27 +78,27 @@ func tryProvidersFrom[R any](
 }
 
 // GetLightBlock queries peers for a specific light block.
-func (lc *Client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, lc, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+func (c *Client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+	return tryProviders(ctx, c, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 		return p.GetLightBlock(ctx, height)
 	})
 }
 
 // GetParameters queries peers for consensus parameters for a specific height.
-func (lc *Client) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, lc, func(p *p2pLight.LightClientProvider) (*consensus.Parameters, rpc.PeerFeedback, error) {
+func (c *Client) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+	return tryProviders(ctx, c, func(p *p2pLight.LightClientProvider) (*consensus.Parameters, rpc.PeerFeedback, error) {
 		return p.GetParameters(ctx, height)
 	})
 }
 
 // GetVerifiedLightBlock returns a verified light block.
-func (lc *Client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
-	return lc.tmc.VerifyLightBlockAtHeight(ctx, height, time.Now())
+func (c *Client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
+	return c.lightClient.VerifyLightBlockAtHeight(ctx, height, time.Now())
 }
 
 // GetVerifiedParameters returns verified consensus parameters.
-func (lc *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
-	p, pf, err := lc.GetParameters(ctx, height)
+func (c *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
+	p, pf, err := c.GetParameters(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +120,7 @@ func (lc *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmt
 	}
 
 	// Fetch the header from the light client.
-	l, err := lc.tmc.VerifyLightBlockAtHeight(ctx, p.Height, time.Now())
+	l, err := c.lightClient.VerifyLightBlockAtHeight(ctx, p.Height, time.Now())
 	if err != nil {
 		pf.RecordBadPeer()
 		return nil, fmt.Errorf("failed to fetch header %d from light client: %w", p.Height, err)
@@ -145,33 +144,17 @@ func (lc *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmt
 // and is used internally for CometBFT's state sync protocol.
 func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config) (*Client, error) {
 	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, p2p)
-
-	initChCases := []reflect.SelectCase{}
-	var providers []cmtlightprovider.Provider
-	for i := 0; i < numProviders; i++ {
-		p := pool.NewLightClientProvider()
-
-		providers = append(providers, p)
-		initChCases = append(initChCases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(p.Initialized()),
-		})
+	primary := pool.NewLightClientProvider()
+	witnesses := make([]cmtlightprovider.Provider, 0, numWitnesses)
+	for range numWitnesses {
+		witnesses = append(witnesses, pool.NewLightClientProvider())
 	}
-	// LightClient instantiation immediately starts the light client and fails if no providers
-	// are available, ensure at least one provider has been initialized.
-	idx, _, _ := reflect.Select(initChCases)
 
-	// Make the initialized provider the primary.
-	primary := providers[idx]
-	providers[idx] = providers[len(providers)-1]
-	providers = providers[:len(providers)-1]
-
-	tmc, err := cmtlight.NewClient(
-		ctx,
+	lightClient, err := newLazyClient(
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
-		primary,   // Primary provider.
-		providers, // Witnesses.
+		primary,
+		witnesses,
 		cmtlightdb.New(dbm.NewMemDB(), ""),
 		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts), // TODO: Make this configurable.
 		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
@@ -182,6 +165,6 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 	}
 
 	return &Client{
-		tmc: tmc,
+		lightClient: lightClient,
 	}, nil
 }
