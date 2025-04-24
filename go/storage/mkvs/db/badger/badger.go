@@ -1133,7 +1133,7 @@ type badgerSubtree struct {
 	batch *badgerBatch
 }
 
-func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
+func (s *badgerSubtree) PutNode(ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
@@ -1154,10 +1154,10 @@ func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 	return s.batch.bat.Set(nodeKey, data)
 }
 
-func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }
 
-func (s *badgerSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
+func (s *badgerSubtree) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }

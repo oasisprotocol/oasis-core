@@ -170,11 +170,11 @@ func doRestoreChunk(
 
 	switch n := ptr.Node.(type) {
 	case nil:
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 	case *node.InternalNode:
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 
@@ -191,15 +191,15 @@ func doRestoreChunk(
 		}
 
 		// Store the node.
-		if err = subtree.PutNode(depth, ptr); err != nil {
+		if err = subtree.PutNode(ptr); err != nil {
 			return
 		}
 	case *node.LeafNode:
 		// Leaf node -- store the node.
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
-		if err = subtree.PutNode(depth, ptr); err != nil {
+		if err = subtree.PutNode(ptr); err != nil {
 			return
 		}
 	}
