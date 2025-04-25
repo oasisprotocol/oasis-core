@@ -200,24 +200,17 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
 	}
 
-	// In case a component is specified, route to correct component.
-	switch comp {
-	case nil:
-		// Just query the runtime as usual.
-	default:
-		// Route query to appropriate component if possible.
-		cr, ok := hrt.(host.CompositeRuntime)
-		if !ok {
-			break
-		}
-		rt, ok := cr.Component(*comp)
-		if !ok {
-			break
-		}
-		hrt = host.NewRichRuntime(rt)
+	// Route to correct component -- an empty component implies RONL.
+	if comp == nil {
+		comp = &component.ID_RONL
 	}
+	rt, ok := hrt.Component(*comp)
+	if !ok {
+		return nil, fmt.Errorf("component '%s' not found", comp)
+	}
+	dst := host.NewRichRuntime(rt)
 
-	return hrt.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
+	return dst.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
 }
 
 func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[hash.Hash]*pendingTx) error {

@@ -293,7 +293,7 @@ func (w *secretsWorker) GetStatus() *workerKm.SecretsStatus {
 	}
 }
 
-func (w *secretsWorker) work(ctx context.Context, hrt host.RichRuntime) {
+func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 	w.logger.Info("starting master and ephemeral secrets worker")
 
 	// Signal that the worker started.

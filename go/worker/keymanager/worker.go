@@ -219,7 +219,7 @@ func (w *Worker) callEnclaveLocal(ctx context.Context, method string, args any, 
 	if rt == nil {
 		return fmt.Errorf("not initialized")
 	}
-	return rt.LocalRPC(ctx, method, args, rsp)
+	return host.NewRichRuntime(rt).LocalRPC(ctx, method, args, rsp)
 }
 
 func (w *Worker) runtimeAttestationKey() (*signature.PublicKey, error) {

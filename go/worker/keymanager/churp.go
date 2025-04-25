@@ -223,7 +223,7 @@ func (w *churpWorker) GetStatus() workerKm.ChurpStatus {
 	return status
 }
 
-func (w *churpWorker) work(ctx context.Context, _ host.RichRuntime) {
+func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 	w.logger.Info("starting worker",
 		"node_id", w.kmWorker.nodeID,
 	)

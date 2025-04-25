@@ -18,7 +18,9 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
@@ -26,8 +28,10 @@ const (
 	// notifyTimeout is the maximum time to wait for a notification to be processed by the runtime.
 	notifyTimeout = 10 * time.Second
 
-	// retryInterval is the time interval used between failed key manager updates.
-	retryInterval = time.Second
+	// keyManagerUpdateRetryInterval is the time interval used between failed key manager updates.
+	keyManagerUpdateRetryInterval = time.Second
+	// maxKeyManagerUpdateRetries is the maximum number of key manager update retries.
+	maxKeyManagerUpdateRetries = 16
 
 	// minAttestationInterval is the minimum attestation interval.
 	minAttestationInterval = 5 * time.Minute
@@ -36,27 +40,56 @@ const (
 // Ensure that the runtime host notifier implements the Notifier interface.
 var _ protocol.Notifier = (*runtimeHostNotifier)(nil)
 
+type componentNotifyFunc func(context.Context, host.RichRuntime)
+
+// Queue names.
+//
+// Multiple queues are used so that notifications of a given kind do not block notifications of
+// other kinds. All queues are created for each component independently.
+const (
+	queueKeyManagerStatus      = "key-manager/status"
+	queueKeyManagerQuotePolicy = "key-manager/quote-policy"
+	queueConsensusSync         = "consensus-sync"
+)
+
+const (
+	// notifyMainQueueSize is the size of the main routing queue.
+	notifyMainQueueSize = 64
+	// notifyComponentQueueSize is the size of each per-component queue.
+	//
+	// If the queue would overflow, the oldest entry is overwritten.
+	notifyComponentQueueSize = 1
+)
+
+type componentNotifyFuncWithQueue struct {
+	queue string
+	f     componentNotifyFunc
+}
+
 // runtimeHostNotifier is a runtime host notifier suitable for compute runtimes. It handles things
 // like key manager policy updates.
 type runtimeHostNotifier struct {
 	startOne cmSync.One
 
 	runtime   Runtime
-	host      host.RichRuntime
+	host      *composite.Host
 	consensus consensus.Backend
+
+	notifyCh chan *componentNotifyFuncWithQueue
 
 	logger *logging.Logger
 }
 
 // NewRuntimeHostNotifier returns a protocol notifier that handles key manager policy updates.
-func NewRuntimeHostNotifier(runtime Runtime, hostRt host.Runtime, consensus consensus.Backend) protocol.Notifier {
+func NewRuntimeHostNotifier(runtime Runtime, host *composite.Host, consensus consensus.Backend) protocol.Notifier {
 	logger := logging.GetLogger("runtime/registry/notifier").With("runtime_id", runtime.ID())
 
 	return &runtimeHostNotifier{
 		startOne:  cmSync.NewOne(),
 		runtime:   runtime,
-		host:      host.NewRichRuntime(hostRt),
+		host:      host,
 		consensus: consensus,
+		notifyCh:  make(chan *componentNotifyFuncWithQueue, notifyMainQueueSize),
 		logger:    logger,
 	}
 }
@@ -81,7 +114,118 @@ func (n *runtimeHostNotifier) run(ctx context.Context) {
 		n.watchPolicyUpdates(ctx)
 	}()
 
-	n.watchConsensusLightBlocks(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n.watchConsensusLightBlocks(ctx)
+	}()
+
+	n.broadcastNotifications(ctx)
+}
+
+func (n *runtimeHostNotifier) notifyComponents(queue string, f componentNotifyFunc) {
+	n.notifyCh <- &componentNotifyFuncWithQueue{
+		queue: queue,
+		f:     f,
+	}
+}
+
+func (n *runtimeHostNotifier) broadcastNotifications(ctx context.Context) {
+	type queueID struct {
+		comp  component.ID
+		queue string
+	}
+	type componentNotifier struct {
+		cancelFn context.CancelFunc
+		notifyCh *channels.RingChannel
+	}
+	queues := make(map[queueID]*componentNotifier)
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	runner := func(runnerCtx context.Context, qid queueID, notifyCh <-chan any) {
+		defer wg.Done()
+
+		n.logger.Debug("starting notification broadcast for component",
+			"component_id", qid.comp,
+			"queue", qid.queue,
+		)
+		defer func() {
+			n.logger.Debug("notification broadcast for component terminating",
+				"component_id", qid.comp,
+				"queue", qid.queue,
+			)
+		}()
+
+		for {
+			select {
+			case <-runnerCtx.Done():
+				return
+			case f, ok := <-notifyCh:
+				if !ok {
+					return
+				}
+
+				comp, ok := n.host.Component(qid.comp)
+				if !ok {
+					// Will be cleaned up by the manager loop.
+					continue
+				}
+
+				rr := host.NewRichRuntime(comp)
+				f.(componentNotifyFunc)(runnerCtx, rr)
+			}
+		}
+	}
+
+	n.logger.Debug("starting notification broadcast to components")
+
+	defer func() {
+		for _, cn := range queues {
+			cn.cancelFn()
+			cn.notifyCh.Close()
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			n.logger.Debug("broadcast terminating")
+			return
+		case fq := <-n.notifyCh:
+			// Dispatch to all components using a per-component queue to not block others.
+			for compID := range n.host.Components() {
+				qid := queueID{comp: compID, queue: fq.queue}
+				notifier, ok := queues[qid]
+				if !ok {
+					runnerCtx, cancelFn := context.WithCancel(ctx)
+
+					notifier = &componentNotifier{
+						cancelFn: cancelFn,
+						notifyCh: channels.NewRingChannel(channels.BufferCap(notifyComponentQueueSize)),
+					}
+					queues[qid] = notifier
+
+					wg.Add(1)
+					go runner(runnerCtx, qid, notifier.notifyCh.Out())
+				}
+
+				notifier.notifyCh.In() <- fq.f
+			}
+		}
+
+		// Drop queues for any removed components.
+		for qid, cn := range queues {
+			if _, ok := n.host.Component(qid.comp); ok {
+				continue
+			}
+
+			cn.cancelFn()
+			cn.notifyCh.Close()
+			delete(queues, qid)
+		}
+	}
 }
 
 func (n *runtimeHostNotifier) watchPolicyUpdates(ctx context.Context) {
@@ -167,9 +311,6 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	evCh, evSub := n.host.WatchEvents()
 	defer evSub.Close()
 
-	retryTicker := time.NewTicker(retryInterval)
-	defer retryTicker.Stop()
-
 	var (
 		statusUpdated      = true
 		quotePolicyUpdated = true
@@ -184,25 +325,15 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	for {
 		// Make sure that we actually have a new status.
 		if !statusUpdated && st != nil {
-			if err = n.updateKeyManagerStatus(ctx, st); err != nil {
-				n.logger.Error("failed to update key manager status",
-					"err", err,
-				)
-			} else {
-				statusUpdated = true
-			}
+			n.updateKeyManagerStatus(st)
+			statusUpdated = true
 		}
 
 		// Make sure that we actually have a new quote policy and that the current runtime version
 		// supports quote policy updates.
 		if !quotePolicyUpdated && sc != nil && sc.Policy != nil {
-			if err = n.updateKeyManagerQuotePolicy(ctx, sc.Policy); err != nil {
-				n.logger.Error("failed to update key manager quote policy",
-					"err", err,
-				)
-			} else {
-				quotePolicyUpdated = true
-			}
+			n.updateKeyManagerQuotePolicy(sc.Policy)
+			quotePolicyUpdated = true
 		}
 
 		select {
@@ -261,55 +392,64 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 
 			statusUpdated = false
 			quotePolicyUpdated = false
-		case <-retryTicker.C:
-			// Retry updates if some of them failed. When using CometBFT as a backend service
-			// the host will see the new state one block before the consensus verifier as the former
-			// sees the block H after it is executed while the latter needs to trust the block H
-			// first by verifying the signatures which are only available after the block H+1
-			// finalizes.
 		}
 	}
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status *secrets.Status) error {
+func (n *runtimeHostNotifier) updateKeyManagerStatus(status *secrets.Status) {
 	n.logger.Debug("got key manager status update", "status", status)
 
 	req := &protocol.Body{RuntimeKeyManagerStatusUpdateRequest: &protocol.RuntimeKeyManagerStatusUpdateRequest{
 		Status: *status,
 	}}
 
-	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
-	defer cancel()
+	n.notifyComponents(queueKeyManagerStatus, func(ctx context.Context, rr host.RichRuntime) {
+		for range maxKeyManagerUpdateRetries {
+			callCtx, cancelFn := context.WithTimeout(ctx, notifyTimeout)
+			_, err := rr.Call(callCtx, req)
+			cancelFn()
 
-	if _, err := n.host.Call(ctx, req); err != nil {
-		n.logger.Error("failed dispatching key manager status update to runtime",
-			"err", err,
-		)
-		return err
-	}
-
-	n.logger.Debug("key manager status update dispatched")
-	return nil
+			if err != nil {
+				n.logger.Error("failed dispatching key manager status update to runtime",
+					"err", err,
+				)
+				select {
+				case <-ctx.Done():
+				case <-time.After(keyManagerUpdateRetryInterval):
+					continue
+				}
+			}
+			break
+		}
+	})
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(ctx context.Context, policy *quote.Policy) error {
+func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(policy *quote.Policy) {
 	n.logger.Debug("got key manager quote policy update", "policy", policy)
 
 	req := &protocol.Body{RuntimeKeyManagerQuotePolicyUpdateRequest: &protocol.RuntimeKeyManagerQuotePolicyUpdateRequest{
 		Policy: *policy,
 	}}
 
-	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
-	defer cancel()
+	n.notifyComponents(queueKeyManagerQuotePolicy, func(ctx context.Context, rr host.RichRuntime) {
+		for range maxKeyManagerUpdateRetries {
+			callCtx, cancelFn := context.WithTimeout(ctx, notifyTimeout)
+			_, err := rr.Call(callCtx, req)
+			cancelFn()
 
-	if _, err := n.host.Call(ctx, req); err != nil {
-		n.logger.Error("failed dispatching key manager quote policy update to runtime",
-			"err", err,
-		)
-		return err
-	}
-	n.logger.Debug("key manager quote policy update dispatched")
-	return nil
+			if err != nil {
+				n.logger.Error("failed dispatching key manager quote policy update to runtime",
+					"err", err,
+				)
+				select {
+				case <-ctx.Done():
+				case <-time.After(keyManagerUpdateRetryInterval):
+					continue
+				}
+			}
+			break
+		}
+	})
 }
 
 func (n *runtimeHostNotifier) watchConsensusLightBlocks(ctx context.Context) {
@@ -414,19 +554,17 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks(ctx context.Context) {
 			height := uint64(blk.Height)
 
 			// Notify the runtime that a new consensus layer block is available.
-			ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
-			err = n.host.ConsensusSync(ctx, height)
-			cancel()
-			if err != nil {
-				n.logger.Error("failed to notify runtime of a new consensus layer block",
-					"err", err,
-					"height", height,
-				)
-				continue
-			}
-			n.logger.Debug("runtime notified of new consensus layer block",
-				"height", height,
-			)
+			n.notifyComponents(queueConsensusSync, func(ctx context.Context, rr host.RichRuntime) {
+				callCtx, cancelFn := context.WithTimeout(ctx, notifyTimeout)
+				defer cancelFn()
+
+				if err := rr.ConsensusSync(callCtx, height); err != nil {
+					n.logger.Error("failed to notify runtime of a new consensus layer block",
+						"err", err,
+						"height", height,
+					)
+				}
+			})
 
 			// Assume runtime has already done the initial attestation.
 			if lastAttestationUpdate.IsZero() {

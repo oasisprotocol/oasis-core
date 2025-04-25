@@ -19,7 +19,6 @@ type RuntimeHostNode struct {
 	mu sync.Mutex
 
 	host *composite.Host
-	rr   host.RichRuntime
 
 	runtime     Runtime
 	provisioner host.Provisioner
@@ -31,11 +30,9 @@ type RuntimeHostNode struct {
 // NewRuntimeHostNode creates a new runtime host node.
 func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler host.RuntimeHandler) (*RuntimeHostNode, error) {
 	h := composite.NewHost(runtime.ID())
-	rr := host.NewRichRuntime(h)
 
 	return &RuntimeHostNode{
 		host:        h,
-		rr:          rr,
 		runtime:     runtime,
 		handler:     handler,
 		provisioner: provisioner,
@@ -106,8 +103,8 @@ func (n *RuntimeHostNode) RemoveHostedRuntimeComponent(id component.ID) error {
 }
 
 // GetHostedRuntime returns the hosted runtime.
-func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
-	return n.rr
+func (n *RuntimeHostNode) GetHostedRuntime() *composite.Host {
+	return n.host
 }
 
 // GetHostedRuntimeActiveVersion returns the version of the active runtime.
