@@ -64,15 +64,8 @@ func tryProviders[R any](
 	return result, nil, err
 }
 
-// GetLightBlock queries peers for a specific light block.
-func (c *Client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-		return p.GetLightBlock(ctx, height)
-	})
-}
-
-// GetParameters queries peers for consensus parameters for a specific height.
-func (c *Client) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+// getParameters queries peers for consensus parameters for a specific height.
+func (c *Client) getParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
 	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Parameters, rpc.PeerFeedback, error) {
 		return p.GetParameters(ctx, height)
 	})
@@ -85,7 +78,7 @@ func (c *Client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmtt
 
 // GetVerifiedParameters returns verified consensus parameters.
 func (c *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
-	p, pf, err := c.GetParameters(ctx, height)
+	p, pf, err := c.getParameters(ctx, height)
 	if err != nil {
 		return nil, err
 	}
