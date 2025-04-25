@@ -23,8 +23,10 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -69,6 +71,9 @@ type Registry interface {
 
 	// GetBundleManager returns the bundle manager.
 	GetBundleManager() *bundle.Manager
+
+	// GetVolumeManager returns the volume manager.
+	GetVolumeManager() *volume.Manager
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -148,7 +153,7 @@ func newRuntime(
 	logger := logging.GetLogger("runtime/registry").With("runtime_id", runtimeID)
 
 	// Ensure runtime state directory exists.
-	rtDataDir, err := EnsureRuntimeStateDir(dataDir, runtimeID)
+	rtDataDir, err := runtimeConfig.EnsureRuntimeStateDir(dataDir, runtimeID)
 	if err != nil {
 		return nil, err
 	}
@@ -479,6 +484,7 @@ type runtimeRegistry struct {
 
 	bundleRegistry *bundle.Registry
 	bundleManager  *bundle.Manager
+	volumeManager  *volume.Manager
 }
 
 // GetRuntime implements Registry.
@@ -610,6 +616,11 @@ func (r *runtimeRegistry) GetBundleManager() *bundle.Manager {
 	return r.bundleManager
 }
 
+// GetVolumeManager implements Registry.
+func (r *runtimeRegistry) GetVolumeManager() *volume.Manager {
+	return r.volumeManager
+}
+
 // Name implements BackgroundService.
 func (r *runtimeRegistry) Name() string {
 	return "runtime registry"
@@ -618,6 +629,7 @@ func (r *runtimeRegistry) Name() string {
 // Start implements BackgroundService.
 func (r *runtimeRegistry) Start() error {
 	r.bundleManager.Start()
+	r.volumeManager.Start()
 
 	r.RLock()
 	defer r.RUnlock()
@@ -634,6 +646,7 @@ func (r *runtimeRegistry) Start() error {
 // Stop implements BackgroundService.
 func (r *runtimeRegistry) Stop() {
 	r.bundleManager.Stop()
+	r.volumeManager.Stop()
 
 	r.RLock()
 	defer r.RUnlock()
@@ -690,9 +703,15 @@ func New(
 		return nil, err
 	}
 
+	// Create volume manager.
+	volumeManager, err := volume.NewManager(dataDir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create bundle registry and discovery.
 	bundleRegistry := bundle.NewRegistry()
-	bundleManager, err := bundle.NewManager(dataDir, runtimeIDs, bundleRegistry)
+	bundleManager, err := bundle.NewManager(dataDir, runtimeIDs, bundleRegistry, volumeManager)
 	if err != nil {
 		return nil, err
 	}
@@ -714,6 +733,7 @@ func New(
 		historyFactory: historyFactory,
 		bundleRegistry: bundleRegistry,
 		bundleManager:  bundleManager,
+		volumeManager:  volumeManager,
 	}
 
 	// Initialize the runtime registry.

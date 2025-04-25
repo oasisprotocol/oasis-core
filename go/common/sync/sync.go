@@ -1,5 +1,5 @@
 // Package sync provides sync primitives.
-package service
+package sync
 
 import (
 	"context"

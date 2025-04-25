@@ -19,6 +19,14 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
+// ComponentNotification is a component notification.
+type ComponentNotification struct {
+	// Added is set when the given component has been added.
+	Added *ExplodedComponent
+	// Removed is set when the given component has been removed.
+	Removed *component.ID
+}
+
 // Registry is a registry of manifests and components.
 type Registry struct {
 	mu sync.RWMutex
@@ -111,6 +119,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			TEEKind:         teeKind,
 			Detached:        detached,
 			ExplodedDataDir: manifest.ExplodedDataDir,
+			Volumes:         manifest.Volumes,
 		}
 
 		runtimeComponents, ok := r.components[manifest.ID]
@@ -126,7 +135,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 		componentVersions[comp.Version] = comp
 
 		if notifier, ok := r.notifiers[manifest.ID]; ok {
-			notifier.Broadcast(comp)
+			notifier.Broadcast(&ComponentNotification{Added: comp})
 		}
 	}
 
@@ -148,11 +157,30 @@ func (r *Registry) Manifests() []*ExplodedManifest {
 	return slices.Collect(maps.Values(r.manifests))
 }
 
+// ManifestsWithLabels returns all manifests that have the specified labels set.
+func (r *Registry) ManifestsWithLabels(labels map[string]string) []*ExplodedManifest {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// TODO: Index labels when there are a lot of manifests to manage.
+	var manifests []*ExplodedManifest
+	for _, manifest := range r.manifests {
+		if !manifest.HasLabels(labels) {
+			continue
+		}
+		manifests = append(manifests, manifest)
+	}
+	return manifests
+}
+
 // RemoveManifest removes a manifest with provided hash.
 func (r *Registry) RemoveManifest(hash hash.Hash) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.removeManifestLocked(hash)
+}
 
+func (r *Registry) removeManifestLocked(hash hash.Hash) bool {
 	r.logger.Info("removing manifest",
 		"manifest_hash", hash,
 	)
@@ -168,6 +196,11 @@ func (r *Registry) RemoveManifest(hash hash.Hash) bool {
 		delete(r.components[manifest.ID][c.ID()], c.Version)
 		if len(r.components[manifest.ID][c.ID()]) == 0 {
 			delete(r.components[manifest.ID], c.ID())
+
+			if notifier, ok := r.notifiers[manifest.ID]; ok {
+				compID := c.ID()
+				notifier.Broadcast(&ComponentNotification{Removed: &compID})
+			}
 		}
 	}
 	if len(r.components[manifest.ID]) == 0 {
@@ -175,6 +208,26 @@ func (r *Registry) RemoveManifest(hash hash.Hash) bool {
 	}
 
 	return true
+}
+
+// RemoveManifestsWithLabels removes all manifests matching the provided labels.
+//
+// Returns the number of removed manifests.
+func (r *Registry) RemoveManifestsWithLabels(labels map[string]string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// TODO: Index labels when there are a lot of manifests to manage.
+	var result int
+	for manifestHash, manifest := range r.manifests {
+		if !manifest.HasLabels(labels) {
+			continue
+		}
+		if r.removeManifestLocked(manifestHash) {
+			result++
+		}
+	}
+	return result
 }
 
 // GetVersions returns versions for the given runtime, sorted in ascending
@@ -260,7 +313,7 @@ func (r *Registry) Components(runtimeID common.Namespace) []*ExplodedComponent {
 
 // WatchComponents provides a channel that streams runtime components as they
 // are added to the registry.
-func (r *Registry) WatchComponents(runtimeID common.Namespace) (<-chan *ExplodedComponent, *pubsub.Subscription) {
+func (r *Registry) WatchComponents(runtimeID common.Namespace) (<-chan *ComponentNotification, *pubsub.Subscription) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -271,7 +324,7 @@ func (r *Registry) WatchComponents(runtimeID common.Namespace) (<-chan *Exploded
 	}
 
 	sub := notifier.Subscribe()
-	ch := make(chan *ExplodedComponent)
+	ch := make(chan *ComponentNotification)
 	sub.Unwrap(ch)
 
 	return ch, sub

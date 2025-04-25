@@ -8,13 +8,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mdlayher/vsock"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -23,13 +21,13 @@ import (
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox/process"
 	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
+	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
 
 const (
@@ -39,9 +37,6 @@ const (
 	defaultQemuImgPath = "/usr/bin/qemu-img"
 	// defaultRuntimeAttestInterval is the default runtime (re-)attestation interval.
 	defaultRuntimeAttestInterval = 2 * time.Hour
-	// persistentImageDir is the name of the directory within the runtime data directory
-	// where persistent overlay images can be stored.
-	persistentImageDir = "images"
 
 	// vsockPortRHP is the VSOCK port used for the Runtime-Host Protocol.
 	vsockPortRHP = 1
@@ -51,7 +46,7 @@ const (
 
 // QemuConfig is the configuration of the QEMU-based TDX runtime provisioner.
 type QemuConfig struct {
-	// DataDir is the runtime data directory.
+	// DataDir is the node data directory.
 	DataDir string
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
@@ -225,8 +220,13 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			// Set up a persistent overlay image when configured to do so.
 			snapshotMode := "on" // Default to ephemeral images.
 			if tdxCfg.Stage2Persist {
+				volume, ok := cfg.Component.Volumes[tdxCfg.Stage2Image]
+				if !ok {
+					return process.Config{}, fmt.Errorf("volume for '%s' not attached", tdxCfg.Stage2Image)
+				}
+
 				var err error
-				stage2Image, err = p.createPersistentOverlayImage(cfg, cfg.Component, stage2Image, stage2Format)
+				stage2Image, err = p.createPersistentOverlayImage(stage2Image, stage2Format, volume)
 				if err != nil {
 					return process.Config{}, err
 				}
@@ -337,16 +337,8 @@ func (p *qemuProvisioner) createNetworkingConfig(cfg host.Config) ([]string, err
 // returns the full path to the overlay image. In case the image already exists, it is reused.
 //
 // The format of the resulting image is always qcow2.
-func (p *qemuProvisioner) createPersistentOverlayImage(
-	rtCfg host.Config,
-	comp *bundle.ExplodedComponent,
-	image string,
-	format string,
-) (string, error) {
-	compID, _ := comp.ID().MarshalText()
-	imageDir := filepath.Join(p.cfg.DataDir, persistentImageDir, rtCfg.ID.String(), string(compID))
-	imageFn := filepath.Join(imageDir, fmt.Sprintf("%s.overlay", filepath.Base(image)))
-	switch _, err := os.Stat(imageFn); {
+func (p *qemuProvisioner) createPersistentOverlayImage(image string, format string, volume *volume.Volume) (string, error) {
+	switch _, err := os.Stat(volume.Path); {
 	case err == nil:
 		// Image already exists, perform a rebase operation to account for the backing file location
 		// changing (e.g. due to an upgrade).
@@ -369,14 +361,14 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 			return "", fmt.Errorf("malformed base image metadata: %w", err)
 		}
 
-		cmd = exec.Command(
+		cmd = exec.Command( //nolint: gosec
 			defaultQemuImgPath,
 			"rebase",
 			"-u",
 			"-f", "qcow2",
 			"-b", image,
 			"-F", format,
-			imageFn,
+			volume.Path,
 		)
 		out.Reset()
 		cmd.Stderr = &out
@@ -386,10 +378,10 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 		}
 
 		// Perform a resize if needed.
-		cmd = exec.Command(
+		cmd = exec.Command( //nolint: gosec
 			defaultQemuImgPath,
 			"resize",
-			imageFn,
+			volume.Path,
 			fmt.Sprintf("%d", info.VirtualSize),
 		)
 		out.Reset()
@@ -399,19 +391,14 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 			return "", fmt.Errorf("failed to resize persistent overlay image: %s\n%w", out.String(), err)
 		}
 	case errors.Is(err, os.ErrNotExist):
-		// Create image directory if it doesn't yet exist.
-		if err := common.Mkdir(imageDir); err != nil {
-			return "", fmt.Errorf("failed to create persistent overlay image directory: %w", err)
-		}
-
 		// Create the persistent overlay image.
-		cmd := exec.Command(
+		cmd := exec.Command( //nolint: gosec
 			defaultQemuImgPath,
 			"create",
 			"-f", "qcow2",
 			"-b", image,
 			"-F", format,
-			imageFn,
+			volume.Path,
 		)
 		var out strings.Builder
 		cmd.Stderr = &out
@@ -422,7 +409,7 @@ func (p *qemuProvisioner) createPersistentOverlayImage(
 	default:
 		return "", fmt.Errorf("failed to stat persistent overlay image: %w", err)
 	}
-	return imageFn, nil
+	return volume.Path, nil
 }
 
 func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (capTEE *node.CapabilityTEE, aerr error) {

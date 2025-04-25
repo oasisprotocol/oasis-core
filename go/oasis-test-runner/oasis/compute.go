@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
-	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
@@ -222,7 +221,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 	// Initialize runtime state paths.
 	for i, path := range cfg.RuntimeStatePaths {
-		stateDir := registry.GetRuntimeStateDir(host.DataDir(), net.Runtimes()[i].descriptor.ID)
+		stateDir := runtimeConfig.GetRuntimeStateDir(host.DataDir(), net.Runtimes()[i].descriptor.ID)
 		net.logger.Info("copying runtime state", "from", path, "to", stateDir)
 		if err := common.CopyDir(path, stateDir); err != nil {
 			return nil, fmt.Errorf("oasis/compute: failed to copy runtime state: %w", err)

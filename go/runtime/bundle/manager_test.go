@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
 
 type mockStore struct {
@@ -32,13 +33,32 @@ func (r *mockStore) Manifests() []*ExplodedManifest {
 	panic("not implemented")
 }
 
+func (r *mockStore) ManifestsWithLabels(map[string]string) []*ExplodedManifest {
+	panic("not implemented")
+}
+
 func (r *mockStore) RemoveManifest(hash.Hash) bool {
+	panic("not implemented")
+}
+
+func (r *mockStore) RemoveManifestsWithLabels(map[string]string) int {
+	panic("not implemented")
+}
+
+type mockVolumeManager struct{}
+
+func newMockVolumeManager() *mockVolumeManager {
+	return &mockVolumeManager{}
+}
+
+func (m *mockVolumeManager) GetOrCreate(map[string]string) (*volume.Volume, error) {
 	panic("not implemented")
 }
 
 func TestRegisterManifest(t *testing.T) {
 	store := newMockStore()
-	manager, err := NewManager("", nil, store)
+	volumeManager := newMockVolumeManager()
+	manager, err := NewManager("", nil, store, volumeManager)
 	require.NoError(t, err)
 
 	manifests := []*ExplodedManifest{
