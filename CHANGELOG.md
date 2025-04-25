@@ -12,6 +12,131 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.2 (2025-04-25)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- Add component permissions
+  ([#6119](https://github.com/oasisprotocol/oasis-core/issues/6119))
+
+  Each component can be granted special permissions in the configuration file
+  as follows:
+
+  ```yaml
+  runtime:
+    # ... other fields omitted ...
+    runtimes:
+      - id: 000000000000000000000000000000000000000000000000a6d1e3ebf60dff6c
+        components:
+          - id: rofl.rofl1qrqw99h0f7az3hwt2cl7yeew3wtz0fxunu7luyfg
+            permissions:
+              - bundle_add
+              - bundle_remove
+              - volume_add
+              - volume_remove
+  ```
+
+  The currently available permissions are:
+
+  - `bundle_add` to allow the component to add bundles to the host node.
+  - `bundle_remove` to allow the component to remove bundles from the host node.
+  - `volume_add` to allow the component to add volumes to the host node.
+  - `volume_remove` to allow the component to remove volumes from the host node.
+
+  Other permissions may be added in the future.
+
+- Add support for per-component local configuration
+  ([#6119](https://github.com/oasisprotocol/oasis-core/issues/6119))
+
+  Each component can now have its own local configuration specified in the
+  configuration file as follows:
+
+  ```yaml
+  runtime:
+    # ... other fields omitted ...
+    runtimes:
+      - id: 000000000000000000000000000000000000000000000000a6d1e3ebf60dff6c
+        components:
+          - id: rofl.rofl1qrqw99h0f7az3hwt2cl7yeew3wtz0fxunu7luyfg
+            config:
+              my_custom_entry: 42
+  ```
+
+  The old per-runtime configuration is _deprecated_ but is used for the RONL
+  component in case it is not overriden in the `components` section.
+
+- Move runtime SGX loader configuration
+  ([#6159](https://github.com/oasisprotocol/oasis-core/issues/6159))
+
+  The configuration option `runtime.sgx_loader` has been moved to
+  `runtime.sgx.loader`. The old option has been deprecated and support may
+  be removed in a future release.
+
+  The new SGX loader configuration can look as follows:
+
+  ```yaml
+  runtime:
+    sgx:
+      loader: /srv/node/bin/oasis-core-runtime-loader
+  ```
+
+- Add configurable CID pool
+  ([#6159](https://github.com/oasisprotocol/oasis-core/issues/6159))
+
+  The node's CID pool for allocating CIDs to TDX virtual machines can now be
+  configured in the node configuration as follows:
+
+  ```yaml
+  runtime:
+    tdx:
+      cid_start: 123
+      cid_count: 1000
+  ```
+
+  This allows one to run multiple node instances with non-overlapping CID
+  ranges.
+
+### Features
+
+- go/runtime: Add support for ROFL-managed bundles
+  ([#6119](https://github.com/oasisprotocol/oasis-core/issues/6119))
+
+- go/consensus/api: Add method GetLatestHeight
+  ([#6144](https://github.com/oasisprotocol/oasis-core/issues/6144))
+
+  A new method, `GetLatestHeight`, was added to the consensus to retrieve
+  the height of the latest block.
+
+### Bug Fixes
+
+- go/consensus/cometbft/light: Lazy initialize light client
+  ([#6163](https://github.com/oasisprotocol/oasis-core/issues/6163))
+
+  To initialize the CometBFT light client, a valid trusted light block is
+  required. However, if no peers are available at startup or if the available
+  peers do not have the requested light block, initialization fails.
+  This causes consensus state synchronization from a checkpoint to fail,
+  and the node must be restarted. To address this issue, we implemented
+  lazy initialization for the client. If initialization fails initially,
+  the system will retry initialization on subsequent requests.
+
+- go/runtime/registry: Implement per-component notification queues
+  ([#6167](https://github.com/oasisprotocol/oasis-core/issues/6167))
+
+  This fixes an issue where a non-working component could prevent notifications
+  from being delivered to other components, causing issues.
+
+### Internal Changes
+
+- runtime: Bump tendermint-rs to 0.40.3
+  ([#6145](https://github.com/oasisprotocol/oasis-core/issues/6145))
+
 ## 25.1 (2025-03-31)
 
 | Protocol          | Version   |
