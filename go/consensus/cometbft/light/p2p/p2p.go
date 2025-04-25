@@ -59,7 +59,6 @@ func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rp
 // Each instantiated provider is backed by a distinct P2P Peer.
 func (p *LightClientProvidersPool) NewLightClientProvider() *LightClientProvider {
 	provider := &LightClientProvider{
-		initCh:    make(chan struct{}),
 		chainID:   p.chainID,
 		p2pMgr:    p.p2pMgr,
 		rc:        p.rc,
@@ -74,9 +73,6 @@ func (p *LightClientProvidersPool) NewLightClientProvider() *LightClientProvider
 }
 
 type LightClientProvider struct {
-	initOnce sync.Once
-	initCh   chan struct{}
-
 	logger *logging.Logger
 
 	chainID string
@@ -174,17 +170,9 @@ func (lp *LightClientProvider) refreshPeer() {
 		p := peerID
 		lp.peerID = &p
 		lp.pool.peerRegistry[peerID] = true
-		lp.initOnce.Do(func() {
-			close(lp.initCh)
-		})
 		return
 	}
 	lp.logger.Debug("no p2p peer available")
-}
-
-// Initialized implements api.Provider.
-func (lp *LightClientProvider) Initialized() <-chan struct{} {
-	return lp.initCh
 }
 
 // PeerID implements api.Provider.
