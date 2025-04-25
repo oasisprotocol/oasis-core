@@ -1009,7 +1009,7 @@ func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 
 		// If the runtime has a trust root configured, make sure we are able to successfully sync
 		// the runtime up to the latest height as otherwise request processing will fail.
-		n.startRuntimeTrustSyncLocked(rt)
+		n.startRuntimeTrustSyncLocked(host.NewRichRuntime(rt))
 
 		// We are now able to service requests for this runtime.
 		n.runtimeReady = true
@@ -1416,11 +1416,12 @@ func (n *Node) roundWorker(ctx context.Context) {
 
 	// This should never fail as we only register to be an executor worker
 	// once the hosted runtime is ready.
-	n.rt = n.commonNode.GetHostedRuntime()
-	if n.rt == nil {
+	rt := n.commonNode.GetHostedRuntime()
+	if rt == nil {
 		n.logger.Error("skipping round, hosted runtime is not yet initialized")
 		return
 	}
+	n.rt = host.NewRichRuntime(rt)
 
 	// Fetch state and round results upfront.
 	var err error

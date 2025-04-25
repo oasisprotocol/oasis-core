@@ -878,7 +878,7 @@ func (t *txPool) recheck() {
 func New(
 	runtimeID common.Namespace,
 	cfg config.Config,
-	runtime host.RichRuntime,
+	runtime host.Runtime,
 	history history.History,
 	txPublisher TransactionPublisher,
 ) TransactionPool {
@@ -901,7 +901,7 @@ func New(
 		initCh:               make(chan struct{}),
 		runtimeID:            runtimeID,
 		cfg:                  cfg,
-		runtime:              runtime,
+		runtime:              host.NewRichRuntime(runtime),
 		history:              history,
 		txPublisher:          txPublisher,
 		seenCache:            seenCache,
