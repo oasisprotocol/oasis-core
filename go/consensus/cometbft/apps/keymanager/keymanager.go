@@ -7,7 +7,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	api "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
@@ -18,20 +17,20 @@ import (
 
 // Application is a key manager application.
 type Application struct {
-	state tmapi.ApplicationState
+	state api.ApplicationState
 
-	exts         []tmapi.Extension
+	exts         []api.Extension
 	methods      []transaction.MethodName
-	extsByMethod map[transaction.MethodName]tmapi.Extension
+	extsByMethod map[transaction.MethodName]api.Extension
 }
 
 // New constructs a new key manager application.
 func New(state api.ApplicationState) *Application {
 	app := Application{
 		state:        state,
-		exts:         make([]tmapi.Extension, 0),
+		exts:         make([]api.Extension, 0),
 		methods:      make([]transaction.MethodName, 0),
-		extsByMethod: make(map[transaction.MethodName]tmapi.Extension),
+		extsByMethod: make(map[transaction.MethodName]api.Extension),
 	}
 
 	app.registerExtensions(secrets.New(app.Name(), state))
@@ -73,7 +72,7 @@ func (app *Application) Subscribe() {
 func (app *Application) OnCleanup() {}
 
 // BeginBlock implements api.Application.
-func (app *Application) BeginBlock(ctx *tmapi.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Prioritize application-specific logic.
 	if changed, _ := app.state.EpochChanged(ctx); changed {
 		if err := suspendRuntimes(ctx); err != nil {
@@ -92,7 +91,7 @@ func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 }
 
 // ExecuteTx implements api.Application.
-func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	ctx.SetPriority(AppPriority)
 
 	ext, ok := app.extsByMethod[tx.Method]
@@ -104,13 +103,13 @@ func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transactio
 }
 
 // EndBlock implements api.Application.
-func (app *Application) EndBlock(*tmapi.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
 // suspendRuntimes suspends runtimes if registering entities no longer possess enough stake
 // to cover the entity and runtime deposits.
-func suspendRuntimes(ctx *tmapi.Context) error {
+func suspendRuntimes(ctx *api.Context) error {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -166,7 +165,7 @@ func suspendRuntimes(ctx *tmapi.Context) error {
 	return nil
 }
 
-func (app *Application) registerExtensions(exts ...tmapi.Extension) {
+func (app *Application) registerExtensions(exts ...api.Extension) {
 	for _, ext := range exts {
 		for _, m := range ext.Methods() {
 			if _, ok := app.extsByMethod[m]; ok {
