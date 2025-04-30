@@ -124,7 +124,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	entities, err := NewTestEntities(entityNodeSeed, 4)
 	require.NoError(t, err, "NewTestEntities")
 
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	timeSource := consensus.Beacon()
 	epoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
@@ -405,7 +405,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require := require.New(t)
 
 		expectedNodeList := getExpectedNodeList()
-		epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
+		epoch = beaconTests.MustAdvanceEpoch(t, consensus)
 
 		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
@@ -468,7 +468,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedDeregEvents := len(nodes[0])
 		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
-		epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
+		epoch = beaconTests.MustAdvanceEpoch(t, consensus)
 
 		var deregEvents int
 		for deregEvents < expectedDeregEvents {
@@ -557,7 +557,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger 0th entity nodes to be removed.
-		_ = beaconTests.MustAdvanceEpoch(t, timeSource)
+		_ = beaconTests.MustAdvanceEpoch(t, consensus)
 
 		// At this point it should only be possible to deregister 0th entity nodes.
 		err := entities[0].Deregister(consensus)
@@ -603,7 +603,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger all nodes to expire and be removed.
-		_ = beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(len(entities)+2))
+		_ = beaconTests.MustAdvanceEpochMulti(t, consensus, uint64(len(entities)+2))
 
 		// Now it should be possible to deregister all remaining entities.
 		for _, v := range entities[1:] {
@@ -1762,8 +1762,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 	defer nodeSub.Close()
 
 	// Make sure all nodes expire so we can remove the entity.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	_ = beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testRuntimeNodeExpiration+2))
+	_ = beaconTests.MustAdvanceEpochMulti(t, consensus, uint64(testRuntimeNodeExpiration+2))
 
 	err = rt.entity.Deregister(consensus)
 	require.NoError(err, "DeregisterEntity")

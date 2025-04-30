@@ -40,7 +40,7 @@ func (app *Application) ID() uint8 {
 
 // Methods implements api.Application.
 func (app *Application) Methods() []transaction.MethodName {
-	return Methods
+	return beacon.Methods
 }
 
 // Blessed implements api.Application.

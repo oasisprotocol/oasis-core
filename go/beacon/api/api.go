@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
 const (
@@ -35,6 +36,15 @@ var (
 	// ErrBeaconNotAvailable is the error returned when a beacon is not
 	// available for the requested height for any reason.
 	ErrBeaconNotAvailable = errors.New(ModuleName, 2, "beacon: random beacon not available")
+
+	// MethodSetEpoch is the method name for setting epochs.
+	MethodSetEpoch = transaction.NewMethodName(ModuleName, "SetEpoch", EpochTime(0))
+
+	// Methods is a list of all methods supported by the beacon backend.
+	Methods = []transaction.MethodName{
+		MethodSetEpoch,
+		MethodVRFProve,
+	}
 )
 
 // EpochTime is the number of intervals (epochs) since a fixed instant
@@ -107,14 +117,6 @@ type Backend interface {
 
 	// ConsensusParameters returns the beacon consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
-}
-
-// SetableBackend is a Backend that supports setting the current epoch.
-type SetableBackend interface {
-	Backend
-
-	// SetEpoch sets the current epoch.
-	SetEpoch(context.Context, EpochTime) error
 }
 
 // Genesis is the genesis state.

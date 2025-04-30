@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -949,8 +948,7 @@ func testEscrowHelper( // nolint: gocyclo
 	require.Len(debs[destAccData.Address], 1, "one debonding delegation after reclaiming escrow")
 
 	// Advance epoch to trigger debonding.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource)
+	beaconTests.MustAdvanceEpoch(t, consensus)
 
 	// Wait for debonding period to pass.
 	select {

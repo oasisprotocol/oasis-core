@@ -208,8 +208,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	}
 
 	// Advance the epoch.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource)
+	beaconTests.MustAdvanceEpoch(t, consensus)
 
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
@@ -789,8 +788,7 @@ func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend
 	}
 
 	// Trigger an epoch transition while the timeout is armed.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource)
+	beaconTests.MustAdvanceEpoch(t, consensus)
 
 	// Next round must be an epoch transition.
 	parent, err := nextRuntimeBlock(ch, nil)

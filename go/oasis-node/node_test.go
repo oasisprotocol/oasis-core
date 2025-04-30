@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -319,10 +318,8 @@ func testConsensusClient(t *testing.T, node *testNode) {
 }
 
 func testBeacon(t *testing.T, node *testNode) {
-	beaconTests.EpochtimeSetableImplementationTest(t, node.Consensus.Beacon())
-
-	timeSource := (node.Consensus.Beacon()).(beacon.SetableBackend)
-	beaconTests.BeaconImplementationTests(t, timeSource)
+	beaconTests.EpochtimeSetableImplementationTest(t, node.Consensus)
+	beaconTests.BeaconImplementationTests(t, node.Consensus)
 }
 
 func testStorage(t *testing.T, _ *testNode) {
@@ -410,8 +407,6 @@ func testGovernance(t *testing.T, node *testNode) {
 }
 
 func testExecutorWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Consensus.Beacon()).(beacon.SetableBackend)
-
 	rt, err := node.RuntimeRegistry.GetRuntime(node.runtimeID)
 	require.NoError(t, err, "runtimeRegistry.GetRuntime")
 
@@ -422,8 +417,7 @@ func testExecutorWorker(t *testing.T, node *testNode) {
 		node.runtimeID,
 		node.commonCommitteeNode,
 		node.executorCommitteeNode,
-		timeSource,
-		node.Consensus.RootHash(),
+		node.Consensus,
 		rt.Storage(),
 	)
 }

@@ -235,10 +235,6 @@ type SeedStatus struct {
 // DebugModuleName is the module name for the debug controller service.
 const DebugModuleName = "control/debug"
 
-// ErrIncompatibleBackend is the error raised when the current beacon
-// backend does not support manually setting the current epoch.
-var ErrIncompatibleBackend = errors.New(DebugModuleName, 1, "debug: incompatible backend")
-
 // DebugController is a debug-only controller useful during tests.
 type DebugController interface {
 	// SetEpoch manually sets the current epoch to the given epoch.

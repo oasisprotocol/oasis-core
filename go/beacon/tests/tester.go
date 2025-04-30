@@ -3,45 +3,52 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
 const recvTimeout = 5 * time.Second
 
+// TestSigner is a test signer used for setting epochs in tests.
+var TestSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
+
 // BeaconImplementationTests exercises the basic functionality of a
 // beacon backend.
-func BeaconImplementationTests(t *testing.T, backend api.SetableBackend) {
+func BeaconImplementationTests(t *testing.T, backend consensus.Backend) {
 	require := require.New(t)
 
-	beacon, err := backend.GetBeacon(context.Background(), consensus.HeightLatest)
+	timeSource := backend.Beacon()
+
+	beacon, err := timeSource.GetBeacon(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetBeacon")
 	require.Len(beacon, api.BeaconSize, "GetBeacon - length")
 
 	_ = MustAdvanceEpoch(t, backend)
 
-	newBeacon, err := backend.GetBeacon(context.Background(), consensus.HeightLatest)
+	newBeacon, err := timeSource.GetBeacon(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetBeacon")
 	require.Len(newBeacon, api.BeaconSize, "GetBeacon - length")
 	require.NotEqual(beacon, newBeacon, "After epoch transition, new beacon should be generated.")
 
-	latestEpoch, err := backend.GetEpoch(context.Background(), consensus.HeightLatest)
+	latestEpoch, err := timeSource.GetEpoch(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	// Querying epoch for a non-existing height should fail.
-	_, err = backend.GetEpoch(context.Background(), 100000000000)
+	_, err = timeSource.GetEpoch(context.Background(), 100000000000)
 	require.ErrorIs(err, consensus.ErrVersionNotFound, "GetEpoch should fail for non-existing height")
 
 	var lastHeight int64
 	for epoch := api.EpochTime(0); epoch <= latestEpoch; epoch++ {
-		height, err := backend.GetEpochBlock(context.Background(), epoch)
+		height, err := timeSource.GetEpochBlock(context.Background(), epoch)
 		require.NoError(err, "GetEpochBlock")
 		require.True(height > lastHeight)
 		lastHeight = height
@@ -50,14 +57,12 @@ func BeaconImplementationTests(t *testing.T, backend api.SetableBackend) {
 
 // EpochtimeSetableImplementationTest exercises the basic functionality of
 // a setable (mock) epochtime backend.
-func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
+func EpochtimeSetableImplementationTest(t *testing.T, backend consensus.Backend) {
 	require := require.New(t)
 
-	// Ensure that the backend is setable.
-	require.Implements((*api.SetableBackend)(nil), backend, "epoch time backend is mock")
-	timeSource := (backend).(api.SetableBackend)
+	timeSource := backend.Beacon()
 
-	parameters, err := backend.ConsensusParameters(context.Background(), consensus.HeightLatest)
+	parameters, err := timeSource.ConsensusParameters(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 	require.True(parameters.DebugMockBackend, "expected debug backend")
 
@@ -87,7 +92,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	}
 
 	epoch++
-	err = timeSource.SetEpoch(context.Background(), epoch)
+	err = SetEpoch(context.Background(), epoch, backend)
 	require.NoError(err, "SetEpoch")
 
 	select {
@@ -110,20 +115,22 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 }
 
 // MustAdvanceEpoch advances the epoch and returns the new epoch.
-func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend) api.EpochTime {
+func MustAdvanceEpoch(t *testing.T, backend consensus.Backend) api.EpochTime {
 	require := require.New(t)
+
+	timeSource := backend.Beacon()
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
+	epoch, err := timeSource.GetEpoch(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	// While using a timeout here would be nice, the correct timeout value
 	// depends on the block interval and all the various internal timekeeping
 	// periods so it's not easy to set one.
 	epoch++
-	err = backend.SetEpoch(context.Background(), epoch)
+	err = SetEpoch(context.Background(), epoch, backend)
 	require.NoError(err, "SetEpoch")
 
 	return epoch
@@ -134,13 +141,16 @@ func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend) api.EpochTime {
 // Between each epoch increment the method ensures that the consensus validator is re-registered
 // so that epochs are not advanced too fast, which could cause a consensus error due to no
 // validators being registered for the epoch.
-func MustAdvanceEpochMulti(t *testing.T, backend api.SetableBackend, reg registry.Backend, increment uint64) api.EpochTime {
+func MustAdvanceEpochMulti(t *testing.T, backend consensus.Backend, increment uint64) api.EpochTime {
 	require := require.New(t)
+
+	timeSource := backend.Beacon()
+	registry := backend.Registry()
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
+	epoch, err := timeSource.GetEpoch(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	// While using a timeout here would be nice, the correct timeout value
@@ -150,14 +160,14 @@ func MustAdvanceEpochMulti(t *testing.T, backend api.SetableBackend, reg registr
 		epoch++
 
 		// Used to ensure validator re-registers after the epoch transition.
-		ch, sub, err := reg.WatchNodes(context.Background())
+		ch, sub, err := registry.WatchNodes(context.Background())
 		require.NoError(err, "WatchNodes")
 		defer sub.Close()
 
 		// While using a timeout here would be nice, the correct timeout value
 		// depends on the block interval and all the various internal timekeeping
 		// periods so it's not easy to set one.
-		err = backend.SetEpoch(context.Background(), epoch)
+		err = SetEpoch(context.Background(), epoch, backend)
 		require.NoError(err, "SetEpoch")
 
 		// Ensure validator re-registers before transitioning to next epoch.
@@ -181,4 +191,32 @@ func MustAdvanceEpochMulti(t *testing.T, backend api.SetableBackend, reg registr
 	}
 
 	return epoch
+}
+
+// SetEpoch sets the current epoch.
+func SetEpoch(ctx context.Context, epoch api.EpochTime, backend consensus.Backend) error {
+	ch, sub, err := backend.Beacon().WatchEpochs(ctx)
+	if err != nil {
+		return fmt.Errorf("watch epochs failed: %w", err)
+	}
+	defer sub.Close()
+
+	tx := transaction.NewTransaction(0, nil, api.MethodSetEpoch, epoch)
+	if err := consensus.SignAndSubmitTx(ctx, backend, TestSigner, tx); err != nil {
+		return fmt.Errorf("set epoch failed: %w", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case newEpoch, ok := <-ch:
+			if !ok {
+				return context.Canceled
+			}
+			if newEpoch == epoch {
+				return nil
+			}
+		}
+	}
 }

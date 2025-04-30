@@ -9,11 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -37,8 +36,7 @@ func WorkerImplementationTests(
 	runtimeID common.Namespace,
 	commonNode *commonCommittee.Node,
 	rtNode *committee.Node,
-	beacon beacon.SetableBackend,
-	roothash roothash.Backend,
+	backend consensus.Backend,
 	storage storage.Backend,
 ) {
 	// Wait for worker to start and register.
@@ -50,19 +48,19 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, beacon)
+		testInitialEpochTransition(t, stateCh, backend)
 	})
 
 	t.Run("QueueTx", func(t *testing.T) {
-		testQueueTx(t, runtimeID, stateCh, commonNode, rtNode, roothash, storage)
+		testQueueTx(t, runtimeID, stateCh, commonNode, rtNode, backend.RootHash(), storage)
 	})
 
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, beacon beacon.SetableBackend) {
+func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, backend consensus.Backend) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	beaconTests.MustAdvanceEpoch(t, beacon)
+	beaconTests.MustAdvanceEpoch(t, backend)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
@@ -153,7 +151,7 @@ func testQueueTx(
 }
 
 // nextRuntimeBlock return the next (non-empty) runtime block.
-func nextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, allowEmpty bool) (*api.AnnotatedBlock, error) {
+func nextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, allowEmpty bool) (*roothash.AnnotatedBlock, error) {
 	for {
 		select {
 		case blk, ok := <-ch:
