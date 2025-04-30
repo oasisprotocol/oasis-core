@@ -243,9 +243,9 @@ func (impl *backendVRF) ExecuteTx(
 	switch tx.Method {
 	case beacon.MethodVRFProve:
 		return impl.doProveTx(ctx, state, params, tx)
-	case MethodSetEpoch:
+	case beacon.MethodSetEpoch:
 		if !params.DebugMockBackend {
-			return fmt.Errorf("beacon: method '%s' is disabled via consensus", MethodSetEpoch)
+			return fmt.Errorf("beacon: method '%s' is disabled via consensus", beacon.MethodSetEpoch)
 		}
 		return impl.doSetEpochTx(ctx, state, tx.Body)
 	default:

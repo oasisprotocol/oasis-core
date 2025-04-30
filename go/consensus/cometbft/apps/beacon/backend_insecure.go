@@ -135,9 +135,9 @@ func (impl *backendInsecure) ExecuteTx(
 	tx *transaction.Transaction,
 ) error {
 	switch tx.Method {
-	case MethodSetEpoch:
+	case beacon.MethodSetEpoch:
 		if !params.DebugMockBackend {
-			return fmt.Errorf("beacon: method '%s' is disabled via consensus", MethodSetEpoch)
+			return fmt.Errorf("beacon: method '%s' is disabled via consensus", beacon.MethodSetEpoch)
 		}
 		return impl.doTxSetEpoch(ctx, state, tx.Body)
 	default:

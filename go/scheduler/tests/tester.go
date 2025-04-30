@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -45,8 +44,7 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	defer sub.Close()
 
 	// Advance the epoch.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	epoch := beaconTests.MustAdvanceEpoch(t, timeSource)
+	epoch := beaconTests.MustAdvanceEpoch(t, consensus)
 
 	ensureValidCommittees := func(expectedExecutor int) {
 		var executor *api.Committee
@@ -112,7 +110,7 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	rt.Runtime.Constraints[api.KindComputeExecutor][api.RoleBackupWorker].MinPoolSize.Limit = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
-	epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
+	epoch = beaconTests.MustAdvanceEpoch(t, consensus)
 
 	ensureValidCommittees(
 		3,

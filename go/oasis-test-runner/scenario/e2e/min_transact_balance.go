@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/beacon"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -92,7 +92,7 @@ func (mtb *minTransactBalanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	beaconSignerAddr := staking.NewAddress(tmbeacon.TestSigner.Public())
+	beaconSignerAddr := staking.NewAddress(tests.TestSigner.Public())
 	f.Network.StakingGenesis = &staking.Genesis{
 		Parameters: staking.ConsensusParameters{
 			MinTransactBalance: *quantity.NewFromUint64(1000),

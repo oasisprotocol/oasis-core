@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -376,10 +375,10 @@ WaitForSubmittedVote:
 	require.EqualValues(ev.Vote.Submitter, votes[0].Voter, "vote event should be equal to the queried vote")
 
 	// Transition to the voting close epoch.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	timeSource := consensus.Beacon()
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testState.proposal.ClosesAt.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpochMulti(t, consensus, uint64(testState.proposal.ClosesAt.AbsDiff(currentEpoch)))
 
 	var proposal *api.Proposal
 

@@ -16,17 +16,12 @@ import (
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
 )
-
-var TestSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
 
 // epochCacheCapacity is the capacity of the epoch LRU cache.
 const epochCacheCapacity = 128
@@ -230,35 +225,6 @@ func (sc *ServiceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
-}
-
-func (sc *ServiceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
-	ch, sub, err := sc.WatchEpochs(ctx)
-	if err != nil {
-		return fmt.Errorf("epochtime: watch epochs failed: %w", err)
-	}
-	defer sub.Close()
-
-	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)
-	if err := consensus.SignAndSubmitTx(ctx, sc.backend, TestSigner, tx); err != nil {
-		return fmt.Errorf("epochtime: set epoch failed: %w", err)
-	}
-
-	for {
-		select {
-		case <-sc.ctx.Done():
-			return sc.ctx.Err()
-		case newEpoch, ok := <-ch:
-			if !ok {
-				return context.Canceled
-			}
-			if newEpoch == epoch {
-				return nil
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {

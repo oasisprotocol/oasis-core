@@ -27,15 +27,6 @@ var (
 	// QueryApp is the query for filtering events procecessed by the
 	// beacon application.
 	QueryApp = api.QueryForApp(AppName)
-
-	// MethodSetEpoch is the method name for setting epochs.
-	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", beacon.EpochTime(0))
-
-	// Methods is a list of all methods supported by the beacon application.
-	Methods = []transaction.MethodName{
-		MethodSetEpoch,
-		beacon.MethodVRFProve,
-	}
 )
 
 type internalBackend interface {
