@@ -24,27 +24,12 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed key manager CHURP service client.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
-	sc := ServiceClient{
-		logger:  logging.GetLogger("cometbft/keymanager/churp"),
-		querier: querier,
+func New(querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:         logging.GetLogger("cometbft/keymanager/churp"),
+		querier:        querier,
+		statusNotifier: pubsub.NewBroker(false),
 	}
-	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		statuses, err := sc.AllStatuses(ctx, consensus.HeightLatest)
-		if err != nil {
-			sc.logger.Error("status notifier: unable to get a list of statuses",
-				"err", err,
-			)
-			return
-		}
-
-		wr := ch.In()
-		for _, v := range statuses {
-			wr <- v
-		}
-	})
-
-	return &sc
 }
 
 // ConsensusParameters implements churp.Backend.
@@ -98,9 +83,10 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*chu
 }
 
 // WatchStatuses implements churp.Backend.
-func (sc *ServiceClient) WatchStatuses(context.Context) (<-chan *churp.Status, pubsub.ClosableSubscription, error) {
-	sub := sc.statusNotifier.Subscribe()
+func (sc *ServiceClient) WatchStatuses(ctx context.Context) (<-chan *churp.Status, pubsub.ClosableSubscription, error) {
+	hook := sc.statusNotifierHook(ctx)
 	ch := make(chan *churp.Status)
+	sub := sc.statusNotifier.SubscribeEx(hook)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
@@ -135,4 +121,20 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 		}
 	}
 	return nil
+}
+
+func (sc *ServiceClient) statusNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
+		statuses, err := sc.AllStatuses(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("status notifier: unable to get a list of statuses",
+				"err", err,
+			)
+			return
+		}
+
+		for _, v := range statuses {
+			ch.In() <- v
+		}
+	}
 }

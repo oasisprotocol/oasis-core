@@ -49,7 +49,6 @@ type ServiceClient struct {
 
 	mu sync.RWMutex
 
-	ctx    context.Context
 	logger *logging.Logger
 
 	backend tmapi.Backend
@@ -64,9 +63,8 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT-based roothash service client.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
-		ctx:              ctx,
 		logger:           logging.GetLogger("cometbft/roothash"),
 		backend:          backend,
 		querier:          querier,

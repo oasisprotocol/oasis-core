@@ -27,10 +27,10 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed key manager service client.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
+func New(querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
-		secretsClient: secrets.New(ctx, querier),
-		churpClient:   churp.New(ctx, querier),
+		secretsClient: secrets.New(querier),
+		churpClient:   churp.New(querier),
 	}
 }
 

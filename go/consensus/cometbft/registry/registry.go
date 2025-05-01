@@ -41,43 +41,17 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed registry service client.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	sc := &ServiceClient{
-		logger:         logging.GetLogger("cometbft/registry"),
-		backend:        backend,
-		querier:        querier,
-		entityNotifier: pubsub.NewBroker(false),
-		nodeNotifier:   pubsub.NewBroker(false),
-		eventNotifier:  pubsub.NewBroker(false),
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:           logging.GetLogger("cometbft/registry"),
+		backend:          backend,
+		querier:          querier,
+		entityNotifier:   pubsub.NewBroker(false),
+		nodeNotifier:     pubsub.NewBroker(false),
+		nodeListNotifier: pubsub.NewBroker(false),
+		runtimeNotifier:  pubsub.NewBroker(false),
+		eventNotifier:    pubsub.NewBroker(false),
 	}
-	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
-		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
-		if err != nil {
-			sc.logger.Error("node list notifier: unable to get a list of nodes",
-				"err", err,
-			)
-			return
-		}
-
-		wr <- nodeList
-	})
-	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
-		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
-		if err != nil {
-			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
-				"err", err,
-			)
-			return
-		}
-
-		for _, v := range runtimes {
-			wr <- v
-		}
-	})
-
-	return sc
 }
 
 // NodeListEpochInternalEvent is the per-epoch node list event.
@@ -155,9 +129,10 @@ func (sc *ServiceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pub
 	return typedCh, sub, nil
 }
 
-func (sc *ServiceClient) WatchNodeList(context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchNodeList(ctx context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
+	hook := sc.nodeListNotifierHook(ctx)
 	typedCh := make(chan *api.NodeList)
-	sub := sc.nodeListNotifier.Subscribe()
+	sub := sc.nodeListNotifier.SubscribeEx(hook)
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -172,9 +147,10 @@ func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQu
 	return q.Runtime(ctx, query.ID, query.IncludeSuspended)
 }
 
-func (sc *ServiceClient) WatchRuntimes(_ context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
+func (sc *ServiceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
+	hook := sc.runtimeNotifierHook(ctx)
 	typedCh := make(chan *api.Runtime)
-	sub := sc.runtimeNotifier.Subscribe()
+	sub := sc.runtimeNotifier.SubscribeEx(hook)
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -409,4 +385,34 @@ func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.No
 	return &api.NodeList{
 		Nodes: nodes,
 	}, nil
+}
+
+func (sc *ServiceClient) nodeListNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
+		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("node list notifier: unable to get a list of nodes",
+				"err", err,
+			)
+			return
+		}
+
+		ch.In() <- nodeList
+	}
+}
+
+func (sc *ServiceClient) runtimeNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
+		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
+		if err != nil {
+			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
+				"err", err,
+			)
+			return
+		}
+
+		for _, v := range runtimes {
+			ch.In() <- v
+		}
+	}
 }
