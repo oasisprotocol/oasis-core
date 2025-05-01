@@ -94,7 +94,7 @@ type OnSubscribeHook func(channels.Channel)
 // Note: The returned subscription's channel will have an unbounded
 // capacity, use SubscribeBuffered to use a bounded ring channel.
 func (b *Broker) Subscribe() *Subscription {
-	return b.SubscribeEx(int64(channels.Infinity), nil)
+	return b.SubscribeEx(nil)
 }
 
 // SubscribeBuffered subscribes to the Broker's broadcasts, and returns a
@@ -104,7 +104,7 @@ func (b *Broker) Subscribe() *Subscription {
 // oldest value will be discarded. In case buffer is negative (or zero) an
 // unbounded channel is used.
 func (b *Broker) SubscribeBuffered(buffer int64) *Subscription {
-	return b.SubscribeEx(buffer, nil)
+	return b.SubscribeBufferedEx(buffer, nil)
 }
 
 // SubscribeEx subscribes to the Broker's broadcasts, and returns a
@@ -112,9 +112,23 @@ func (b *Broker) SubscribeBuffered(buffer int64) *Subscription {
 // addition it also takes a per-subscription on-subscribe callback
 // hook.
 //
+// Note: The returned subscription's channel will have an unbounded
+// capacity, use SubscribeBufferedEx to use a bounded ring channel.
+//
 // Note: If there is a Broker wide hook set, it will be called
 // after the per-subscription hook is called.
-func (b *Broker) SubscribeEx(buffer int64, onSubscribeHook OnSubscribeHook) *Subscription {
+func (b *Broker) SubscribeEx(onSubscribeHook OnSubscribeHook) *Subscription {
+	return b.SubscribeBufferedEx(int64(channels.Infinity), onSubscribeHook)
+}
+
+// SubscribeBufferedEx subscribes to the Broker's broadcasts, and returns a
+// subscription handle that can be used to receive broadcasts.  In
+// addition it also takes a per-subscription on-subscribe callback
+// hook.
+//
+// Note: If there is a Broker wide hook set, it will be called
+// after the per-subscription hook is called.
+func (b *Broker) SubscribeBufferedEx(buffer int64, onSubscribeHook OnSubscribeHook) *Subscription {
 	var ch channels.Channel
 	if buffer <= 0 {
 		ch = channels.NewInfiniteChannel()

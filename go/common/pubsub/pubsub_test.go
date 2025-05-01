@@ -17,7 +17,7 @@ func TestPubSub(t *testing.T) {
 	t.Run("BasicInfinity", testBasicInfinity)
 	t.Run("BasicOverwriting", testBasicOverwriting)
 	t.Run("PubLastOnSubscribe", testLastOnSubscribe)
-	t.Run("SubscribeEx", testSubscribeEx)
+	t.Run("SubscribeBufferedEx", testSubscribeBufferedEx)
 	t.Run("NewBrokerEx", testNewBrokerEx)
 }
 
@@ -121,7 +121,7 @@ func testLastOnSubscribe(t *testing.T) {
 	}
 }
 
-func testSubscribeEx(t *testing.T) {
+func testSubscribeBufferedEx(t *testing.T) {
 	broker := NewBroker(false)
 	var callbackCh channels.Channel
 	callback := func(ch channels.Channel) {
@@ -132,7 +132,7 @@ func testSubscribeEx(t *testing.T) {
 		int64(channels.Infinity),
 		bufferSize,
 	} {
-		sub := broker.SubscribeEx(b, callback)
+		sub := broker.SubscribeBufferedEx(b, callback)
 
 		require.NotNil(t, sub.ch, "Subscription, inner channel")
 		require.Equal(t, sub.ch, callbackCh, "Callback channel != Subscription, inner channel")
