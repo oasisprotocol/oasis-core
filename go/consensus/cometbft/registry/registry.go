@@ -78,11 +78,11 @@ func (sc *ServiceClient) GetEntities(ctx context.Context, height int64) ([]*enti
 }
 
 func (sc *ServiceClient) WatchEntities(context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.EntityEvent)
+	ch := make(chan *api.EntityEvent)
 	sub := sc.entityNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
@@ -122,20 +122,20 @@ func (sc *ServiceClient) GetNodeByConsensusAddress(ctx context.Context, query *a
 }
 
 func (sc *ServiceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.NodeEvent)
+	ch := make(chan *api.NodeEvent)
 	sub := sc.nodeNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) WatchNodeList(ctx context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
 	hook := sc.nodeListNotifierHook(ctx)
-	typedCh := make(chan *api.NodeList)
+	ch := make(chan *api.NodeList)
 	sub := sc.nodeListNotifier.SubscribeEx(hook)
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQuery) (*api.Runtime, error) {
@@ -149,11 +149,11 @@ func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQu
 
 func (sc *ServiceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
 	hook := sc.runtimeNotifierHook(ctx)
-	typedCh := make(chan *api.Runtime)
+	ch := make(chan *api.Runtime)
 	sub := sc.runtimeNotifier.SubscribeEx(hook)
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) Cleanup() {
@@ -230,11 +230,11 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 
 // WatchEvents implements api.Backend.
 func (sc *ServiceClient) WatchEvents(_ context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.Event)
+	ch := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {

@@ -199,20 +199,20 @@ func (sc *ServiceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 
 func (sc *ServiceClient) WatchEpochs(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	hook := sc.epochNotifierHook()
-	typedCh := make(chan beaconAPI.EpochTime)
+	ch := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.SubscribeEx(hook)
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	hook := sc.epochNotifierHook()
-	typedCh := make(chan beaconAPI.EpochTime)
+	ch := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.SubscribeBufferedEx(1, hook)
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
@@ -235,11 +235,11 @@ func (sc *ServiceClient) GetVRFState(ctx context.Context, height int64) (*beacon
 
 func (sc *ServiceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
 	hook := sc.vrfNotifierHook()
-	typedCh := make(chan *beaconAPI.VRFEvent)
+	ch := make(chan *beaconAPI.VRFEvent)
 	sub := sc.vrfNotifier.SubscribeEx(hook)
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {

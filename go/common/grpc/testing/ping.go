@@ -107,11 +107,11 @@ func (s *pingServer) WatchPings(ctx context.Context, _ *PingQuery) (<-chan *Ping
 			}
 		}
 	}()
-	typedCh := make(chan *PingResponse)
+	ch := make(chan *PingResponse)
 	sub := pingNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 // RegisterService registers a new ping server service with the given gRPC server.

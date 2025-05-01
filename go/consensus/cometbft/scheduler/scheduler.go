@@ -101,11 +101,11 @@ func (sc *ServiceClient) GetCommittees(ctx context.Context, request *api.GetComm
 }
 
 func (sc *ServiceClient) WatchCommittees(_ context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.Committee)
+	ch := make(chan *api.Committee)
 	sub := sc.notifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {

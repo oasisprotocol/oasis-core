@@ -235,11 +235,11 @@ func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
 }
 
 func (mgr *peerManager) WatchUpdates() (<-chan *PeerUpdate, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *PeerUpdate)
+	ch := make(chan *PeerUpdate)
 	sub := mgr.peerUpdatesNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {

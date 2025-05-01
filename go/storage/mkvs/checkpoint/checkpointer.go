@@ -119,11 +119,11 @@ func (c *checkpointer) ForceCheckpoint(version uint64) {
 
 // Implements Checkpointer.
 func (c *checkpointer) WatchCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan uint64)
+	ch := make(chan uint64)
 	sub := c.cpNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 // Implements Checkpointer.

@@ -526,11 +526,11 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 
 // Implements consensusAPI.Backend.
 func (t *fullService) WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error) {
-	typedCh := make(chan *cmttypes.Block)
+	ch := make(chan *cmttypes.Block)
 	sub := t.blockNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (t *fullService) lazyInit() error { // nolint: gocyclo

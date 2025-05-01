@@ -140,11 +140,11 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*vault.
 }
 
 func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *vault.Event, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *vault.Event)
+	ch := make(chan *vault.Event)
 	sub := sc.eventNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*vault.ConsensusParameters, error) {

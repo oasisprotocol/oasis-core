@@ -179,11 +179,11 @@ func (h *mockHost) UpdateCapabilityTEE() {
 
 // Implements host.Runtime.
 func (h *mockHost) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
-	typedCh := make(chan *host.Event)
+	ch := make(chan *host.Event)
 	sub := h.notifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub
+	return ch, sub
 }
 
 // Implements host.Runtime.
