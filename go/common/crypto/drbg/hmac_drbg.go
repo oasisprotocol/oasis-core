@@ -43,10 +43,7 @@ type Drbg struct {
 func (r *Drbg) Read(p []byte) (n int, err error) {
 	toRead, off := len(p), 0
 	for toRead > 0 {
-		readSz := toRead
-		if readSz > maxBytesPerRequest {
-			readSz = maxBytesPerRequest
-		}
+		readSz := min(toRead, maxBytesPerRequest)
 
 		b, err := r.generate(readSz, nil)
 		if err != nil {
