@@ -374,7 +374,7 @@ type P2PStatus struct {
 // Backend is an interface that a consensus backend must provide.
 type Backend interface {
 	service.BackgroundService
-	ServicesBackend
+	ClientBackend
 
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask
@@ -394,19 +394,11 @@ type Backend interface {
 	// Pruner returns the state pruner.
 	Pruner() StatePruner
 
-	// RegisterP2PService registers the P2P service used for light client state sync.
-	RegisterP2PService(p2pAPI.Service) error
-}
-
-// ServicesBackend is an interface for consensus backends which indicate support for
-// communicating with consensus services.
-//
-// In case the feature is absent, these methods may return nil or ErrUnsupported.
-type ServicesBackend interface {
-	ClientBackend
-
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
+
+	// RegisterP2PService registers the P2P service used for light client state sync.
+	RegisterP2PService(p2pAPI.Service) error
 }
 
 // StatePruner is a state pruner implementation.
