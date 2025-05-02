@@ -269,13 +269,11 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
-		var takeFirst bool
-		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0 {
-			takeFirst = true
-		}
+		takeFirst := bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0
+		keyNotLonger := key.BitLength() <= bitLength
 
 		// Does lookup key end here? Look into LeafNode.
-		if (state == visitBefore && (key.BitLength() <= bitLength || takeFirst)) || state == visitAt {
+		if (state == visitBefore && (keyNotLonger || takeFirst)) || state == visitAt {
 			if state == visitBefore {
 				err := it.doNext(n.LeafNode, bitLength, path, key, visitBefore)
 				if err != nil {
@@ -288,7 +286,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 				}
 			}
 			// Key has not been found, continue with search for next key.
-			if key.BitLength() <= bitLength {
+			if keyNotLonger {
 				key = key.AppendBit(bitLength, false)
 			}
 		}
