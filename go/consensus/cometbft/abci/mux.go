@@ -134,7 +134,7 @@ func (a *ApplicationServer) Register(app api.Application) error {
 
 // RegisterHaltHook registers a function to be called when the
 // consensus Halt epoch height is reached.
-func (a *ApplicationServer) RegisterHaltHook(hook consensus.HaltHook) {
+func (a *ApplicationServer) RegisterHaltHook(hook api.HaltHook) {
 	a.mux.registerHaltHook(hook)
 }
 
@@ -224,7 +224,7 @@ type abciMux struct {
 	appBlessed     api.Application
 
 	haltOnce  sync.Once
-	haltHooks []consensus.HaltHook
+	haltHooks []api.HaltHook
 
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
@@ -262,7 +262,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	return resultCh, sub, nil
 }
 
-func (mux *abciMux) registerHaltHook(hook consensus.HaltHook) {
+func (mux *abciMux) registerHaltHook(hook api.HaltHook) {
 	mux.Lock()
 	defer mux.Unlock()
 

@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/viper"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -67,6 +68,8 @@ const (
 	// tmSubscriberID is the subscriber identifier used for all internal CometBFT pubsub
 	// subscriptions. If any other subscriber IDs need to be derived they will be under this prefix.
 	tmSubscriberID = "oasis-core"
+
+	exportsSubDir = "exports"
 )
 
 var (
@@ -764,40 +767,13 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		t.client = cmtcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.ctx, t.Logger, t.node.ConsensusState().Wait)
 
-		// Register a halt hook that handles upgrades gracefully.
-		t.RegisterHaltHook(func(_ context.Context, _ int64, _ beaconAPI.EpochTime, err error) {
-			if !errors.Is(err, upgradeAPI.ErrStopForUpgrade) {
-				return
-			}
-
-			// Mark this as a clean shutdown and request the node to stop gracefully.
-			t.failMonitor.markCleanShutdown()
-
-			// Wait before stopping to give time for P2P messages to propagate. Sleep for at least
-			// minUpgradeStopWaitPeriod or the configured commit timeout.
-			t.Logger.Info("waiting a bit before stopping the node for upgrade")
-			waitPeriod := minUpgradeStopWaitPeriod
-			if tc := t.timeoutCommit; tc > waitPeriod {
-				waitPeriod = tc
-			}
-			time.Sleep(waitPeriod)
-
-			go func() {
-				// Sleep another period so there is some time between when consensus shuts down and
-				// when all the other services start shutting down.
-				//
-				// Randomize the period so that not all nodes shut down at the same time.
-				delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), config.GlobalConfig.Consensus.UpgradeStopDelay)
-				time.Sleep(delay)
-
-				t.Logger.Info("stopping the node for upgrade")
-				t.Stop()
-
-				// Close the quit channel early to force the node to stop. This is needed because
-				// the CometBFT node will otherwise never quit.
-				close(t.quitCh)
-			}()
-		})
+		hooks := []api.HaltHook{
+			t.upgradeHaltHook(),
+			t.dumpGenesisHaltHook(),
+		}
+		for _, hook := range hooks {
+			t.mux.RegisterHaltHook(hook)
+		}
 
 		return nil
 	}
@@ -913,6 +889,84 @@ func (t *fullService) metrics() {
 			}
 		}
 	}
+}
+
+// upgradeHaltHook returns a halt hook that handles upgrades gracefully.
+func (t *fullService) upgradeHaltHook() api.HaltHook {
+	return func(_ context.Context, _ int64, _ beaconAPI.EpochTime, err error) {
+		if !errors.Is(err, upgradeAPI.ErrStopForUpgrade) {
+			return
+		}
+
+		// Mark this as a clean shutdown and request the node to stop gracefully.
+		t.failMonitor.markCleanShutdown()
+
+		// Wait before stopping to give time for P2P messages to propagate. Sleep for at least
+		// minUpgradeStopWaitPeriod or the configured commit timeout.
+		t.Logger.Info("waiting a bit before stopping the node for upgrade")
+		waitPeriod := minUpgradeStopWaitPeriod
+		if tc := t.timeoutCommit; tc > waitPeriod {
+			waitPeriod = tc
+		}
+		time.Sleep(waitPeriod)
+
+		go func() {
+			// Sleep another period so there is some time between when consensus shuts down and
+			// when all the other services start shutting down.
+			//
+			// Randomize the period so that not all nodes shut down at the same time.
+			delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), config.GlobalConfig.Consensus.UpgradeStopDelay)
+			time.Sleep(delay)
+
+			t.Logger.Info("stopping the node for upgrade")
+			t.Stop()
+
+			// Close the quit channel early to force the node to stop. This is needed because
+			// the CometBFT node will otherwise never quit.
+			close(t.quitCh)
+		}()
+	}
+}
+
+// dumpGenesisHaltHook returns a halt hook which dump genesis.
+func (t *fullService) dumpGenesisHaltHook() api.HaltHook {
+	return func(ctx context.Context, height int64, epoch beaconAPI.EpochTime, _ error) {
+		t.Logger.Info("consensus halt hook: dumping genesis",
+			"epoch", epoch,
+			"height", height,
+		)
+		if err := t.dumpGenesis(ctx, height); err != nil {
+			t.Logger.Error("halt hook: failed to dump genesis",
+				"err", err,
+			)
+			return
+		}
+		t.Logger.Info("consensus halt hook: genesis dumped",
+			"epoch", epoch,
+			"height", height,
+		)
+	}
+}
+
+// dumpGenesis writes state at the given height to a genesis file.
+func (t *fullService) dumpGenesis(ctx context.Context, height int64) error {
+	doc, err := t.StateToGenesis(ctx, height)
+	if err != nil {
+		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
+	}
+
+	exportsDir := filepath.Join(t.dataDir, exportsSubDir)
+
+	if err := common.Mkdir(exportsDir); err != nil {
+		return fmt.Errorf("dumpGenesis: failed to create exports dir: %w", err)
+	}
+
+	filename := filepath.Join(exportsDir, fmt.Sprintf("genesis-%s-at-%d.json", doc.ChainID, doc.Height))
+	if err := doc.WriteFileJSON(filename); err != nil {
+		return fmt.Errorf("dumpGenesis: failed to write genesis file: %w", err)
+	}
+
+	return nil
 }
 
 // New creates a new CometBFT consensus backend.

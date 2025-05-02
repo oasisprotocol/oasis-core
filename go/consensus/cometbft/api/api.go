@@ -14,6 +14,7 @@ import (
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -213,6 +214,9 @@ type Backend interface {
 	// returned via the `EventDataNewBlock` query.
 	WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
 }
+
+// HaltHook is a function that gets called when consensus needs to halt for some reason.
+type HaltHook func(ctx context.Context, height int64, epoch beacon.EpochTime, err error)
 
 // TransactionAuthHandler is the interface for ABCI applications that handle
 // authenticating transactions (checking nonces and fees).

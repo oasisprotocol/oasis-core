@@ -4,11 +4,9 @@ package node
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sync"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -53,8 +51,6 @@ import (
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
-
-const exportsSubDir = "exports"
 
 // Node is the Oasis node service.
 //
@@ -171,24 +167,6 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 	roothashAPI.RegisterService(grpcSrv, n.Consensus.RootHash())
 	governanceAPI.RegisterService(grpcSrv, n.Consensus.Governance())
 	vaultAPI.RegisterService(grpcSrv, n.Consensus.Vault())
-
-	// Register dump genesis halt hook.
-	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime, _ error) {
-		n.logger.Info("Consensus halt hook: dumping genesis",
-			"epoch", epoch,
-			"block_height", blockHeight,
-		)
-		if err = n.dumpGenesis(ctx, blockHeight); err != nil {
-			n.logger.Error("halt hook: failed to dump genesis",
-				"err", err,
-			)
-			return
-		}
-		n.logger.Info("Consensus halt hook: genesis dumped",
-			"epoch", epoch,
-			"block_height", blockHeight,
-		)
-	})
 
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(genesisDoc); err != nil {
@@ -395,26 +373,6 @@ func (n *Node) startRuntimeWorkers() error {
 
 	// Close readyCh once all workers and runtimes are initialized.
 	go n.waitReady()
-
-	return nil
-}
-
-func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64) error {
-	doc, err := n.Consensus.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
-	}
-
-	exportsDir := filepath.Join(n.dataDir, exportsSubDir)
-
-	if err := common.Mkdir(exportsDir); err != nil {
-		return fmt.Errorf("dumpGenesis: failed to create exports dir: %w", err)
-	}
-
-	filename := filepath.Join(exportsDir, fmt.Sprintf("genesis-%s-at-%d.json", doc.ChainID, doc.Height))
-	if err := doc.WriteFileJSON(filename); err != nil {
-		return fmt.Errorf("dumpGenesis: failed to write genesis file: %w", err)
-	}
 
 	return nil
 }

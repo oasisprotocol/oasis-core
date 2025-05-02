@@ -398,18 +398,12 @@ type Backend interface {
 	RegisterP2PService(p2pAPI.Service) error
 }
 
-// HaltHook is a function that gets called when consensus needs to halt for some reason.
-type HaltHook func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime, err error)
-
 // ServicesBackend is an interface for consensus backends which indicate support for
 // communicating with consensus services.
 //
 // In case the feature is absent, these methods may return nil or ErrUnsupported.
 type ServicesBackend interface {
 	ClientBackend
-
-	// RegisterHaltHook registers a function to be called when the consensus needs to halt.
-	RegisterHaltHook(hook HaltHook)
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
