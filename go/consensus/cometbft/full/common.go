@@ -237,17 +237,17 @@ func (n *commonNode) initialize() error {
 	n.querier = abci.NewQueryFactory(state)
 
 	// Initialize the beacon/epochtime backend.
-	n.beacon = tmbeacon.New(n.ctx, n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))
+	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))
 	n.serviceClients = append(n.serviceClients, n.beacon)
 	if err := n.mux.SetEpochtime(n.beacon); err != nil {
 		return err
 	}
 
 	// Initialize the rest of backends.
-	n.keymanager = tmkeymanager.New(n.ctx, keymanagerApp.NewQueryFactory(state))
+	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
 	n.serviceClients = append(n.serviceClients, n.keymanager)
 
-	n.registry = tmregistry.New(n.ctx, n.parentNode, registryApp.NewQueryFactory(state))
+	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
 	if cmmetrics.Enabled() {
 		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
 	}
@@ -262,7 +262,7 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, n.scheduler)
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
-	n.roothash = tmroothash.New(n.ctx, n.parentNode, roothashApp.NewQueryFactory(state))
+	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
 	n.serviceClients = append(n.serviceClients, n.roothash)
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 

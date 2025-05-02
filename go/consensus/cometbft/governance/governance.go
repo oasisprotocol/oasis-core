@@ -33,6 +33,16 @@ type ServiceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
+// New constructs a new CometBFT backed governance service client.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:        logging.GetLogger("cometbft/staking"),
+		backend:       backend,
+		querier:       querier,
+		eventNotifier: pubsub.NewBroker(false),
+	}
+}
+
 func (sc *ServiceClient) ActiveProposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -140,11 +150,11 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 }
 
 func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.Event)
+	ch := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
@@ -253,14 +263,4 @@ func EventsFromCometBFT(
 	}
 
 	return events, errs
-}
-
-// New constructs a new CometBFT backed governance backend instance.
-func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	return &ServiceClient{
-		logger:        logging.GetLogger("cometbft/staking"),
-		backend:       backend,
-		querier:       querier,
-		eventNotifier: pubsub.NewBroker(false),
-	}
 }

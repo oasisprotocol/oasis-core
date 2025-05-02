@@ -49,7 +49,6 @@ type ServiceClient struct {
 
 	mu sync.RWMutex
 
-	ctx    context.Context
 	logger *logging.Logger
 
 	backend tmapi.Backend
@@ -61,6 +60,20 @@ type ServiceClient struct {
 
 	queryCh         chan cmtpubsub.Query
 	trackedRuntimes map[common.Namespace]*trackedRuntime
+}
+
+// New constructs a new CometBFT-based roothash service client.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:           logging.GetLogger("cometbft/roothash"),
+		backend:          backend,
+		querier:          querier,
+		allBlockNotifier: pubsub.NewBroker(false),
+		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
+		genesisBlocks:    make(map[common.Namespace]*block.Block),
+		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
+		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
+	}
 }
 
 // GetGenesisBlock implements api.Backend.
@@ -594,21 +607,6 @@ EventLoop:
 		}
 	}
 	return events, errs
-}
-
-// New constructs a new CometBFT-based root hash backend.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	return &ServiceClient{
-		ctx:              ctx,
-		logger:           logging.GetLogger("cometbft/roothash"),
-		backend:          backend,
-		querier:          querier,
-		allBlockNotifier: pubsub.NewBroker(false),
-		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
-		genesisBlocks:    make(map[common.Namespace]*block.Block),
-		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
-		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
-	}
 }
 
 func init() {

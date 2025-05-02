@@ -135,6 +135,30 @@ func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) 
 	return &state, nil
 }
 
+// RuntimeStates returns the list of all roothash runtime states.
+func (s *ImmutableState) RuntimeStates(ctx context.Context) ([]*roothash.RuntimeState, error) {
+	it := s.state.NewIterator(ctx)
+	defer it.Close()
+
+	var states []*roothash.RuntimeState
+	for it.Seek(runtimeKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !runtimeKeyFmt.Decode(it.Key()) {
+			break
+		}
+
+		var state roothash.RuntimeState
+		if err := cbor.Unmarshal(it.Value(), &state); err != nil {
+			return nil, api.UnavailableStateError(err)
+		}
+
+		states = append(states, &state)
+	}
+	if it.Err() != nil {
+		return nil, api.UnavailableStateError(it.Err())
+	}
+	return states, nil
+}
+
 // LastRoundResults returns the last normal round results for a specific runtime.
 func (s *ImmutableState) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
 	raw, err := s.state.Get(ctx, lastRoundResultsKeyFmt.Encode(&id))
@@ -176,30 +200,6 @@ func (s *ImmutableState) StateRoot(ctx context.Context, id common.Namespace) (ha
 // IORoot returns the state root for a specific runtime.
 func (s *ImmutableState) IORoot(ctx context.Context, id common.Namespace) (hash.Hash, error) {
 	return s.getRoot(ctx, id, ioRootKeyFmt)
-}
-
-// Runtimes returns the list of all roothash runtime states.
-func (s *ImmutableState) Runtimes(ctx context.Context) ([]*roothash.RuntimeState, error) {
-	it := s.state.NewIterator(ctx)
-	defer it.Close()
-
-	var runtimes []*roothash.RuntimeState
-	for it.Seek(runtimeKeyFmt.Encode()); it.Valid(); it.Next() {
-		if !runtimeKeyFmt.Decode(it.Key()) {
-			break
-		}
-
-		var state roothash.RuntimeState
-		if err := cbor.Unmarshal(it.Value(), &state); err != nil {
-			return nil, api.UnavailableStateError(err)
-		}
-
-		runtimes = append(runtimes, &state)
-	}
-	if it.Err() != nil {
-		return nil, api.UnavailableStateError(it.Err())
-	}
-	return runtimes, nil
 }
 
 // ConsensusParameters returns the roothash consensus parameters.
@@ -436,7 +436,7 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 func (s *MutableState) ShrinkPastRoots(ctx context.Context, maxStoredRoots uint64) error {
 	// Go through all runtimes, so we can delete extra stored past
 	// roots for each one, where it's needed.
-	runtimes, err := s.Runtimes(ctx)
+	runtimes, err := s.RuntimeStates(ctx)
 	if err != nil {
 		return err
 	}

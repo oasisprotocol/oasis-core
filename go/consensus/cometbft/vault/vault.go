@@ -32,6 +32,16 @@ type ServiceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
+// New constructs a new CometBFT backed vault service client.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:        logging.GetLogger("cometbft/vault"),
+		backend:       backend,
+		querier:       querier,
+		eventNotifier: pubsub.NewBroker(false),
+	}
+}
+
 func (sc *ServiceClient) Vaults(ctx context.Context, height int64) ([]*vault.Vault, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -130,11 +140,11 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*vault.
 }
 
 func (sc *ServiceClient) WatchEvents(context.Context) (<-chan *vault.Event, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *vault.Event)
+	ch := make(chan *vault.Event)
 	sub := sc.eventNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*vault.ConsensusParameters, error) {
@@ -261,14 +271,4 @@ func EventsFromCometBFT(
 	}
 
 	return events, errs
-}
-
-// New constructs a new CometBFT backed vault backend instance.
-func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	return &ServiceClient{
-		logger:        logging.GetLogger("cometbft/vault"),
-		backend:       backend,
-		querier:       querier,
-		eventNotifier: pubsub.NewBroker(false),
-	}
 }

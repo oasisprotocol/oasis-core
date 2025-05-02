@@ -277,11 +277,11 @@ func (agg *Aggregate) UpdateCapabilityTEE() {
 
 // WatchEvents implements host.Runtime.
 func (agg *Aggregate) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
-	typedCh := make(chan *host.Event)
+	ch := make(chan *host.Event)
 	sub := agg.notifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub
+	return ch, sub
 }
 
 // Start implements host.Runtime.

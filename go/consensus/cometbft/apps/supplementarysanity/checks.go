@@ -81,7 +81,7 @@ func checkRootHash(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	st := roothashState.NewMutableState(ctx.State())
 
 	// Check blocks.
-	runtimes, err := st.Runtimes(ctx)
+	runtimes, err := st.RuntimeStates(ctx)
 	if err != nil {
 		return fmt.Errorf("Runtimes(): %w", err)
 	}

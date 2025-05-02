@@ -35,7 +35,6 @@ type ServiceClient struct {
 
 	backend tmapi.Backend
 	querier *app.QueryFactory
-	ctx     context.Context
 
 	epochNotifier     *pubsub.Broker
 	epochLastNotified beaconAPI.EpochTime
@@ -51,6 +50,21 @@ type ServiceClient struct {
 
 	baseEpoch beaconAPI.EpochTime
 	baseBlock int64
+}
+
+// New constructs a new CometBFT backed beacon service client.
+func New(baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:            logging.GetLogger("cometbft/beacon"),
+		backend:           backend,
+		querier:           querier,
+		epochNotifier:     pubsub.NewBroker(false),
+		epochLastNotified: beaconAPI.EpochInvalid,
+		epochCache:        lru.New(lru.Capacity(epochCacheCapacity, false)),
+		vrfNotifier:       pubsub.NewBroker(false),
+		baseEpoch:         baseEpoch,
+		baseBlock:         baseBlock,
+	}
 }
 
 func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*beaconAPI.Genesis, error) {
@@ -170,8 +184,6 @@ func (sc *ServiceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 
 	for {
 		select {
-		case <-sc.ctx.Done():
-			return sc.ctx.Err()
 		case <-ctx.Done():
 			return ctx.Err()
 		case e, ok := <-ch:
@@ -185,20 +197,22 @@ func (sc *ServiceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 	}
 }
 
-func (sc *ServiceClient) WatchEpochs(_ context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan beaconAPI.EpochTime)
-	sub := sc.epochNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+func (sc *ServiceClient) WatchEpochs(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
+	hook := sc.epochNotifierHook()
+	ch := make(chan beaconAPI.EpochTime)
+	sub := sc.epochNotifier.SubscribeEx(hook)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan beaconAPI.EpochTime)
-	sub := sc.epochNotifier.SubscribeBuffered(1)
-	sub.Unwrap(typedCh)
+	hook := sc.epochNotifierHook()
+	ch := make(chan beaconAPI.EpochTime)
+	sub := sc.epochNotifier.SubscribeBufferedEx(1, hook)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
@@ -220,11 +234,12 @@ func (sc *ServiceClient) GetVRFState(ctx context.Context, height int64) (*beacon
 }
 
 func (sc *ServiceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
-	typedCh := make(chan *beaconAPI.VRFEvent)
-	sub := sc.vrfNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	hook := sc.vrfNotifierHook()
+	ch := make(chan *beaconAPI.VRFEvent)
+	sub := sc.vrfNotifier.SubscribeEx(hook)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
@@ -349,36 +364,24 @@ func (sc *ServiceClient) currentEpochBlock() (beaconAPI.EpochTime, int64) {
 	return sc.epoch, sc.epochCurrentBlock
 }
 
-// New constructs a new CometBFT backed beacon and epochtime backend instance.
-func New(ctx context.Context, baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	epochCache := lru.New(lru.Capacity(epochCacheCapacity, false))
-
-	sc := &ServiceClient{
-		logger:            logging.GetLogger("cometbft/beacon"),
-		backend:           backend,
-		querier:           querier,
-		ctx:               ctx,
-		epochLastNotified: beaconAPI.EpochInvalid,
-		epochCache:        epochCache,
-		baseEpoch:         baseEpoch,
-		baseBlock:         baseBlock,
-	}
-	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+func (sc *ServiceClient) epochNotifierHook() pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
 		sc.RLock()
 		defer sc.RUnlock()
 
 		if sc.epochLastNotified == sc.epoch {
 			ch.In() <- sc.epoch
 		}
-	})
-	sc.vrfNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+	}
+}
+
+func (sc *ServiceClient) vrfNotifierHook() pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
 		sc.RLock()
 		defer sc.RUnlock()
 
 		if sc.vrfEvent != nil {
 			ch.In() <- sc.vrfEvent
 		}
-	})
-
-	return sc
+	}
 }

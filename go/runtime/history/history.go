@@ -170,19 +170,19 @@ func (h *runtimeHistory) LastStorageSyncedRound() (uint64, error) {
 }
 
 func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *roothash.AnnotatedBlock)
+	ch := make(chan *roothash.AnnotatedBlock)
 	sub := h.syncedBlocksNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (h *runtimeHistory) WatchCommittedBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *roothash.AnnotatedBlock)
+	ch := make(chan *roothash.AnnotatedBlock)
 	sub := h.committedBlocksNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (h *runtimeHistory) WaitRoundSynced(ctx context.Context, round uint64) (uint64, error) {

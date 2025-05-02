@@ -17,7 +17,7 @@ func TestPubSub(t *testing.T) {
 	t.Run("BasicInfinity", testBasicInfinity)
 	t.Run("BasicOverwriting", testBasicOverwriting)
 	t.Run("PubLastOnSubscribe", testLastOnSubscribe)
-	t.Run("SubscribeEx", testSubscribeEx)
+	t.Run("SubscribeBufferedEx", testSubscribeBufferedEx)
 	t.Run("NewBrokerEx", testNewBrokerEx)
 }
 
@@ -25,13 +25,13 @@ func testBasicInfinity(t *testing.T) {
 	broker := NewBroker(false)
 
 	sub := broker.Subscribe()
-	typedCh := make(chan int)
-	sub.Unwrap(typedCh)
+	ch := make(chan int)
+	sub.Unwrap(ch)
 
 	// Test a single broadcast/receive.
 	broker.Broadcast(23)
 	select {
-	case v := <-typedCh:
+	case v := <-ch:
 		require.Equal(t, 23, v, "Single Broadcast())")
 	case <-time.After(recvTimeout):
 		t.Fatalf("Failed to receive value, initial Broadcast()")
@@ -43,7 +43,7 @@ func testBasicInfinity(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		select {
-		case v := <-typedCh:
+		case v := <-ch:
 			require.Equal(t, i, v, "Buffered Broadcast()")
 		case <-time.After(recvTimeout):
 			t.Fatalf("Failed to receive value, buffered Broadcast()")
@@ -58,13 +58,13 @@ func testBasicOverwriting(t *testing.T) {
 	broker := NewBroker(false)
 
 	sub := broker.SubscribeBuffered(bufferSize)
-	typedCh := make(chan int)
-	sub.Unwrap(typedCh)
+	ch := make(chan int)
+	sub.Unwrap(ch)
 
 	// Test a single broadcast/receive.
 	broker.Broadcast(23)
 	select {
-	case v := <-typedCh:
+	case v := <-ch:
 		require.Equal(t, 23, v, "Single Broadcast())")
 	case <-time.After(recvTimeout):
 		t.Fatalf("Failed to receive value, initial Broadcast()")
@@ -89,7 +89,7 @@ func testBasicOverwriting(t *testing.T) {
 	}
 	for _, i := range expected {
 		select {
-		case v := <-typedCh:
+		case v := <-ch:
 			require.Equal(t, i, v, "Buffered Broadcast()")
 		case <-time.After(recvTimeout):
 			t.Fatalf("Failed to receive value, buffered Broadcast()")
@@ -109,11 +109,11 @@ func testLastOnSubscribe(t *testing.T) {
 		bufferSize,
 	} {
 		sub := broker.SubscribeBuffered(b)
-		typedCh := make(chan int)
-		sub.Unwrap(typedCh)
+		ch := make(chan int)
+		sub.Unwrap(ch)
 
 		select {
-		case v := <-typedCh:
+		case v := <-ch:
 			require.Equal(t, 23, v, "Last Broadcast()")
 		case <-time.After(recvTimeout):
 			t.Fatalf("Failed to receive value, last Broadcast() on Subscribe()")
@@ -121,7 +121,7 @@ func testLastOnSubscribe(t *testing.T) {
 	}
 }
 
-func testSubscribeEx(t *testing.T) {
+func testSubscribeBufferedEx(t *testing.T) {
 	broker := NewBroker(false)
 	var callbackCh channels.Channel
 	callback := func(ch channels.Channel) {
@@ -132,7 +132,7 @@ func testSubscribeEx(t *testing.T) {
 		int64(channels.Infinity),
 		bufferSize,
 	} {
-		sub := broker.SubscribeEx(b, callback)
+		sub := broker.SubscribeBufferedEx(b, callback)
 
 		require.NotNil(t, sub.ch, "Subscription, inner channel")
 		require.Equal(t, sub.ch, callbackCh, "Callback channel != Subscription, inner channel")

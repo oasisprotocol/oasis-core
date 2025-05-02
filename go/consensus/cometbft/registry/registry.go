@@ -40,6 +40,20 @@ type ServiceClient struct {
 	eventNotifier    *pubsub.Broker
 }
 
+// New constructs a new CometBFT backed registry service client.
+func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:           logging.GetLogger("cometbft/registry"),
+		backend:          backend,
+		querier:          querier,
+		entityNotifier:   pubsub.NewBroker(false),
+		nodeNotifier:     pubsub.NewBroker(false),
+		nodeListNotifier: pubsub.NewBroker(false),
+		runtimeNotifier:  pubsub.NewBroker(false),
+		eventNotifier:    pubsub.NewBroker(false),
+	}
+}
+
 // NodeListEpochInternalEvent is the per-epoch node list event.
 type NodeListEpochInternalEvent struct {
 	Height int64 `json:"height"`
@@ -64,11 +78,11 @@ func (sc *ServiceClient) GetEntities(ctx context.Context, height int64) ([]*enti
 }
 
 func (sc *ServiceClient) WatchEntities(context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.EntityEvent)
+	ch := make(chan *api.EntityEvent)
 	sub := sc.entityNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
@@ -108,19 +122,20 @@ func (sc *ServiceClient) GetNodeByConsensusAddress(ctx context.Context, query *a
 }
 
 func (sc *ServiceClient) WatchNodes(context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.NodeEvent)
+	ch := make(chan *api.NodeEvent)
 	sub := sc.nodeNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
-func (sc *ServiceClient) WatchNodeList(context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.NodeList)
-	sub := sc.nodeListNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+func (sc *ServiceClient) WatchNodeList(ctx context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
+	hook := sc.nodeListNotifierHook(ctx)
+	ch := make(chan *api.NodeList)
+	sub := sc.nodeListNotifier.SubscribeEx(hook)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQuery) (*api.Runtime, error) {
@@ -132,12 +147,13 @@ func (sc *ServiceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQu
 	return q.Runtime(ctx, query.ID, query.IncludeSuspended)
 }
 
-func (sc *ServiceClient) WatchRuntimes(_ context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.Runtime)
-	sub := sc.runtimeNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+func (sc *ServiceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
+	hook := sc.runtimeNotifierHook(ctx)
+	ch := make(chan *api.Runtime)
+	sub := sc.runtimeNotifier.SubscribeEx(hook)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) Cleanup() {
@@ -214,11 +230,11 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 
 // WatchEvents implements api.Backend.
 func (sc *ServiceClient) WatchEvents(_ context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.Event)
+	ch := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
-	sub.Unwrap(typedCh)
+	sub.Unwrap(ch)
 
-	return typedCh, sub, nil
+	return ch, sub, nil
 }
 
 func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
@@ -371,18 +387,8 @@ func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.No
 	}, nil
 }
 
-// New constructs a new CometBFT backed registry backend instance.
-func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
-	sc := &ServiceClient{
-		logger:         logging.GetLogger("cometbft/registry"),
-		backend:        backend,
-		querier:        querier,
-		entityNotifier: pubsub.NewBroker(false),
-		nodeNotifier:   pubsub.NewBroker(false),
-		eventNotifier:  pubsub.NewBroker(false),
-	}
-	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
+func (sc *ServiceClient) nodeListNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
 		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
 		if err != nil {
 			sc.logger.Error("node list notifier: unable to get a list of nodes",
@@ -391,10 +397,12 @@ func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) 
 			return
 		}
 
-		wr <- nodeList
-	})
-	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		wr := ch.In()
+		ch.In() <- nodeList
+	}
+}
+
+func (sc *ServiceClient) runtimeNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
 		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
 		if err != nil {
 			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
@@ -404,9 +412,7 @@ func New(ctx context.Context, backend tmapi.Backend, querier *app.QueryFactory) 
 		}
 
 		for _, v := range runtimes {
-			wr <- v
+			ch.In() <- v
 		}
-	})
-
-	return sc
+	}
 }

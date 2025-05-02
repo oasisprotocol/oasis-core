@@ -17,6 +17,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+// ServiceClient is the key manager secrets service client.
 type ServiceClient struct {
 	logger *logging.Logger
 
@@ -24,6 +25,17 @@ type ServiceClient struct {
 	statusNotifier    *pubsub.Broker
 	mstSecretNotifier *pubsub.Broker
 	ephSecretNotifier *pubsub.Broker
+}
+
+// New constructs a new CometBFT backed key manager secrets service client.
+func New(querier *app.QueryFactory) *ServiceClient {
+	return &ServiceClient{
+		logger:            logging.GetLogger("cometbft/keymanager/secrets"),
+		querier:           querier,
+		statusNotifier:    pubsub.NewBroker(false),
+		mstSecretNotifier: pubsub.NewBroker(false),
+		ephSecretNotifier: pubsub.NewBroker(false),
+	}
 }
 
 func (sc *ServiceClient) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*secrets.Status, error) {
@@ -44,9 +56,10 @@ func (sc *ServiceClient) GetStatuses(ctx context.Context, height int64) ([]*secr
 	return q.Secrets().Statuses(ctx)
 }
 
-func (sc *ServiceClient) WatchStatuses(context.Context) (<-chan *secrets.Status, pubsub.ClosableSubscription, error) {
-	sub := sc.statusNotifier.Subscribe()
+func (sc *ServiceClient) WatchStatuses(ctx context.Context) (<-chan *secrets.Status, pubsub.ClosableSubscription, error) {
+	hook := sc.statusNotifierHook(ctx)
 	ch := make(chan *secrets.Status)
+	sub := sc.statusNotifier.SubscribeEx(hook)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
@@ -136,16 +149,8 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 	return nil
 }
 
-// New constructs a new CometBFT backed key manager secrets management Backend
-// instance.
-func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
-	sc := ServiceClient{
-		logger:            logging.GetLogger("cometbft/keymanager/secrets"),
-		querier:           querier,
-		mstSecretNotifier: pubsub.NewBroker(false),
-		ephSecretNotifier: pubsub.NewBroker(false),
-	}
-	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+func (sc *ServiceClient) statusNotifierHook(ctx context.Context) pubsub.OnSubscribeHook {
+	return func(ch channels.Channel) {
 		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
 		if err != nil {
 			sc.logger.Error("status notifier: unable to get a list of statuses",
@@ -154,11 +159,8 @@ func New(ctx context.Context, querier *app.QueryFactory) *ServiceClient {
 			return
 		}
 
-		wr := ch.In()
 		for _, v := range statuses {
-			wr <- v
+			ch.In() <- v
 		}
-	})
-
-	return &sc
+	}
 }
