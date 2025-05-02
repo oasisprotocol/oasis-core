@@ -2,7 +2,6 @@
 package metrics
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -60,7 +59,6 @@ type pullService struct {
 	ln net.Listener
 	s  *http.Server
 
-	ctx   context.Context
 	errCh chan error
 
 	rsvc *resourceService
@@ -109,7 +107,7 @@ func (s *pullService) Cleanup() {
 	}
 }
 
-func newPullService(ctx context.Context) (service.BackgroundService, error) {
+func newPullService() (service.BackgroundService, error) {
 	addr := config.GlobalConfig.Metrics.Address
 
 	svc := *service.NewBaseBackgroundService("metrics")
@@ -126,7 +124,6 @@ func newPullService(ctx context.Context) (service.BackgroundService, error) {
 
 	return &pullService{
 		BaseBackgroundService: svc,
-		ctx:                   ctx,
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler(), ReadTimeout: 5 * time.Second},
 		errCh:                 make(chan error),
@@ -250,13 +247,13 @@ func newPushService() (service.BackgroundService, error) {
 }
 
 // New constructs a new metrics service.
-func New(ctx context.Context) (service.BackgroundService, error) {
+func New() (service.BackgroundService, error) {
 	mode := strings.ToLower(config.GlobalConfig.Metrics.Mode)
 	switch mode {
 	case MetricsModeNone:
 		return newStubService()
 	case MetricsModePull:
-		return newPullService(ctx)
+		return newPullService()
 	default:
 		if mode == MetricsModePush && flags.DebugDontBlameOasis() {
 			return newPushService()

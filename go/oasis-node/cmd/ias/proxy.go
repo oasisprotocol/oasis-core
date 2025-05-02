@@ -153,7 +153,7 @@ func doProxy(cmd *cobra.Command, _ []string) {
 	env.svcMgr.Register(env.grpcSrv)
 
 	// Initialize the metrics server.
-	metrics, err := metrics.New(env.svcMgr.Ctx)
+	metrics, err := metrics.New()
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
