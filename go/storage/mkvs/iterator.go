@@ -267,6 +267,17 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		bitLength := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
 
+		tryNext := func(next *node.Pointer, nextKey node.Key, parentState visitState) (bool, error) {
+			if err := it.doNext(next, bitLength, newPath, nextKey, visitBefore); err != nil {
+				return false, err
+			}
+			if it.key != nil { // Key has been found
+				it.pos = append(it.pos, pathAtom{state: parentState, ptr: ptr, bitDepth: bitDepth, path: path})
+				return true, nil
+			}
+			return false, nil
+		}
+
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
 		takeFirst := bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0
@@ -275,14 +286,8 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		// Does lookup key end here? Look into LeafNode.
 		if (state == visitBefore && (keyNotLonger || takeFirst)) || state == visitAt {
 			if state == visitBefore {
-				err := it.doNext(n.LeafNode, bitLength, newPath, key, visitBefore)
-				if err != nil {
+				if ok, err := tryNext(n.LeafNode, key, visitAt); ok || err != nil {
 					return err
-				}
-				if it.key != nil {
-					// Key has been found.
-					it.pos = append(it.pos, pathAtom{state: visitAt, ptr: ptr, bitDepth: bitDepth, path: path})
-					return nil
 				}
 			}
 			// Key has not been found, continue with search for next key.
@@ -298,14 +303,8 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		// Continue recursively based on a bit value.
 		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
 			if state == visitAt {
-				err := it.doNext(n.Left, bitLength, newPath, key, visitBefore)
-				if err != nil {
+				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
 					return err
-				}
-				if it.key != nil {
-					// Key has been found.
-					it.pos = append(it.pos, pathAtom{state: visitAtLeft, ptr: ptr, bitDepth: bitDepth, path: path})
-					return nil
 				}
 			}
 			// Key has not been found, continue with search for next key.
@@ -314,13 +313,8 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		}
 
 		if state == visitAt || state == visitAtLeft {
-			err := it.doNext(n.Right, bitLength, newPath, key, visitBefore)
-			if err != nil {
+			if ok, err := tryNext(n.Right, key, visitAfter); ok || err != nil {
 				return err
-			}
-			if it.key != nil {
-				// Key has been found.
-				it.pos = append(it.pos, pathAtom{state: visitAfter, ptr: ptr, bitDepth: bitDepth, path: path})
 			}
 		}
 	case *node.LeafNode:
