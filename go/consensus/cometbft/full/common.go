@@ -506,15 +506,6 @@ func (n *commonNode) Pruner() consensusAPI.StatePruner {
 	return n.mux.Pruner()
 }
 
-// Implements consensusAPI.Backend.
-func (n *commonNode) RegisterHaltHook(hook consensusAPI.HaltHook) {
-	if !n.initialized() {
-		return
-	}
-
-	n.mux.RegisterHaltHook(hook)
-}
-
 func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
 	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
