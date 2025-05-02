@@ -275,7 +275,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		// Does lookup key end here? Look into LeafNode.
 		if (state == visitBefore && (keyNotLonger || takeFirst)) || state == visitAt {
 			if state == visitBefore {
-				err := it.doNext(n.LeafNode, bitLength, path, key, visitBefore)
+				err := it.doNext(n.LeafNode, bitLength, newPath, key, visitBefore)
 				if err != nil {
 					return err
 				}
@@ -298,7 +298,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		// Continue recursively based on a bit value.
 		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
 			if state == visitAt {
-				err := it.doNext(n.Left, bitLength, newPath.AppendBit(bitLength, false), key, visitBefore)
+				err := it.doNext(n.Left, bitLength, newPath, key, visitBefore)
 				if err != nil {
 					return err
 				}
@@ -314,7 +314,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		}
 
 		if state == visitAt || state == visitAtLeft {
-			err := it.doNext(n.Right, bitLength, newPath.AppendBit(bitLength, true), key, visitBefore)
+			err := it.doNext(n.Right, bitLength, newPath, key, visitBefore)
 			if err != nil {
 				return err
 			}
