@@ -278,21 +278,20 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			return false, nil
 		}
 
+		advanceKeyToRight := func(k node.Key) node.Key {
+			k, _ = k.Split(bitLength, k.BitLength())
+			return k.AppendBit(bitLength, true)
+		}
+
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
 		takeFirst := bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0
 		keyNotLonger := key.BitLength() <= bitLength
 
 		// Does lookup key end here? Look into LeafNode.
-		if (state == visitBefore && (keyNotLonger || takeFirst)) || state == visitAt {
-			if state == visitBefore {
-				if ok, err := tryNext(n.LeafNode, key, visitAt); ok || err != nil {
-					return err
-				}
-			}
-			// Key has not been found, continue with search for next key.
-			if keyNotLonger {
-				key = key.AppendBit(bitLength, false)
+		if state == visitBefore && (keyNotLonger || takeFirst) {
+			if ok, err := tryNext(n.LeafNode, key, visitAt); ok || err != nil {
+				return err
 			}
 		}
 
@@ -300,16 +299,21 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			state = visitAt
 		}
 
+		if state == visitAt && keyNotLonger {
+			key = key.AppendBit(bitLength, false)
+		}
+
 		// Continue recursively based on a bit value.
-		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
-			if state == visitAt {
-				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
-					return err
-				}
+		if state == visitAt && (!key.GetBit(bitLength) || takeFirst) {
+			if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
+				return err
 			}
 			// Key has not been found, continue with search for next key.
-			key, _ = key.Split(bitLength, key.BitLength())
-			key = key.AppendBit(bitLength, true)
+			key = advanceKeyToRight(key)
+		}
+
+		if state == visitAtLeft {
+			key = advanceKeyToRight(key)
 		}
 
 		if state == visitAt || state == visitAtLeft {
