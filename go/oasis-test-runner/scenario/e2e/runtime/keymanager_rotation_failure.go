@@ -169,7 +169,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	params, err := sc.Net.ClientController().Consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
+	params, err := sc.Net.ClientController().Registry.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		return err
 	}
