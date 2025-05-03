@@ -41,7 +41,7 @@ type transferAccount struct {
 type transfer struct {
 	BaseWorkload
 
-	consensus consensus.Backend
+	consensus consensus.Services
 
 	accounts       []transferAccount
 	fundingAccount signature.Signer
@@ -248,7 +248,7 @@ func (t *transfer) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.Backend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,

@@ -874,7 +874,7 @@ func (q *queries) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.Backend,
+	cnsc consensus.Services,
 	_ consensus.SubmissionManager,
 	_ signature.Signer,
 	_ []signature.Signer,

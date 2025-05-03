@@ -193,30 +193,35 @@ type Backend interface {
 
 	// GetNextBlockState returns the state of the next block being voted on by validators.
 	GetNextBlockState(ctx context.Context) (*NextBlockState, error)
+}
+
+// Services are consensus services.
+type Services interface {
+	Backend
 
 	// Beacon returns the beacon backend.
 	Beacon() beacon.Backend
 
-	// Registry returns the registry backend.
-	Registry() registry.Backend
-
-	// Staking returns the staking backend.
-	Staking() staking.Backend
-
-	// Scheduler returns the scheduler backend.
-	Scheduler() scheduler.Backend
-
 	// Governance returns the governance backend.
 	Governance() governance.Backend
+
+	// KeyManager returns the keymanager backend.
+	KeyManager() keymanager.Backend
+
+	// Registry returns the registry backend.
+	Registry() registry.Backend
 
 	// RootHash returns the roothash backend.
 	RootHash() roothash.Backend
 
+	// Scheduler returns the scheduler backend.
+	Scheduler() scheduler.Backend
+
+	// Staking returns the staking backend.
+	Staking() staking.Backend
+
 	// Vault returns the vault backend.
 	Vault() vault.Backend
-
-	// KeyManager returns the keymanager backend.
-	KeyManager() keymanager.Backend
 }
 
 // Block is a consensus block.
@@ -374,7 +379,7 @@ type P2PStatus struct {
 // Service is an interface that a consensus backend service must provide.
 type Service interface {
 	service.BackgroundService
-	Backend
+	Services
 
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask

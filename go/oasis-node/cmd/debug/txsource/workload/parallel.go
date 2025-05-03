@@ -49,7 +49,7 @@ func (p *parallel) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	_ *grpc.ClientConn,
-	cnsc consensus.Backend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,

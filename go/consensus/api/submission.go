@@ -51,7 +51,7 @@ type SubmissionManager interface {
 }
 
 type submissionManager struct {
-	backend        Backend
+	consensus      Backend
 	priceDiscovery PriceDiscovery
 	maxFee         quantity.Quantity
 
@@ -77,7 +77,7 @@ func (m *submissionManager) EstimateGasAndSetFee(ctx context.Context, signer sig
 		gas transaction.Gas
 		err error
 	)
-	gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
+	gas, err = m.consensus.EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
 	if err != nil {
 		return fmt.Errorf("failed to estimate gas: %w", err)
 	}
@@ -119,7 +119,7 @@ func (m *submissionManager) getSignerNonce(ctx context.Context, signerAddr staki
 	if !ok {
 		// Query latest nonce when one is not available.
 		var err error
-		nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{
+		nonce, err = m.consensus.GetSignerNonce(ctx, &GetSignerNonceRequest{
 			AccountAddress: signerAddr,
 			Height:         HeightLatest,
 		})
@@ -171,9 +171,9 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 
 	var proof *transaction.Proof
 	if withProof {
-		proof, err = m.backend.SubmitTxWithProof(ctx, sigTx)
+		proof, err = m.consensus.SubmitTxWithProof(ctx, sigTx)
 	} else {
-		err = m.backend.SubmitTx(ctx, sigTx)
+		err = m.consensus.SubmitTx(ctx, sigTx)
 	}
 	if err != nil {
 		// If the transaction check fails (which cannot be determined from
@@ -236,9 +236,9 @@ func (m *submissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer
 }
 
 // NewSubmissionManager creates a new transaction submission manager.
-func NewSubmissionManager(backend Backend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
+func NewSubmissionManager(consensus Backend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
 	sm := &submissionManager{
-		backend:        backend,
+		consensus:      consensus,
 		priceDiscovery: priceDiscovery,
 		nonces:         make(map[staking.Address]uint64),
 		logger:         logging.GetLogger("consensus/submission"),

@@ -185,7 +185,7 @@ func (d *delegation) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.Backend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,

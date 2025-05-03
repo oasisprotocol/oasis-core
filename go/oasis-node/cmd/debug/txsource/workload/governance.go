@@ -64,7 +64,7 @@ type governanceWorkload struct {
 	currentEpoch beacon.EpochTime
 	parameters   *governance.ConsensusParameters
 
-	consensus consensus.Backend
+	consensus consensus.Services
 
 	proposerAccounts []*struct {
 		signer  signature.Signer
@@ -578,7 +578,7 @@ func (g *governanceWorkload) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	_ *grpc.ClientConn,
-	cnsc consensus.Backend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	validatorEntities []signature.Signer,
