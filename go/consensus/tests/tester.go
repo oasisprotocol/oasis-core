@@ -12,7 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -26,7 +26,7 @@ const (
 
 // ConsensusImplementationTests exercises the basic functionality of a
 // consensus backend.
-func ConsensusImplementationTests(t *testing.T, consensus consensusAPI.Backend) {
+func ConsensusImplementationTests(t *testing.T, consensus api.Backend) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
@@ -40,7 +40,7 @@ func ConsensusImplementationTests(t *testing.T, consensus consensusAPI.Backend) 
 	require.NoError(err, "GetChainContext")
 	require.EqualValues(genDoc.ChainContext(), chainCtx, "returned chain context should be correct")
 
-	blk, err := consensus.GetBlock(ctx, consensusAPI.HeightLatest)
+	blk, err := consensus.GetBlock(ctx, api.HeightLatest)
 	require.NoError(err, "GetBlock")
 	require.NotNil(blk, "returned block should not be nil")
 	require.Greater(blk.Height, int64(0), "block height should be greater than zero")
@@ -117,20 +117,20 @@ func ConsensusImplementationTests(t *testing.T, consensus consensusAPI.Backend) 
 		}
 	}
 
-	_, err = consensus.EstimateGas(ctx, &consensusAPI.EstimateGasRequest{})
-	require.ErrorIs(err, consensusAPI.ErrInvalidArgument, "EstimateGas with nil transaction should fail")
+	_, err = consensus.EstimateGas(ctx, &api.EstimateGasRequest{})
+	require.ErrorIs(err, api.ErrInvalidArgument, "EstimateGas with nil transaction should fail")
 
-	_, err = consensus.EstimateGas(ctx, &consensusAPI.EstimateGasRequest{
+	_, err = consensus.EstimateGas(ctx, &api.EstimateGasRequest{
 		Signer:      memorySigner.NewTestSigner("estimate gas signer").Public(),
 		Transaction: transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{}),
 	})
 	require.NoError(err, "EstimateGas")
 
-	nonce, err := consensus.GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{
+	nonce, err := consensus.GetSignerNonce(ctx, &api.GetSignerNonceRequest{
 		AccountAddress: staking.NewAddress(
 			signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		),
-		Height: consensusAPI.HeightLatest,
+		Height: api.HeightLatest,
 	})
 	require.NoError(err, "GetSignerNonce")
 	require.Equal(uint64(0), nonce, "Nonce should be zero")
@@ -142,7 +142,7 @@ func ConsensusImplementationTests(t *testing.T, consensus consensusAPI.Backend) 
 	require.NotNil(shdr.Meta, "returned light block should contain metadata")
 
 	// Late block queries.
-	lshdr, err := consensus.GetLightBlock(ctx, consensusAPI.HeightLatest)
+	lshdr, err := consensus.GetLightBlock(ctx, api.HeightLatest)
 	require.NoError(err, "GetLightBlock(HeightLatest)")
 	require.True(lshdr.Height >= shdr.Height, "returned latest light block height should be greater or equal")
 	require.NotNil(shdr.Meta, "returned latest light block should contain metadata")
@@ -167,13 +167,13 @@ func ConsensusImplementationTests(t *testing.T, consensus consensusAPI.Backend) 
 	err = consensus.SubmitTxNoWait(ctx, testSigTx)
 	require.NoError(err, "SubmitTxNoWait")
 
-	err = consensus.SubmitEvidence(ctx, &consensusAPI.Evidence{})
+	err = consensus.SubmitEvidence(ctx, &api.Evidence{})
 	require.Error(err, "SubmitEvidence should fail with invalid evidence")
 
 	// Trigger some duplicate transaction errors.
 	err = consensus.SubmitTxNoWait(ctx, testSigTx)
 	require.Error(err, "SubmitTxNoWait(duplicate)")
-	require.True(errors.Is(err, consensusAPI.ErrDuplicateTx), "SubmitTxNoWait should return ErrDuplicateTx on duplicate tx")
+	require.True(errors.Is(err, api.ErrDuplicateTx), "SubmitTxNoWait should return ErrDuplicateTx on duplicate tx")
 
 	// We should be able to do remote state queries. Of course the state format is backend-specific
 	// so we simply perform some usual storage operations like fetching random keys and iterating

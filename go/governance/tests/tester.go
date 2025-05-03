@@ -43,7 +43,7 @@ type governanceTestsState struct {
 // GovernanceImplementationTests exercises the basic functionality of a governance backend.
 func GovernanceImplementationTests(
 	t *testing.T,
-	backend api.Backend,
+	governance api.Backend,
 	consensus consensusAPI.Service,
 	entity *entity.Entity,
 	entitySigner signature.Signer,
@@ -79,7 +79,7 @@ func GovernanceImplementationTests(
 	}
 
 	// Query state.
-	_, err = backend.StateToGenesis(ctx, consensusAPI.HeightLatest)
+	_, err = governance.StateToGenesis(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "StateToGenesis")
 
 	// Assert empty governance deposits.
@@ -98,7 +98,7 @@ func GovernanceImplementationTests(
 		{"TestCancelUpgradeProposal", testCancelUpgradeProposal},
 		{"TestChangeParametersProposal", testChangeParametersProposal},
 	} {
-		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, consensus, state) })
+		t.Run(tc.n, func(t *testing.T) { tc.fn(t, governance, consensus, state) })
 	}
 }
 
@@ -162,7 +162,7 @@ func testBadVotes(t *testing.T, _ api.Backend, consensus consensusAPI.Service, t
 	require.Equal(api.ErrNotEligible, err, "CastVoteTx")
 }
 
-func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func testUpgradeProposalSubmit(t *testing.T, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -184,23 +184,23 @@ func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus cons
 	}
 
 	// Submit the proposal but don't close it yet as we would like to test the bad votes also.
-	submitProposal(t, content, backend, consensus, testState)
+	submitProposal(t, content, governance, consensus, testState)
 }
 
-func testUpgradeProposalVoteAndClose(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func testUpgradeProposalVoteAndClose(t *testing.T, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
 	// Close the proposal.
-	voteAndCloseProposal(t, backend, consensus, testState)
+	voteAndCloseProposal(t, governance, consensus, testState)
 
 	// Verify that there is one pending upgrade.
-	pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
+	pendingUpgrade, err := governance.PendingUpgrades(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "PendingUpgrades")
 	require.Equal(1, len(pendingUpgrade), "There should be one pending upgrade")
 }
 
-func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func testCancelUpgradeProposal(t *testing.T, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -210,26 +210,26 @@ func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus cons
 	}
 
 	// Submit the proposal.
-	submitProposal(t, content, backend, consensus, testState)
-	voteAndCloseProposal(t, backend, consensus, testState)
+	submitProposal(t, content, governance, consensus, testState)
+	voteAndCloseProposal(t, governance, consensus, testState)
 
 	// Verify that there are no more pending upgrades.
-	pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
+	pendingUpgrade, err := governance.PendingUpgrades(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "PendingUpgrades")
 	require.Empty(pendingUpgrade, "no pending upgrades should remain")
 
 	// Test proposals query.
-	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	proposals, err := governance.Proposals(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "Proposals query")
 	require.True(len(proposals) > 1, "At least two proposals should exist")
 }
 
-func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func testChangeParametersProposal(t *testing.T, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
 	// Ensure changes were applied.
-	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	params, err := governance.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 
 	// Prepare a change parameters proposal. Incrementing UpgradeMinEpochDiff parameter should
@@ -245,31 +245,31 @@ func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus c
 	}
 
 	// Submit the proposal.
-	submitProposal(t, content, backend, consensus, testState)
-	voteAndCloseProposal(t, backend, consensus, testState)
+	submitProposal(t, content, governance, consensus, testState)
+	voteAndCloseProposal(t, governance, consensus, testState)
 
 	// Ensure changes were applied.
-	params, err = backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	params, err = governance.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 	require.Equal(upgradeMinEpochDiff, params.UpgradeMinEpochDiff, "UpgradeMinEpochDiff parameter should change")
 
 	// Test proposals query.
-	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	proposals, err := governance.Proposals(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "Proposals query")
 	require.True(len(proposals) > 2, "At least three proposals should exist")
 }
 
-func submitProposal(t *testing.T, content *api.ProposalContent, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func submitProposal(t *testing.T, content *api.ProposalContent, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
 	// Start watching events before doing any serious work.
-	ch, sub, err := backend.WatchEvents(ctx)
+	ch, sub, err := governance.WatchEvents(ctx)
 	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
 	// Fetch parameters to get min proposal deposit.
-	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	params, err := governance.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 
 	// Submit the proposal content.
@@ -288,7 +288,7 @@ WaitForSubmittedProposal:
 				continue
 			}
 
-			proposal, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: ev.ProposalSubmitted.ID})
+			proposal, err = governance.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: ev.ProposalSubmitted.ID})
 			require.NoError(err, "Proposal query")
 
 			// Skip if this is not the proposal content we submitted earlier.
@@ -307,14 +307,14 @@ WaitForSubmittedProposal:
 
 	// Active proposals should return the proposal.
 	var activeProposals []*api.Proposal
-	activeProposals, err = backend.ActiveProposals(ctx, consensusAPI.HeightLatest)
+	activeProposals, err = governance.ActiveProposals(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ActiveProposals")
 	require.Len(activeProposals, 1, "one active proposal should be returned")
 	require.EqualValues(proposal, activeProposals[0], "expected proposal should be returned")
 
 	// Backend events should contain the event.
 	var evs []*api.Event
-	evs, err = backend.GetEvents(ctx, ev.Height)
+	evs, err = governance.GetEvents(ctx, ev.Height)
 	require.NoError(err, "GetEvents")
 	require.Len(evs, 1, "one event should be returned")
 	require.EqualValues(ev, evs[0], "queried event should match")
@@ -329,12 +329,12 @@ WaitForSubmittedProposal:
 	testState.proposal = proposal
 }
 
-func voteAndCloseProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
+func voteAndCloseProposal(t *testing.T, governance api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
 	// Start watching events before doing any serious work.
-	ch, sub, err := backend.WatchEvents(ctx)
+	ch, sub, err := governance.WatchEvents(ctx)
 	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
@@ -368,7 +368,7 @@ WaitForSubmittedVote:
 	require.EqualValues(entAddr, ev.Vote.Submitter, "vote submitter should be correct")
 
 	// Query vote.
-	votes, err := backend.Votes(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
+	votes, err := governance.Votes(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
 	require.NoError(err, "Votes query")
 	require.Len(votes, 1, "one vote should be cast")
 	require.EqualValues(ev.Vote.Vote, votes[0].Vote, "vote event should be equal to the queried vote")
@@ -395,7 +395,7 @@ WaitForProposalToBeFinalized:
 
 			require.EqualValues(api.StatePassed, ev.ProposalFinalized.State, "proposal should pass")
 
-			proposal, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
+			proposal, err = governance.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
 			require.NoError(err, "Proposal query")
 
 			break WaitForProposalToBeFinalized
@@ -415,7 +415,7 @@ WaitForProposalToBeFinalized:
 	assertAccountBalance(t, consensus, submitterAddr, ev.Height, testState.submitterBalance)
 
 	// Test proposals query.
-	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	proposals, err := governance.Proposals(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "Proposals query")
 	require.True(len(proposals) > 0, "At least one proposals should exist")
 }

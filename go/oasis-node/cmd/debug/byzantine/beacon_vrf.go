@@ -247,7 +247,7 @@ func waitTillHeightAtLeast(
 	b *byzantine,
 	height int64,
 ) (int64, error) {
-	ch, sub, err := b.cometbft.service.WatchBlocks(ctx)
+	ch, sub, err := b.cometbft.service.Core().WatchBlocks(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to watch blocks: %w", err)
 	}

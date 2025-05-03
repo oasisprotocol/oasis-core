@@ -31,7 +31,7 @@ type vaultTestState struct {
 // VaultImplementationTests exercises the basic functionality of a vault backend.
 func VaultImplementationTests(
 	t *testing.T,
-	backend api.Backend,
+	vault api.Backend,
 	consensus consensusAPI.Service,
 ) {
 	require := require.New(t)
@@ -39,7 +39,7 @@ func VaultImplementationTests(
 	testState := &vaultTestState{}
 
 	// Query state.
-	_, err := backend.StateToGenesis(ctx, consensusAPI.HeightLatest)
+	_, err := vault.StateToGenesis(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "StateToGenesis")
 
 	// Run multiple sub-tests.

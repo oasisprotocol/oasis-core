@@ -58,12 +58,12 @@ func New(
 }
 
 func createHostInfo(consensus consensus.Service) (*hostProtocol.HostInfo, error) {
-	cs, err := consensus.GetStatus(context.Background())
+	cs, err := consensus.Core().GetStatus(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
 	}
 
-	chainCtx, err := consensus.GetChainContext(context.Background())
+	chainCtx, err := consensus.Core().GetChainContext(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain context: %w", err)
 	}

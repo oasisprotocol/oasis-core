@@ -56,17 +56,17 @@ var (
 //
 // WARNING: This assumes that the registry is empty, and will leave
 // a Runtime registered.
-func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Service, validatorEntityID signature.PublicKey) {
-	EnsureRegistryClean(t, backend)
+func RegistryImplementationTests(t *testing.T, registry api.Backend, consensus consensusAPI.Service, validatorEntityID signature.PublicKey) {
+	EnsureRegistryClean(t, registry)
 
 	// We need a runtime ID as otherwise the registry will not allow us to
 	// register nodes for roles which require runtimes.
 	var runtimeID, runtimeEWID common.Namespace
 	t.Run("Runtime", func(t *testing.T) {
-		runtimeID, runtimeEWID = testRegistryRuntime(t, backend, consensus)
+		runtimeID, runtimeEWID = testRegistryRuntime(t, registry, consensus)
 	})
 
-	testRegistryEntityNodes(t, backend, consensus, runtimeID, runtimeEWID, validatorEntityID)
+	testRegistryEntityNodes(t, registry, consensus, runtimeID, runtimeEWID, validatorEntityID)
 
 	t.Run("FreshnessProofs", func(t *testing.T) {
 		testFreshnessProofs(t, consensus)
@@ -112,7 +112,7 @@ func ensureExpectedEvent(t *testing.T, ch <-chan *api.Event, expected *api.Event
 
 func testRegistryEntityNodes( // nolint: gocyclo
 	t *testing.T,
-	backend api.Backend,
+	registry api.Backend,
 	consensus consensusAPI.Service,
 	runtimeID common.Namespace,
 	runtimeEWID common.Namespace,
@@ -131,7 +131,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	// All of these tests are combined because the Entity and Node structures
 	// are linked together.
 
-	entityCh, entitySub, err := backend.WatchEntities(ctx)
+	entityCh, entitySub, err := registry.WatchEntities(ctx)
 	require.NoError(t, err, "WatchEntities")
 	defer entitySub.Close()
 
@@ -192,7 +192,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	whitelistedNodes = append(whitelistedNodes, ent3nodes[0])
 	nonWhitelistedNodes = append(nonWhitelistedNodes, ent3nodes[1])
 
-	eventsCh, eventsSub, err := backend.WatchEvents(context.Background())
+	eventsCh, eventsSub, err := registry.WatchEvents(context.Background())
 	require.NoError(t, err, "WatchEvents")
 	defer eventsSub.Close()
 
@@ -215,7 +215,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.True(ev.IsRegistration, "event is registration")
 
 				// Make sure that GetEvents also returns the registration event.
-				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+				evts, grr := registry.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var receivedEvt *api.Event
 				for _, evt := range evts {
@@ -244,13 +244,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		for _, v := range entities {
 			var ent *entity.Entity
-			ent, err = backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			ent, err = registry.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.NoError(err, "GetEntity")
 			require.EqualValues(v.Entity, ent, "retrieved entity")
 		}
 
 		var registeredEntities []*entity.Entity
-		registeredEntities, err = backend.GetEntities(ctx, consensusAPI.HeightLatest)
+		registeredEntities, err = registry.GetEntities(ctx, consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
 		testEntity, _, _ := entity.TestEntity()
 		require.Len(registeredEntities, len(entities)+preExistingEntities, "entities after registration")
@@ -280,7 +280,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require.Len(seen, len(entities), "unique bulk retrieved entities")
 	})
 
-	nodeCh, nodeSub, err := backend.WatchNodes(ctx)
+	nodeCh, nodeSub, err := registry.WatchNodes(ctx)
 	require.NoError(t, err, "WatchNodes")
 	defer nodeSub.Close()
 
@@ -303,7 +303,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					require.True(ev.IsRegistration, "event is registration")
 
 					// Make sure that GetEvents also returns the registration event.
-					evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+					evts, grr := registry.GetEvents(ctx, consensusAPI.HeightLatest)
 					require.NoError(grr, "GetEvents")
 					var receivedEvt *api.Event
 					for _, evt := range evts {
@@ -330,12 +330,12 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				}
 
 				var nod *node.Node
-				nod, err = backend.GetNode(ctx, &api.IDQuery{ID: tn.Node.ID, Height: consensusAPI.HeightLatest})
+				nod, err = registry.GetNode(ctx, &api.IDQuery{ID: tn.Node.ID, Height: consensusAPI.HeightLatest})
 				require.NoError(err, "GetNode")
 				require.EqualValues(tn.Node, nod, "retrieved node")
 
 				var nodeByConsensus *node.Node
-				nodeByConsensus, err = backend.GetNodeByConsensusAddress(
+				nodeByConsensus, err = registry.GetNodeByConsensusAddress(
 					ctx,
 					&api.ConsensusAddressQuery{
 						Address: []byte(tmcrypto.PublicKeyToCometBFT(&tn.Node.Consensus.ID).Address()), //nolint:gosec
@@ -407,7 +407,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedNodeList := getExpectedNodeList()
 		epoch = beaconTests.MustAdvanceEpoch(t, consensus)
 
-		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
+		registeredNodes, nerr := registry.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 
 		// Remove the pre-exiting validator node.
@@ -428,7 +428,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// Get node status.
 		var nodeStatus *api.NodeStatus
-		nodeStatus, err = backend.GetNodeStatus(ctx, &api.IDQuery{ID: node.Node.ID, Height: consensusAPI.HeightLatest})
+		nodeStatus, err = registry.GetNodeStatus(ctx, &api.IDQuery{ID: node.Node.ID, Height: consensusAPI.HeightLatest})
 		require.NoError(err, "GetNodeStatus")
 		require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 		require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
@@ -484,7 +484,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				deregisteredNodes[ev.Node.ID] = ev.Node
 
 				// Make sure that GetEvents also returns the deregistration event.
-				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+				evts, grr := registry.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var receivedEvt *api.Event
 				for _, evt := range evts {
@@ -526,7 +526,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// Ensure the node list doesn't have the expired nodes.
 		expectedNodeList := getExpectedNodeList()
-		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
+		registeredNodes, nerr := registry.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 		// Remove the pre-exiting validator node.
 		for i, nd := range registeredNodes {
@@ -569,7 +569,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			require.False(ev.IsRegistration, "event is deregistration")
 
 			// Make sure that GetEvents also returns the deregistration event.
-			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+			evts, err := registry.GetEvents(ctx, consensusAPI.HeightLatest)
 			require.NoError(err, "GetEvents")
 			var receivedEvt *api.Event
 			for _, evt := range evts {
@@ -616,7 +616,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.False(ev.IsRegistration, "event is deregistration")
 
 				// Make sure that GetEvents also returns the deregistration event.
-				evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+				evts, err := registry.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
 				var receivedEvt *api.Event
 				for _, evt := range evts {
@@ -645,7 +645,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// There should be no more entities.
 		for _, v := range entities {
-			_, err := backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			_, err := registry.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})
@@ -689,17 +689,17 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 	// TODO: Test the various failures. (ErrNoSuchEntity is already covered)
 
-	EnsureRegistryClean(t, backend)
+	EnsureRegistryClean(t, registry)
 }
 
-func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Service) (common.Namespace, common.Namespace) {
+func testRegistryRuntime(t *testing.T, registry api.Backend, consensus consensusAPI.Service) (common.Namespace, common.Namespace) {
 	require := require.New(t)
 
 	query := &api.GetRuntimesQuery{Height: consensusAPI.HeightLatest, IncludeSuspended: false}
-	existingRuntimes, err := backend.GetRuntimes(context.Background(), query)
+	existingRuntimes, err := registry.GetRuntimes(context.Background(), query)
 	require.NoError(err, "GetRuntimes(includeSuspended=false)")
 	query.IncludeSuspended = true
-	existingAllRuntimes, err := backend.GetRuntimes(context.Background(), query)
+	existingAllRuntimes, err := registry.GetRuntimes(context.Background(), query)
 	require.NoError(err, "GetRuntimes(includeSuspended=true)")
 	require.ElementsMatch(existingRuntimes, existingAllRuntimes, "no suspended runtimes")
 
@@ -945,7 +945,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 		switch tc.valid {
 		case true:
 			rtMap[rt.Runtime.ID] = rt.Runtime
-			rt.MustRegister(t, backend, consensus)
+			rt.MustRegister(t, registry, consensus)
 		case false:
 			rt.MustNotRegister(t, consensus)
 		}
@@ -953,7 +953,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 		rtMapByName[tc.name] = rt.Runtime
 	}
 
-	registeredRuntimes, err := backend.GetRuntimes(context.Background(), query)
+	registeredRuntimes, err := registry.GetRuntimes(context.Background(), query)
 	require.NoError(err, "GetRuntimes")
 	require.Len(registeredRuntimes, len(existingRuntimes)+len(rtMap), "registry has all the new runtimes")
 	for _, regRuntime := range registeredRuntimes {
@@ -968,10 +968,10 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	var re *TestRuntime
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 1"), entity, false)
 	require.NoError(err, "NewTestRuntime (re-registration test 1)")
-	re.MustRegister(t, backend, consensus)
+	re.MustRegister(t, registry, consensus)
 	// Entity to runtime governance transition should succeed.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime
-	re.MustRegister(t, backend, consensus)
+	re.MustRegister(t, registry, consensus)
 	// Runtime to consensus governance transition should fail.
 	re.Runtime.GovernanceModel = api.GovernanceConsensus
 	re.MustNotRegister(t, consensus)
@@ -986,12 +986,12 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 2"), entity, true)
 	require.NoError(err, "NewTestRuntime (re-registration test 2)")
 	re.Runtime.Kind = api.KindKeyManager
-	re.MustRegister(t, backend, consensus)
+	re.MustRegister(t, registry, consensus)
 	// Changing the owning entity should work.
 	entities, err := NewTestEntities(entityRuntimeSeed, 1)
 	require.NoError(err, "NewTestEntities")
 	re.Runtime.EntityID = entities[0].Entity.ID
-	re.MustRegister(t, backend, consensus)
+	re.MustRegister(t, registry, consensus)
 	// Non-compute runtimes cannot transition to runtime governance.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime
 	re.MustNotRegister(t, consensus)
@@ -1001,7 +1001,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 3"), entity, false)
 	require.NoError(err, "NewTestRuntime (re-registration test 3)")
-	re.MustRegister(t, backend, consensus)
+	re.MustRegister(t, registry, consensus)
 	// Entity to consensus governance transition should fail.
 	re.Runtime.GovernanceModel = api.GovernanceConsensus
 	re.MustNotRegister(t, consensus)
@@ -1024,14 +1024,14 @@ func testFreshnessProofs(t *testing.T, consensus consensusAPI.Service) {
 }
 
 // EnsureRegistryClean enforces that the registry is in a clean state before running the registry tests.
-func EnsureRegistryClean(t *testing.T, backend api.Backend) {
-	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
+func EnsureRegistryClean(t *testing.T, registry api.Backend) {
+	registeredEntities, err := registry.GetEntities(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEntities")
 	// Allow runtime-controlling and the validator node entities.
 	require.Len(t, registeredEntities, preExistingEntities, "registered entities")
 
 	// Allow validator node registered.
-	registeredNodes, err := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
+	registeredNodes, err := registry.GetNodes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetNodes")
 	require.Len(t, registeredNodes, preExistingNodes, "registered nodes")
 }
@@ -1552,14 +1552,14 @@ type TestRuntime struct {
 }
 
 // MustRegister registers the TestRuntime with the provided registry.
-func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
+func (rt *TestRuntime) MustRegister(t *testing.T, registry api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
-	ch, sub, err := backend.WatchRuntimes(context.Background())
+	ch, sub, err := registry.WatchRuntimes(context.Background())
 	require.NoError(err, "WatchRuntimes")
 	defer sub.Close()
 
-	eventsCh, eventsSub, err := backend.WatchEvents(context.Background())
+	eventsCh, eventsSub, err := registry.WatchEvents(context.Background())
 	require.NoError(err, "WatchEvents")
 	defer eventsSub.Close()
 
@@ -1583,7 +1583,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 				rt.didRegister = true
 
 				// Make sure that GetEvents also returns the registration event.
-				evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+				evts, err := registry.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
 				var receivedEvt *api.Event
 				for _, evt := range evts {
@@ -1624,24 +1624,24 @@ func (rt *TestRuntime) MustNotRegister(t *testing.T, consensus consensusAPI.Serv
 }
 
 // Populate populates the registry for a given TestRuntime.
-func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus consensusAPI.Service, seed []byte) []*node.Node {
+func (rt *TestRuntime) Populate(t *testing.T, registry api.Backend, consensus consensusAPI.Service, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.Nil(rt.entity, "runtime has no associated entity")
 	require.Nil(rt.nodes, "runtime has no associated nodes")
 
-	return BulkPopulate(t, backend, consensus, []*TestRuntime{rt}, seed)
+	return BulkPopulate(t, registry, consensus, []*TestRuntime{rt}, seed)
 }
 
 // BulkPopulate bulk populates the registry for the given TestRuntimes.
-func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Service, runtimes []*TestRuntime, seed []byte) []*node.Node {
+func BulkPopulate(t *testing.T, registry api.Backend, consensus consensusAPI.Service, runtimes []*TestRuntime, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.True(len(runtimes) > 0, "at least one runtime")
-	EnsureRegistryClean(t, backend)
+	EnsureRegistryClean(t, registry)
 
 	// Create the one entity that has ownership of every single node.
-	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	entityCh, entitySub, err := registry.WatchEntities(context.Background())
 	require.NoError(err, "WatchEntities")
 	defer entitySub.Close()
 
@@ -1651,7 +1651,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Serv
 
 	var rts []*node.Runtime
 	for _, v := range runtimes {
-		v.MustRegister(t, backend, consensus)
+		v.MustRegister(t, registry, consensus)
 		rts = append(rts, &node.Runtime{ID: v.Runtime.ID})
 	}
 
@@ -1676,7 +1676,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Serv
 		require.True(ev.IsRegistration, "event is registration")
 
 		// Make sure that GetEvents also returns the registration event.
-		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		evts, grr := registry.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
 		for _, evt := range evts {
@@ -1697,7 +1697,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Serv
 	// For the sake of simplicity, require that all runtimes have the same
 	// number of nodes for now.
 
-	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	nodeCh, nodeSub, err := registry.WatchNodes(context.Background())
 	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
@@ -1711,7 +1711,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Serv
 			require.True(ev.IsRegistration, "event is registration")
 
 			// Make sure that GetEvents also returns the registration event.
-			evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+			evts, grr := registry.GetEvents(context.Background(), consensusAPI.HeightLatest)
 			require.NoError(grr, "GetEvents")
 			var gotIt bool
 			for _, evt := range evts {
@@ -1747,17 +1747,17 @@ func (rt *TestRuntime) TestNodes() []*TestNode {
 }
 
 // Cleanup deregisteres the entity and nodes for a given TestRuntime.
-func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
+func (rt *TestRuntime) Cleanup(t *testing.T, registry api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	require.NotNil(rt.entity, "runtime has an associated entity")
 	require.NotNil(rt.nodes, "runtime has associated nodes")
 
-	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	entityCh, entitySub, err := registry.WatchEntities(context.Background())
 	require.NoError(err, "WatchEntities")
 	defer entitySub.Close()
 
-	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	nodeCh, nodeSub, err := registry.WatchNodes(context.Background())
 	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
@@ -1797,7 +1797,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 		}
 	}
 
-	EnsureRegistryClean(t, backend)
+	EnsureRegistryClean(t, registry)
 	rt.entity = nil
 	rt.nodes = nil
 }

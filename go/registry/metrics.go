@@ -46,7 +46,7 @@ var (
 type MetricsUpdater struct {
 	logger *logging.Logger
 
-	backend api.Backend
+	registry api.Backend
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
@@ -79,31 +79,31 @@ func (m *MetricsUpdater) worker(ctx context.Context) {
 }
 
 func (m *MetricsUpdater) updatePeriodicMetrics(ctx context.Context) {
-	nodes, err := m.backend.GetNodes(ctx, consensus.HeightLatest)
+	nodes, err := m.registry.GetNodes(ctx, consensus.HeightLatest)
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
 	}
 
-	entities, err := m.backend.GetEntities(ctx, consensus.HeightLatest)
+	entities, err := m.registry.GetEntities(ctx, consensus.HeightLatest)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
 	}
 
-	runtimes, err := m.backend.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: false})
+	runtimes, err := m.registry.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: false})
 	if err == nil {
 		registryRuntimes.Set(float64(len(runtimes)))
 	}
 }
 
 // NewMetricsUpdater creates a new registry metrics updater.
-func NewMetricsUpdater(ctx context.Context, backend api.Backend) *MetricsUpdater {
+func NewMetricsUpdater(ctx context.Context, registry api.Backend) *MetricsUpdater {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registryCollectors...)
 	})
 
 	m := &MetricsUpdater{
 		logger:   logging.GetLogger("go/registry/metrics"),
-		backend:  backend,
+		registry: registry,
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}

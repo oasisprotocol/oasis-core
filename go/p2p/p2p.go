@@ -395,7 +395,7 @@ func New(identity *identity.Identity, consensus consensus.Service, store *persis
 		return nil, fmt.Errorf("p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
-	chainContext, err := consensus.GetChainContext(ctx)
+	chainContext, err := consensus.Core().GetChainContext(ctx)
 	if err != nil {
 		ctxCancel()
 		_ = host.Close()

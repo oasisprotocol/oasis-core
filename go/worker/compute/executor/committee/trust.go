@@ -20,7 +20,7 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 	ctx, n.runtimeTrustSyncCncl = context.WithCancel(n.ctx)
 
 	syncOp := func() error {
-		height, err := n.commonNode.Consensus.GetLatestHeight(ctx)
+		height, err := n.commonNode.Consensus.Core().GetLatestHeight(ctx)
 		if err != nil {
 			n.logger.Warn("failed to retrieve latest consensus block height for runtime light client sync",
 				"err", err,

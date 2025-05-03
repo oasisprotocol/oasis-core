@@ -550,7 +550,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Register consensus light client P2P protocol server.
-	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus))
+	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus.Core()))
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.

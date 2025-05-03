@@ -83,15 +83,15 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
-func StorageImplementationTests(t *testing.T, localBackend api.LocalBackend, backend api.Backend, namespace common.Namespace, round uint64) {
-	<-backend.Initialized()
+func StorageImplementationTests(t *testing.T, localBackend api.LocalBackend, storage api.Backend, namespace common.Namespace, round uint64) {
+	<-storage.Initialized()
 
 	t.Run("Basic", func(t *testing.T) {
-		testBasic(t, localBackend, backend, namespace, round)
+		testBasic(t, localBackend, storage, namespace, round)
 	})
 }
 
-func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend, namespace common.Namespace, round uint64) {
+func testBasic(t *testing.T, localBackend api.LocalBackend, storage api.Backend, namespace common.Namespace, round uint64) {
 	ctx := context.Background()
 
 	var rootHash hash.Hash
@@ -121,7 +121,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test individual fetches.
 	t.Run("SyncGet", func(t *testing.T) {
-		tree := mkvs.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(storage, nil, newRoot)
 		defer tree.Close()
 		for _, entry := range wl {
 			value, werr := tree.Get(ctx, entry.Key)
@@ -132,7 +132,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test prefetch.
 	t.Run("SyncGetPrefixes", func(t *testing.T) {
-		tree := mkvs.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(storage, nil, newRoot)
 		defer tree.Close()
 		err = tree.PrefetchPrefixes(ctx, [][]byte{[]byte("1")}, 10)
 		require.NoError(t, err, "PrefetchPrefixes")
@@ -140,7 +140,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test iteration.
 	t.Run("SyncIterate", func(t *testing.T) {
-		tree := mkvs.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(storage, nil, newRoot)
 		defer tree.Close()
 		it := tree.NewIterator(ctx)
 		defer it.Close()
@@ -160,7 +160,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		Type:      api.RootTypeState,
 		Hash:      rootHash,
 	}
-	it, err := backend.GetDiff(ctx, &api.GetDiffRequest{StartRoot: root, EndRoot: newRoot})
+	it, err := storage.GetDiff(ctx, &api.GetDiffRequest{StartRoot: root, EndRoot: newRoot})
 	require.NoError(t, err, "GetDiff()")
 	getDiffWl := foldWriteLogIterator(t, it)
 	originalWl := make(api.WriteLog, len(wl))
@@ -187,7 +187,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		cp, err := localBackend.Checkpointer().CreateCheckpoint(ctx, newRoot, 16*1024)
 		require.NoError(t, err, "CreateCheckpoint")
 
-		cps, err := backend.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: namespace})
+		cps, err := storage.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: namespace})
 		require.NoError(t, err, "GetCheckpoints")
 		require.Contains(t, cps, cp, "GetCheckpoints should return correct checkpoint metadata")
 		require.Len(t, cp.Chunks, 1, "checkpoint should have a single chunk")
@@ -195,7 +195,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		var buf bytes.Buffer
 		chunk, err := cp.GetChunkMetadata(0)
 		require.NoError(t, err, "GetChunkMetadata")
-		err = backend.GetCheckpointChunk(ctx, chunk, &buf)
+		err = storage.GetCheckpointChunk(ctx, chunk, &buf)
 		require.NoError(t, err, "GetCheckpointChunk")
 
 		hb := hash.NewBuilder()

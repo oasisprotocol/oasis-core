@@ -27,17 +27,17 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	backend tmapi.Backend
-	querier *app.QueryFactory
+	consensus tmapi.Backend
+	querier   *app.QueryFactory
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed staking service client.
-func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
-		backend:       backend,
+		consensus:     consensus,
 		querier:       querier,
 		eventNotifier: pubsub.NewBroker(false),
 	}
@@ -54,7 +54,7 @@ func (sc *ServiceClient) TokenSymbol(ctx context.Context, height int64) (string,
 	}
 
 	// Fallback to genesis document.
-	genesis, err := sc.backend.GetGenesisDocument(ctx)
+	genesis, err := sc.consensus.GetGenesisDocument(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -73,7 +73,7 @@ func (sc *ServiceClient) TokenValueExponent(ctx context.Context, height int64) (
 	}
 
 	// Fallback to genesis document.
-	genesis, err := sc.backend.GetGenesisDocument(ctx)
+	genesis, err := sc.consensus.GetGenesisDocument(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -247,7 +247,7 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
+	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
 			"err", err,
@@ -257,7 +257,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.backend.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,

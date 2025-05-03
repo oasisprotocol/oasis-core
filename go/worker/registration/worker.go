@@ -265,7 +265,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 			blockSub pubsub.ClosableSubscription
 			err      error
 		)
-		blockCh, blockSub, err = w.consensus.WatchBlocks(w.ctx)
+		blockCh, blockSub, err = w.consensus.Core().WatchBlocks(w.ctx)
 		switch err {
 		case nil:
 			defer blockSub.Close()

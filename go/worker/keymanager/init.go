@@ -22,7 +22,7 @@ import (
 func New(
 	commonWorker *workerCommon.Worker,
 	r *registration.Worker,
-	backend api.Backend,
+	keymanager api.Backend,
 	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
@@ -46,7 +46,7 @@ func New(
 		peerMap:      NewPeerMap(),
 		accessList:   NewAccessList(),
 		commonWorker: commonWorker,
-		backend:      backend,
+		keymanager:   keymanager,
 		enabled:      enabled,
 	}
 
@@ -94,7 +94,7 @@ func New(
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Prepare sub-workers.
-	w.secretsWorker, err = newSecretsWorker(w.runtimeID, commonWorker, w, r, backend)
+	w.secretsWorker, err = newSecretsWorker(w.runtimeID, commonWorker, w, r, keymanager)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create secrets worker: %w", err)
 	}

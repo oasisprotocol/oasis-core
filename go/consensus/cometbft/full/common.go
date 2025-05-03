@@ -449,6 +449,11 @@ func (n *commonNode) Beacon() beaconAPI.Backend {
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) Core() consensusAPI.Backend {
+	return n.parentNode
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) KeyManager() keymanagerAPI.Backend {
 	return n.keymanager
 }

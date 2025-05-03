@@ -453,7 +453,7 @@ func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(policy *quote.Policy) 
 }
 
 func (n *runtimeHostNotifier) watchConsensusLightBlocks(ctx context.Context) {
-	rawCh, sub, err := n.consensus.WatchBlocks(ctx)
+	rawCh, sub, err := n.consensus.Core().WatchBlocks(ctx)
 	if err != nil {
 		n.logger.Error("failed to subscribe to consensus block updates",
 			"err", err,

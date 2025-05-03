@@ -12,7 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -49,13 +49,13 @@ func (p *parallel) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	_ *grpc.ClientConn,
-	cnsc consensus.Services,
-	sm consensus.SubmissionManager,
+	consensus consensusAPI.Services,
+	sm consensusAPI.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
-	p.BaseWorkload.Init(cnsc, sm, fundingAccount)
+	p.BaseWorkload.Init(consensus, sm, fundingAccount)
 
 	ctx := context.Background()
 	var err error
@@ -68,7 +68,7 @@ func (p *parallel) Run(
 	if err = xfer.Amount.FromInt64(parallelTxTransferAmount); err != nil {
 		return fmt.Errorf("transfer base units FromInt64 %d: %w", parallelTxTransferAmount, err)
 	}
-	txGasAmount, err = cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+	txGasAmount, err = consensus.Core().EstimateGas(ctx, &consensusAPI.EstimateGasRequest{
 		Signer:      fundingAccount.Public(),
 		Transaction: staking.NewTransferTx(0, nil, xfer),
 	})
@@ -136,7 +136,7 @@ func (p *parallel) Run(
 				parallelLogger.Debug("submitting self transfer",
 					"account", addr,
 				)
-				if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
+				if err = consensus.Core().SubmitTx(ctx, signedTx); err != nil {
 					parallelLogger.Error("SubmitTx error", "err", err)
 					errCh <- fmt.Errorf("cnsc.SubmitTx: %w", err)
 					return

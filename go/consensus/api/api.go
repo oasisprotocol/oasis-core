@@ -197,10 +197,11 @@ type Backend interface {
 
 // Services are consensus services.
 type Services interface {
-	Backend
-
 	// Beacon returns the beacon backend.
 	Beacon() beacon.Backend
+
+	// Core returns the consensus core backend.
+	Core() Backend
 
 	// Governance returns the governance backend.
 	Governance() governance.Backend

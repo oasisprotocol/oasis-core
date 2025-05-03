@@ -228,7 +228,7 @@ func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 		"node_id", w.kmWorker.nodeID,
 	)
 
-	stCh, stSub, err := w.kmWorker.backend.Churp().WatchStatuses(ctx)
+	stCh, stSub, err := w.kmWorker.keymanager.Churp().WatchStatuses(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch statuses",
 			"err", err,
@@ -246,7 +246,7 @@ func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 	}
 	defer epoSub.Close()
 
-	blkCh, blkSub, err := w.kmWorker.commonWorker.Consensus.WatchBlocks(ctx)
+	blkCh, blkSub, err := w.kmWorker.commonWorker.Consensus.Core().WatchBlocks(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch blocks",
 			"err", err,

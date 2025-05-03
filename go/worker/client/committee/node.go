@@ -191,7 +191,7 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
 	}
 
-	lb, err := n.commonNode.Consensus.GetLightBlock(ctx, annBlk.Height)
+	lb, err := n.commonNode.Consensus.Core().GetLightBlock(ctx, annBlk.Height)
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", annBlk.Height, err)
 	}

@@ -294,7 +294,7 @@ func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 	}
 	startHeight := lastHeight + 1 // +1 since we want the last non-seen height.
 
-	lastRetainedHeight, err := bi.consensus.GetLastRetainedHeight(ctx)
+	lastRetainedHeight, err := bi.consensus.Core().GetLastRetainedHeight(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get last retained height: %w", err)
 	}

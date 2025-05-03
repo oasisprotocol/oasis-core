@@ -1,4 +1,4 @@
-// Package tests si a collection of roothash implementation test cases.
+// Package tests is a collection of roothash implementation test cases.
 package tests
 
 import (
@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -60,8 +60,8 @@ type finalizedEvent struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Service, identity *identity.Identity) {
-	seedBase := []byte(fmt.Sprintf("RootHashImplementationTests: %T", backend))
+func RootHashImplementationTests(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, identity *identity.Identity) {
+	seedBase := []byte(fmt.Sprintf("RootHashImplementationTests: %T", roothash))
 
 	require := require.New(t)
 
@@ -95,17 +95,17 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	registryTests.BulkPopulate(t, consensus.Registry(), consensus, runtimes, seedBase)
 
 	t.Run("ConsensusParameters", func(t *testing.T) {
-		testConsensusParameters(t, backend)
+		testConsensusParameters(t, roothash)
 	})
 
 	// Run the various tests. (Ordering matters)
 	for _, v := range rtStates {
 		t.Run("GenesisBlock/"+v.id, func(t *testing.T) {
-			testGenesisBlock(t, backend, v)
+			testGenesisBlock(t, roothash, v)
 		})
 	}
 	success := t.Run("EpochTransitionBlock", func(t *testing.T) {
-		testEpochTransitionBlock(t, backend, consensus, rtStates)
+		testEpochTransitionBlock(t, roothash, consensus, rtStates)
 	})
 	if !success {
 		return
@@ -115,35 +115,35 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	// EpochTransitionBlock was successful. Otherwise this may leave the
 	// committees set to nil and cause a crash.
 	t.Run("SuccessfulRound", func(t *testing.T) {
-		testSuccessfulRound(t, backend, consensus, rtStates)
+		testSuccessfulRound(t, roothash, consensus, rtStates)
 	})
 
 	t.Run("RoundTimeout", func(t *testing.T) {
-		testRoundTimeout(t, backend, consensus, rtStates)
+		testRoundTimeout(t, roothash, consensus, rtStates)
 	})
 
 	t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
-		testRoundTimeoutWithEpochTransition(t, backend, consensus, rtStates)
+		testRoundTimeoutWithEpochTransition(t, roothash, consensus, rtStates)
 	})
 
 	t.Run("EquivocationEvidence", func(t *testing.T) {
-		testSubmitEquivocationEvidence(t, backend, consensus, identity, rtStates)
+		testSubmitEquivocationEvidence(t, roothash, consensus, identity, rtStates)
 	})
 }
 
-func testConsensusParameters(t *testing.T, backend api.Backend) {
+func testConsensusParameters(t *testing.T, roothash api.Backend) {
 	ctx := context.Background()
 
-	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	params, err := roothash.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(t, err, "ConsensusParameters")
 	require.EqualValues(t, 32, params.MaxRuntimeMessages, "expected max runtime messages value")
 }
 
-func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
+func testGenesisBlock(t *testing.T, roothash api.Backend, state *runtimeState) {
 	require := require.New(t)
 
 	id := state.rt.Runtime.ID
-	ch, sub, err := backend.WatchBlocks(context.Background(), id)
+	ch, sub, err := roothash.WatchBlocks(context.Background(), id)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -162,7 +162,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		t.Fatalf("failed to receive block")
 	}
 
-	blk, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+	blk, err := roothash.GetLatestBlock(context.Background(), &api.RuntimeRequest{
 		RuntimeID: id,
 		Height:    consensusAPI.HeightLatest,
 	})
@@ -173,7 +173,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	// to subscribe to these updates and this would not be needed.
 	time.Sleep(1 * time.Second)
 
-	blk, err = backend.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
+	blk, err = roothash.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
 		RuntimeID: id,
 		Height:    consensusAPI.HeightLatest,
 	})
@@ -181,12 +181,12 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
 
-func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
+func testEpochTransitionBlock(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	require := require.New(t)
 
 	// Before an epoch transition there should just be a genesis block.
 	for _, v := range states {
-		genesisBlock, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+		genesisBlock, err := roothash.GetLatestBlock(context.Background(), &api.RuntimeRequest{
 			RuntimeID: v.rt.Runtime.ID,
 			Height:    consensusAPI.HeightLatest,
 		})
@@ -200,7 +200,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	var blkChannels []<-chan *api.AnnotatedBlock
 	for i := range states {
 		v := states[i]
-		ch, sub, err := backend.WatchBlocks(context.Background(), v.rt.Runtime.ID)
+		ch, sub, err := roothash.WatchBlocks(context.Background(), v.rt.Runtime.ID)
 		require.NoError(err, "WatchBlocks")
 		defer sub.Close()
 
@@ -218,7 +218,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 
 	// Check if GetGenesisBlock still returns the correct genesis block.
 	for i := range states {
-		blk, err := backend.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
+		blk, err := roothash.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
 			RuntimeID: states[i].rt.Runtime.ID,
 			Height:    consensusAPI.HeightLatest,
 		})
@@ -266,9 +266,9 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensu
 	}
 }
 
-func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
+func testSuccessfulRound(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
-		state.testSuccessfulRound(t, backend, consensus)
+		state.testSuccessfulRound(t, roothash, consensus)
 	}
 }
 
@@ -366,8 +366,8 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 }
 
 // getEvents returns runtime events at specified block height.
-func (s *runtimeState) getEvents(ctx context.Context, backend api.Backend, height int64) ([]*api.Event, error) {
-	evs, err := backend.GetEvents(ctx, height)
+func (s *runtimeState) getEvents(ctx context.Context, roothash api.Backend, height int64) ([]*api.Event, error) {
+	evs, err := roothash.GetEvents(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (s *runtimeState) getEvents(ctx context.Context, backend api.Backend, heigh
 
 // verifyEvents verifies that executor commitment, discrepancy detection and round finalized events
 // were emitted at the given height.
-func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, backend api.Backend, height int64, ce *commitmentEvent, de *discrepancyEvent, fe *finalizedEvent) {
+func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, roothash api.Backend, height int64, ce *commitmentEvent, de *discrepancyEvent, fe *finalizedEvent) {
 	require := require.New(t)
 
 	numEvents := 0
@@ -399,7 +399,7 @@ func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, backend a
 		numEvents++
 	}
 
-	evts, err := s.getEvents(ctx, backend, height)
+	evts, err := s.getEvents(ctx, roothash, height)
 	require.NoError(err, "getEvents")
 	require.Len(evts, numEvents, "should have all events")
 
@@ -429,10 +429,10 @@ func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, backend a
 }
 
 // livenessStatistics fetches liveness statistics at the specified height.
-func (s *runtimeState) livenessStatistics(t *testing.T, ctx context.Context, backend api.Backend, height int64) *api.LivenessStatistics {
+func (s *runtimeState) livenessStatistics(t *testing.T, ctx context.Context, roothash api.Backend, height int64) *api.LivenessStatistics {
 	require := require.New(t)
 
-	state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
+	state, err := roothash.GetRuntimeState(ctx, &api.RuntimeRequest{
 		RuntimeID: s.rt.Runtime.ID,
 		Height:    height,
 	})
@@ -452,9 +452,9 @@ func (s *runtimeState) livenessStatistics(t *testing.T, ctx context.Context, bac
 
 // livenessStatisticsDiff returns the differences in liveness statistics caused by a block
 // at the specified height.
-func (s *runtimeState) livenessStatisticsDiff(t *testing.T, ctx context.Context, backend api.Backend, height int64) *api.LivenessStatistics {
-	before := s.livenessStatistics(t, ctx, backend, height-1)
-	after := s.livenessStatistics(t, ctx, backend, height)
+func (s *runtimeState) livenessStatisticsDiff(t *testing.T, ctx context.Context, roothash api.Backend, height int64) *api.LivenessStatistics {
+	before := s.livenessStatistics(t, ctx, roothash, height-1)
+	after := s.livenessStatistics(t, ctx, roothash, height)
 
 	after.TotalRounds -= before.TotalRounds
 	for i, v := range before.FinalizedProposals {
@@ -470,13 +470,13 @@ func (s *runtimeState) livenessStatisticsDiff(t *testing.T, ctx context.Context,
 	return after
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, roothash api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
-	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
+	ch, sub, err := roothash.WatchBlocks(ctx, s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -509,10 +509,10 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 
 	// There should be executor commitment events for all commitments and one finalized event.
 	height := parent.Height
-	s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits}, nil, &finalizedEvent{parent.Block.Header.Round})
+	s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits}, nil, &finalizedEvent{parent.Block.Header.Round})
 
 	// Check that the liveness statistics were computed correctly.
-	livenessStatistics := s.livenessStatisticsDiff(t, ctx, backend, parent.Height)
+	livenessStatistics := s.livenessStatisticsDiff(t, ctx, roothash, parent.Height)
 
 	liveRounds := make([]uint64, len(livenessStatistics.LiveRounds))
 	finalizedProposals := make([]uint64, len(livenessStatistics.FinalizedProposals))
@@ -534,21 +534,21 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	require.EqualValues(missedProposals, livenessStatistics.MissedProposals, "there should be no failed proposals")
 }
 
-func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
+func testRoundTimeout(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
 		for _, rank := range []uint64{0, 1, 2} {
-			state.testRoundTimeout(t, backend, consensus, rank)
+			state.testRoundTimeout(t, roothash, consensus, rank)
 		}
 	}
 }
 
-func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Service, rank uint64) {
+func (s *runtimeState) testRoundTimeout(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, rank uint64) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
-	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
+	ch, sub, err := roothash.WatchBlocks(ctx, s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -559,7 +559,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	// verifyLivenessStatistics verifies liveness statistics, i.e. that the scheduler missed
 	// a proposal because of the round timeout.
 	verifyLivenessStatistics := func(blk *api.AnnotatedBlock) {
-		livenessStatistics := s.livenessStatisticsDiff(t, ctx, backend, blk.Height)
+		livenessStatistics := s.livenessStatisticsDiff(t, ctx, roothash, blk.Height)
 
 		liveRounds := make([]uint64, len(livenessStatistics.LiveRounds))
 		finalizedProposals := make([]uint64, len(livenessStatistics.FinalizedProposals))
@@ -597,11 +597,11 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 		// Check that round was finalized after 2.5*RoundTimeout blocks.
 		height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:1]}, nil, nil)
+		s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:1]}, nil, nil)
 
 		// Check that discrepancy resolution started after RoundTimeout blocks.
 		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
+		s.verifyEvents(t, ctx, roothash, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		// Check that the liveness statistics were computed correctly.
 		verifyLivenessStatistics(parent)
@@ -638,15 +638,15 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
 			// resolution started immediately.
 			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, &discrepancyEvent{false, rank, round}, nil)
+			s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:2]}, &discrepancyEvent{false, rank, round}, nil)
 		default:
 			// Check that round was finalized after 2.5*RoundTimeout blocks.
 			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
+			s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
 
 			// Check that discrepancy resolution started after RoundTimeout blocks.
 			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
+			s.verifyEvents(t, ctx, roothash, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		}
 
@@ -681,11 +681,11 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 		// Check that round was finalized after 2.5*RoundTimeout blocks.
 		height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
+		s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
 
 		// Check that discrepancy resolution started after RoundTimeout blocks.
 		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
+		s.verifyEvents(t, ctx, roothash, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		// Check that the liveness statistics were computed correctly.
 		verifyLivenessStatistics(parent)
@@ -726,15 +726,15 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
 			// resolution started immediately.
 			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, &discrepancyEvent{false, rank, round}, nil)
+			s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:3]}, &discrepancyEvent{false, rank, round}, nil)
 		default:
 			// Check that round was finalized after 2.5*RoundTimeout blocks.
 			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, nil, nil)
+			s.verifyEvents(t, ctx, roothash, height, &commitmentEvent{executorCommits[:3]}, nil, nil)
 
 			// Check that discrepancy resolution started after RoundTimeout blocks.
 			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
+			s.verifyEvents(t, ctx, roothash, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		}
 
@@ -745,23 +745,23 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	})
 }
 
-func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
+func testRoundTimeoutWithEpochTransition(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
-		state.testRoundTimeoutWithEpochTransition(t, backend, consensus)
+		state.testRoundTimeoutWithEpochTransition(t, roothash, consensus)
 	}
 }
 
-func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
+func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, roothash api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
-	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
+	ch, sub, err := roothash.WatchBlocks(ctx, s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
-	blk, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
+	blk, err := roothash.GetLatestBlock(ctx, &api.RuntimeRequest{
 		RuntimeID: s.rt.Runtime.ID,
 		Height:    consensusAPI.HeightLatest,
 	})
@@ -778,7 +778,7 @@ func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend
 	require.NoError(err, "ExecutorCommit")
 
 	// Wait few consensus blocks.
-	consCh, consSub, err := consensus.WatchBlocks(ctx)
+	consCh, consSub, err := consensus.Core().WatchBlocks(ctx)
 	require.NoError(err, "WatchBlocks")
 	defer consSub.Close()
 
@@ -807,7 +807,7 @@ type testCommittee struct {
 func mustGetCommittee(
 	t *testing.T,
 	rt *registryTests.TestRuntime,
-	epoch beacon.EpochTime,
+	epoch beaconAPI.EpochTime,
 	sched scheduler.Backend,
 	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
@@ -874,8 +874,8 @@ func MustTransitionEpoch(
 	t *testing.T,
 	runtimeID common.Namespace,
 	roothash api.Backend,
-	backend beacon.Backend,
-	epoch beacon.EpochTime,
+	beacon beaconAPI.Backend,
+	epoch beaconAPI.EpochTime,
 ) {
 	require := require.New(t)
 
@@ -894,7 +894,7 @@ func MustTransitionEpoch(
 		blk, err := nextRuntimeBlock(ch, nil)
 		require.NoError(err, "nextRuntimeBlock")
 
-		blkEpoch, err := backend.GetEpoch(ctx, blk.Height)
+		blkEpoch, err := beacon.GetEpoch(ctx, blk.Height)
 		require.NoError(err, "GetEpoch")
 
 		if blkEpoch >= epoch {
@@ -903,13 +903,13 @@ func MustTransitionEpoch(
 	}
 }
 
-func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Service, _ *identity.Identity, states []*runtimeState) {
+func testSubmitEquivocationEvidence(t *testing.T, roothash api.Backend, consensus consensusAPI.Service, _ *identity.Identity, states []*runtimeState) {
 	require := require.New(t)
 
 	ctx := context.Background()
 
 	s := states[0]
-	child, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
+	child, err := roothash.GetLatestBlock(ctx, &api.RuntimeRequest{
 		RuntimeID: s.rt.Runtime.ID,
 		Height:    consensusAPI.HeightLatest,
 	})

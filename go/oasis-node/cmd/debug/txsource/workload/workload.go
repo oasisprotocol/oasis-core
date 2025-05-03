@@ -82,7 +82,7 @@ func (bw *BaseWorkload) Init(
 	bw.fundingAccount = fundingAccount
 }
 
-// Consensus returns the consensus client backend.
+// Consensus returns the consensus services.
 func (bw *BaseWorkload) Consensus() consensus.Services {
 	return bw.cc
 }

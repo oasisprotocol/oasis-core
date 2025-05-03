@@ -76,7 +76,7 @@ func (w *vrfWorker) worker() {
 	defer eventSub.Close()
 
 	// Subscribe to block height events.
-	blockCh, blockSub, err := w.parent.consensus.WatchBlocks(w.parent.ctx)
+	blockCh, blockSub, err := w.parent.consensus.Core().WatchBlocks(w.parent.ctx)
 	if err != nil {
 		w.logger.Error("failed to subscribe to block events",
 			"err", err,
@@ -110,7 +110,7 @@ func (w *vrfWorker) worker() {
 		}
 
 		// Re-query the current block height.
-		blk, err := w.parent.consensus.GetBlock(w.parent.ctx, consensus.HeightLatest)
+		blk, err := w.parent.consensus.Core().GetBlock(w.parent.ctx, consensus.HeightLatest)
 		if err != nil {
 			w.logger.Error("failed to query latest block",
 				"err", err,

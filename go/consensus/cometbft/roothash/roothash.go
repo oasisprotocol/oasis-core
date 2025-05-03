@@ -51,8 +51,8 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	backend tmapi.Backend
-	querier *app.QueryFactory
+	consensus tmapi.Backend
+	querier   *app.QueryFactory
 
 	allBlockNotifier *pubsub.Broker
 	runtimeNotifiers map[common.Namespace]*runtimeBrokers
@@ -63,10 +63,10 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT-based roothash service client.
-func New(backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/roothash"),
-		backend:          backend,
+		consensus:        consensus,
 		querier:          querier,
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
@@ -262,7 +262,7 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.backend.GetCometBFTBlockResults(ctx, height)
+	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
 			"err", err,
@@ -272,7 +272,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.backend.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,

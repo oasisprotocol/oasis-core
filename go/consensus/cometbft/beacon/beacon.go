@@ -33,8 +33,8 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	backend tmapi.Backend
-	querier *app.QueryFactory
+	consensus tmapi.Backend
+	querier   *app.QueryFactory
 
 	epochNotifier     *pubsub.Broker
 	epochLastNotified beaconAPI.EpochTime
@@ -53,10 +53,10 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed beacon service client.
-func New(baseEpoch beaconAPI.EpochTime, baseBlock int64, backend tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(baseEpoch beaconAPI.EpochTime, baseBlock int64, consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
-		backend:           backend,
+		consensus:         consensus,
 		querier:           querier,
 		epochNotifier:     pubsub.NewBroker(false),
 		epochLastNotified: beaconAPI.EpochInvalid,
@@ -124,12 +124,12 @@ func (sc *ServiceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.Epoc
 		return cachedHeight.(int64), nil
 	}
 
-	lowHeight, err := sc.backend.GetLastRetainedHeight(ctx)
+	lowHeight, err := sc.consensus.GetLastRetainedHeight(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query last retained version: %w", err)
 	}
 
-	hiHeight, err := sc.backend.GetLatestHeight(ctx)
+	hiHeight, err := sc.consensus.GetLatestHeight(ctx)
 	if err != nil {
 		return 0, err
 	}
