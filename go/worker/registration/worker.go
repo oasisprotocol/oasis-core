@@ -204,7 +204,7 @@ type Worker struct { // nolint: maligned
 	stopRegCh    chan struct{} // closed internally to trigger clean registration lapse
 
 	logger    *logging.Logger
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	roleProviders []*roleProvider
 	registerCh    chan struct{}
@@ -1058,7 +1058,7 @@ func New(
 	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	p2p p2p.Service,
 	workerCommonCfg *workerCommon.Config,
 	store *persistent.CommonStore,

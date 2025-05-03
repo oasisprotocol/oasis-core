@@ -64,7 +64,7 @@ type Node struct {
 
 	commonStore *persistent.CommonStore
 
-	Consensus    consensusAPI.Backend
+	Consensus    consensusAPI.Service
 	LightService consensusAPI.LightService
 
 	dataDir      string

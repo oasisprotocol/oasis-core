@@ -53,7 +53,7 @@ type Workload interface {
 		gracefulExit context.Context,
 		rng *rand.Rand,
 		conn *grpc.ClientConn,
-		cnsc consensus.ClientBackend,
+		cnsc consensus.Backend,
 		sm consensus.SubmissionManager,
 		fundingAccount signature.Signer,
 		validatorEntities []signature.Signer,
@@ -65,7 +65,7 @@ type BaseWorkload struct {
 	// Logger is the logger for the workload.
 	Logger *logging.Logger
 
-	cc consensus.ClientBackend
+	cc consensus.Backend
 	sm consensus.SubmissionManager
 
 	fundingAccount signature.Signer
@@ -73,7 +73,7 @@ type BaseWorkload struct {
 
 // Init initializes the base workload.
 func (bw *BaseWorkload) Init(
-	cc consensus.ClientBackend,
+	cc consensus.Backend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 ) {
@@ -83,7 +83,7 @@ func (bw *BaseWorkload) Init(
 }
 
 // Consensus returns the consensus client backend.
-func (bw *BaseWorkload) Consensus() consensus.ClientBackend {
+func (bw *BaseWorkload) Consensus() consensus.Backend {
 	return bw.cc
 }
 
@@ -181,7 +181,7 @@ func NewBaseWorkload(name string) BaseWorkload {
 // FundAccountFromTestEntity funds an account from test entity.
 func FundAccountFromTestEntity(
 	ctx context.Context,
-	cc consensus.ClientBackend,
+	cc consensus.Backend,
 	sm consensus.SubmissionManager,
 	to signature.Signer,
 ) error {

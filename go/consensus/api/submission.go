@@ -51,7 +51,7 @@ type SubmissionManager interface {
 }
 
 type submissionManager struct {
-	backend        ClientBackend
+	backend        Backend
 	priceDiscovery PriceDiscovery
 	maxFee         quantity.Quantity
 
@@ -236,7 +236,7 @@ func (m *submissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer
 }
 
 // NewSubmissionManager creates a new transaction submission manager.
-func NewSubmissionManager(backend ClientBackend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
+func NewSubmissionManager(backend Backend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
 	sm := &submissionManager{
 		backend:        backend,
 		priceDiscovery: priceDiscovery,
@@ -256,8 +256,8 @@ func NewSubmissionManager(backend ClientBackend, priceDiscovery PriceDiscovery, 
 //
 // If the fee is set to nil, it will be automatically filled in based on gas
 // estimation and current gas price discovery.
-func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) error {
-	return backend.SubmissionManager().SignAndSubmitTx(ctx, signer, tx)
+func SignAndSubmitTx(ctx context.Context, consensus Service, signer signature.Signer, tx *transaction.Transaction) error {
+	return consensus.SubmissionManager().SignAndSubmitTx(ctx, signer, tx)
 }
 
 // SignAndSubmitTxWithProof is a helper function that signs and submits
@@ -268,8 +268,8 @@ func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Sign
 //
 // If the fee is set to nil, it will be automatically filled in based on gas
 // estimation and current gas price discovery.
-func SignAndSubmitTxWithProof(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
-	return backend.SubmissionManager().SignAndSubmitTxWithProof(ctx, signer, tx)
+func SignAndSubmitTxWithProof(ctx context.Context, consensus Service, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
+	return consensus.SubmissionManager().SignAndSubmitTxWithProof(ctx, signer, tx)
 }
 
 type noOpPriceDiscovery struct{}

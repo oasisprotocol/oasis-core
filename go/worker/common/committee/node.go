@@ -154,7 +154,7 @@ type Node struct {
 	Identity         *identity.Identity
 	KeyManager       keymanager.Backend
 	KeyManagerClient *KeyManagerClientWrapper
-	Consensus        consensus.Backend
+	Consensus        consensus.Service
 	LightProvider    consensus.LightProvider
 	Group            *Group
 	P2P              p2pAPI.Service
@@ -872,7 +872,7 @@ func NewNode(
 	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
 	txPoolCfg tpConfig.Config,

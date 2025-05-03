@@ -11,7 +11,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-func schedulerNextElectionHeight(svc consensus.Backend, epoch beacon.EpochTime) (int64, beacon.EpochTime, error) {
+func schedulerNextElectionHeight(svc consensus.Service, epoch beacon.EpochTime) (int64, beacon.EpochTime, error) {
 	ch, sub, err := svc.Scheduler().WatchCommittees(context.Background())
 	if err != nil {
 		return -1, beacon.EpochInvalid, fmt.Errorf("failed to watch committees: %w", err)

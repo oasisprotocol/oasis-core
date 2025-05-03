@@ -26,7 +26,7 @@ type Controller struct {
 	control.NodeController
 
 	Beacon        beacon.Backend
-	Consensus     consensus.ClientBackend
+	Consensus     consensus.Backend
 	Staking       staking.Backend
 	Governance    governance.Backend
 	Registry      registry.Backend

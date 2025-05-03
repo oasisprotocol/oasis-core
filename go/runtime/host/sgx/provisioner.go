@@ -63,7 +63,7 @@ type Config struct {
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
 	// Consensus is the consensus layer backend.
-	Consensus consensus.Backend
+	Consensus consensus.Service
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -93,7 +93,7 @@ type sgxProvisioner struct {
 	ias       []ias.Endpoint
 	pcs       pcs.QuoteService
 	aesm      *aesm.Client
-	consensus consensus.Backend
+	consensus consensus.Service
 	identity  *identity.Identity
 	store     *persistent.CommonStore
 

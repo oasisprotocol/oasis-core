@@ -32,7 +32,7 @@ type vaultTestState struct {
 func VaultImplementationTests(
 	t *testing.T,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 ) {
 	require := require.New(t)
 	ctx := context.Background()
@@ -45,7 +45,7 @@ func VaultImplementationTests(
 	// Run multiple sub-tests.
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, consensusAPI.Backend, *vaultTestState)
+		fn func(*testing.T, consensusAPI.Service, *vaultTestState)
 	}{
 		{"TestVaultCreate", testVaultCreate},
 		{"TestVaultAuthorizeAction", testVaultAuthorizeAction},
@@ -56,7 +56,7 @@ func VaultImplementationTests(
 	}
 }
 
-func testVaultCreate(t *testing.T, consensus consensusAPI.Backend, testState *vaultTestState) {
+func testVaultCreate(t *testing.T, consensus consensusAPI.Service, testState *vaultTestState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -99,7 +99,7 @@ func testVaultCreate(t *testing.T, consensus consensusAPI.Backend, testState *va
 	require.NoError(err, "TransferTx to vault")
 }
 
-func testVaultAuthorizeAction(t *testing.T, consensus consensusAPI.Backend, testState *vaultTestState) {
+func testVaultAuthorizeAction(t *testing.T, consensus consensusAPI.Service, testState *vaultTestState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -126,7 +126,7 @@ func testVaultAuthorizeAction(t *testing.T, consensus consensusAPI.Backend, test
 	require.NoError(err, "AuthorizeActionTx")
 }
 
-func testVaultWithdraw(t *testing.T, consensus consensusAPI.Backend, testState *vaultTestState) {
+func testVaultWithdraw(t *testing.T, consensus consensusAPI.Service, testState *vaultTestState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -149,7 +149,7 @@ func testVaultWithdraw(t *testing.T, consensus consensusAPI.Backend, testState *
 	require.ErrorIs(err, staking.ErrForbidden, "Withdraw")
 }
 
-func testVaultExecuteMessage(t *testing.T, consensus consensusAPI.Backend, testState *vaultTestState) {
+func testVaultExecuteMessage(t *testing.T, consensus consensusAPI.Service, testState *vaultTestState) {
 	require := require.New(t)
 	ctx := context.Background()
 

@@ -60,7 +60,7 @@ type finalizedEvent struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Service, identity *identity.Identity) {
 	seedBase := []byte(fmt.Sprintf("RootHashImplementationTests: %T", backend))
 
 	require := require.New(t)
@@ -181,7 +181,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
 
-func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
+func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	require := require.New(t)
 
 	// Before an epoch transition there should just be a genesis block.
@@ -227,7 +227,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	}
 }
 
-func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Backend) {
+func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Service) {
 	nodes := make(map[signature.PublicKey]*registryTests.TestNode)
 	for _, node := range s.rt.TestNodes() {
 		nodes[node.Node.ID] = node
@@ -239,7 +239,7 @@ func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Ba
 	s.executorCommittee = mustGetCommittee(t, s.rt, epoch, consensus.Scheduler(), nodes)
 }
 
-func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensusAPI.Backend, ch <-chan *api.AnnotatedBlock) {
+func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensusAPI.Service, ch <-chan *api.AnnotatedBlock) {
 	require := require.New(t)
 
 	s.refreshCommittees(t, consensus)
@@ -266,13 +266,13 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensu
 	}
 }
 
-func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
+func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
 		state.testSuccessfulRound(t, backend, consensus)
 	}
 }
 
-func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, child *block.Block, rank uint64) (
+func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Service, child *block.Block, rank uint64) (
 	*block.Block,
 	[]commitment.ExecutorCommitment,
 	[]*registryTests.TestNode,
@@ -470,7 +470,7 @@ func (s *runtimeState) livenessStatisticsDiff(t *testing.T, ctx context.Context,
 	return after
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
@@ -534,7 +534,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	require.EqualValues(missedProposals, livenessStatistics.MissedProposals, "there should be no failed proposals")
 }
 
-func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
+func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
 		for _, rank := range []uint64{0, 1, 2} {
 			state.testRoundTimeout(t, backend, consensus, rank)
@@ -542,7 +542,7 @@ func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.
 	}
 }
 
-func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, rank uint64) {
+func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Service, rank uint64) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
@@ -745,13 +745,13 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	})
 }
 
-func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
+func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Service, states []*runtimeState) {
 	for _, state := range states {
 		state.testRoundTimeoutWithEpochTransition(t, backend, consensus)
 	}
 }
 
-func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
@@ -903,7 +903,7 @@ func MustTransitionEpoch(
 	}
 }
 
-func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, _ *identity.Identity, states []*runtimeState) {
+func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Service, _ *identity.Identity, states []*runtimeState) {
 	require := require.New(t)
 
 	ctx := context.Background()

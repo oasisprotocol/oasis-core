@@ -109,8 +109,8 @@ func (m FeatureMask) Has(f FeatureMask) bool {
 	return m&f != 0
 }
 
-// ClientBackend is a consensus interface used by clients that connect to the local full node.
-type ClientBackend interface {
+// Backend is a consensus interface used by clients that connect to the local full node.
+type Backend interface {
 	// SubmitTx submits a signed consensus transaction and waits for the transaction to be included
 	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
@@ -371,10 +371,10 @@ type P2PStatus struct {
 	Peers []string `json:"peers"`
 }
 
-// Backend is an interface that a consensus backend must provide.
-type Backend interface {
+// Service is an interface that a consensus backend service must provide.
+type Service interface {
 	service.BackgroundService
-	ClientBackend
+	Backend
 
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask

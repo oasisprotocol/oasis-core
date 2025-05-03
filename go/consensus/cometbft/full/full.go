@@ -971,7 +971,7 @@ func (t *fullService) dumpGenesis(ctx context.Context, height int64) error {
 }
 
 // New creates a new CometBFT consensus backend.
-func New(ctx context.Context, cfg Config) (consensusAPI.Backend, error) {
+func New(ctx context.Context, cfg Config) (consensusAPI.Service, error) {
 	commonNode := newCommonNode(ctx, cfg.CommonConfig)
 
 	t := &fullService{

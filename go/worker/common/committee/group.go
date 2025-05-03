@@ -152,7 +152,7 @@ type Group struct {
 	runtimeID common.Namespace
 	identity  *identity.Identity
 
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	activeEpoch *epoch
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
@@ -309,7 +309,7 @@ func NewGroup(
 	ctx context.Context,
 	runtimeID common.Namespace,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) (*Group, error) {
 	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {

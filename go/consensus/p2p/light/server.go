@@ -19,7 +19,7 @@ const (
 )
 
 type service struct {
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	logger *logging.Logger
 }
@@ -57,7 +57,7 @@ func (s *service) handleGetLightBlock(ctx context.Context, height int64) (*conse
 func NewServer(
 	p2p rpc.P2P,
 	chainContext string,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) rpc.Server {
 	p2p.RegisterProtocol(ProtocolID(chainContext), minProtocolPeers, totalProtocolPeers)
 

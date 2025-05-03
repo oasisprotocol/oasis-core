@@ -23,7 +23,7 @@ const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, name string, identity *identity.Identity, backend api.Backend, consensus consensusAPI.Backend) {
+func SchedulerImplementationTests(t *testing.T, name string, identity *identity.Identity, backend api.Backend, consensus consensusAPI.Service) {
 	ctx := context.Background()
 	seed := []byte("SchedulerImplementationTests/" + name)
 

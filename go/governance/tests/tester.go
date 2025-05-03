@@ -44,7 +44,7 @@ type governanceTestsState struct {
 func GovernanceImplementationTests(
 	t *testing.T,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	entity *entity.Entity,
 	entitySigner signature.Signer,
 ) {
@@ -89,7 +89,7 @@ func GovernanceImplementationTests(
 	// an upgrade proposal is closed.
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, api.Backend, consensusAPI.Backend, *governanceTestsState)
+		fn func(*testing.T, api.Backend, consensusAPI.Service, *governanceTestsState)
 	}{
 		{"TestBadProposals", testBadProposals},
 		{"TestUpgradeProposalSubmit", testUpgradeProposalSubmit},
@@ -104,7 +104,7 @@ func GovernanceImplementationTests(
 
 func assertAccountBalance(
 	t *testing.T,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	addr staking.Address,
 	height int64,
 	expectedBalance *quantity.Quantity,
@@ -116,7 +116,7 @@ func assertAccountBalance(
 	require.EqualValues(expectedBalance, &acc.General.Balance, "account should have expected balance")
 }
 
-func testBadProposals(t *testing.T, _ api.Backend, consensus consensusAPI.Backend, _ *governanceTestsState) {
+func testBadProposals(t *testing.T, _ api.Backend, consensus consensusAPI.Service, _ *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -143,7 +143,7 @@ func testBadProposals(t *testing.T, _ api.Backend, consensus consensusAPI.Backen
 	require.Equal(api.ErrInvalidArgument, err, "SubmitProposalTx")
 }
 
-func testBadVotes(t *testing.T, _ api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testBadVotes(t *testing.T, _ api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -162,7 +162,7 @@ func testBadVotes(t *testing.T, _ api.Backend, consensus consensusAPI.Backend, t
 	require.Equal(api.ErrNotEligible, err, "CastVoteTx")
 }
 
-func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -187,7 +187,7 @@ func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus cons
 	submitProposal(t, content, backend, consensus, testState)
 }
 
-func testUpgradeProposalVoteAndClose(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testUpgradeProposalVoteAndClose(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -200,7 +200,7 @@ func testUpgradeProposalVoteAndClose(t *testing.T, backend api.Backend, consensu
 	require.Equal(1, len(pendingUpgrade), "There should be one pending upgrade")
 }
 
-func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -224,7 +224,7 @@ func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus cons
 	require.True(len(proposals) > 1, "At least two proposals should exist")
 }
 
-func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -259,7 +259,7 @@ func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus c
 	require.True(len(proposals) > 2, "At least three proposals should exist")
 }
 
-func submitProposal(t *testing.T, content *api.ProposalContent, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func submitProposal(t *testing.T, content *api.ProposalContent, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -329,7 +329,7 @@ WaitForSubmittedProposal:
 	testState.proposal = proposal
 }
 
-func voteAndCloseProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func voteAndCloseProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Service, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 

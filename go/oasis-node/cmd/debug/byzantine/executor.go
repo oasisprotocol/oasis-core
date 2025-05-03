@@ -347,7 +347,7 @@ func (cbc *computeBatchContext) createCommitment(
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity) error {
+func (cbc *computeBatchContext) publishToChain(svc consensus.Service, id *identity.Identity) error {
 	if err := roothashExecutorCommit(svc, id, cbc.runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
 		return fmt.Errorf("roothash merge commitment: %w", err)
 	}

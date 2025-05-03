@@ -84,7 +84,7 @@ type queries struct {
 	control    control.NodeController
 	beacon     beacon.Backend
 	staking    staking.Backend
-	consensus  consensus.ClientBackend
+	consensus  consensus.Backend
 	registry   registry.Backend
 	scheduler  scheduler.Backend
 	governance governance.Backend
@@ -874,7 +874,7 @@ func (q *queries) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
+	cnsc consensus.Backend,
 	_ consensus.SubmissionManager,
 	_ signature.Signer,
 	_ []signature.Signer,

@@ -56,7 +56,7 @@ var (
 //
 // WARNING: This assumes that the registry is empty, and will leave
 // a Runtime registered.
-func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, validatorEntityID signature.PublicKey) {
+func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Service, validatorEntityID signature.PublicKey) {
 	EnsureRegistryClean(t, backend)
 
 	// We need a runtime ID as otherwise the registry will not allow us to
@@ -113,7 +113,7 @@ func ensureExpectedEvent(t *testing.T, ch <-chan *api.Event, expected *api.Event
 func testRegistryEntityNodes( // nolint: gocyclo
 	t *testing.T,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	runtimeID common.Namespace,
 	runtimeEWID common.Namespace,
 	validatorEntityID signature.PublicKey,
@@ -692,7 +692,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	EnsureRegistryClean(t, backend)
 }
 
-func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) (common.Namespace, common.Namespace) {
+func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Service) (common.Namespace, common.Namespace) {
 	require := require.New(t)
 
 	query := &api.GetRuntimesQuery{Height: consensusAPI.HeightLatest, IncludeSuspended: false}
@@ -1011,7 +1011,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	return rtMapByName["WithoutKM"].ID, rtMapByName["EntityWhitelist"].ID
 }
 
-func testFreshnessProofs(t *testing.T, consensus consensusAPI.Backend) {
+func testFreshnessProofs(t *testing.T, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	// Generate one entity used for the test case.
@@ -1053,17 +1053,17 @@ type invalidEntityRegistration struct {
 }
 
 // Register attempts to register an entity.
-func (ent *TestEntity) Register(consensus consensusAPI.Backend, sigEnt *entity.SignedEntity) error {
+func (ent *TestEntity) Register(consensus consensusAPI.Service, sigEnt *entity.SignedEntity) error {
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewRegisterEntityTx(0, nil, sigEnt))
 }
 
 // Deregister attempts to deregister the entity.
-func (ent *TestEntity) Deregister(consensus consensusAPI.Backend) error {
+func (ent *TestEntity) Deregister(consensus consensusAPI.Service) error {
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewDeregisterEntityTx(0, nil))
 }
 
 // ProveFreshness attempts to prove freshness with zero value blob.
-func (ent *TestEntity) ProveFreshness(consensus consensusAPI.Backend) error {
+func (ent *TestEntity) ProveFreshness(consensus consensusAPI.Service) error {
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewProveFreshnessTx(0, nil, [32]byte{}))
 }
 
@@ -1090,7 +1090,7 @@ type invalidNodeRegistration struct {
 }
 
 // Register attempts to register a node.
-func (n *TestNode) Register(consensus consensusAPI.Backend, sigNode *node.MultiSignedNode) error {
+func (n *TestNode) Register(consensus consensusAPI.Service, sigNode *node.MultiSignedNode) error {
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, n.Signer, api.NewRegisterNodeTx(0, nil, sigNode))
 }
 
@@ -1120,7 +1120,7 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*node.Runtime, expiration beacon.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
+func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*node.Runtime, expiration beacon.EpochTime, consensus consensusAPI.Service) ([]*TestNode, error) { // nolint: gocyclo
 	if nCompute <= 0 || nCompute > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -1552,7 +1552,7 @@ type TestRuntime struct {
 }
 
 // MustRegister registers the TestRuntime with the provided registry.
-func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	ch, sub, err := backend.WatchRuntimes(context.Background())
@@ -1615,7 +1615,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 }
 
 // MustNotRegister attempts to register the TestRuntime with the provided registry and expects failure.
-func (rt *TestRuntime) MustNotRegister(t *testing.T, consensus consensusAPI.Backend) {
+func (rt *TestRuntime) MustNotRegister(t *testing.T, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	tx := api.NewRegisterRuntimeTx(0, nil, rt.Runtime)
@@ -1624,7 +1624,7 @@ func (rt *TestRuntime) MustNotRegister(t *testing.T, consensus consensusAPI.Back
 }
 
 // Populate populates the registry for a given TestRuntime.
-func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, seed []byte) []*node.Node {
+func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus consensusAPI.Service, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.Nil(rt.entity, "runtime has no associated entity")
@@ -1634,7 +1634,7 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus con
 }
 
 // BulkPopulate bulk populates the registry for the given TestRuntimes.
-func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, runtimes []*TestRuntime, seed []byte) []*node.Node {
+func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Service, runtimes []*TestRuntime, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.True(len(runtimes) > 0, "at least one runtime")
@@ -1747,7 +1747,7 @@ func (rt *TestRuntime) TestNodes() []*TestNode {
 }
 
 // Cleanup deregisteres the entity and nodes for a given TestRuntime.
-func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	require.NotNil(rt.entity, "runtime has an associated entity")

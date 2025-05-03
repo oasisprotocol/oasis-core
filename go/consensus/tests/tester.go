@@ -26,7 +26,7 @@ const (
 
 // ConsensusImplementationTests exercises the basic functionality of a
 // consensus backend.
-func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend) {
+func ConsensusImplementationTests(t *testing.T, backend consensus.Backend) {
 	require := require.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)

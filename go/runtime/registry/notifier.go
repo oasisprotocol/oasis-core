@@ -73,7 +73,7 @@ type runtimeHostNotifier struct {
 
 	runtime   Runtime
 	host      *composite.Host
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	notifyCh chan *componentNotifyFuncWithQueue
 
@@ -81,7 +81,7 @@ type runtimeHostNotifier struct {
 }
 
 // NewRuntimeHostNotifier returns a protocol notifier that handles key manager policy updates.
-func NewRuntimeHostNotifier(runtime Runtime, host *composite.Host, consensus consensus.Backend) protocol.Notifier {
+func NewRuntimeHostNotifier(runtime Runtime, host *composite.Host, consensus consensus.Service) protocol.Notifier {
 	logger := logging.GetLogger("runtime/registry/notifier").With("runtime_id", runtime.ID())
 
 	return &runtimeHostNotifier{

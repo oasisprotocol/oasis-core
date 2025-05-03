@@ -11,12 +11,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
 
-func roothashExecutorCommit(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace, commits []commitment.ExecutorCommitment) error {
+func roothashExecutorCommit(svc consensus.Service, id *identity.Identity, runtimeID common.Namespace, commits []commitment.ExecutorCommitment) error {
 	tx := roothash.NewExecutorCommitTx(0, nil, runtimeID, commits)
 	return consensus.SignAndSubmitTx(context.Background(), svc, id.NodeSigner, tx)
 }
 
-func getRoothashLatestBlock(ctx context.Context, sbc consensus.Backend, runtimeID common.Namespace) (*block.Block, error) {
+func getRoothashLatestBlock(ctx context.Context, sbc consensus.Service, runtimeID common.Namespace) (*block.Block, error) {
 	return sbc.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
 		RuntimeID: runtimeID,
 		Height:    consensus.HeightLatest,

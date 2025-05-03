@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-func registryRegisterNode(svc consensus.Backend, id *identity.Identity, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
+func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(id)
 	if err != nil {
 		return fmt.Errorf("registration GetRegistrationSigner: %w", err)

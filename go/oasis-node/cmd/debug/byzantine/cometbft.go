@@ -12,7 +12,7 @@ import (
 )
 
 type honestCometBFT struct {
-	service consensus.Backend
+	service consensus.Service
 
 	genesis    genesis.Provider
 	genesisDoc *genesis.Document

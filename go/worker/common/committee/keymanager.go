@@ -43,7 +43,7 @@ type KeyManagerClientWrapper struct {
 
 	id           *common.Namespace
 	p2p          p2p.Service
-	consensus    consensus.Backend
+	consensus    consensus.Service
 	chainContext string
 	cli          keymanagerP2P.Client
 	nt           *nodeTracker
@@ -271,7 +271,7 @@ func (km *KeyManagerClientWrapper) getKeyManagerClient() (keymanagerP2P.Client, 
 }
 
 // NewKeyManagerClientWrapper creates a new key manager client wrapper.
-func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Backend, chainContext string, logger *logging.Logger) *KeyManagerClientWrapper {
+func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Service, chainContext string, logger *logging.Logger) *KeyManagerClientWrapper {
 	return &KeyManagerClientWrapper{
 		p2p:           p2p,
 		consensus:     consensus,
@@ -285,7 +285,7 @@ type nodeTracker struct {
 	sync.Mutex
 
 	p2p          p2p.Service
-	consensus    consensus.Backend
+	consensus    consensus.Service
 	keymanagerID common.Namespace
 
 	nodes map[signature.PublicKey]core.PeerID
@@ -424,7 +424,7 @@ func (nt *nodeTracker) trackKeymanagerNodes(ctx context.Context) {
 
 // newKeyManagerNodeTracker creates a new tracker that is responsible for keeping the list
 // of key manager nodes and their peer identities up-to-date.
-func newKeyManagerNodeTracker(p2p p2p.Service, consensus consensus.Backend, keymanagerID common.Namespace) *nodeTracker {
+func newKeyManagerNodeTracker(p2p p2p.Service, consensus consensus.Service, keymanagerID common.Namespace) *nodeTracker {
 	return &nodeTracker{
 		p2p:          p2p,
 		consensus:    consensus,

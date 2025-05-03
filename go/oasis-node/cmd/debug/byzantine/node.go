@@ -229,7 +229,7 @@ func initializeAndRegisterByzantineNode(
 	return b, nil
 }
 
-func waitForEpoch(svc consensus.Backend, epoch beacon.EpochTime) error {
+func waitForEpoch(svc consensus.Service, epoch beacon.EpochTime) error {
 	ch, sub, err := svc.Beacon().WatchEpochs(context.Background())
 	if err != nil {
 		return err

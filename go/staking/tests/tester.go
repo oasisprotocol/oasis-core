@@ -138,13 +138,13 @@ var (
 func StakingImplementationTests(
 	t *testing.T,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	identity *identity.Identity,
 	entity *entity.Entity,
 ) {
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, *stakingTestsState, api.Backend, consensusAPI.Backend)
+		fn func(*testing.T, *stakingTestsState, api.Backend, consensusAPI.Service)
 	}{
 		{"Thresholds", testThresholds},
 		{"CommonPool", testCommonPool},
@@ -171,10 +171,10 @@ func StakingImplementationTests(
 
 // StakingClientImplementationTests exercises the basic functionality of a
 // staking client backend.
-func StakingClientImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func StakingClientImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Service) {
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, *stakingTestsState, api.Backend, consensusAPI.Backend)
+		fn func(*testing.T, *stakingTestsState, api.Backend, consensusAPI.Service)
 	}{
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
@@ -191,7 +191,7 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 	}
 }
 
-func testThresholds(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
+func testThresholds(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Service) {
 	require := require.New(t)
 
 	for _, kind := range []api.ThresholdKind{
@@ -209,7 +209,7 @@ func testThresholds(t *testing.T, _ *stakingTestsState, backend api.Backend, _ c
 	}
 }
 
-func testCommonPool(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
+func testCommonPool(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Service) {
 	require := require.New(t)
 
 	commonPool, err := backend.CommonPool(context.Background(), consensusAPI.HeightLatest)
@@ -220,7 +220,7 @@ func testCommonPool(t *testing.T, _ *stakingTestsState, backend api.Backend, _ c
 	require.EqualValues(commonPool, &commonPoolAcc.General.Balance, "CommonPool Account - initial value should match")
 }
 
-func testLastBlockFees(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
+func testLastBlockFees(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Service) {
 	require := require.New(t)
 
 	lastBlockFees, err := backend.LastBlockFees(context.Background(), consensusAPI.HeightLatest)
@@ -232,7 +232,7 @@ func testLastBlockFees(t *testing.T, _ *stakingTestsState, backend api.Backend, 
 	require.True(lastBlockFeesAcc.General.Balance.IsZero(), "LastBlockFees Account - initial value")
 }
 
-func testGovernanceDeposits(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
+func testGovernanceDeposits(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Service) {
 	require := require.New(t)
 
 	governanceDeposits, err := backend.GovernanceDeposits(context.Background(), consensusAPI.HeightLatest)
@@ -244,7 +244,7 @@ func testGovernanceDeposits(t *testing.T, _ *stakingTestsState, backend api.Back
 	require.True(governanceDepositsAcc.General.Balance.IsZero(), "GovernaceDeposits Account - initial value")
 }
 
-func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
+func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend, _ consensusAPI.Service) {
 	require := require.New(t)
 
 	accts := state.accounts
@@ -452,11 +452,11 @@ func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend
 	}
 }
 
-func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	testTransferHelper(t, state, backend, consensus, state.accounts.getAccount(1), state.accounts.getAccount(2))
 }
 
-func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	testTransferHelper(t, state, backend, consensus, state.accounts.getAccount(1), state.accounts.getAccount(1))
 }
 
@@ -464,7 +464,7 @@ func testTransferHelper(
 	t *testing.T,
 	_ *stakingTestsState,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	srcAccData, destAccData accountData,
 ) {
 	require := require.New(t)
@@ -563,7 +563,7 @@ TransferWaitLoop:
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	require := require.New(t)
 
 	accData := state.accounts.getAccount(1)
@@ -695,11 +695,11 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 	)
 }
 
-func testEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	testEscrowHelper(t, state, backend, consensus, state.accounts.getAccount(1), state.accounts.getAccount(2))
 }
 
-func testSelfEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testSelfEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	testEscrowHelper(t, state, backend, consensus, state.accounts.getAccount(1), state.accounts.getAccount(1))
 }
 
@@ -707,7 +707,7 @@ func testEscrowHelper( // nolint: gocyclo
 	t *testing.T,
 	_ *stakingTestsState,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	srcAccData, destAccData accountData,
 ) {
 	require := require.New(t)
@@ -1028,7 +1028,7 @@ func testEscrowHelper( // nolint: gocyclo
 	require.Error(err, "AddEscrow")
 }
 
-func testAllowance(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testAllowance(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Service) {
 	testAllowanceHelper(t, state, backend, consensus, state.accounts.getAccount(1), state.accounts.getAccount(2))
 }
 
@@ -1036,7 +1036,7 @@ func testAllowanceHelper(
 	t *testing.T,
 	_ *stakingTestsState,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	srcAccData, destAccData accountData,
 ) {
 	require := require.New(t)
@@ -1178,7 +1178,7 @@ func testSlashConsensusEquivocation(
 	t *testing.T,
 	state *stakingTestsState,
 	backend api.Backend,
-	consensus consensusAPI.Backend,
+	consensus consensusAPI.Service,
 	ident *identity.Identity,
 	ent *entity.Entity,
 ) {

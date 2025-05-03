@@ -35,7 +35,7 @@ type priceDiscovery struct {
 	// tracks the current index of the blockPrices rolling array.
 	blockPricesCurrentIdx int
 
-	client consensus.ClientBackend
+	client consensus.Backend
 
 	logger *logging.Logger
 }
@@ -120,7 +120,7 @@ func (pd *priceDiscovery) worker(ctx context.Context, ch <-chan *consensus.Block
 }
 
 // New creates a new dynamic price discovery implementation.
-func New(ctx context.Context, client consensus.ClientBackend, fallbackGasPrice uint64) (consensus.PriceDiscovery, error) {
+func New(ctx context.Context, client consensus.Backend, fallbackGasPrice uint64) (consensus.PriceDiscovery, error) {
 	pd := &priceDiscovery{
 		finalGasPrice:    quantity.NewFromUint64(fallbackGasPrice),
 		fallbackGasPrice: quantity.NewFromUint64(fallbackGasPrice),

@@ -201,7 +201,7 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 
 // Backend is a CometBFT consensus backend.
 type Backend interface {
-	consensus.ClientBackend
+	consensus.Backend
 
 	// GetCometBFTBlock returns the CometBFT block at the specified height.
 	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)

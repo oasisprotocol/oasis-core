@@ -59,7 +59,7 @@ type BlockIndexer struct {
 	mu       sync.RWMutex
 	startOne cmSync.One
 
-	consensus consensus.Backend
+	consensus consensus.Service
 	history   History
 	batchSize uint16
 
@@ -74,7 +74,7 @@ type BlockIndexer struct {
 }
 
 // NewBlockIndexer creates a new block indexer.
-func NewBlockIndexer(consensus consensus.Backend, history History, batchSize uint16) *BlockIndexer {
+func NewBlockIndexer(consensus consensus.Service, history History, batchSize uint16) *BlockIndexer {
 	logger := logging.GetLogger("runtime/history/indexer").With("runtime_id", history.RuntimeID())
 
 	return &BlockIndexer{

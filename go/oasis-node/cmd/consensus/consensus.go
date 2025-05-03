@@ -66,7 +66,7 @@ var (
 	logger = logging.GetLogger("cmd/consensus")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.Backend) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",

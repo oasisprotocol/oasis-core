@@ -159,7 +159,7 @@ func (srv *archiveService) WatchBlocks(ctx context.Context) (<-chan *consensusAP
 }
 
 // NewArchive creates a new archive-only consensus service.
-func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Backend, error) {
+func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Service, error) {
 	commonNode := newCommonNode(ctx, cfg.CommonConfig)
 
 	srv := &archiveService{

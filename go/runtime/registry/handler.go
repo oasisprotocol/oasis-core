@@ -46,7 +46,7 @@ type RuntimeHostHandlerEnvironment interface {
 type runtimeHostHandler struct {
 	env       RuntimeHostHandlerEnvironment
 	runtime   Runtime
-	consensus consensus.Backend
+	consensus consensus.Service
 }
 
 // NewRuntimeHostHandler returns a protocol handler that provides the required host methods for the
@@ -56,7 +56,7 @@ type runtimeHostHandler struct {
 func NewRuntimeHostHandler(
 	env RuntimeHostHandlerEnvironment,
 	runtime Runtime,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) host.RuntimeHandler {
 	return &runtimeHostHandler{
 		env:       env,

@@ -28,13 +28,13 @@ import (
 func GetQuotePolicy(
 	ctx context.Context,
 	cfg *host.Config,
-	cb consensus.Backend,
+	cs consensus.Service,
 	fallbackPolicy *sgxQuote.Policy,
 ) (*sgxQuote.Policy, error) {
 	switch cfg.Component.Kind {
 	case component.RONL:
 		// Load RONL policy from the consensus layer.
-		rt, err := cb.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
+		rt, err := cs.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
 			Height:           consensus.HeightLatest,
 			ID:               cfg.ID,
 			IncludeSuspended: true,
