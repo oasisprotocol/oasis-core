@@ -819,16 +819,11 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 	}, nil
 }
 
-func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
-	return n.parentNode.SupportedFeatures()
-}
-
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
 		Version:       version.ConsensusProtocol,
 		Backend:       api.BackendName,
-		Features:      n.SupportedFeatures(),
 		ChainContext:  n.chainContext,
 		GenesisHeight: n.genesisHeight,
 	}

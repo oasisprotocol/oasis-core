@@ -132,6 +132,7 @@ func (srv *archiveService) GetStatus(ctx context.Context) (*consensusAPI.Status,
 		return nil, err
 	}
 	status.Status = consensusAPI.StatusStateReady
+	status.Features = srv.SupportedFeatures()
 
 	return status, nil
 }

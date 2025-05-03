@@ -414,6 +414,7 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		return nil, err
 	}
 	status.Status = consensusAPI.StatusStateSyncing
+	status.Features = t.SupportedFeatures()
 
 	status.P2P = &consensusAPI.P2PStatus{}
 	status.P2P.PubKey = t.identity.P2PSigner.Public()
