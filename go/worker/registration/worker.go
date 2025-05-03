@@ -726,7 +726,7 @@ func (w *Worker) GetRegistrationStatus(ctx context.Context) (*control.Registrati
 	*status = w.status
 	w.RUnlock()
 
-	if status == nil || status.Descriptor == nil {
+	if status.Descriptor == nil {
 		return status, nil
 	}
 
