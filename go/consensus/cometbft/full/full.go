@@ -455,24 +455,27 @@ func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.Next
 
 	rs := t.node.ConsensusState().GetRoundState()
 	nbs := &consensusAPI.NextBlockState{
-		Height: rs.Height,
-
+		Height:        rs.Height,
 		NumValidators: uint64(rs.Validators.Size()),
 		VotingPower:   uint64(rs.Validators.TotalVotingPower()),
 	}
 
 	for i, val := range rs.Validators.Validators {
-		var vote consensusAPI.Vote
+		vote := consensusAPI.Vote{
+			VotingPower: uint64(val.VotingPower),
+		}
+
 		valNode, err := t.Registry().GetNodeByConsensusAddress(ctx, &registryAPI.ConsensusAddressQuery{
-			Height:  consensusAPI.HeightLatest,
+			Height:  rs.Height,
 			Address: val.Address,
 		})
-		if err == nil {
+		switch err {
+		case nil:
 			vote.NodeID = valNode.ID
 			vote.EntityID = valNode.EntityID
 			vote.EntityAddress = stakingAPI.NewAddress(valNode.EntityID)
+		default:
 		}
-		vote.VotingPower = uint64(val.VotingPower)
 
 		if prevote := rs.Votes.Prevotes(rs.Round).GetByIndex(int32(i)); prevote != nil {
 			nbs.Prevotes.Votes = append(nbs.Prevotes.Votes, vote)
