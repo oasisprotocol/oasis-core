@@ -119,12 +119,7 @@ type badgerSubtree struct {
 }
 
 // Implements api.Subtree.
-func (s *badgerSubtree) Commit() error {
-	return nil
-}
-
-// Implements api.Subtree.
-func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) error {
 	var needsPutNode bool
 	if parent == nil && ptr.DBInternal == nil {
 		// If this is a clean root node, don't do anything as it seems the root has not changed.
@@ -170,13 +165,13 @@ func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer, pare
 	}
 
 	if needsPutNode {
-		return s.PutNode(depth, ptr)
+		return s.PutNode(ptr)
 	}
 	return nil
 }
 
 // Implements api.Subtree.
-func (s *badgerSubtree) VisitDirtyNode(_ node.Depth, ptr *node.Pointer, parent *node.Pointer) error {
+func (s *badgerSubtree) VisitDirtyNode(ptr *node.Pointer, parent *node.Pointer) error {
 	return s.refreshDbPtr(ptr, parent)
 }
 
@@ -224,7 +219,7 @@ func (s *badgerSubtree) refreshDbPtr(ptr *node.Pointer, parent *node.Pointer) er
 }
 
 // Implements api.Subtree.
-func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
+func (s *badgerSubtree) PutNode(ptr *node.Pointer) error {
 	iptr, ok := ptr.DBInternal.(*dbPtr)
 	if !ok {
 		return fmt.Errorf("mkvs/pathbadger: bad internal pointer")

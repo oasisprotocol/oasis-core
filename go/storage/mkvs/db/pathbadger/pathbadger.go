@@ -778,7 +778,7 @@ type badgerBatch struct {
 }
 
 // Implements api.Batch.
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, _ node.Depth, _ *node.Pointer) api.Subtree {
+func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree) api.Subtree {
 	if subtree == nil {
 		return &badgerSubtree{batch: ba}
 	}

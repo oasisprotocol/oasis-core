@@ -145,11 +145,8 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	defer batch.Reset()
 
-	subtree := batch.MaybeStartSubtree(nil, 0, ptr)
+	subtree := batch.MaybeStartSubtree(nil)
 	if err = doRestoreChunk(ctx, batch, subtree, 0, ptr, nil); err != nil {
-		return fmt.Errorf("chunk: node import failed: %w", err)
-	}
-	if err = subtree.Commit(); err != nil {
 		return fmt.Errorf("chunk: node import failed: %w", err)
 	}
 	if err = batch.Commit(chunk.Root); err != nil {
@@ -173,11 +170,11 @@ func doRestoreChunk(
 
 	switch n := ptr.Node.(type) {
 	case nil:
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 	case *node.InternalNode:
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 
@@ -187,27 +184,22 @@ func doRestoreChunk(
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
+			newSubtree := batch.MaybeStartSubtree(subtree)
 			if err = doRestoreChunk(ctx, batch, newSubtree, depth+1, subNode, ptr); err != nil {
 				return
-			}
-			if newSubtree != subtree {
-				if err = newSubtree.Commit(); err != nil {
-					return
-				}
 			}
 		}
 
 		// Store the node.
-		if err = subtree.PutNode(depth, ptr); err != nil {
+		if err = subtree.PutNode(ptr); err != nil {
 			return
 		}
 	case *node.LeafNode:
 		// Leaf node -- store the node.
-		if err = subtree.VisitDirtyNode(depth, ptr, parent); err != nil {
+		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
-		if err = subtree.PutNode(depth, ptr); err != nil {
+		if err = subtree.PutNode(ptr); err != nil {
 			return
 		}
 	}

@@ -192,37 +192,26 @@ type NodeDB interface {
 // Subtree is a NodeDB-specific subtree implementation.
 type Subtree interface {
 	// PutNode persists a node in the NodeDB.
-	//
-	// Depth is the node depth not bit depth.
-	PutNode(depth node.Depth, ptr *node.Pointer) error
+	PutNode(ptr *node.Pointer) error
 
 	// VisitCleanNode is called for any clean node encountered during commit
 	// for which no further processing will be done (as it is marked clean).
 	//
 	// The specific NodeDB implementation may wish to do further processing.
-	//
-	// Depth is the node depth not bit depth.
-	VisitCleanNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error
+	VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) error
 
 	// VisitDirtyNode is called before processing any children of a dirty node encountered during
 	// commit or checkpoint restore operation.
 	//
 	// The specific NodeDB implementation may wish to do further processing.
-	//
-	// Depth is the node depth not bit depth.
-	VisitDirtyNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error
-
-	// Commit marks the subtree as complete.
-	Commit() error
+	VisitDirtyNode(ptr *node.Pointer, parent *node.Pointer) error
 }
 
 // Batch is a NodeDB-specific batch implementation.
 type Batch interface {
 	// MaybeStartSubtree returns a new subtree instance that can be used for
 	// persisting nodes under a given root.
-	//
-	// Depth is the depth of the node that subtreeRoot points to.
-	MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree
+	MaybeStartSubtree(subtree Subtree) Subtree
 
 	// OnCommit registers a hook to run after a successful commit.
 	OnCommit(hook func())
@@ -326,7 +315,7 @@ func (d *nopNodeDB) NewBatch(node.Root, uint64, bool) (Batch, error) {
 	return &nopBatch{}, nil
 }
 
-func (b *nopBatch) MaybeStartSubtree(Subtree, node.Depth, *node.Pointer) Subtree {
+func (b *nopBatch) MaybeStartSubtree(Subtree) Subtree {
 	return &nopSubtree{}
 }
 
@@ -344,18 +333,14 @@ func (b *nopBatch) Reset() {
 // nopSubtree is a no-op subtree.
 type nopSubtree struct{}
 
-func (s *nopSubtree) PutNode(node.Depth, *node.Pointer) error {
+func (s *nopSubtree) PutNode(*node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer) error {
+func (s *nopSubtree) VisitCleanNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
-	return nil
-}
-
-func (s *nopSubtree) Commit() error {
+func (s *nopSubtree) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }
