@@ -135,6 +135,9 @@ type Backend interface {
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
 
+	// GetBlockResults returns the consensus block results at a specific height.
+	GetBlockResults(ctx context.Context, height int64) (*BlockResults, error)
+
 	// GetLightBlock returns a light version of the consensus layer block that can be used for light
 	// client verification.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
@@ -241,6 +244,17 @@ type Block struct {
 	// Size is the size of the block in bytes.
 	Size uint64 `json:"size,omitempty"`
 	// Meta contains the consensus backend specific block metadata.
+	Meta cbor.RawMessage `json:"meta"`
+}
+
+// BlockResults are consensus block results.
+//
+// While some common fields are provided, most of the structure is dependent on
+// the actual backend implementation.
+type BlockResults struct {
+	// Height contains the block height.
+	Height int64 `json:"height"`
+	// Meta contains the consensus backend specific block results metadata.
 	Meta cbor.RawMessage `json:"meta"`
 }
 

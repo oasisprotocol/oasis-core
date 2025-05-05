@@ -11,6 +11,7 @@ import (
 	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	cmtp2p "github.com/cometbft/cometbft/p2p"
 	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
+	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -157,8 +158,7 @@ func QueryForApp(eventApp string) cmtpubsub.Query {
 	return cmtquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
 }
 
-// BlockMeta is the CometBFT-specific per-block metadata that is
-// exposed via the consensus API.
+// BlockMeta is the CometBFT-specific per-block metadata.
 type BlockMeta struct {
 	// Header is the CometBFT block header.
 	Header *cmttypes.Header `json:"header"`
@@ -196,6 +196,38 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 		},
 		Size: uint64(blk.Size()),
 		Meta: rawMeta,
+	}
+}
+
+// BlockResultsMeta is the CometBFT-specific per-block results metadata.
+type BlockResultsMeta struct {
+	TxsResults       []*types.ResponseDeliverTx `json:"txs_results"`
+	BeginBlockEvents []types.Event              `json:"begin_block_events"`
+	EndBlockEvents   []types.Event              `json:"end_block_events"`
+}
+
+// NewBlockResultsMeta converts consensus results into CometBFT-specific block
+// results metadata.
+func NewBlockResultsMeta(results *consensus.BlockResults) (*BlockResultsMeta, error) {
+	var meta BlockResultsMeta
+	if err := cbor.Unmarshal(results.Meta, &meta); err != nil {
+		return nil, fmt.Errorf("malformed block results metadata: %w", err)
+	}
+
+	return &meta, nil
+}
+
+// NewBlockResults converts CometBFT-specific block results into consensus results.
+func NewBlockResults(results *cmtcoretypes.ResultBlockResults) *consensus.BlockResults {
+	meta := BlockResultsMeta{
+		TxsResults:       results.TxsResults,
+		BeginBlockEvents: results.BeginBlockEvents,
+		EndBlockEvents:   results.EndBlockEvents,
+	}
+
+	return &consensus.BlockResults{
+		Height: results.Height,
+		Meta:   cbor.Marshal(meta),
 	}
 }
 

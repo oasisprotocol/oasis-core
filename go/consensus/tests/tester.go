@@ -46,6 +46,11 @@ func ConsensusImplementationTests(t *testing.T, consensus api.Backend) {
 	require.Greater(blk.Height, int64(0), "block height should be greater than zero")
 	require.Greater(blk.Size, uint64(0), "block size should be greater than zero")
 
+	results, err := consensus.GetBlockResults(ctx, api.HeightLatest)
+	require.NoError(err, "GetBlockResults")
+	require.NotNil(blk, "returned block results should not be nil")
+	require.Greater(results.Height, int64(0), "block results height should be greater than zero")
+
 	status, err := consensus.GetStatus(ctx)
 	require.NoError(err, "GetStatus")
 	require.NotNil(status, "returned status should not be nil")

@@ -573,12 +573,12 @@ func (n *commonNode) GetCometBFTBlockResults(ctx context.Context, height int64) 
 	if err != nil {
 		return nil, err
 	}
-	result, err := cmtcore.BlockResults(n.rpcCtx, &tmHeight)
+	results, err := cmtcore.BlockResults(n.rpcCtx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: block results query failed: %w", err)
 	}
 
-	return result, nil
+	return results, nil
 }
 
 // Implements consensusAPI.Backend.
@@ -592,6 +592,16 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 	}
 
 	return api.NewBlock(blk), nil
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*consensusAPI.BlockResults, error) {
+	results, err := n.GetCometBFTBlockResults(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.NewBlockResults(results), nil
 }
 
 // Implements consensusAPI.Backend.
