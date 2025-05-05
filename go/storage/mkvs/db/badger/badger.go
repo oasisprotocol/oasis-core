@@ -273,7 +273,7 @@ func (d *badgerNodeDB) cleanMultipartLocked(removeNodes bool) error {
 	return nil
 }
 
-func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
+func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer, _ int) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("mkvs/badger: attempted to get invalid pointer from node database")
 	}
@@ -445,7 +445,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.
 							return root, log, nil
 						},
 						func(root node.Root, h hash.Hash) (*node.LeafNode, error) {
-							leaf, err := d.GetNode(root, &node.Pointer{Hash: h, Clean: true})
+							leaf, err := d.GetNode(root, &node.Pointer{Hash: h, Clean: true}, 0)
 							if err != nil {
 								return nil, err
 							}

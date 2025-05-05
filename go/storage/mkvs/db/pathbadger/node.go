@@ -30,7 +30,11 @@ const (
 )
 
 // Implements api.NodeDB.
-func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
+func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer, maxPrefetched int) (node.Node, error) {
+	if maxPrefetched < 1 {
+		return nil, fmt.Errorf("mkvs/pathbadger: number of nodes to prefetch must be greater than 1")
+	}
+
 	if ptr == nil || !ptr.IsClean() {
 		return nil, fmt.Errorf("mkvs/pathbadger: invalid node pointer")
 	}
@@ -50,13 +54,59 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	if err := d.checkRootExists(tx, root); err != nil {
 		return nil, err
 	}
-	rootHash := api.TypedHashFromRoot(root)
 
+	var prefetched int
+	var prefetch func(node.Root, *node.Pointer, *badger.Txn) (node.Node, error)
+	prefetch = func(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {
+		if prefetched >= maxPrefetched {
+			return nil, nil
+		}
+
+		nd, err := d.getNode(root, ptr, tx)
+		if err != nil {
+			return nil, err
+		}
+		prefetched++
+
+		switch n := nd.(type) {
+		case *node.InternalNode:
+			if n.Left != nil {
+				if n.Left.Node, err = prefetch(root, n.Left, tx); err != nil {
+					return nil, err
+				}
+			}
+			if n.LeafNode != nil {
+				// Prefetch only when leaf node is not part of internal node.
+				if n.LeafNode.Node == nil {
+					if n.LeafNode.Node, err = prefetch(root, n.LeafNode, tx); err != nil {
+						return nil, err
+					}
+				}
+			}
+			if n.Right != nil {
+				if n.Right.Node, err = prefetch(root, n.Right, tx); err != nil {
+					return nil, err
+				}
+			}
+		case *node.LeafNode:
+			return n, nil
+		default:
+			return nil, fmt.Errorf("mkvs/pathbadger: unexpected type")
+		}
+
+		return nd, nil
+	}
+	return prefetch(root, ptr, tx)
+}
+
+func (d *badgerNodeDB) getNode(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {
 	var (
 		item  *badger.Item
 		dbKey []byte
 		err   error
 	)
+	rootHash := api.TypedHashFromRoot(root)
+
 	switch {
 	case ptr.Hash.Equal(&root.Hash):
 		// Requesting the root node which is special.
@@ -93,7 +143,8 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	case badger.ErrKeyNotFound:
 		return nil, api.ErrNodeNotFound
 	default:
-		d.logger.Error("failed to Get node from backing store",
+		d.logger.Error("mkvs/pathbadger: failed to Get node from backing store",
+			"ptr", ptr,
 			"err", err,
 		)
 		return nil, fmt.Errorf("mkvs/pathbadger: failed to Get node from backing store: %w", err)
@@ -105,7 +156,8 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 		n, vErr = nodeFromDb(val)
 		return vErr
 	}); err != nil {
-		d.logger.Error("failed to unmarshal node",
+		d.logger.Error("mkvs/pathbadger: failed to unmarshal node",
+			"ptr", ptr,
 			"err", err,
 		)
 		return nil, fmt.Errorf("mkvs/pathbadger: failed to unmarshal node: %w", err)

@@ -128,7 +128,7 @@ func doVisit(ctx context.Context, ndb NodeDB, root node.Root, visitor NodeVisito
 		err error
 	)
 	if ptr.Node == nil {
-		nd, err = ndb.GetNode(root, ptr)
+		nd, err = ndb.GetNode(root, ptr, 1)
 		if err != nil {
 			return err
 		}

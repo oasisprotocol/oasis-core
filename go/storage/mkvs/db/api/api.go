@@ -130,7 +130,10 @@ func RootTypes() []node.RootType {
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
 	// GetNode looks up a node in the database.
-	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
+	//
+	// MaxPrefetched is the maximum number of nodes that will be fetched,
+	// following inorder traversal.
+	GetNode(root node.Root, ptr *node.Pointer, maxPrefetched int) (node.Node, error)
 
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error)
@@ -255,7 +258,7 @@ func NewNopNodeDB() (NodeDB, error) {
 	return &nopNodeDB{}, nil
 }
 
-func (d *nopNodeDB) GetNode(node.Root, *node.Pointer) (node.Node, error) {
+func (d *nopNodeDB) GetNode(node.Root, *node.Pointer, int) (node.Node, error) {
 	return nil, ErrNodeNotFound
 }
 
