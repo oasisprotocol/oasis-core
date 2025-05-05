@@ -208,6 +208,42 @@ impl Tree {
         self.tree
             .commit_both(self.io_root.namespace, self.io_root.version)
     }
+
+    /// Fetch the input artifact for the given transaction hash.
+    pub fn get_input(&self, tx_hash: Hash) -> Result<Option<Vec<u8>>> {
+        let raw = self.tree.get(
+            &TxnKeyFormat {
+                tx_hash,
+                kind: ArtifactKind::Input,
+            }
+            .encode(),
+        )?;
+        match raw {
+            Some(raw) => {
+                let ia: InputArtifacts = cbor::from_slice(&raw)?;
+                Ok(Some(ia.input))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Fetch the output artifact for the given transaction hash.
+    pub fn get_output(&self, tx_hash: Hash) -> Result<Option<Vec<u8>>> {
+        let raw = self.tree.get(
+            &TxnKeyFormat {
+                tx_hash,
+                kind: ArtifactKind::Output,
+            }
+            .encode(),
+        )?;
+        match raw {
+            Some(raw) => {
+                let oa: OutputArtifacts = cbor::from_slice(&raw)?;
+                Ok(Some(oa.output))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -228,6 +264,7 @@ mod test {
 
         let input = b"this goes in".to_vec();
         let tx_hash = Hash::digest_bytes(&input);
+        let orig_tx_hash = tx_hash;
         tree.add_input(input, 0).unwrap();
         tree.add_output(
             tx_hash,
@@ -258,5 +295,16 @@ mod test {
             format!("{:?}", root_hash),
             "8399ffa753987b00ec6ab251337c6b88e40812662ed345468fcbf1dbdd16321c",
         );
+
+        // Accessors.
+        let dec_input = tree.get_input(orig_tx_hash).unwrap();
+        assert_eq!(dec_input, Some(b"this goes in".to_vec()));
+        let dec_output = tree.get_output(orig_tx_hash).unwrap();
+        assert_eq!(dec_output, Some(b"and this comes out".to_vec()));
+
+        let dec_input = tree.get_input(Hash::empty_hash()).unwrap();
+        assert!(dec_input.is_none());
+        let dec_output = tree.get_output(Hash::empty_hash()).unwrap();
+        assert!(dec_output.is_none());
     }
 }

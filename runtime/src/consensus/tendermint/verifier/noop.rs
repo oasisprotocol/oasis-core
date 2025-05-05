@@ -64,6 +64,8 @@ impl NopVerifier {
 #[async_trait]
 impl verifier::Verifier for NopVerifier {
     async fn sync(&self, height: u64) -> Result<(), Error> {
+        let height = self.fetch_light_block(height).await?.height; // Ensure height is valid.
+
         let mut inner = self.inner.lock().unwrap();
         inner.latest_height = Some(height);
 
