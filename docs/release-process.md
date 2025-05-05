@@ -150,6 +150,10 @@ checksums, and publish a GitHub Release that accompanies the versioned git tag.
 Browse to [Oasis Core's releases page] and make sure the new release is properly
 published.
 
+**Initially the release will be published as a pre-release to allow for early
+testing on Testnet. Once the release is ready for a wider audience on Mainnet it
+should be explicitly changed to be a normal production release.**
+
 ### Create `stable/YY.MINOR.x` Branch
 
 To prepare a new stable branch from the new release tag and push it to the

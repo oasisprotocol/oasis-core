@@ -89,3 +89,5 @@ snapshot:
 
 release:
   name_template: "{{.ProjectName}} {{.Version}}"
+  prerelease: true
+  make_latest: false
