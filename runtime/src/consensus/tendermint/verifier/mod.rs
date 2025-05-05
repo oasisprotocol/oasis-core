@@ -155,7 +155,9 @@ impl Verifier {
     }
 
     fn sync(&self, cache: &mut Cache, instance: &mut Instance, height: u64) -> Result<(), Error> {
-        if height < cache.last_verified_height || height < cache.latest_known_height().unwrap_or(0)
+        if height != HEIGHT_LATEST
+            && (height < cache.last_verified_height
+                || height < cache.latest_known_height().unwrap_or(0))
         {
             // Ignore requests for earlier heights.
             return Ok(());
