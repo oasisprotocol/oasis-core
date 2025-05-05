@@ -3,6 +3,7 @@ package mkvs
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
@@ -135,6 +136,10 @@ type treeIterator struct {
 	key      node.Key
 	value    []byte
 
+	offset         node.Key
+	offsetBitDepth node.Depth
+	isLeaf         bool
+
 	proofBuilder *syncer.ProofBuilder
 }
 
@@ -170,6 +175,15 @@ func newTreeIterator(ctx context.Context, tree *tree, options ...IteratorOption)
 	return it
 }
 
+func newSubtreeIterator(ctx context.Context, tree *tree, offset node.Key, offsetBitLength node.Depth, isLeaf bool, options ...IteratorOption) Iterator {
+	i := newTreeIterator(ctx, tree, options...)
+	it := i.(*treeIterator) // TODO
+	it.offset = offset
+	it.offsetBitDepth = offsetBitLength
+	it.isLeaf = isLeaf
+	return it
+}
+
 func (it *treeIterator) Valid() bool {
 	return it.key != nil
 }
@@ -179,7 +193,15 @@ func (it *treeIterator) Err() error {
 }
 
 func (it *treeIterator) Rewind() {
+	if it.isSubtreeIterator() {
+		it.Seek(it.offset)
+		return
+	}
 	it.Seek(node.Key{})
+}
+
+func (it *treeIterator) isSubtreeIterator() bool {
+	return it.offset != nil
 }
 
 func (it *treeIterator) reset() {
@@ -199,6 +221,12 @@ func (it *treeIterator) Seek(key node.Key) {
 	}
 
 	it.reset()
+
+	// If subtree iterator, return first equal or bigger key inside subtree boundary.
+	if it.isSubtreeIterator() && key.Compare(it.offset) <= 0 {
+		key = it.offset
+	}
+
 	err := it.doNext(it.tree.cache.pendingRoot, 0, node.Key{}, key, visitBefore)
 	if err != nil {
 		// Make sure to invalidate the iterator on error.
@@ -208,6 +236,11 @@ func (it *treeIterator) Seek(key node.Key) {
 
 func (it *treeIterator) Next() {
 	if it.err != nil {
+		return
+	}
+
+	if it.isLeaf {
+		it.reset()
 		return
 	}
 
@@ -246,6 +279,17 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
+func (it *treeIterator) withinSubtreeOrAccessPath(key node.Key, keyBitLen node.Depth) bool {
+	cpBitLen := key.CommonPrefixLen(keyBitLen, it.offset, it.offsetBitDepth)
+	if cpBitLen == keyBitLen {
+		return true
+	}
+	if cpBitLen < it.offsetBitDepth {
+		return false
+	}
+	return true
+}
+
 func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
@@ -267,10 +311,14 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		bitLength := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
 
+		if it.isSubtreeIterator() && !it.withinSubtreeOrAccessPath(newPath, bitLength) {
+			return nil
+		}
+
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
 		var takeFirst bool
-		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0 {
+		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) <= 0 {
 			takeFirst = true
 		}
 
@@ -326,7 +374,12 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			}
 		}
 	case *node.LeafNode:
-		// Reached a leaf node.
+		if n.Key.Equal([]byte("0")) {
+			fmt.Println("here")
+		}
+		if it.isSubtreeIterator() && !it.withinSubtreeOrAccessPath(n.Key, n.Key.BitLength()) {
+			return nil
+		}
 		if n.Key.Compare(key) >= 0 {
 			it.key = n.Key
 			it.value = n.Value

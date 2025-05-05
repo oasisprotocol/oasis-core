@@ -2,11 +2,15 @@ package checkpoint
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -32,9 +36,6 @@ type fileCreator struct {
 }
 
 func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
-	tree := mkvs.NewWithRoot(nil, fc.ndb, root)
-	defer tree.Close()
-
 	// Create checkpoint directory.
 	checkpointDir := filepath.Join(
 		fc.dataDir,
@@ -67,44 +68,127 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
 
-	// Create chunks until we are done.
-	var chunks []hash.Hash
-	var nextOffset node.Key
-	for chunkIndex := 0; ; chunkIndex++ {
-		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
+	depth := 7 // TODO make this configurable.
+	subtrees, err := mkvs.NewIterSubtrees(ctx, fc.ndb, root, depth)
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint: failed to create subtrees (depth: %d): %w", depth, err)
+	}
+	defer func() {
+		for _, st := range subtrees {
+			st.Close()
+		}
+	}()
 
-		// Generate chunk.
-		var f *os.File
-		if f, err = os.Create(dataFilename); err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", chunkIndex, err)
+	indexer := newChunkIndexer()
+	createSubtreeChunks := func(ctx context.Context, subtree mkvs.Subtree) error {
+		// Create chunks until we are done.
+		var nextOffset node.Key
+		var count int64
+		for {
+			idx := indexer.next()
+
+			dataFilename := filepath.Join(chunksDir, strconv.Itoa(idx))
+
+			// Generate chunk.
+			f, err := os.Create(dataFilename)
+			if err != nil {
+				return fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", idx, err)
+			}
+
+			var chunkHash hash.Hash
+			chunkHash, nextOffset, err = createChunk(ctx, root, subtree, nextOffset, chunkSize, f, &count)
+			errClose := f.Close()
+			err = errors.Join(err, errClose)
+			if err != nil {
+				return fmt.Errorf("checkpoint: failed to create chunk %d: %w", idx, err)
+			}
+
+			indexer.add(idx, chunkHash)
+
+			// Check if we are finished.
+			if nextOffset == nil {
+				fmt.Printf("Subtree: %s has %d keys\n", subtree.String(), count)
+				break
+			}
 		}
 
-		var chunkHash hash.Hash
-		chunkHash, nextOffset, err = createChunk(ctx, tree, root, nextOffset, chunkSize, f)
-		f.Close()
-		if err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk %d: %w", chunkIndex, err)
-		}
+		return nil
+	}
 
-		chunks = append(chunks, chunkHash)
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(ctx)
+	errCh := make(chan error, len(subtrees))
+	for _, st := range subtrees {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := createSubtreeChunks(ctx, st)
+			if err != nil {
+				cancel()
+				errCh <- err
+			}
+		}()
+	}
 
-		// Check if we are finished.
-		if nextOffset == nil {
-			break
-		}
+	wg.Wait()
+
+	close(errCh)
+	for err := range errCh { // return first error if present
+		return nil, err
 	}
 
 	// Generate and write checkpoint metadata.
 	meta = &Metadata{
 		Version: checkpointVersion,
 		Root:    root,
-		Chunks:  chunks,
+		Chunks:  indexer.hashes(),
 	}
 
 	if err = os.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0o600); err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
 	}
 	return meta, nil
+}
+
+// TODO consider testing independently.
+type chunkIndexer struct {
+	sync.Mutex
+	chunks    map[int]hash.Hash
+	nextIndex int
+}
+
+func newChunkIndexer() chunkIndexer {
+	return chunkIndexer{
+		chunks: make(map[int]hash.Hash),
+	}
+}
+
+func (ci *chunkIndexer) next() int {
+	ci.Lock()
+	defer ci.Unlock()
+	ci.nextIndex++
+	return ci.nextIndex - 1
+
+}
+
+func (ci *chunkIndexer) add(idx int, hash hash.Hash) {
+	ci.Lock()
+	defer ci.Unlock()
+	ci.chunks[idx] = hash
+}
+
+func (ci *chunkIndexer) hashes() []hash.Hash {
+	ci.Lock()
+	defer ci.Unlock()
+	idxs := slices.Collect(maps.Keys(ci.chunks))
+	slices.Sort(idxs)
+
+	hashes := make([]hash.Hash, 0, len(ci.chunks))
+	for _, idx := range idxs {
+		hashes = append(hashes, ci.chunks[idx])
+	}
+	return hashes
+
 }
 
 func (fc *fileCreator) GetCheckpoints(_ context.Context, request *GetCheckpointsRequest) ([]*Metadata, error) {
