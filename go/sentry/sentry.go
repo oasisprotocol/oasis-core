@@ -19,7 +19,7 @@ type backend struct {
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
+	consensus consensus.Service
 	identity  *identity.Identity
 }
 
@@ -40,16 +40,16 @@ func (b *backend) GetAddresses(context.Context) (*api.SentryAddresses, error) {
 
 // New constructs a new sentry backend instance.
 func New(
-	consensusBackend consensus.Backend,
+	consensus consensus.Service,
 	identity *identity.Identity,
 ) (api.Backend, error) {
-	if consensusBackend == nil {
+	if consensus == nil {
 		return nil, fmt.Errorf("sentry: consensus backend is nil")
 	}
 
 	b := &backend{
 		logger:    logging.GetLogger("sentry"),
-		consensus: consensusBackend,
+		consensus: consensus,
 		identity:  identity,
 	}
 

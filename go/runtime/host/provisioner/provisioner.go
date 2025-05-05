@@ -33,7 +33,7 @@ func New(
 	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) (runtimeHost.Provisioner, error) {
 	// Initialize the IAS proxy client.
 	ias, err := ias.New(identity)
@@ -57,13 +57,13 @@ func New(
 	return createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs)
 }
 
-func createHostInfo(consensus consensus.Backend) (*hostProtocol.HostInfo, error) {
-	cs, err := consensus.GetStatus(context.Background())
+func createHostInfo(consensus consensus.Service) (*hostProtocol.HostInfo, error) {
+	cs, err := consensus.Core().GetStatus(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
 	}
 
-	chainCtx, err := consensus.GetChainContext(context.Background())
+	chainCtx, err := consensus.Core().GetChainContext(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain context: %w", err)
 	}
@@ -92,7 +92,7 @@ func createProvisioner(
 	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	hostInfo *hostProtocol.HostInfo,
 	ias []iasAPI.Endpoint,
 	qs pcs.QuoteService,

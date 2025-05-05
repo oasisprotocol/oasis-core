@@ -34,7 +34,7 @@ func TagsForRoleMask(nodeRoles node.RolesMask) (tags []string) {
 type runtimeNodesWatcher struct { // nolint: maligned
 	sync.RWMutex
 
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	runtimeID common.Namespace
 
@@ -195,7 +195,7 @@ func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
 // Aditionally, watched nodes are tagged by node roles.
 func NewRuntimeNodeLookup(
 	ctx context.Context,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	runtimeID common.Namespace,
 ) (NodeDescriptorLookup, error) {
 	rw := &runtimeNodesWatcher{

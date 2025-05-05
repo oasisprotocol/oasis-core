@@ -66,7 +66,7 @@ var (
 	logger = logging.GetLogger("cmd/consensus")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.Services) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",
@@ -75,7 +75,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
 		os.Exit(1)
 	}
 
-	client := consensus.NewClient(conn)
+	client := consensus.NewServicesClient(conn)
 	return conn, client
 }
 
@@ -129,7 +129,7 @@ func doSubmitTx(cmd *cobra.Command, _ []string) {
 
 	tx := loadTx()
 
-	if err := client.SubmitTx(context.Background(), tx); err != nil {
+	if err := client.Core().SubmitTx(context.Background(), tx); err != nil {
 		logger.Error("failed to submit transaction",
 			"err", err,
 		)
@@ -171,7 +171,7 @@ func doEstimateGas(cmd *cobra.Command, _ []string) {
 		)
 		os.Exit(1)
 	}
-	gas, err := client.EstimateGas(context.Background(), &req)
+	gas, err := client.Core().EstimateGas(context.Background(), &req)
 	if err != nil {
 		logger.Error("failed to estimate gas",
 			"err", err,
@@ -190,7 +190,7 @@ func doNextBlockState(cmd *cobra.Command, _ []string) {
 	defer conn.Close()
 
 	// Use background context to block until the result comes in.
-	state, err := client.GetNextBlockState(context.Background())
+	state, err := client.Core().GetNextBlockState(context.Background())
 	if err != nil {
 		logger.Error("failed to query next block state",
 			"err", err,

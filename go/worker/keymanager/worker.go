@@ -76,7 +76,7 @@ type Worker struct { // nolint: maligned
 
 	commonWorker     *workerCommon.Worker
 	roleProvider     registration.RoleProvider
-	backend          api.Backend
+	keymanager       api.Backend
 	notifier         protocol.Notifier
 	keyManagerClient *commonCommittee.KeyManagerClientWrapper
 

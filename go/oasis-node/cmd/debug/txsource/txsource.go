@@ -18,7 +18,7 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
 	"github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -99,12 +99,12 @@ func doRun(cmd *cobra.Command, _ []string) error {
 	defer conn.Close()
 
 	// Set up the consensus client and submission manager.
-	cnsc := consensus.NewClient(conn)
+	consensus := consensusAPI.NewServicesClient(conn)
 	pd, err := pricediscovery.NewStatic(viper.GetUint64(CfgGasPrice))
 	if err != nil {
 		return fmt.Errorf("failed to create submission manager: %w", err)
 	}
-	sm := consensus.NewSubmissionManager(cnsc, pd, 0)
+	sm := consensusAPI.NewSubmissionManager(consensus.Core(), pd, 0)
 
 	// Wait for sync before transferring control to the workload.
 	ncc := api.NewNodeControllerClient(conn)
@@ -124,7 +124,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("memory signer factory generate funding account %w", err)
 	}
 	if w.NeedsFunds() {
-		if err = workload.FundAccountFromTestEntity(ctx, cnsc, sm, fundingAccount); err != nil {
+		if err = workload.FundAccountFromTestEntity(ctx, consensus, sm, fundingAccount); err != nil {
 			return fmt.Errorf("test entity account funding failure: %w", err)
 		}
 	}
@@ -147,7 +147,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	logger.Debug("entering workload", "name", name)
-	if err = w.Run(ctx, rng, conn, cnsc, sm, fundingAccount, validatorEntities); err != nil {
+	if err = w.Run(ctx, rng, conn, consensus, sm, fundingAccount, validatorEntities); err != nil {
 		logger.Error("workload error", "err", err)
 		return fmt.Errorf("workload %s: %w", name, err)
 	}

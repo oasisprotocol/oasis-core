@@ -226,7 +226,7 @@ WaitLoop:
 	}
 
 	// Make sure the node is frozen.
-	nodeStatus, err := ctrl.Consensus.Registry().GetNodeStatus(ctx, &registry.IDQuery{ID: identity.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
+	nodeStatus, err := ctrl.Registry.GetNodeStatus(ctx, &registry.IDQuery{ID: identity.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("GetNodeStatus: %w", err)
 	}

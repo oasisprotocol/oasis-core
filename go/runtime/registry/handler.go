@@ -46,7 +46,7 @@ type RuntimeHostHandlerEnvironment interface {
 type runtimeHostHandler struct {
 	env       RuntimeHostHandlerEnvironment
 	runtime   Runtime
-	consensus consensus.Backend
+	consensus consensus.Service
 }
 
 // NewRuntimeHostHandler returns a protocol handler that provides the required host methods for the
@@ -56,7 +56,7 @@ type runtimeHostHandler struct {
 func NewRuntimeHostHandler(
 	env RuntimeHostHandlerEnvironment,
 	runtime Runtime,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) host.RuntimeHandler {
 	return &runtimeHostHandler{
 		env:       env,
@@ -210,7 +210,7 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 		}
 	case protocol.HostStorageEndpointConsensus:
 		// Consensus state storage.
-		rs = h.consensus.State()
+		rs = h.consensus.Core().State()
 	default:
 		return nil, fmt.Errorf("endpoint not supported")
 	}
@@ -257,7 +257,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 	ctx context.Context,
 	rq *protocol.HostFetchConsensusBlockRequest,
 ) (*protocol.HostFetchConsensusBlockResponse, error) {
-	blk, err := h.consensus.GetLightBlock(ctx, int64(rq.Height))
+	blk, err := h.consensus.Core().GetLightBlock(ctx, int64(rq.Height))
 	if err != nil {
 		lc, err := h.env.GetLightProvider()
 		if err != nil {
@@ -322,7 +322,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
 func (h *runtimeHostHandler) handleHostFetchGenesisHeight(
 	ctx context.Context,
 ) (*protocol.HostFetchGenesisHeightResponse, error) {
-	doc, err := h.consensus.GetGenesisDocument(ctx)
+	doc, err := h.consensus.Core().GetGenesisDocument(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (h *runtimeHostHandler) handleHostFetchBlockMetadataTx(
 	ctx context.Context,
 	rq *protocol.HostFetchBlockMetadataTxRequest,
 ) (*protocol.HostFetchBlockMetadataTxResponse, error) {
-	tps, err := h.consensus.GetTransactionsWithProofs(ctx, int64(rq.Height))
+	tps, err := h.consensus.Core().GetTransactionsWithProofs(ctx, int64(rq.Height))
 	if err != nil {
 		return nil, err
 	}

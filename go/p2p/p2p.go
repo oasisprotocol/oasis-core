@@ -360,7 +360,7 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 }
 
 // New creates a new P2P node.
-func New(identity *identity.Identity, consensus consensus.Backend, store *persistent.CommonStore) (api.Service, error) {
+func New(identity *identity.Identity, consensus consensus.Service, store *persistent.CommonStore) (api.Service, error) {
 	var cfg Config
 	if err := cfg.Load(); err != nil {
 		return nil, fmt.Errorf("p2p: failed to load peer config: %w", err)
@@ -395,7 +395,7 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		return nil, fmt.Errorf("p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
-	chainContext, err := consensus.GetChainContext(ctx)
+	chainContext, err := consensus.Core().GetChainContext(ctx)
 	if err != nil {
 		ctxCancel()
 		_ = host.Close()

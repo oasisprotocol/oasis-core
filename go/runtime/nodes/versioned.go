@@ -53,7 +53,7 @@ type VersionedNodeDescriptorWatcher interface {
 type versionedNodeDescriptorWatcher struct {
 	sync.RWMutex
 
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	frozen        bool
 	version       int64
@@ -270,7 +270,7 @@ func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
 //
 // This watcher will only track nodes that will be explicitly marked to watch
 // via WatchNode/WatchNodeWithTags methods.
-func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Backend) (VersionedNodeDescriptorWatcher, error) {
+func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Service) (VersionedNodeDescriptorWatcher, error) {
 	nw := &versionedNodeDescriptorWatcher{
 		consensus: consensus,
 		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),

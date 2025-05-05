@@ -12,7 +12,7 @@ import (
 )
 
 type honestCometBFT struct {
-	service consensus.Backend
+	service consensus.Service
 
 	genesis    genesis.Provider
 	genesisDoc *genesis.Document
@@ -38,7 +38,7 @@ func (ht *honestCometBFT) start(id *identity.Identity, dataDir string) error {
 
 	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
 	blockOne := make(chan struct{})
-	blocksCh, blocksSub, err := ht.service.WatchBlocks(context.Background())
+	blocksCh, blocksSub, err := ht.service.Core().WatchBlocks(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to watch blocks: %w", err)
 	}

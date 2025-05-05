@@ -23,7 +23,7 @@ const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, name string, identity *identity.Identity, backend api.Backend, consensus consensusAPI.Backend) {
+func SchedulerImplementationTests(t *testing.T, name string, identity *identity.Identity, scheduler api.Backend, consensus consensusAPI.Service) {
 	ctx := context.Background()
 	seed := []byte("SchedulerImplementationTests/" + name)
 
@@ -36,10 +36,10 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
 	// Query genesis parameters.
-	_, err = backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	_, err = scheduler.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 
-	ch, sub, err := backend.WatchCommittees(ctx)
+	ch, sub, err := scheduler.WatchCommittees(ctx)
 	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
 
@@ -77,7 +77,7 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 		}
 
 		var committees []*api.Committee
-		committees, err = backend.GetCommittees(context.Background(), &api.GetCommitteesRequest{
+		committees, err = scheduler.GetCommittees(context.Background(), &api.GetCommitteesRequest{
 			RuntimeID: rt.Runtime.ID,
 			Height:    consensusAPI.HeightLatest,
 		})
@@ -119,7 +119,7 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	// Cleanup the registry.
 	rt.Cleanup(t, consensus.Registry(), consensus)
 
-	validators, err := backend.GetValidators(context.Background(), consensusAPI.HeightLatest)
+	validators, err := scheduler.GetValidators(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetValidators")
 
 	require.Len(validators, 1, "should be only one validator")

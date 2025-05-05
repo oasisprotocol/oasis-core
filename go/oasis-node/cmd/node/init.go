@@ -83,7 +83,7 @@ func loadOrGenerateIdentity(dataDir string, logger *logging.Logger) (*identity.I
 // startMetricServer initializes and starts the metrics reporting server.
 func startMetricServer(svcMgr *background.ServiceManager, logger *logging.Logger) (service.BackgroundService, error) {
 	// Initialize the metrics server.
-	metrics, err := metrics.New(svcMgr.Ctx)
+	metrics, err := metrics.New()
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,

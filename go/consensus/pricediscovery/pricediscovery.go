@@ -35,7 +35,7 @@ type priceDiscovery struct {
 	// tracks the current index of the blockPrices rolling array.
 	blockPricesCurrentIdx int
 
-	client consensus.ClientBackend
+	consensus consensus.Backend
 
 	logger *logging.Logger
 }
@@ -50,7 +50,7 @@ func (pd *priceDiscovery) GasPrice() (*quantity.Quantity, error) {
 
 // refreshMinGasPrice refreshes minimum gas price reported by the consensus layer.
 func (pd *priceDiscovery) refreshMinGasPrice(ctx context.Context) {
-	mgp, err := pd.client.MinGasPrice(ctx)
+	mgp, err := pd.consensus.MinGasPrice(ctx)
 	if err != nil {
 		pd.logger.Warn("failed to fetch minimum gas price",
 			"err", err,
@@ -120,13 +120,13 @@ func (pd *priceDiscovery) worker(ctx context.Context, ch <-chan *consensus.Block
 }
 
 // New creates a new dynamic price discovery implementation.
-func New(ctx context.Context, client consensus.ClientBackend, fallbackGasPrice uint64) (consensus.PriceDiscovery, error) {
+func New(ctx context.Context, consensus consensus.Backend, fallbackGasPrice uint64) (consensus.PriceDiscovery, error) {
 	pd := &priceDiscovery{
 		finalGasPrice:    quantity.NewFromUint64(fallbackGasPrice),
 		fallbackGasPrice: quantity.NewFromUint64(fallbackGasPrice),
 		minGasPrice:      quantity.NewQuantity(),
 		computedGasPrice: quantity.NewQuantity(),
-		client:           client,
+		consensus:        consensus,
 		logger:           logging.GetLogger("consensus/pricediscovery"),
 	}
 
@@ -136,7 +136,7 @@ func New(ctx context.Context, client consensus.ClientBackend, fallbackGasPrice u
 	}
 
 	// Subscribe to consensus layer blocks and start watching.
-	ch, sub, err := pd.client.WatchBlocks(ctx)
+	ch, sub, err := pd.consensus.WatchBlocks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to block updates: %w", err)
 	}

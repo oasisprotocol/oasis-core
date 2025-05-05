@@ -186,7 +186,7 @@ func (n *Node) getIdentityStatus() control.IdentityStatus {
 }
 
 func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error) {
-	return n.Consensus.GetStatus(ctx)
+	return n.Consensus.Core().GetStatus(ctx)
 }
 
 func (n *Node) getLightClientStatus() (*consensus.LightClientStatus, error) {

@@ -204,7 +204,7 @@ type Worker struct { // nolint: maligned
 	stopRegCh    chan struct{} // closed internally to trigger clean registration lapse
 
 	logger    *logging.Logger
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	roleProviders []*roleProvider
 	registerCh    chan struct{}
@@ -265,7 +265,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 			blockSub pubsub.ClosableSubscription
 			err      error
 		)
-		blockCh, blockSub, err = w.consensus.WatchBlocks(w.ctx)
+		blockCh, blockSub, err = w.consensus.Core().WatchBlocks(w.ctx)
 		switch err {
 		case nil:
 			defer blockSub.Close()
@@ -726,7 +726,7 @@ func (w *Worker) GetRegistrationStatus(ctx context.Context) (*control.Registrati
 	*status = w.status
 	w.RUnlock()
 
-	if status == nil || status.Descriptor == nil {
+	if status.Descriptor == nil {
 		return status, nil
 	}
 
@@ -1058,7 +1058,7 @@ func New(
 	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	p2p p2p.Service,
 	workerCommonCfg *workerCommon.Config,
 	store *persistent.CommonStore,

@@ -82,7 +82,7 @@ func NewPeerManager(
 	h host.Host,
 	g connmgr.ConnectionGater,
 	ps *pubsub.PubSub,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	chainContext string,
 	cs *persistent.CommonStore,
 	opts ...PeerManagerOption,

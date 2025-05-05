@@ -23,7 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -81,15 +81,16 @@ type queries struct {
 	stakingParams   *staking.ConsensusParameters
 	schedulerParams *scheduler.ConsensusParameters
 
-	control    control.NodeController
 	beacon     beacon.Backend
-	staking    staking.Backend
-	consensus  consensus.ClientBackend
-	registry   registry.Backend
-	scheduler  scheduler.Backend
+	consensus  consensusAPI.Backend
 	governance governance.Backend
+	registry   registry.Backend
 	roothash   roothash.Backend
-	runtime    runtimeClient.RuntimeClient
+	scheduler  scheduler.Backend
+	staking    staking.Backend
+
+	control control.NodeController
+	runtime runtimeClient.RuntimeClient
 
 	runtimeGenesisRound uint64
 
@@ -874,8 +875,8 @@ func (q *queries) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
-	_ consensus.SubmissionManager,
+	consensus consensusAPI.Services,
+	_ consensusAPI.SubmissionManager,
 	_ signature.Signer,
 	_ []signature.Signer,
 ) error {
@@ -885,7 +886,7 @@ func (q *queries) Run(
 	q.logger = logging.GetLogger("cmd/txsource/workload/queries")
 
 	q.control = control.NewNodeControllerClient(conn)
-	q.consensus = cnsc
+	q.consensus = consensus.Core()
 	q.beacon = beacon.NewClient(conn)
 	q.registry = registry.NewClient(conn)
 	q.runtime = runtimeClient.NewClient(conn)
@@ -894,15 +895,15 @@ func (q *queries) Run(
 	q.staking = staking.NewClient(conn)
 	q.roothash = roothash.NewClient(conn)
 
-	q.stakingParams, err = q.staking.ConsensusParameters(ctx, consensus.HeightLatest)
+	q.stakingParams, err = q.staking.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query staking consensus parameters: %w", err)
 	}
-	q.schedulerParams, err = q.scheduler.ConsensusParameters(ctx, consensus.HeightLatest)
+	q.schedulerParams, err = q.scheduler.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query scheduler consensus parameters: %w", err)
 	}
-	q.epochtimeParams, err = q.beacon.ConsensusParameters(ctx, consensus.HeightLatest)
+	q.epochtimeParams, err = q.beacon.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query epochtime consensus parameters: %w", err)
 	}

@@ -73,7 +73,7 @@ type runtimeHostNotifier struct {
 
 	runtime   Runtime
 	host      *composite.Host
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	notifyCh chan *componentNotifyFuncWithQueue
 
@@ -81,7 +81,7 @@ type runtimeHostNotifier struct {
 }
 
 // NewRuntimeHostNotifier returns a protocol notifier that handles key manager policy updates.
-func NewRuntimeHostNotifier(runtime Runtime, host *composite.Host, consensus consensus.Backend) protocol.Notifier {
+func NewRuntimeHostNotifier(runtime Runtime, host *composite.Host, consensus consensus.Service) protocol.Notifier {
 	logger := logging.GetLogger("runtime/registry/notifier").With("runtime_id", runtime.ID())
 
 	return &runtimeHostNotifier{
@@ -453,7 +453,7 @@ func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(policy *quote.Policy) 
 }
 
 func (n *runtimeHostNotifier) watchConsensusLightBlocks(ctx context.Context) {
-	rawCh, sub, err := n.consensus.WatchBlocks(ctx)
+	rawCh, sub, err := n.consensus.Core().WatchBlocks(ctx)
 	if err != nil {
 		n.logger.Error("failed to subscribe to consensus block updates",
 			"err", err,

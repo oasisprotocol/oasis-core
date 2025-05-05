@@ -19,7 +19,7 @@ import (
 type peerRegistry struct {
 	logger *logging.Logger
 
-	consensus    consensus.Backend
+	consensus    consensus.Service
 	chainContext string
 
 	mu            sync.Mutex
@@ -33,12 +33,12 @@ type peerRegistry struct {
 	startOne cmSync.One
 }
 
-func newPeerRegistry(c consensus.Backend, chainContext string) *peerRegistry {
+func newPeerRegistry(consensus consensus.Service, chainContext string) *peerRegistry {
 	l := logging.GetLogger("p2p/peer-manager/registry")
 
 	return &peerRegistry{
 		logger:        l,
-		consensus:     c,
+		consensus:     consensus,
 		chainContext:  chainContext,
 		peers:         make(map[core.PeerID]peer.AddrInfo),
 		protocolPeers: make(map[core.ProtocolID]map[core.PeerID]struct{}),

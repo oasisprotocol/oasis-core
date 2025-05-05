@@ -154,7 +154,7 @@ type Node struct {
 	Identity         *identity.Identity
 	KeyManager       keymanager.Backend
 	KeyManagerClient *KeyManagerClientWrapper
-	Consensus        consensus.Backend
+	Consensus        consensus.Service
 	LightProvider    consensus.LightProvider
 	Group            *Group
 	P2P              p2pAPI.Service
@@ -470,7 +470,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	firstBlockReceived := n.CurrentBlock == nil
 
 	// Fetch light consensus block.
-	consensusBlk, err := n.Consensus.GetLightBlock(n.ctx, height)
+	consensusBlk, err := n.Consensus.Core().GetLightBlock(n.ctx, height)
 	if err != nil {
 		n.logger.Error("failed to query light block",
 			"err", err,
@@ -872,7 +872,7 @@ func NewNode(
 	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
 	txPoolCfg tpConfig.Config,
@@ -916,7 +916,7 @@ func NewNode(
 	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
 
 	// Prepare the runtime host handler.
-	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
+	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, consensus)
 
 	// Prepare the runtime host node helpers.
 	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler)

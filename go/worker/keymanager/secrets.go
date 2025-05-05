@@ -73,7 +73,7 @@ type secretsWorker struct {
 	kmWorker     *Worker
 	commonWorker *workerCommon.Worker
 	roleProvider registration.RoleProvider
-	backend      api.Backend
+	keymanager   api.Backend
 
 	status   workerKm.SecretsStatus // Guarded by mutex.
 	kmStatus *secrets.Status
@@ -108,7 +108,7 @@ func newSecretsWorker(
 	commonWorker *workerCommon.Worker,
 	kmWorker *Worker,
 	r *registration.Worker,
-	backend api.Backend,
+	keymanager api.Backend,
 ) (*secretsWorker, error) {
 	roleProvider, err := r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
 	if err != nil {
@@ -147,7 +147,7 @@ func newSecretsWorker(
 		privatePeers:      privatePeers,
 		kmWorker:          kmWorker,
 		commonWorker:      commonWorker,
-		backend:           backend,
+		keymanager:        keymanager,
 		initEnclaveDoneCh: make(chan *secrets.SignedInitResponse, 1),
 		genMstSecDoneCh:   make(chan bool, 1),
 		genMstSecEpoch:    math.MaxUint64,
@@ -307,7 +307,7 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 	defer hrtSub.Close()
 
 	// Subscribe to key manager status updates.
-	statusCh, statusSub, err := w.backend.Secrets().WatchStatuses(ctx)
+	statusCh, statusSub, err := w.keymanager.Secrets().WatchStatuses(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch statuses",
 			"err", err,
@@ -317,7 +317,7 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 	defer statusSub.Close()
 
 	// Subscribe to key manager master secret publications.
-	mstCh, mstSub, err := w.backend.Secrets().WatchMasterSecrets(ctx)
+	mstCh, mstSub, err := w.keymanager.Secrets().WatchMasterSecrets(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch master secrets",
 			"err", err,
@@ -327,7 +327,7 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 	defer mstSub.Close()
 
 	// Subscribe to key manager ephemeral secret publications.
-	ephCh, ephSub, err := w.backend.Secrets().WatchEphemeralSecrets(ctx)
+	ephCh, ephSub, err := w.keymanager.Secrets().WatchEphemeralSecrets(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch ephemeral secrets",
 			"err", err,
@@ -356,7 +356,7 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 
 	// Watch block heights so we can impose a random ephemeral secret
 	// generation delay.
-	blkCh, blkSub, err := w.commonWorker.Consensus.WatchBlocks(ctx)
+	blkCh, blkSub, err := w.commonWorker.Consensus.Core().WatchBlocks(ctx)
 	if err != nil {
 		w.logger.Error("failed to watch blocks",
 			"err", err,

@@ -19,7 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -165,13 +165,13 @@ func (r *registration) Run( // nolint: gocyclo
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
-	sm consensus.SubmissionManager,
+	consensus consensusAPI.Services,
+	sm consensusAPI.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
-	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
+	r.BaseWorkload.Init(consensus, sm, fundingAccount)
 
 	beacon := beacon.NewClient(conn)
 	ctx := context.Background()
@@ -220,9 +220,9 @@ func (r *registration) Run( // nolint: gocyclo
 	// XXX: currently entities are only registered at start. Could also
 	// periodically register new entities.
 	for i := range entityAccs {
-		entityAccs[i].reckonedNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+		entityAccs[i].reckonedNonce, err = consensus.Core().GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{
 			AccountAddress: entityAccs[i].address,
-			Height:         consensus.HeightLatest,
+			Height:         consensusAPI.HeightLatest,
 		})
 		if err != nil {
 			return fmt.Errorf("GetSignerNonce error: %w", err)
@@ -247,9 +247,9 @@ func (r *registration) Run( // nolint: gocyclo
 
 			var nodeAccNonce uint64
 			nodeAccAddress := staking.NewAddress(ident.NodeSigner.Public())
-			nodeAccNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+			nodeAccNonce, err = consensus.Core().GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{
 				AccountAddress: nodeAccAddress,
-				Height:         consensus.HeightLatest,
+				Height:         consensusAPI.HeightLatest,
 			})
 			if err != nil {
 				return fmt.Errorf("GetSignerNonce error for accout %s: %w", nodeAccAddress, err)
@@ -288,7 +288,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// XXX: currently only a single runtime is used throughout the test, could use more.
 		if i == 0 {
 			// Current epoch.
-			epoch, err := beacon.GetEpoch(ctx, consensus.HeightLatest)
+			epoch, err := beacon.GetEpoch(ctx, consensusAPI.HeightLatest)
 			if err != nil {
 				return fmt.Errorf("failed to get current epoch: %w", err)
 			}
@@ -325,7 +325,7 @@ func (r *registration) Run( // nolint: gocyclo
 		selectedNode := selectedAcc.nodeIdentities[rng.Intn(registryNumNodesPerEntity)]
 
 		// Current epoch.
-		epoch, err := beacon.GetEpoch(loopCtx, consensus.HeightLatest)
+		epoch, err := beacon.GetEpoch(loopCtx, consensusAPI.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch: %w", err)
 		}

@@ -125,7 +125,7 @@ type runtime struct { // nolint: maligned
 	activeDescriptorHash hash.Hash
 	managed              bool
 
-	consensus    consensus.Backend
+	consensus    consensus.Service
 	storage      storageAPI.Backend
 	localStorage localstorage.LocalStorage
 
@@ -146,7 +146,7 @@ func newRuntime(
 	runtimeID common.Namespace,
 	managed bool,
 	dataDir string,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	bundleRegistry *bundle.Registry,
 	bundleManager *bundle.Manager,
 ) (*runtime, error) {
@@ -474,7 +474,7 @@ type runtimeRegistry struct {
 
 	dataDir string
 
-	consensus consensus.Backend
+	consensus consensus.Service
 	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
@@ -695,7 +695,7 @@ func (r *runtimeRegistry) Init(runtimeIDs []common.Namespace) error {
 // New creates a new runtime registry.
 func New(
 	dataDir string,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 ) (Registry, error) {
 	// Get configured runtime IDs.
 	runtimeIDs, err := getConfiguredRuntimeIDs()

@@ -20,7 +20,7 @@ type Worker struct {
 	ctx context.Context
 
 	identity  *identity.Identity
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	allQuitCh chan struct{}
 	allQuitWg sync.WaitGroup
@@ -59,7 +59,7 @@ func (w *Worker) Name() string {
 // New creates a new worker instance.
 func New(
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	registrationWorker *registration.Worker,
 ) (*Worker, error) {
 	var (

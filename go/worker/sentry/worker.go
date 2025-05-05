@@ -22,7 +22,7 @@ func Enabled() bool {
 type Worker struct {
 	enabled bool
 
-	backend api.Backend
+	sentry api.Backend
 
 	grpcServer *grpc.Server
 
@@ -93,10 +93,10 @@ func (w *Worker) Cleanup() {
 }
 
 // New creates a new sentry worker.
-func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
+func New(sentry api.Backend, identity *identity.Identity) (*Worker, error) {
 	w := &Worker{
 		enabled: Enabled(),
-		backend: backend,
+		sentry:  sentry,
 		quitCh:  make(chan struct{}),
 		logger:  logging.GetLogger("worker/sentry"),
 	}
@@ -121,7 +121,7 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 		}
 		w.grpcServer = grpcServer
 		// Initialize and register the sentry gRPC service.
-		api.RegisterService(w.grpcServer.Server(), backend)
+		api.RegisterService(w.grpcServer.Server(), sentry)
 	}
 
 	return w, nil

@@ -36,7 +36,7 @@ func WorkerImplementationTests(
 	runtimeID common.Namespace,
 	commonNode *commonCommittee.Node,
 	rtNode *committee.Node,
-	backend consensus.Backend,
+	consensus consensus.Service,
 	storage storage.Backend,
 ) {
 	// Wait for worker to start and register.
@@ -48,19 +48,19 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, backend)
+		testInitialEpochTransition(t, stateCh, consensus)
 	})
 
 	t.Run("QueueTx", func(t *testing.T) {
-		testQueueTx(t, runtimeID, stateCh, commonNode, rtNode, backend.RootHash(), storage)
+		testQueueTx(t, runtimeID, stateCh, commonNode, rtNode, consensus.RootHash(), storage)
 	})
 
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, backend consensus.Backend) {
+func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, consensus consensus.Service) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	beaconTests.MustAdvanceEpoch(t, backend)
+	beaconTests.MustAdvanceEpoch(t, consensus)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)

@@ -10,7 +10,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -42,13 +42,13 @@ func (o *oversized) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	_ *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
-	sm consensus.SubmissionManager,
+	consensus consensusAPI.Services,
+	sm consensusAPI.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
-	o.BaseWorkload.Init(cnsc, sm, fundingAccount)
+	o.BaseWorkload.Init(consensus, sm, fundingAccount)
 
 	txSignerFactory := memorySigner.NewFactory()
 	txSigner, err := txSignerFactory.Generate(signature.SignerEntity, rng)
@@ -59,7 +59,7 @@ func (o *oversized) Run(
 
 	ctx := context.Background()
 
-	params, err := cnsc.GetParameters(ctx, consensus.HeightLatest)
+	params, err := consensus.Core().GetParameters(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query consensus parameters: %w", err)
 	}
@@ -114,13 +114,13 @@ func (o *oversized) Run(
 
 		// Wait for a maximum of 5 seconds.
 		submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		err = cnsc.SubmitTx(submitCtx, signedTx)
+		err = consensus.Core().SubmitTx(submitCtx, signedTx)
 		cancel()
 		switch err {
 		case nil:
 			// This should never happen.
 			return fmt.Errorf("successfully submitted an oversized transaction")
-		case consensus.ErrOversizedTx:
+		case consensusAPI.ErrOversizedTx:
 			// Submitting an oversized transaction is an error, so we expect this to fail.
 			o.Logger.Info("transaction rejected due to ErrOversizedTx")
 		default:

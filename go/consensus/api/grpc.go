@@ -80,7 +80,7 @@ var (
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
 		ServiceName: string(serviceName),
-		HandlerType: (*ClientBackend)(nil),
+		HandlerType: (*Services)(nil),
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: methodSubmitTx.ShortName(),
@@ -200,14 +200,14 @@ func handlerSubmitTx(
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(ClientBackend).SubmitTx(ctx, rq)
+		return nil, srv.(Services).Core().SubmitTx(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSubmitTx.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return nil, srv.(ClientBackend).SubmitTx(ctx, req.(*transaction.SignedTransaction))
+		return nil, srv.(Services).Core().SubmitTx(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -223,14 +223,14 @@ func handlerSubmitTxNoWait(
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(ClientBackend).SubmitTxNoWait(ctx, rq)
+		return nil, srv.(Services).Core().SubmitTxNoWait(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSubmitTxNoWait.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return nil, srv.(ClientBackend).SubmitTxNoWait(ctx, req.(*transaction.SignedTransaction))
+		return nil, srv.(Services).Core().SubmitTxNoWait(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -246,14 +246,14 @@ func handlerSubmitTxWithProof(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).SubmitTxWithProof(ctx, rq)
+		return srv.(Services).Core().SubmitTxWithProof(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSubmitTxWithProof.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).SubmitTxWithProof(ctx, req.(*transaction.SignedTransaction))
+		return srv.(Services).Core().SubmitTxWithProof(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -269,14 +269,14 @@ func handlerStateToGenesis(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).StateToGenesis(ctx, height)
+		return srv.(Services).Core().StateToGenesis(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).StateToGenesis(ctx, req.(int64))
+		return srv.(Services).Core().StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -292,14 +292,14 @@ func handlerEstimateGas(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).EstimateGas(ctx, rq)
+		return srv.(Services).Core().EstimateGas(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodEstimateGas.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).EstimateGas(ctx, req.(*EstimateGasRequest))
+		return srv.(Services).Core().EstimateGas(ctx, req.(*EstimateGasRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -311,14 +311,14 @@ func handlerMinGasPrice(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).MinGasPrice(ctx)
+		return srv.(Services).Core().MinGasPrice(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodMinGasPrice.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).MinGasPrice(ctx)
+		return srv.(Services).Core().MinGasPrice(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -334,14 +334,14 @@ func handlerGetSignerNonce(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetSignerNonce(ctx, rq)
+		return srv.(Services).Core().GetSignerNonce(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetSignerNonce.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
+		return srv.(Services).Core().GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -357,14 +357,14 @@ func handlerGetBlock(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetBlock(ctx, height)
+		return srv.(Services).Core().GetBlock(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetBlock.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetBlock(ctx, req.(int64))
+		return srv.(Services).Core().GetBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -380,14 +380,14 @@ func handlerGetLightBlock(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetLightBlock(ctx, height)
+		return srv.(Services).Core().GetLightBlock(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetLightBlock.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetLightBlock(ctx, req.(int64))
+		return srv.(Services).Core().GetLightBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -399,14 +399,14 @@ func handlerGetLatestHeight(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetLatestHeight(ctx)
+		return srv.(Services).Core().GetLatestHeight(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetLatestHeight.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetLatestHeight(ctx)
+		return srv.(Services).Core().GetLatestHeight(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -418,14 +418,14 @@ func handlerGetLastRetainedHeight(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
+		return srv.(Services).Core().GetLastRetainedHeight(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetLastRetainedHeight.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetLastRetainedHeight(ctx)
+		return srv.(Services).Core().GetLastRetainedHeight(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -441,14 +441,14 @@ func handlerGetTransactions(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetTransactions(ctx, height)
+		return srv.(Services).Core().GetTransactions(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetTransactions.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetTransactions(ctx, req.(int64))
+		return srv.(Services).Core().GetTransactions(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -464,14 +464,14 @@ func handlerGetTransactionsWithResults(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetTransactionsWithResults(ctx, height)
+		return srv.(Services).Core().GetTransactionsWithResults(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetTransactionsWithResults.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetTransactionsWithResults(ctx, req.(int64))
+		return srv.(Services).Core().GetTransactionsWithResults(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -487,14 +487,14 @@ func handlerGetTransactionsWithProofs(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetTransactionsWithProofs(ctx, height)
+		return srv.(Services).Core().GetTransactionsWithProofs(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetTransactionsWithProofs.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetTransactionsWithProofs(ctx, req.(int64))
+		return srv.(Services).Core().GetTransactionsWithProofs(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -506,14 +506,14 @@ func handlerGetUnconfirmedTransactions(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
+		return srv.(Services).Core().GetUnconfirmedTransactions(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetUnconfirmedTransactions.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
+		return srv.(Services).Core().GetUnconfirmedTransactions(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -529,14 +529,14 @@ func handlerStateSyncGet(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).State().SyncGet(ctx, rq)
+		return srv.(Services).Core().State().SyncGet(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodStateSyncGet.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).State().SyncGet(ctx, req.(*syncer.GetRequest))
+		return srv.(Services).Core().State().SyncGet(ctx, req.(*syncer.GetRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -552,14 +552,14 @@ func handlerStateSyncGetPrefixes(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).State().SyncGetPrefixes(ctx, rq)
+		return srv.(Services).Core().State().SyncGetPrefixes(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodStateSyncGetPrefixes.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).State().SyncGetPrefixes(ctx, req.(*syncer.GetPrefixesRequest))
+		return srv.(Services).Core().State().SyncGetPrefixes(ctx, req.(*syncer.GetPrefixesRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -575,14 +575,14 @@ func handlerStateSyncIterate(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).State().SyncIterate(ctx, rq)
+		return srv.(Services).Core().State().SyncIterate(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodStateSyncIterate.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).State().SyncIterate(ctx, req.(*syncer.IterateRequest))
+		return srv.(Services).Core().State().SyncIterate(ctx, req.(*syncer.IterateRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -594,14 +594,14 @@ func handlerGetGenesisDocument(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetGenesisDocument(ctx)
+		return srv.(Services).Core().GetGenesisDocument(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetGenesisDocument.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetGenesisDocument(ctx)
+		return srv.(Services).Core().GetGenesisDocument(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -613,14 +613,14 @@ func handlerGetChainContext(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetChainContext(ctx)
+		return srv.(Services).Core().GetChainContext(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetChainContext.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetChainContext(ctx)
+		return srv.(Services).Core().GetChainContext(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -632,14 +632,14 @@ func handlerGetStatus(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetStatus(ctx)
+		return srv.(Services).Core().GetStatus(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetStatus.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetStatus(ctx)
+		return srv.(Services).Core().GetStatus(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -651,14 +651,14 @@ func handlerGetNextBlockState(
 	interceptor grpc.UnaryServerInterceptor,
 ) (any, error) {
 	if interceptor == nil {
-		return srv.(ClientBackend).GetNextBlockState(ctx)
+		return srv.(Services).Core().GetNextBlockState(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetNextBlockState.FullName(),
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
-		return srv.(ClientBackend).GetNextBlockState(ctx)
+		return srv.(Services).Core().GetNextBlockState(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -674,14 +674,14 @@ func handlerGetParameters(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).GetParameters(ctx, height)
+		return srv.(Services).Core().GetParameters(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetParameters.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(ClientBackend).GetParameters(ctx, req.(int64))
+		return srv.(Services).Core().GetParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -697,14 +697,14 @@ func handlerSubmitEvidence(
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(ClientBackend).SubmitEvidence(ctx, rq)
+		return nil, srv.(Services).Core().SubmitEvidence(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSubmitEvidence.FullName(),
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return nil, srv.(ClientBackend).SubmitEvidence(ctx, req.(*Evidence))
+		return nil, srv.(Services).Core().SubmitEvidence(ctx, req.(*Evidence))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -715,7 +715,7 @@ func handlerWatchBlocks(srv any, stream grpc.ServerStream) error {
 	}
 
 	ctx := stream.Context()
-	ch, sub, err := srv.(ClientBackend).WatchBlocks(ctx)
+	ch, sub, err := srv.(Services).Core().WatchBlocks(ctx)
 	if err != nil {
 		return err
 	}
@@ -738,7 +738,7 @@ func handlerWatchBlocks(srv any, stream grpc.ServerStream) error {
 }
 
 // RegisterService registers a new client backend service with the given gRPC server.
-func RegisterService(server *grpc.Server, service ClientBackend) {
+func RegisterService(server *grpc.Server, service Services) {
 	server.RegisterService(&serviceDesc, service)
 }
 
@@ -980,34 +980,50 @@ func (c *Client) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.Closabl
 	return ch, sub, nil
 }
 
-func (c *Client) Beacon() beacon.Backend {
+// ServicesClient is a gRPC consensus services client.
+type ServicesClient struct {
+	conn *grpc.ClientConn
+}
+
+// NewServicesClient creates a new gRPC consensus services client.
+func NewServicesClient(c *grpc.ClientConn) *ServicesClient {
+	return &ServicesClient{
+		conn: c,
+	}
+}
+
+func (c *ServicesClient) Beacon() beacon.Backend {
 	return beacon.NewClient(c.conn)
 }
 
-func (c *Client) Registry() registry.Backend {
-	return registry.NewClient(c.conn)
+func (c *ServicesClient) Core() Backend {
+	return NewClient(c.conn)
 }
 
-func (c *Client) Staking() staking.Backend {
-	return staking.NewClient(c.conn)
-}
-
-func (c *Client) Scheduler() scheduler.Backend {
-	return scheduler.NewClient(c.conn)
-}
-
-func (c *Client) Governance() governance.Backend {
+func (c *ServicesClient) Governance() governance.Backend {
 	return governance.NewClient(c.conn)
 }
 
-func (c *Client) RootHash() roothash.Backend {
+func (c *ServicesClient) KeyManager() keymanager.Backend {
+	return keymanager.NewClient(c.conn)
+}
+
+func (c *ServicesClient) Registry() registry.Backend {
+	return registry.NewClient(c.conn)
+}
+
+func (c *ServicesClient) RootHash() roothash.Backend {
 	return roothash.NewClient(c.conn)
 }
 
-func (c *Client) Vault() vault.Backend {
-	return vault.NewClient(c.conn)
+func (c *ServicesClient) Scheduler() scheduler.Backend {
+	return scheduler.NewClient(c.conn)
 }
 
-func (c *Client) KeyManager() keymanager.Backend {
-	return keymanager.NewClient(c.conn)
+func (c *ServicesClient) Staking() staking.Backend {
+	return staking.NewClient(c.conn)
+}
+
+func (c *ServicesClient) Vault() vault.Backend {
+	return vault.NewClient(c.conn)
 }

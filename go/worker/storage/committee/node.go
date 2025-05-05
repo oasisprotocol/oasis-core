@@ -602,7 +602,7 @@ func (n *Node) consensusCheckpointSyncer() {
 	}
 
 	// Determine the maximum number of consensus checkpoints to keep.
-	consensusParams, err := n.commonNode.Consensus.GetParameters(n.ctx, consensus.HeightLatest)
+	consensusParams, err := n.commonNode.Consensus.Core().GetParameters(n.ctx, consensus.HeightLatest)
 	if err != nil {
 		n.logger.Error("failed to fetch consensus parameters",
 			"err", err,
@@ -652,7 +652,7 @@ func (n *Node) consensusCheckpointSyncer() {
 			)
 
 			if blkCh == nil {
-				blkCh, blkSub, err = n.commonNode.Consensus.WatchBlocks(n.ctx)
+				blkCh, blkSub, err = n.commonNode.Consensus.Core().WatchBlocks(n.ctx)
 				if err != nil {
 					n.logger.Error("failed to watch blocks",
 						"err", err,

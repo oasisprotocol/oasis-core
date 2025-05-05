@@ -18,7 +18,7 @@ type txRetry struct {
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
+	consensus consensus.Service
 	identity  *identity.Identity
 
 	cancelFn context.CancelFunc
@@ -89,7 +89,7 @@ func (rtr *txRetry) SubmitTx(
 
 func newTxRetry(
 	logger *logging.Logger,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	identity *identity.Identity,
 ) *txRetry {
 	return &txRetry{

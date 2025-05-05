@@ -449,6 +449,11 @@ func (n *commonNode) Beacon() beaconAPI.Backend {
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) Core() consensusAPI.Backend {
+	return n.parentNode
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) KeyManager() keymanagerAPI.Backend {
 	return n.keymanager
 }
@@ -507,21 +512,19 @@ func (n *commonNode) Pruner() consensusAPI.StatePruner {
 }
 
 func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
-	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
 		// Do not let CometBFT determine the latest height (e.g., by passing nil) as that
 		// completely ignores ABCI processing so it can return a block for which local state does
 		// not yet exist. Use our mux notion of latest height instead.
-		tmHeight = n.mux.State().BlockHeight()
+		tmHeight := n.mux.State().BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
 			return 0, consensusAPI.ErrNoCommittedBlocks
 		}
-	} else {
-		tmHeight = height
+		return tmHeight, nil
 	}
 
-	return tmHeight, nil
+	return height, nil
 }
 
 // Implements consensusAPI.Backend.
@@ -639,16 +642,8 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetLatestHeight(ctx context.Context) (int64, error) {
-	blk, err := n.GetCometBFTBlock(ctx, consensusAPI.HeightLatest)
-	if err != nil {
-		return 0, err
-	}
-	if blk == nil {
-		return 0, consensusAPI.ErrNoCommittedBlocks
-	}
-
-	return blk.Height, nil
+func (n *commonNode) GetLatestHeight(context.Context) (int64, error) {
+	return n.heightToCometBFTHeight(consensusAPI.HeightLatest)
 }
 
 // Implements consensusAPI.Backend.
@@ -682,12 +677,18 @@ func (n *commonNode) GetTransactions(ctx context.Context, height int64) ([][]byt
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int64) (*consensusAPI.TransactionsWithResults, error) {
-	txs, err := n.GetTransactions(ctx, height)
+	// Ensure all queries use the same height if the specified height is the latest.
+	tmHeight, err := n.heightToCometBFTHeight(height)
 	if err != nil {
 		return nil, err
 	}
 
-	blockResults, err := n.GetCometBFTBlockResults(ctx, height)
+	txs, err := n.GetTransactions(ctx, tmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	blockResults, err := n.GetCometBFTBlockResults(ctx, tmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -705,7 +706,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction staking events.
-		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], height, rs.Events)
+		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -714,7 +715,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction registry events.
-		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], height, rs.Events)
+		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -723,7 +724,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction roothash events.
-		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], height, rs.Events)
+		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -732,7 +733,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		}
 
 		// Transaction governance events.
-		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], height, rs.Events)
+		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -786,6 +787,7 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, err
 	}
 
+	// Ensure all queries use the same height if the specified height is the latest.
 	tmHeight, err := n.heightToCometBFTHeight(height)
 	if err != nil {
 		return nil, err
@@ -803,7 +805,7 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, fmt.Errorf("cometbft: failed to marshal consensus params: %w", err)
 	}
 
-	q, err := n.querier.QueryAt(ctx, height)
+	q, err := n.querier.QueryAt(ctx, tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: failed to create consensus query: %w", err)
 	}
@@ -819,16 +821,11 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 	}, nil
 }
 
-func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
-	return n.parentNode.SupportedFeatures()
-}
-
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
 		Version:       version.ConsensusProtocol,
 		Backend:       api.BackendName,
-		Features:      n.SupportedFeatures(),
 		ChainContext:  n.chainContext,
 		GenesisHeight: n.genesisHeight,
 	}

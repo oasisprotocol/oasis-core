@@ -23,7 +23,7 @@ import (
 // key manager runtime, ensuring it remains up-to-date.
 type kmNodeWatcher struct {
 	runtimeID common.Namespace
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	peerMap    *PeerMap
 	accessList *AccessList
@@ -32,7 +32,7 @@ type kmNodeWatcher struct {
 	logger *logging.Logger
 }
 
-func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Backend, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
+func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/km")
 
 	return &kmNodeWatcher{
@@ -147,7 +147,7 @@ type kmRuntimeWatcher struct {
 	mu sync.RWMutex
 
 	runtimeID common.Namespace
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	accessList *AccessList
 
@@ -156,7 +156,7 @@ type kmRuntimeWatcher struct {
 	logger *logging.Logger
 }
 
-func newKmRuntimeWatcher(runtimeID common.Namespace, consensus consensus.Backend, accessList *AccessList) *kmRuntimeWatcher {
+func newKmRuntimeWatcher(runtimeID common.Namespace, consensus consensus.Service, accessList *AccessList) *kmRuntimeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/rts")
 
 	return &kmRuntimeWatcher{
@@ -251,14 +251,14 @@ func (w *kmRuntimeWatcher) Runtimes() []common.Namespace {
 // the access list for the specified runtime, ensuring it remains up-to-date.
 type rtNodeWatcher struct {
 	runtimeID common.Namespace
-	consensus consensus.Backend
+	consensus consensus.Service
 
 	accessList *AccessList
 
 	logger *logging.Logger
 }
 
-func newRtNodeWatcher(runtimeID common.Namespace, consensus consensus.Backend, accessList *AccessList) *rtNodeWatcher {
+func newRtNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, accessList *AccessList) *rtNodeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/rt").With("runtime_id", runtimeID)
 
 	return &rtNodeWatcher{

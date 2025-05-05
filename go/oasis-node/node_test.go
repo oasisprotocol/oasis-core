@@ -304,7 +304,7 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 }
 
 func testConsensus(t *testing.T, node *testNode) {
-	consensusTests.ConsensusImplementationTests(t, node.Consensus)
+	consensusTests.ConsensusImplementationTests(t, node.Consensus.Core())
 }
 
 func testConsensusClient(t *testing.T, node *testNode) {

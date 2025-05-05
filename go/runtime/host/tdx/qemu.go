@@ -57,7 +57,7 @@ type QemuConfig struct {
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
 	// Consensus is the consensus layer backend.
-	Consensus consensus.Backend
+	Consensus consensus.Service
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -80,7 +80,7 @@ type qemuProvisioner struct {
 
 	sandbox   host.Provisioner
 	pcs       pcs.QuoteService
-	consensus consensus.Backend
+	consensus consensus.Service
 	identity  *identity.Identity
 	cidPool   *CidPool
 

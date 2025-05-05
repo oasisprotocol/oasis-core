@@ -59,7 +59,7 @@ type BlockIndexer struct {
 	mu       sync.RWMutex
 	startOne cmSync.One
 
-	consensus consensus.Backend
+	consensus consensus.Service
 	history   History
 	batchSize uint16
 
@@ -74,7 +74,7 @@ type BlockIndexer struct {
 }
 
 // NewBlockIndexer creates a new block indexer.
-func NewBlockIndexer(consensus consensus.Backend, history History, batchSize uint16) *BlockIndexer {
+func NewBlockIndexer(consensus consensus.Service, history History, batchSize uint16) *BlockIndexer {
 	logger := logging.GetLogger("runtime/history/indexer").With("runtime_id", history.RuntimeID())
 
 	return &BlockIndexer{
@@ -294,7 +294,7 @@ func (bi *BlockIndexer) reindexTo(ctx context.Context, height int64) error {
 	}
 	startHeight := lastHeight + 1 // +1 since we want the last non-seen height.
 
-	lastRetainedHeight, err := bi.consensus.GetLastRetainedHeight(ctx)
+	lastRetainedHeight, err := bi.consensus.Core().GetLastRetainedHeight(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get last retained height: %w", err)
 	}

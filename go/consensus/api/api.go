@@ -109,8 +109,8 @@ func (m FeatureMask) Has(f FeatureMask) bool {
 	return m&f != 0
 }
 
-// ClientBackend is a consensus interface used by clients that connect to the local full node.
-type ClientBackend interface {
+// Backend is a consensus interface used by clients that connect to the local full node.
+type Backend interface {
 	// SubmitTx submits a signed consensus transaction and waits for the transaction to be included
 	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
@@ -193,30 +193,36 @@ type ClientBackend interface {
 
 	// GetNextBlockState returns the state of the next block being voted on by validators.
 	GetNextBlockState(ctx context.Context) (*NextBlockState, error)
+}
 
+// Services are consensus services.
+type Services interface {
 	// Beacon returns the beacon backend.
 	Beacon() beacon.Backend
 
-	// Registry returns the registry backend.
-	Registry() registry.Backend
-
-	// Staking returns the staking backend.
-	Staking() staking.Backend
-
-	// Scheduler returns the scheduler backend.
-	Scheduler() scheduler.Backend
+	// Core returns the consensus core backend.
+	Core() Backend
 
 	// Governance returns the governance backend.
 	Governance() governance.Backend
 
+	// KeyManager returns the keymanager backend.
+	KeyManager() keymanager.Backend
+
+	// Registry returns the registry backend.
+	Registry() registry.Backend
+
 	// RootHash returns the roothash backend.
 	RootHash() roothash.Backend
 
+	// Scheduler returns the scheduler backend.
+	Scheduler() scheduler.Backend
+
+	// Staking returns the staking backend.
+	Staking() staking.Backend
+
 	// Vault returns the vault backend.
 	Vault() vault.Backend
-
-	// KeyManager returns the keymanager backend.
-	KeyManager() keymanager.Backend
 }
 
 // Block is a consensus block.
@@ -371,10 +377,10 @@ type P2PStatus struct {
 	Peers []string `json:"peers"`
 }
 
-// Backend is an interface that a consensus backend must provide.
-type Backend interface {
+// Service is an interface that a consensus backend service must provide.
+type Service interface {
 	service.BackgroundService
-	ClientBackend
+	Services
 
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask

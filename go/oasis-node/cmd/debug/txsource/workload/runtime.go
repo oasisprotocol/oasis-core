@@ -496,7 +496,7 @@ func (r *runtime) escrowIsZero(ctx context.Context, address staking.Address) (bo
 // at every iteration of the test.
 func (r *runtime) assertBalanceInvariants(ctx context.Context) error {
 	// Use a consistent height for querying balances.
-	height, err := r.Consensus().GetLatestHeight(ctx)
+	height, err := r.Consensus().Core().GetLatestHeight(ctx)
 	if err != nil {
 		return err
 	}
@@ -790,7 +790,7 @@ func (r *runtime) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	_ []signature.Signer,

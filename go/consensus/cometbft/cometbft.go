@@ -22,7 +22,7 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
-) (consensusAPI.Backend, error) {
+) (consensusAPI.Service, error) {
 	genesisDoc, err := api.GetCometBFTGenesisDocument(doc)
 	if err != nil {
 		return nil, err

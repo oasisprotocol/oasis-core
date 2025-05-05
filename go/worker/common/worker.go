@@ -25,7 +25,7 @@ type Worker struct {
 	DataDir         string
 	ChainContext    string
 	Identity        *identity.Identity
-	Consensus       consensus.Backend
+	Consensus       consensus.Service
 	LightProvider   consensus.LightProvider
 	P2P             p2p.Service
 	KeyManager      keymanagerApi.Backend
@@ -185,7 +185,7 @@ func New(
 	dataDir string,
 	chainContext string,
 	identity *identity.Identity,
-	consensus consensus.Backend,
+	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2p p2p.Service,
 	keyManager keymanagerApi.Backend,

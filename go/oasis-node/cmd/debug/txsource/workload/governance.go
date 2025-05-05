@@ -64,8 +64,7 @@ type governanceWorkload struct {
 	currentEpoch beacon.EpochTime
 	parameters   *governance.ConsensusParameters
 
-	consensus  consensus.ClientBackend
-	governance governance.Backend
+	consensus consensus.Services
 
 	proposerAccounts []*struct {
 		signer  signature.Signer
@@ -135,7 +134,7 @@ func (g *governanceWorkload) submitProposalContent(pc *governance.ProposalConten
 	// Find submitted proposal.
 	// In case there are multiple proposals with identical content, select the
 	// one with higher ID - since that is the more recently submitted proposal.
-	aps, err := g.governance.ActiveProposals(g.ctx, consensus.HeightLatest)
+	aps, err := g.consensus.Governance().ActiveProposals(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query active proposals: %w", err)
 	}
@@ -178,7 +177,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 	// there is a pending upgrade already scheduled minUpgradeEpoch before/after the
 	// proposed upgrade epoch.
 	var shouldFail bool
-	pendingUpgrades, err := g.governance.PendingUpgrades(g.ctx, consensus.HeightLatest)
+	pendingUpgrades, err := g.consensus.Governance().PendingUpgrades(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("governance.PendingUpgrades: %w", err)
 	}
@@ -208,7 +207,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 
 func (g *governanceWorkload) submitCancelUpgradeProposal(descriptor *upgrade.Descriptor, shouldFail bool) (uint64, error) {
 	// Find proposal matching the pending upgrade.
-	ps, err := g.governance.Proposals(g.ctx, consensus.HeightLatest)
+	ps, err := g.consensus.Governance().Proposals(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return 0, fmt.Errorf("querying proposals: %w", err)
 	}
@@ -236,7 +235,7 @@ func (g *governanceWorkload) submitCancelUpgradeProposal(descriptor *upgrade.Des
 }
 
 func (g *governanceWorkload) doCancelUpgradeProposal() error {
-	pendingUpgrades, err := g.governance.PendingUpgrades(g.ctx, consensus.HeightLatest)
+	pendingUpgrades, err := g.consensus.Governance().PendingUpgrades(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("governance.PendingUpgrades: %w", err)
 	}
@@ -509,7 +508,7 @@ func (g *governanceWorkload) submitVote(voter signature.Signer, proposalID uint6
 }
 
 func (g *governanceWorkload) doGovernanceVote() error {
-	activeProposals, err := g.governance.ActiveProposals(g.ctx, consensus.HeightLatest)
+	activeProposals, err := g.consensus.Governance().ActiveProposals(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("governance.ActiveProposals(): %w", err)
 	}
@@ -579,7 +578,7 @@ func (g *governanceWorkload) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	_ *grpc.ClientConn,
-	cnsc consensus.ClientBackend,
+	cnsc consensus.Services,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 	validatorEntities []signature.Signer,
@@ -597,7 +596,6 @@ func (g *governanceWorkload) Run(
 	}
 
 	g.consensus = cnsc
-	g.governance = cnsc.Governance()
 
 	g.validatorEntities = validatorEntities
 	if len(g.validatorEntities) == 0 {
@@ -682,7 +680,7 @@ func (g *governanceWorkload) Run(
 			// XXX: this makes sure that any pending upgrades that are about to be executed are
 			// canceled. When txsource suite supports handling upgrades mid-run, remove this part.
 			var upgrades []*upgrade.Descriptor
-			upgrades, err = g.governance.PendingUpgrades(g.ctx, consensus.HeightLatest)
+			upgrades, err = g.consensus.Governance().PendingUpgrades(g.ctx, consensus.HeightLatest)
 			if err != nil {
 				return fmt.Errorf("querying pending upgrades: %w", err)
 			}
