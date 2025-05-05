@@ -18,8 +18,8 @@ import (
 
 func createChunk(
 	ctx context.Context,
-	tree mkvs.Tree,
 	root node.Root,
+	subtree mkvs.Subtree,
 	offset node.Key,
 	chunkSize uint64,
 	w io.Writer,
@@ -28,11 +28,9 @@ func createChunk(
 	nextOffset node.Key,
 	err error,
 ) {
-	it := tree.NewIterator(
-		ctx,
-		// V1 checkpoints use V0 proofs.
-		mkvs.WithProofBuilder(syncer.NewProofBuilderV0(root.Hash, root.Hash)),
-	)
+
+	// V1 checkpoints use V0 proofs.
+	it := subtree.Iterator(ctx, syncer.NewProofBuilderV0(root.Hash, root.Hash))
 	defer it.Close()
 
 	// We build the chunk until the proof becomes too large or we have reached the end.

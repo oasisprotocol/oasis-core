@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -67,31 +68,27 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
 
-	// Create chunks until we are done.
-	var chunks []hash.Hash
-	var nextOffset node.Key
-	for chunkIndex := 0; ; chunkIndex++ {
-		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
-
-		// Generate chunk.
-		var f *os.File
-		if f, err = os.Create(dataFilename); err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", chunkIndex, err)
+	depth := 2 // TODO make this configurable.
+	subtrees, err := tree.Subtrees(ctx, depth)
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint: failed to create subtrees (depth: %d): %w", depth, err)
+	}
+	defer func() {
+		for _, st := range subtrees {
+			st.Close()
 		}
+	}()
 
-		var chunkHash hash.Hash
-		chunkHash, nextOffset, err = createChunk(ctx, tree, root, nextOffset, chunkSize, f)
-		f.Close()
+	chunks := []hash.Hash{}
+	chunkIndex := 0
+	for _, st := range subtrees { // TODO run in separate goroutine
+		var ch []hash.Hash
+		ch, chunkIndex, err = fc.createChunks(ctx, root, st, chunksDir, chunkSize, chunkIndex)
 		if err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk %d: %w", chunkIndex, err)
+			return nil, err
 		}
 
-		chunks = append(chunks, chunkHash)
-
-		// Check if we are finished.
-		if nextOffset == nil {
-			break
-		}
+		chunks = append(chunks, ch...)
 	}
 
 	// Generate and write checkpoint metadata.
@@ -105,6 +102,38 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
 	}
 	return meta, nil
+}
+
+func (fc *fileCreator) createChunks(ctx context.Context, root node.Root, subtree mkvs.Subtree, chunksDir string, chunkSize uint64, chunkIndex int) ([]hash.Hash, int, error) {
+	// Create chunks until we are done.
+	var chunks []hash.Hash
+	var nextOffset node.Key
+	for ; ; chunkIndex++ {
+		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
+
+		// Generate chunk.
+		f, err := os.Create(dataFilename)
+		if err != nil {
+			return nil, -1, fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", chunkIndex, err)
+		}
+
+		var chunkHash hash.Hash
+		chunkHash, nextOffset, err = createChunk(ctx, root, subtree, nextOffset, chunkSize, f)
+		errClose := f.Close()
+		err = errors.Join(err, errClose)
+		if err != nil {
+			return nil, -1, fmt.Errorf("checkpoint: failed to create chunk %d: %w", chunkIndex, err)
+		}
+
+		chunks = append(chunks, chunkHash)
+
+		// Check if we are finished.
+		if nextOffset == nil {
+			break
+		}
+	}
+
+	return chunks, chunkIndex + 1, nil
 }
 
 func (fc *fileCreator) GetCheckpoints(_ context.Context, request *GetCheckpointsRequest) ([]*Metadata, error) {
