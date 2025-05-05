@@ -107,4 +107,16 @@ type Tree interface {
 
 	// RootType returns the storage root type.
 	RootType() node.RootType
+
+	// Subtrees returns subtrees at a given depth.
+	//
+	// TODO: explain invariant/rework:
+	// 1. Leaf node is a subtree
+	// 2. If depth > max tree depth we propagate upper subtrees.
+	Subtrees(ctx context.Context, depth int) ([]Subtree, error)
+}
+
+type Subtree interface {
+	Iterator(ctx context.Context, pb *syncer.ProofBuilder) Iterator
+	Close()
 }
