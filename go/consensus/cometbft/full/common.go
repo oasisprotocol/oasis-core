@@ -512,21 +512,19 @@ func (n *commonNode) Pruner() consensusAPI.StatePruner {
 }
 
 func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
-	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
 		// Do not let CometBFT determine the latest height (e.g., by passing nil) as that
 		// completely ignores ABCI processing so it can return a block for which local state does
 		// not yet exist. Use our mux notion of latest height instead.
-		tmHeight = n.mux.State().BlockHeight()
+		tmHeight := n.mux.State().BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
 			return 0, consensusAPI.ErrNoCommittedBlocks
 		}
-	} else {
-		tmHeight = height
+		return tmHeight, nil
 	}
 
-	return tmHeight, nil
+	return height, nil
 }
 
 // Implements consensusAPI.Backend.
@@ -644,16 +642,8 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetLatestHeight(ctx context.Context) (int64, error) {
-	blk, err := n.GetCometBFTBlock(ctx, consensusAPI.HeightLatest)
-	if err != nil {
-		return 0, err
-	}
-	if blk == nil {
-		return 0, consensusAPI.ErrNoCommittedBlocks
-	}
-
-	return blk.Height, nil
+func (n *commonNode) GetLatestHeight(context.Context) (int64, error) {
+	return n.heightToCometBFTHeight(consensusAPI.HeightLatest)
 }
 
 // Implements consensusAPI.Backend.
