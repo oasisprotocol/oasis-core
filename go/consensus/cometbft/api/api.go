@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -228,22 +227,6 @@ func NewBlockResults(results *cmtcoretypes.ResultBlockResults) *consensus.BlockR
 		Height: results.Height,
 		Meta:   cbor.Marshal(meta),
 	}
-}
-
-// Backend is a CometBFT consensus backend.
-type Backend interface {
-	consensus.Backend
-
-	// GetCometBFTBlock returns the CometBFT block at the specified height.
-	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
-
-	// GetCometBFTBlockResults returns the ABCI results from processing a block
-	// at a specific height.
-	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error)
-
-	// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
-	// returned via the `EventDataNewBlock` query.
-	WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
 }
 
 // HaltHook is a function that gets called when consensus needs to halt for some reason.

@@ -8,7 +8,6 @@ import (
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
@@ -30,7 +29,7 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	entityNotifier   *pubsub.Broker
@@ -41,7 +40,7 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed registry service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/registry"),
 		consensus:        consensus,
@@ -178,13 +177,16 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := sc.consensus.GetBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
 			"err", err,
 			"height", height,
 		)
+		return nil, err
+	}
+	meta, err := tmapi.NewBlockResultsMeta(results)
+	if err != nil {
 		return nil, err
 	}
 
@@ -200,14 +202,14 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, _, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, _, err := EventsFromCometBFT(nil, results.Height, meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -219,7 +221,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, _, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, _, err = EventsFromCometBFT(nil, results.Height, meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}

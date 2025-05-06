@@ -29,7 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 )
 
-var _ api.Backend = (*archiveService)(nil)
+var _ consensusAPI.Backend = (*archiveService)(nil)
 
 // ArchiveConfig contains configuration parameters for the archive node.
 type ArchiveConfig struct {

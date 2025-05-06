@@ -23,7 +23,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 	logger := t.Logger.With("service", svd.Name())
 	logger.Info("starting event dispatcher")
 
-	blkCh, blkSub, err := t.WatchCometBFTBlocks()
+	blkCh, blkSub, err := t.WatchBlocks(ctx)
 	if err != nil {
 		logger.Error("failed to subscribe to cometbft blocks, not starting",
 			"err", err,

@@ -8,12 +8,12 @@ import (
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
@@ -27,14 +27,14 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed governance service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		consensus:     consensus,
@@ -99,13 +99,16 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := sc.consensus.GetBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft block results",
 			"err", err,
 			"height", height,
 		)
+		return nil, err
+	}
+	meta, err := tmapi.NewBlockResultsMeta(results)
+	if err != nil {
 		return nil, err
 	}
 
@@ -121,14 +124,14 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, err := EventsFromCometBFT(nil, results.Height, meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -140,7 +143,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, err = EventsFromCometBFT(nil, results.Height, meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}

@@ -147,7 +147,7 @@ type commonNode struct {
 	state     uint32
 	startedCh chan struct{}
 
-	parentNode api.Backend
+	parentNode consensusAPI.Backend
 }
 
 func (n *commonNode) initialized() bool {
@@ -540,7 +540,7 @@ func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSi
 	return acct.General.Nonce, nil
 }
 
-// Implements consensusAPI.Backend.
+// GetCometBFTBlock returns the CometBFT block at the specified height.
 func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
@@ -563,7 +563,8 @@ func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmtty
 	return result.Block, nil
 }
 
-// Implements consensusAPI.Backend.
+// GetCometBFTBlockResults returns the ABCI results from processing a block
+// at a specific height.
 func (n *commonNode) GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
