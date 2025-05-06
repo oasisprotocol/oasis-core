@@ -83,10 +83,6 @@ type StatePruner interface {
 	GetLastRetainedVersion() uint64
 }
 
-type statePrunerInitializer interface {
-	Initialize() error
-}
-
 type nonePruner struct{}
 
 func (p *nonePruner) Prune(uint64) error {
@@ -114,15 +110,6 @@ type genericPruner struct {
 	handlers []consensus.StatePruneHandler
 }
 
-func (p *genericPruner) Initialize() error {
-	// Figure out the eldest version currently present in the tree.
-	p.earliestVersion = p.ndb.GetEarliestVersion()
-	// Initially, the earliest version is the last retained version.
-	p.lastRetainedVersion = p.earliestVersion
-
-	return nil
-}
-
 func (p *genericPruner) GetLastRetainedVersion() uint64 {
 	p.Lock()
 	defer p.Unlock()
@@ -131,6 +118,15 @@ func (p *genericPruner) GetLastRetainedVersion() uint64 {
 
 func (p *genericPruner) Prune(latestVersion uint64) error {
 	if latestVersion < p.keepN {
+		return nil
+	}
+	if p.earliestVersion == 0 {
+		// Figure out the eldest version currently present in the tree.
+		p.earliestVersion = p.ndb.GetEarliestVersion()
+		// Initially, the earliest version is the last retained version.
+		p.lastRetainedVersion = p.earliestVersion
+	}
+	if p.earliestVersion == 0 {
 		return nil
 	}
 
@@ -231,13 +227,7 @@ func newStatePruner(cfg *PruneConfig, ndb nodedb.NodeDB) (StatePruner, error) {
 		return nil, fmt.Errorf("abci/pruner: unsupported pruning strategy: %v", cfg.Strategy)
 	}
 
-	if initializer, ok := statePruner.(statePrunerInitializer); ok {
-		if err := initializer.Initialize(); err != nil {
-			return nil, err
-		}
-	}
-
-	logger.Debug("ABCI state pruner initialized",
+	logger.Debug("ABCI state pruner created",
 		"strategy", cfg.Strategy,
 		"num_kept", cfg.NumKept,
 	)
