@@ -114,12 +114,8 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
-type badgerSubtree struct {
-	batch *badgerBatch
-}
-
-// Implements api.Subtree.
-func (s *badgerSubtree) VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) error {
+// Implements api.Batch.
+func (ba *badgerBatch) VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) error {
 	var needsPutNode bool
 	if parent == nil && ptr.DBInternal == nil {
 		// If this is a clean root node, don't do anything as it seems the root has not changed.
@@ -139,7 +135,7 @@ func (s *badgerSubtree) VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) 
 		// Node was not a root node before, but now it has become one. It needs to be removed as it
 		// will otherwise remain in storage for no good reason.
 		if isRootNode {
-			s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{
+			ba.updatedNodes = append(ba.updatedNodes, updatedNode{
 				Removed: true,
 				Key:     iptr.dbKey(),
 			})
@@ -160,23 +156,23 @@ func (s *badgerSubtree) VisitCleanNode(ptr *node.Pointer, parent *node.Pointer) 
 
 	}
 
-	if err := s.refreshDbPtr(ptr, parent); err != nil {
+	if err := ba.refreshDbPtr(ptr, parent); err != nil {
 		return err
 	}
 
 	if needsPutNode {
-		return s.PutNode(ptr)
+		return ba.PutNode(ptr)
 	}
 	return nil
 }
 
-// Implements api.Subtree.
-func (s *badgerSubtree) VisitDirtyNode(ptr *node.Pointer, parent *node.Pointer) error {
-	return s.refreshDbPtr(ptr, parent)
+// Implements api.Batch.
+func (ba *badgerBatch) VisitDirtyNode(ptr *node.Pointer, parent *node.Pointer) error {
+	return ba.refreshDbPtr(ptr, parent)
 }
 
 // refreshDbPtr recomputes the data for the internal database pointer.
-func (s *badgerSubtree) refreshDbPtr(ptr *node.Pointer, parent *node.Pointer) error {
+func (ba *badgerBatch) refreshDbPtr(ptr *node.Pointer, parent *node.Pointer) error {
 	if ptr.DBInternal == nil {
 		// Assign new index if none exists.
 		var index uint32
@@ -186,40 +182,40 @@ func (s *badgerSubtree) refreshDbPtr(ptr *node.Pointer, parent *node.Pointer) er
 			index = indexRootNode
 		default:
 			// Non-root node, assign new index.
-			index = s.batch.lastIndex.Add(1)
+			index = ba.lastIndex.Add(1)
 		}
 
 		ptr.DBInternal = &dbPtr{
-			version: s.batch.version,
+			version: ba.version,
 			index:   index,
 		}
 	}
 
 	// If this is a multipart insert, the node may already exist. In this case, we need to fetch it
 	// from the database and update our pointers.
-	s.batch.db.metaUpdateLock.Lock()
-	defer s.batch.db.metaUpdateLock.Unlock()
+	ba.db.metaUpdateLock.Lock()
+	defer ba.db.metaUpdateLock.Unlock()
 
-	multipartVersion := s.batch.db.multipartVersion
+	multipartVersion := ba.db.multipartVersion
 	if multipartVersion == multipartVersionNone {
 		return nil
 	}
 
 	dbKey := ptr.DBInternal.(*dbPtr).dbKey()
 	if parent == nil {
-		multiMeta := s.batch.db.multipartMeta[uint8(s.batch.oldRoot.Type)]
+		multiMeta := ba.db.multipartMeta[uint8(ba.oldRoot.Type)]
 		if multiMeta.root != nil {
 			dbKey = rootNodeKeyFmt.Encode(multipartVersion, multiMeta.root)
 		}
 	} else {
-		dbKey = s.deriveNodeDbKey(dbKey)
+		dbKey = ba.deriveNodeDbKey(dbKey)
 	}
 
-	return s.multipartMergeWithExisting(dbKey, ptr)
+	return ba.multipartMergeWithExisting(dbKey, ptr)
 }
 
-// Implements api.Subtree.
-func (s *badgerSubtree) PutNode(ptr *node.Pointer) error {
+// Implements api.Batch.
+func (ba *badgerBatch) PutNode(ptr *node.Pointer) error {
 	iptr, ok := ptr.DBInternal.(*dbPtr)
 	if !ok {
 		return fmt.Errorf("mkvs/pathbadger: bad internal pointer")
@@ -238,30 +234,30 @@ func (s *badgerSubtree) PutNode(ptr *node.Pointer) error {
 
 	// Root node is special.
 	if iptr.isRoot() {
-		s.batch.newRootValue = value
+		ba.newRootValue = value
 		return nil
 	}
 
-	s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{
+	ba.updatedNodes = append(ba.updatedNodes, updatedNode{
 		Key: key,
 	})
 
-	dbKey := s.deriveNodeDbKey(key)
-	if s.batch.seqNo != 0 {
+	dbKey := ba.deriveNodeDbKey(key)
+	if ba.seqNo != 0 {
 		// Need to commit at tsMetadata so this can be garbage-collected upon finalization.
-		return s.batch.batMeta.Set(dbKey, value)
+		return ba.batMeta.Set(dbKey, value)
 	}
-	return s.batch.bat.Set(dbKey, value)
+	return ba.bat.Set(dbKey, value)
 }
 
-func (s *badgerSubtree) deriveNodeDbKey(key []byte) []byte {
+func (ba *badgerBatch) deriveNodeDbKey(key []byte) []byte {
 	var dbKey []byte
-	rootType := byte(s.batch.oldRoot.Type)
-	seqNo := s.batch.seqNo
+	rootType := byte(ba.oldRoot.Type)
+	seqNo := ba.seqNo
 	if seqNo == 0 {
 		dbKey = finalizedNodeKeyFmt.Encode(rootType, key)
 	} else {
-		dbKey = pendingNodeKeyFmt.Encode(s.batch.version, rootType, seqNo, key)
+		dbKey = pendingNodeKeyFmt.Encode(ba.version, rootType, seqNo, key)
 	}
 	return dbKey
 }

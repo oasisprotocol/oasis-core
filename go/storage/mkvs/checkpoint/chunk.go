@@ -145,8 +145,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	defer batch.Reset()
 
-	subtree := batch.MaybeStartSubtree(nil)
-	if err = doRestoreChunk(ctx, batch, subtree, 0, ptr, nil); err != nil {
+	if err = doRestoreChunk(ctx, batch, 0, ptr, nil); err != nil {
 		return fmt.Errorf("chunk: node import failed: %w", err)
 	}
 	if err = batch.Commit(chunk.Root); err != nil {
@@ -159,7 +158,6 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 func doRestoreChunk(
 	ctx context.Context,
 	batch db.Batch,
-	subtree db.Subtree,
 	depth node.Depth,
 	ptr *node.Pointer,
 	parent *node.Pointer,
@@ -170,36 +168,35 @@ func doRestoreChunk(
 
 	switch n := ptr.Node.(type) {
 	case nil:
-		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
+		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 	case *node.InternalNode:
-		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
+		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if err = doRestoreChunk(ctx, batch, subtree, depth, n.LeafNode, ptr); err != nil {
+		if err = doRestoreChunk(ctx, batch, depth, n.LeafNode, ptr); err != nil {
 			return
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			newSubtree := batch.MaybeStartSubtree(subtree)
-			if err = doRestoreChunk(ctx, batch, newSubtree, depth+1, subNode, ptr); err != nil {
+			if err = doRestoreChunk(ctx, batch, depth+1, subNode, ptr); err != nil {
 				return
 			}
 		}
 
 		// Store the node.
-		if err = subtree.PutNode(ptr); err != nil {
+		if err = batch.PutNode(ptr); err != nil {
 			return
 		}
 	case *node.LeafNode:
 		// Leaf node -- store the node.
-		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
+		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
-		if err = subtree.PutNode(ptr); err != nil {
+		if err = batch.PutNode(ptr); err != nil {
 			return
 		}
 	}

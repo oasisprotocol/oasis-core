@@ -189,10 +189,22 @@ type NodeDB interface {
 	Close()
 }
 
-// Subtree is a NodeDB-specific subtree implementation.
-type Subtree interface {
+// Batch is a NodeDB-specific batch implementation.
+type Batch interface {
 	// PutNode persists a node in the NodeDB.
 	PutNode(ptr *node.Pointer) error
+
+	// PutWriteLog stores the specified write log into the batch.
+	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error
+
+	// RemoveNodes marks nodes for eventual garbage collection.
+	RemoveNodes(nodes []*node.Pointer) error
+
+	// Commit commits the batch.
+	Commit(root node.Root) error
+
+	// OnCommit registers a hook to run after a successful commit.
+	OnCommit(hook func())
 
 	// VisitCleanNode is called for any clean node encountered during commit
 	// for which no further processing will be done (as it is marked clean).
@@ -205,25 +217,6 @@ type Subtree interface {
 	//
 	// The specific NodeDB implementation may wish to do further processing.
 	VisitDirtyNode(ptr *node.Pointer, parent *node.Pointer) error
-}
-
-// Batch is a NodeDB-specific batch implementation.
-type Batch interface {
-	// MaybeStartSubtree returns a new subtree instance that can be used for
-	// persisting nodes under a given root.
-	MaybeStartSubtree(subtree Subtree) Subtree
-
-	// OnCommit registers a hook to run after a successful commit.
-	OnCommit(hook func())
-
-	// PutWriteLog stores the specified write log into the batch.
-	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error
-
-	// RemoveNodes marks nodes for eventual garbage collection.
-	RemoveNodes(nodes []*node.Pointer) error
-
-	// Commit commits the batch.
-	Commit(root node.Root) error
 
 	// Reset resets the batch for another use.
 	Reset()
@@ -315,8 +308,8 @@ func (d *nopNodeDB) NewBatch(node.Root, uint64, bool) (Batch, error) {
 	return &nopBatch{}, nil
 }
 
-func (b *nopBatch) MaybeStartSubtree(Subtree) Subtree {
-	return &nopSubtree{}
+func (b *nopBatch) PutNode(*node.Pointer) error {
+	return nil
 }
 
 func (b *nopBatch) PutWriteLog(writelog.WriteLog, writelog.Annotations) error {
@@ -327,20 +320,13 @@ func (b *nopBatch) RemoveNodes([]*node.Pointer) error {
 	return nil
 }
 
+func (b *nopBatch) VisitCleanNode(*node.Pointer, *node.Pointer) error {
+	return nil
+}
+
+func (b *nopBatch) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
+	return nil
+}
+
 func (b *nopBatch) Reset() {
-}
-
-// nopSubtree is a no-op subtree.
-type nopSubtree struct{}
-
-func (s *nopSubtree) PutNode(*node.Pointer) error {
-	return nil
-}
-
-func (s *nopSubtree) VisitCleanNode(*node.Pointer, *node.Pointer) error {
-	return nil
-}
-
-func (s *nopSubtree) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
-	return nil
 }

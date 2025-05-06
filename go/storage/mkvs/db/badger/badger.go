@@ -957,13 +957,7 @@ type badgerBatch struct {
 	updatedNodes []updatedNode
 }
 
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree) api.Subtree {
-	if subtree == nil {
-		return &badgerSubtree{batch: ba}
-	}
-	return subtree
-}
-
+// Implements api.Batch.
 func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
 	if ba.chunk {
 		return fmt.Errorf("mkvs/badger: cannot put write log in chunk mode")
@@ -977,6 +971,7 @@ func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations write
 	return nil
 }
 
+// Implements api.Batch.
 func (ba *badgerBatch) RemoveNodes(nodes []*node.Pointer) error {
 	if ba.chunk {
 		return fmt.Errorf("mkvs/badger: cannot remove nodes in chunk mode")
@@ -991,6 +986,7 @@ func (ba *badgerBatch) RemoveNodes(nodes []*node.Pointer) error {
 	return nil
 }
 
+// Implements api.Batch.
 func (ba *badgerBatch) Commit(root node.Root) error {
 	ba.db.metaUpdateLock.Lock()
 	defer ba.db.metaUpdateLock.Unlock()
@@ -1118,6 +1114,7 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	return ba.BaseBatch.Commit(root)
 }
 
+// Implements api.Batch.
 func (ba *badgerBatch) Reset() {
 	ba.bat.Cancel()
 	if ba.multipartNodes != nil {
@@ -1129,35 +1126,34 @@ func (ba *badgerBatch) Reset() {
 	ba.updatedNodes = nil
 }
 
-type badgerSubtree struct {
-	batch *badgerBatch
-}
-
-func (s *badgerSubtree) PutNode(ptr *node.Pointer) error {
+// Implements api.Batch.
+func (ba *badgerBatch) PutNode(ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
 	h := ptr.Node.GetHash()
-	s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{Hash: h})
+	ba.updatedNodes = append(ba.updatedNodes, updatedNode{Hash: h})
 	nodeKey := nodeKeyFmt.Encode(&h)
-	if s.batch.multipartNodes != nil {
-		if _, err = s.batch.readTxn.Get(nodeKey); err != nil && errors.Is(err, badger.ErrKeyNotFound) {
+	if ba.multipartNodes != nil {
+		if _, err = ba.readTxn.Get(nodeKey); err != nil && errors.Is(err, badger.ErrKeyNotFound) {
 			th := api.TypedHashFromParts(node.RootTypeInvalid, h)
-			if err = s.batch.multipartNodes.Set(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{}); err != nil {
+			if err = ba.multipartNodes.Set(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{}); err != nil {
 				return err
 			}
 		}
 	}
 
-	return s.batch.bat.Set(nodeKey, data)
+	return ba.bat.Set(nodeKey, data)
 }
 
-func (s *badgerSubtree) VisitCleanNode(*node.Pointer, *node.Pointer) error {
+// Implements api.Batch.
+func (ba *badgerBatch) VisitCleanNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }
 
-func (s *badgerSubtree) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
+// Implements api.Batch.
+func (ba *badgerBatch) VisitDirtyNode(*node.Pointer, *node.Pointer) error {
 	return nil
 }

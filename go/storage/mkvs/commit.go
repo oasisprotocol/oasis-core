@@ -83,9 +83,7 @@ func (t *tree) commitWithHooks(
 	}
 	defer batch.Reset()
 
-	subtree := batch.MaybeStartSubtree(nil)
-
-	rootHash, err := doCommit(ctx, t.cache, batch, subtree, t.cache.pendingRoot, nil)
+	rootHash, err := doCommit(ctx, t.cache, batch, t.cache.pendingRoot, nil)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -153,7 +151,6 @@ func doCommit(
 	ctx context.Context,
 	cache *cache,
 	batch db.Batch,
-	subtree db.Subtree,
 	ptr *node.Pointer,
 	parent *node.Pointer,
 ) (h hash.Hash, err error) {
@@ -161,7 +158,7 @@ func doCommit(
 		h.Empty()
 		return
 	} else if ptr.Clean {
-		if err = subtree.VisitCleanNode(ptr, parent); err != nil {
+		if err = batch.VisitCleanNode(ptr, parent); err != nil {
 			return
 		}
 		h = ptr.Hash
@@ -185,18 +182,17 @@ func doCommit(
 			panic("mkvs: non-clean pointer has clean node")
 		}
 
-		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
+		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if _, err = doCommit(ctx, cache, batch, subtree, n.LeafNode, ptr); err != nil {
+		if _, err = doCommit(ctx, cache, batch, n.LeafNode, ptr); err != nil {
 			return
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			newSubtree := batch.MaybeStartSubtree(subtree)
-			if _, err = doCommit(ctx, cache, batch, newSubtree, subNode, ptr); err != nil {
+			if _, err = doCommit(ctx, cache, batch, subNode, ptr); err != nil {
 				return
 			}
 		}
@@ -204,7 +200,7 @@ func doCommit(
 		n.UpdateHash()
 
 		// Store the node.
-		if err = subtree.PutNode(ptr); err != nil {
+		if err = batch.PutNode(ptr); err != nil {
 			return
 		}
 
@@ -218,14 +214,14 @@ func doCommit(
 			panic("mkvs: non-clean pointer has clean node")
 		}
 
-		if err = subtree.VisitDirtyNode(ptr, parent); err != nil {
+		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
 			return
 		}
 
 		n.UpdateHash()
 
 		// Store the node.
-		if err = subtree.PutNode(ptr); err != nil {
+		if err = batch.PutNode(ptr); err != nil {
 			return
 		}
 
