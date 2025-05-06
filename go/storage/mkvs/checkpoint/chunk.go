@@ -145,7 +145,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	defer batch.Reset()
 
-	if err = doRestoreChunk(ctx, batch, 0, ptr, nil); err != nil {
+	if err = doRestoreChunk(ctx, batch, ptr, nil); err != nil {
 		return fmt.Errorf("chunk: node import failed: %w", err)
 	}
 	if err = batch.Commit(chunk.Root); err != nil {
@@ -158,7 +158,6 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 func doRestoreChunk(
 	ctx context.Context,
 	batch db.Batch,
-	depth node.Depth,
 	ptr *node.Pointer,
 	parent *node.Pointer,
 ) (err error) {
@@ -177,12 +176,12 @@ func doRestoreChunk(
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if err = doRestoreChunk(ctx, batch, depth, n.LeafNode, ptr); err != nil {
+		if err = doRestoreChunk(ctx, batch, n.LeafNode, ptr); err != nil {
 			return
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			if err = doRestoreChunk(ctx, batch, depth+1, subNode, ptr); err != nil {
+			if err = doRestoreChunk(ctx, batch, subNode, ptr); err != nil {
 				return
 			}
 		}
