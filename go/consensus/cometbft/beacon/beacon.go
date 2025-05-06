@@ -246,12 +246,12 @@ func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error {
 	if sc.initialNotify {
 		return nil
 	}
 
-	q, err := sc.querier.QueryAt(ctx, blk.Height)
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return fmt.Errorf("epochtime: failed to query state: %w", err)
 	}

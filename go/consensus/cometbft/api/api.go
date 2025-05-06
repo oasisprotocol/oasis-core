@@ -12,7 +12,6 @@ import (
 	cmtp2p "github.com/cometbft/cometbft/p2p"
 	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -240,7 +239,7 @@ type Backend interface {
 
 	// GetCometBFTBlockResults returns the ABCI results from processing a block
 	// at a specific height.
-	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtrpctypes.ResultBlockResults, error)
+	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error)
 
 	// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
 	// returned via the `EventDataNewBlock` query.
@@ -329,8 +328,8 @@ type ServiceClient interface {
 	// ServiceDescriptor returns the consensus service descriptor.
 	ServiceDescriptor() ServiceDescriptor
 
-	// DeliverBlock delivers a new block.
-	DeliverBlock(ctx context.Context, blk *cmttypes.Block) error
+	// DeliverHeight delivers a new block height.
+	DeliverHeight(ctx context.Context, height int64) error
 
 	// DeliverEvent delivers an event emitted by the consensus service.
 	DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error
@@ -340,8 +339,8 @@ type ServiceClient interface {
 // all the delivery methods. Implementations should override them as needed.
 type BaseServiceClient struct{}
 
-// DeliverBlock implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverBlock(context.Context, *cmttypes.Block) error {
+// DeliverHeight implements ServiceClient.
+func (bsc *BaseServiceClient) DeliverHeight(context.Context, int64) error {
 	return nil
 }
 

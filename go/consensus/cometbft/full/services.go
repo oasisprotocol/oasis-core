@@ -51,9 +51,12 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 					t.Logger.Error("event processing failed", "err", err)
 				}
 			}()
-		case blk := <-blkCh:
-			if err := svc.DeliverBlock(ctx, blk); err != nil {
-				logger.Error("failed to deliver block to service client", "err", err)
+		case blk, ok := <-blkCh:
+			if !ok {
+				return
+			}
+			if err := svc.DeliverHeight(ctx, blk.Height); err != nil {
+				logger.Error("failed to deliver block height to service client", "err", err)
 			}
 		case ev := <-evCh:
 			if err := svc.DeliverEvent(ctx, ev.height, ev.tx, &ev.ev); err != nil {

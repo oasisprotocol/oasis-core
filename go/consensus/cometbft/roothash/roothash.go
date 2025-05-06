@@ -341,8 +341,8 @@ func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
 }
 
-// DeliverBlock implements api.ServiceClient.
-func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+// DeliverHeight implements roothash.ServiceClient.
+func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error {
 	sc.mu.RLock()
 	trs := slices.Collect(maps.Values(sc.trackedRuntimes))
 	sc.mu.RUnlock()
@@ -356,13 +356,13 @@ func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) 
 		}
 		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
 			RuntimeID: tr.runtimeID,
-			Height:    blk.Height,
+			Height:    height,
 		})
 		if err != nil {
 			sc.logger.Warn("failed to get runtime state",
 				"err", err,
 				"runtime_id", tr.runtimeID,
-				"height", blk.Height,
+				"height", height,
 			)
 			return fmt.Errorf("roothash: failed to get runtime state: %w", err)
 		}
