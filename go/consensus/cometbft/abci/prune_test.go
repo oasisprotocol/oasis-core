@@ -45,26 +45,20 @@ func TestPruneKeepN(t *testing.T) {
 		require.NoError(err, "Finalize")
 	}
 
-	earliestVersion := ndb.GetEarliestVersion()
-	require.EqualValues(1, earliestVersion, "earliest version should be correct")
-	latestVersion, exists := ndb.GetLatestVersion()
-	require.EqualValues(11, latestVersion, "latest version should be correct")
-	require.True(exists, "latest version should exist")
-
 	pruner, err := newStatePruner(&PruneConfig{
 		Strategy: PruneKeepN,
 		NumKept:  2,
 	}, ndb)
 	require.NoError(err, "newStatePruner failed")
 
-	earliestVersion = ndb.GetEarliestVersion()
+	earliestVersion := ndb.GetEarliestVersion()
 	require.EqualValues(1, earliestVersion, "earliest version should be correct")
-	latestVersion, exists = ndb.GetLatestVersion()
+	latestVersion, exists := ndb.GetLatestVersion()
 	require.EqualValues(11, latestVersion, "latest version should be correct")
 	require.True(exists, "latest version should exist")
 
 	lastRetainedVersion := pruner.GetLastRetainedVersion()
-	require.EqualValues(1, lastRetainedVersion, "last retained version should be correct")
+	require.Zero(lastRetainedVersion, "last retained version should not be set")
 
 	err = pruner.Prune(11)
 	require.NoError(err, "Prune")
