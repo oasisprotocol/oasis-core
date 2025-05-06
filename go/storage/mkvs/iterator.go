@@ -262,14 +262,14 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 	case nil:
 		return nil
 	case *node.InternalNode:
-		bitLength := bitDepth + n.LabelBitLength
+		newBitDepth := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
 
 		tryNext := func(next *node.Pointer, nextKey node.Key, parentState visitState) (bool, error) {
-			if err := it.doNext(next, bitLength, newPath, nextKey, visitBefore); err != nil {
+			if err := it.doNext(next, newBitDepth, newPath, nextKey, visitBefore); err != nil {
 				return false, err
 			}
-			if it.key != nil { // Key has been found
+			if it.key != nil { // Key has been found.
 				it.pos = append(it.pos, pathAtom{state: parentState, ptr: ptr, bitDepth: bitDepth, path: path})
 				return true, nil
 			}
@@ -277,14 +277,14 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		}
 
 		advanceKeyToRight := func(k node.Key) node.Key {
-			k, _ = k.Split(bitLength, k.BitLength())
-			return k.AppendBit(bitLength, true)
+			k, _ = k.Split(newBitDepth, k.BitLength())
+			return k.AppendBit(newBitDepth, true)
 		}
 
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
-		takeFirst := bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0
-		keyNotLonger := key.BitLength() <= bitLength
+		takeFirst := newBitDepth > 0 && key.BitLength() >= newBitDepth && key.Compare(newPath) < 0
+		keyNotLonger := key.BitLength() <= newBitDepth
 
 		switch state {
 		case visitBefore:
@@ -297,10 +297,10 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			fallthrough
 		case visitAt:
 			if keyNotLonger {
-				key = key.AppendBit(bitLength, false)
+				key = key.AppendBit(newBitDepth, false)
 			}
 
-			if !key.GetBit(bitLength) || takeFirst {
+			if !key.GetBit(newBitDepth) || takeFirst {
 				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
 					return err
 				}
