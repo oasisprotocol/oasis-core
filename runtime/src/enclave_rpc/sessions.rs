@@ -260,16 +260,10 @@ where
         session_id: &SessionID,
     ) -> Option<SharedSession<PeerID>> {
         // Check if peer exists.
-        let sessions = match self.by_peer.get_mut(peer_id) {
-            Some(sessions) => sessions,
-            None => return None,
-        };
+        let sessions = self.by_peer.get_mut(peer_id)?;
 
         // Check if the session exists. If so, return it.
-        let session = match sessions.get_mut(session_id) {
-            Some(session) => session,
-            None => return None,
-        };
+        let session = sessions.get_mut(session_id)?;
 
         Self::update_access_time(session, &mut self.by_idle_time);
 
@@ -326,10 +320,7 @@ where
         let mut all_sessions = vec![];
 
         for peer_id in peer_ids.iter() {
-            let sessions = match self.by_peer.get_mut(peer_id) {
-                Some(sessions) => sessions,
-                None => return None,
-            };
+            let sessions = self.by_peer.get_mut(peer_id)?;
 
             // Check if peer has a session that is not currently in use.
             let session = sessions

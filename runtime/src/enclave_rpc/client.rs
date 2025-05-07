@@ -69,7 +69,7 @@ pub struct Response<'a, T> {
     inner: Result<T, RpcClientError>,
 }
 
-impl<'a, T> Response<'a, T> {
+impl<T> Response<'_, T> {
     /// Report success if result was `Ok(_)` and failure if result was `Err(_)`, then return the
     /// inner result consuming the response instance.
     pub async fn into_result_with_feedback(mut self) -> Result<T, RpcClientError> {

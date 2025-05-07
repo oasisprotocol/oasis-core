@@ -208,7 +208,7 @@ impl<'tree, T: mkvs::FallibleMKVS> OverlayTreeIterator<'tree, T> {
     }
 }
 
-impl<'tree, T: mkvs::FallibleMKVS> Iterator for OverlayTreeIterator<'tree, T> {
+impl<T: mkvs::FallibleMKVS> Iterator for OverlayTreeIterator<'_, T> {
     type Item = (Vec<u8>, Vec<u8>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -226,7 +226,7 @@ impl<'tree, T: mkvs::FallibleMKVS> Iterator for OverlayTreeIterator<'tree, T> {
     }
 }
 
-impl<'tree, T: mkvs::FallibleMKVS> mkvs::Iterator for OverlayTreeIterator<'tree, T> {
+impl<T: mkvs::FallibleMKVS> mkvs::Iterator for OverlayTreeIterator<'_, T> {
     fn set_prefetch(&mut self, prefetch: usize) {
         self.inner.set_prefetch(prefetch)
     }

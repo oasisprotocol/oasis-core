@@ -7,7 +7,7 @@ pub trait TakePrefix: Sized {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error>;
 }
 
-impl<'a, T: 'a> TakePrefix for &'a [T] {
+impl<T> TakePrefix for &[T] {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if let (Some(prefix), Some(rest)) = (self.get(..mid), self.get(mid..)) {
             *self = rest;
@@ -20,7 +20,7 @@ impl<'a, T: 'a> TakePrefix for &'a [T] {
     }
 }
 
-impl<'a, T: 'a + Clone> TakePrefix for Cow<'a, [T]> {
+impl<T: Clone> TakePrefix for Cow<'_, [T]> {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if mid <= self.len() {
             match *self {
@@ -38,7 +38,7 @@ impl<'a, T: 'a + Clone> TakePrefix for Cow<'a, [T]> {
     }
 }
 
-impl<'a> TakePrefix for &'a str {
+impl TakePrefix for &str {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if let (Some(prefix), Some(rest)) = (self.get(..mid), self.get(mid..)) {
             *self = rest;
@@ -51,7 +51,7 @@ impl<'a> TakePrefix for &'a str {
     }
 }
 
-impl<'a> TakePrefix for Cow<'a, str> {
+impl TakePrefix for Cow<'_, str> {
     fn take_prefix(&mut self, mid: usize) -> Result<Self, Error> {
         if mid <= self.len() {
             match *self {

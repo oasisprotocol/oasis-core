@@ -200,7 +200,7 @@ impl Methods {
 
     /// Insert a key/value pair.
     pub fn insert(ctx: &mut TxContext, args: Insert) -> Result<Option<String>, String> {
-        if args.value.as_bytes().len() > 128 {
+        if args.value.len() > 128 {
             return Err("Value too big to be inserted.".to_string());
         }
         if ctx.is_check_only() {

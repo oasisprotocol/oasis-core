@@ -19,14 +19,14 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Looks up a specific key manager status by its namespace identifier.
     pub fn status(
         &self,

@@ -280,7 +280,7 @@ pub enum Header<'a> {
     },
 }
 
-impl<'a> Header<'a> {
+impl Header<'_> {
     /// Quote header version.
     pub fn version(&self) -> u16 {
         match self {
@@ -727,11 +727,6 @@ impl<'a> CertificationDataQeReport<'a> {
     /// Raw authentication data.
     pub fn authentication_data(&self) -> &[u8] {
         &self.authentication_data
-    }
-
-    /// Inner certification data type.
-    pub fn certification_data_type(&self) -> CertificationDataType {
-        self.certification_data_type
     }
 
     /// Parse inner certification data.

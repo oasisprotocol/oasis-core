@@ -1,4 +1,4 @@
 [toolchain]
-channel = "nightly-2024-07-09"
+channel = "nightly-2025-02-22"
 targets = ["x86_64-fortanix-unknown-sgx"]
 components = ["clippy", "rustfmt"]

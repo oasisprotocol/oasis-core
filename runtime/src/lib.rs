@@ -12,7 +12,6 @@
 //! the worker host.
 #![feature(test)]
 #![feature(arbitrary_self_types)]
-#![feature(const_option)]
 
 use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]

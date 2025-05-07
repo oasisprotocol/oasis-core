@@ -18,7 +18,7 @@ impl<'a> FetcherSyncGetPrefixes<'a> {
     }
 }
 
-impl<'a> ReadSyncFetcher for FetcherSyncGetPrefixes<'a> {
+impl ReadSyncFetcher for FetcherSyncGetPrefixes<'_> {
     fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof> {
         let rsp = rs.sync_get_prefixes(GetPrefixesRequest {
             tree: TreeID {

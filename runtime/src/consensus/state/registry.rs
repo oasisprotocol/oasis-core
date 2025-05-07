@@ -23,9 +23,9 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
@@ -34,7 +34,7 @@ key_format!(SignedNodeKeyFmt, 0x11, Hash);
 key_format!(RuntimeKeyFmt, 0x13, Hash);
 key_format!(SuspendedRuntimeKeyFmt, 0x18, Hash);
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     fn decode_node(&self, data: &[u8]) -> Result<Node, StateError> {
         let signed: MultiSigned =
             cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))?;

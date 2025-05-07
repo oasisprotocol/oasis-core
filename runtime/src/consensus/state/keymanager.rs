@@ -25,9 +25,9 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
@@ -59,7 +59,7 @@ pub struct Status {
     pub rsk: Option<PublicKey>,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Looks up a specific key manager status by its namespace identifier.
     pub fn status(&self, id: Namespace) -> Result<Option<Status>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
