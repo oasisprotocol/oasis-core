@@ -3,7 +3,6 @@ package roothash
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -15,11 +14,9 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -512,104 +509,6 @@ func (sc *ServiceClient) fetchBlock(ctx context.Context, runtimeID common.Namesp
 func (sc *ServiceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.ecNotifier.Broadcast(ec)
-}
-
-// EventsFromCometBFT extracts staking events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
-	var events []*api.Event
-	var errs error
-EventLoop:
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the roothash app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		var (
-			runtimeID *common.Namespace
-			ev        *api.Event
-		)
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-
-			switch {
-			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
-				// Finalized event.
-				var e api.FinalizedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{Finalized: &e}
-			case eventsAPI.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
-				// An execution discrepancy has been detected.
-				var e api.ExecutionDiscrepancyDetectedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{ExecutionDiscrepancyDetected: &e}
-			case eventsAPI.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
-				// An executor commit has been processed.
-				var e api.ExecutorCommittedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorCommitted event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{ExecutorCommitted: &e}
-			case eventsAPI.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
-				// Incoming message processed event.
-				var e api.InMsgProcessedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{InMsgProcessed: &e}
-			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-				if runtimeID != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
-					continue EventLoop
-				}
-				rtAttribute := api.RuntimeIDAttribute{}
-				if err := eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
-					continue EventLoop
-				}
-				runtimeID = &rtAttribute.ID
-			default:
-				errs = errors.Join(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
-			}
-		}
-
-		if runtimeID == nil {
-			errs = errors.Join(errs, fmt.Errorf("roothash: missing runtime ID attribute"))
-			continue
-		}
-		if ev != nil {
-			ev.RuntimeID = *runtimeID
-			ev.Height = height
-			ev.TxHash = txHash
-			events = append(events, ev)
-		}
-	}
-	return events, errs
 }
 
 func init() {
