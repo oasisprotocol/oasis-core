@@ -197,6 +197,14 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 	}
 }
 
+// BlockResults are CometBFT-specific consensus block results.
+type BlockResults struct {
+	// Height contains the block height.
+	Height int64 `json:"height"`
+	// Meta contains the block results metadata.
+	Meta *BlockResultsMeta `json:"meta"`
+}
+
 // BlockResultsMeta is the CometBFT-specific per-block results metadata.
 type BlockResultsMeta struct {
 	TxsResults       []*types.ResponseDeliverTx `json:"txs_results"`
@@ -227,6 +235,47 @@ func NewBlockResults(results *cmtcoretypes.ResultBlockResults) *consensus.BlockR
 		Height: results.Height,
 		Meta:   cbor.Marshal(meta),
 	}
+}
+
+// GetBlockResults returns CometBFT-specific block results at the given height.
+func GetBlockResults(ctx context.Context, height int64, consensus consensus.Backend) (*BlockResults, error) {
+	// Optimize for CometBTF-specific consensus backends.
+	if cmt, ok := consensus.(Backend); ok {
+		results, err := cmt.GetCometBFTBlockResults(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+		return &BlockResults{
+			Height: results.Height,
+			Meta: &BlockResultsMeta{
+				TxsResults:       results.TxsResults,
+				BeginBlockEvents: results.BeginBlockEvents,
+				EndBlockEvents:   results.EndBlockEvents,
+			},
+		}, nil
+
+	}
+
+	results, err := consensus.GetBlockResults(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := NewBlockResultsMeta(results)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BlockResults{
+		Height: results.Height,
+		Meta:   meta,
+	}, nil
+}
+
+// Backend is a CometBFT-specific consensus backend.
+type Backend interface {
+	// GetCometBFTBlockResults returns the ABCI results from processing a block
+	// at a specific height.
+	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error)
 }
 
 // HaltHook is a function that gets called when consensus needs to halt for some reason.
