@@ -236,43 +236,26 @@ func (n *commonNode) initialize() error {
 	// Initialize consensus backend querier.
 	n.querier = abci.NewQueryFactory(state)
 
-	// Initialize the beacon/epochtime backend.
+	// Initialize backends.
 	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.beacon)
-	if err := n.mux.SetEpochtime(n.beacon); err != nil {
-		return err
-	}
-
-	// Initialize the rest of backends.
-	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.keymanager)
-
-	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
-	if cmmetrics.Enabled() {
-		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
-	}
-	n.serviceClients = append(n.serviceClients, n.registry)
-	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
-
-	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.staking)
-	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
-
-	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.scheduler)
-	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
-
-	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.roothash)
-	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
-
 	n.governance = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.governance)
-	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
-
+	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
+	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
+	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
+	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(state))
+	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(state))
 	n.vault = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.vault)
-	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
+
+	n.serviceClients = []api.ServiceClient{
+		n.beacon,
+		n.governance,
+		n.keymanager,
+		n.registry,
+		n.roothash,
+		n.scheduler,
+		n.staking,
+		n.vault,
+	}
 
 	// Register CometBFT applications.
 	beaconApp := beaconApp.New()
@@ -309,9 +292,20 @@ func (n *commonNode) initialize() error {
 		}
 	}
 
+	// Configure the beacon application as an epochtime.
+	if err := n.mux.SetEpochtime(n.beacon); err != nil {
+		return err
+	}
+
 	// Configure the staking application as a fee handler.
 	if err := n.mux.SetTransactionAuthHandler(stakingApp); err != nil {
 		return err
+	}
+
+	// Start metrics.
+	if cmmetrics.Enabled() {
+		rmu := registry.NewMetricsUpdater(n.ctx, n.registry)
+		n.svcMgr.RegisterCleanupOnly(rmu, "registry metrics updater")
 	}
 
 	atomic.StoreUint32(&n.state, stateInitialized)

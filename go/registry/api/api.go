@@ -224,9 +224,6 @@ type Backend interface {
 
 	// ConsensusParameters returns the registry consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
-
-	// Cleanup cleans up the registry backend.
-	Cleanup()
 }
 
 // IDQuery is a registry query by ID.

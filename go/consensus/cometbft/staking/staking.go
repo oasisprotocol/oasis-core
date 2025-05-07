@@ -313,9 +313,6 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})

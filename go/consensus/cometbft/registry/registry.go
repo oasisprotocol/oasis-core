@@ -152,9 +152,6 @@ func (sc *ServiceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime
 	return ch, sub, nil
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 func (sc *ServiceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {

@@ -315,10 +315,6 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
-// Cleanup implements api.Backend.
-func (sc *ServiceClient) Cleanup() {
-}
-
 func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBrokers {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

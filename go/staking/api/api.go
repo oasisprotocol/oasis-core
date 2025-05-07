@@ -184,9 +184,6 @@ type Backend interface {
 
 	// WatchEvents returns a channel that produces a stream of Events.
 	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
-
-	// Cleanup cleans up the backend.
-	Cleanup()
 }
 
 // ThresholdQuery is a threshold query.

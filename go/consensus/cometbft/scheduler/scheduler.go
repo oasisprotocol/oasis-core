@@ -67,9 +67,6 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 func (sc *ServiceClient) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
