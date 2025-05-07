@@ -96,44 +96,37 @@ impl Tree {
 
                 // If exactly one child including LeafNode remains, collapse it.
                 match remaining_leaf {
-                    Some(_) => match remaining_left {
-                        Some(_) => (),
-                        None => match remaining_right {
-                            None => {
-                                let nd_leaf = noderef_as!(node_ref, Internal).leaf_node.clone();
-                                noderef_as_mut!(node_ref, Internal).leaf_node =
-                                    NodePointer::null_ptr();
-                                self.cache.borrow_mut().remove_node(ptr);
-                                return Ok((nd_leaf, true, old_val));
-                            }
-                            Some(_) => (),
-                        },
-                    },
+                    Some(_) => {
+                        if remaining_left.is_none() && remaining_right.is_none() {
+                            let nd_leaf = noderef_as!(node_ref, Internal).leaf_node.clone();
+                            noderef_as_mut!(node_ref, Internal).leaf_node = NodePointer::null_ptr();
+                            self.cache.borrow_mut().remove_node(ptr);
+                            return Ok((nd_leaf, true, old_val));
+                        }
+                    }
                     None => {
                         let mut nd_child: Option<NodeRef> = None;
                         let mut node_ptr: NodePtrRef = NodePointer::null_ptr();
                         let mut both_children = true;
                         match remaining_left {
-                            Some(_) => match remaining_right {
-                                None => {
+                            Some(_) => {
+                                if remaining_right.is_none() {
                                     node_ptr = noderef_as!(node_ref, Internal).left.clone();
                                     noderef_as_mut!(node_ref, Internal).left =
                                         NodePointer::null_ptr();
                                     nd_child = remaining_left;
                                     both_children = false;
                                 }
-                                Some(_) => (),
-                            },
-                            None => match remaining_right {
-                                None => (),
-                                Some(_) => {
+                            }
+                            None => {
+                                if remaining_right.is_some() {
                                     node_ptr = noderef_as!(node_ref, Internal).right.clone();
                                     noderef_as_mut!(node_ref, Internal).right =
                                         NodePointer::null_ptr();
                                     nd_child = remaining_right;
                                     both_children = false;
                                 }
-                            },
+                            }
                         }
 
                         if !both_children {

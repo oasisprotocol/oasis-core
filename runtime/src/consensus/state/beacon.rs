@@ -16,9 +16,9 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
@@ -26,7 +26,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 key_format!(CurrentEpochKeyFmt, 0x40, ());
 key_format!(FutureEpochKeyFmt, 0x41, ());
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Returns the current epoch number.
     pub fn epoch(&self) -> Result<EpochTime, StateError> {
         self.epoch_state().map(|es| es.epoch)

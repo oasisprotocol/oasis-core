@@ -20,7 +20,7 @@ impl<'a> FetcherSyncGet<'a> {
     }
 }
 
-impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
+impl ReadSyncFetcher for FetcherSyncGet<'_> {
     fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof> {
         let rsp = rs.sync_get(GetRequest {
             tree: TreeID {

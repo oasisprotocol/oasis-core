@@ -12,4 +12,4 @@ RUN wget -O codecov https://codecov.io/bash && \
     mv codecov /usr/local/bin
 
 # Install tarpaulin.
-RUN cargo install --version 0.27.3 cargo-tarpaulin
+RUN cargo install --version 0.32.5 cargo-tarpaulin

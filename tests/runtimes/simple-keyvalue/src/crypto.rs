@@ -28,10 +28,7 @@ impl EncryptionContext {
     /// Get encrypted MKVS entry.
     pub fn get(&self, mkvs: &dyn MKVS, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.get(&key) {
-            Some(ciphertext) => ciphertext,
-            None => return None,
-        };
+        let ciphertext = mkvs.get(&key)?;
 
         self.open(&ciphertext)
     }
@@ -49,10 +46,7 @@ impl EncryptionContext {
         ciphertext.extend_from_slice(&nonce);
 
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.insert(&key, &ciphertext) {
-            Some(ciphertext) => ciphertext,
-            None => return None,
-        };
+        let ciphertext = mkvs.insert(&key, &ciphertext)?;
 
         self.open(&ciphertext)
     }
@@ -60,10 +54,7 @@ impl EncryptionContext {
     /// Remove encrypted MKVS entry.
     pub fn remove(&self, mkvs: &mut dyn MKVS, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.remove(&key) {
-            Some(ciphertext) => ciphertext,
-            None => return None,
-        };
+        let ciphertext = mkvs.remove(&key)?;
 
         self.open(&ciphertext)
     }

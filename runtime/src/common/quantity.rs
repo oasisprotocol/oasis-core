@@ -113,7 +113,7 @@ impl Add for Quantity {
     }
 }
 
-impl<'a> Add<&'a Quantity> for Quantity {
+impl Add<&Quantity> for Quantity {
     type Output = Quantity;
 
     fn add(mut self, other: &Quantity) -> Quantity {
@@ -122,7 +122,7 @@ impl<'a> Add<&'a Quantity> for Quantity {
     }
 }
 
-impl<'a> AddAssign<&'a Quantity> for Quantity {
+impl AddAssign<&Quantity> for Quantity {
     fn add_assign(&mut self, other: &Quantity) {
         self.0 += &other.0;
     }
@@ -158,7 +158,7 @@ impl Mul for Quantity {
     }
 }
 
-impl<'a> Mul<&'a Quantity> for Quantity {
+impl Mul<&Quantity> for Quantity {
     type Output = Quantity;
 
     fn mul(mut self, rhs: &Quantity) -> Quantity {
@@ -167,7 +167,7 @@ impl<'a> Mul<&'a Quantity> for Quantity {
     }
 }
 
-impl<'a> MulAssign<&'a Quantity> for Quantity {
+impl MulAssign<&Quantity> for Quantity {
     fn mul_assign(&mut self, rhs: &Quantity) {
         self.0 *= &rhs.0;
     }

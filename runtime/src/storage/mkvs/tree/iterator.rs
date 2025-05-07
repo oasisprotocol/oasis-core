@@ -21,7 +21,7 @@ impl<'a> FetcherSyncIterate<'a> {
     }
 }
 
-impl<'a> ReadSyncFetcher for FetcherSyncIterate<'a> {
+impl ReadSyncFetcher for FetcherSyncIterate<'_> {
     fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof> {
         let rsp = rs.sync_iterate(IterateRequest {
             tree: TreeID {
@@ -271,7 +271,7 @@ impl<'tree> TreeIterator<'tree> {
     }
 }
 
-impl<'tree> Iterator for TreeIterator<'tree> {
+impl Iterator for TreeIterator<'_> {
     type Item = (Vec<u8>, Vec<u8>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -289,7 +289,7 @@ impl<'tree> Iterator for TreeIterator<'tree> {
     }
 }
 
-impl<'tree> mkvs::Iterator for TreeIterator<'tree> {
+impl mkvs::Iterator for TreeIterator<'_> {
     fn set_prefetch(&mut self, prefetch: usize) {
         self.prefetch = prefetch;
     }

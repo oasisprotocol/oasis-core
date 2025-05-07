@@ -23,9 +23,9 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
@@ -42,7 +42,7 @@ key_format!(
 key_format!(LastBlockFees, 0x57, ());
 key_format!(GovernanceDepositsKeyFmt, 0x59, ());
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Returns the staking account for the given account address.
     pub fn account(&self, address: Address) -> Result<Account, StateError> {
         match self.mkvs.get(&AccountsKeyFmt(address).encode()) {

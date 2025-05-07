@@ -253,6 +253,7 @@ where
                 let mut repr: G::Repr = Default::default();
                 repr.as_mut().copy_from_slice(chunk);
 
+                #[allow(clippy::question_mark)]
                 let mij = match G::from_bytes(&repr).into() {
                     None => return None,
                     Some(mij) => mij,

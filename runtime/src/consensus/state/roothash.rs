@@ -22,9 +22,9 @@ pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Constructs a new ImmutableMKVS.
-    pub fn new(mkvs: &'a T) -> ImmutableState<'a, T> {
+    pub fn new(mkvs: &T) -> ImmutableState<'_, T> {
         ImmutableState { mkvs }
     }
 }
@@ -34,7 +34,7 @@ key_format!(StateRootKeyFmt, 0x25, Hash);
 key_format!(LastRoundResultsKeyFmt, 0x27, Hash);
 key_format!(PastRootsKeyFmt, 0x2a, (Hash, u64));
 
-impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+impl<T: ImmutableMKVS> ImmutableState<'_, T> {
     /// Returns the latest runtime state.
     pub fn runtime_state(&self, id: Namespace) -> Result<RuntimeState, Error> {
         match self
