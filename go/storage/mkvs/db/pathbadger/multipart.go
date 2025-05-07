@@ -160,12 +160,12 @@ func (d *badgerNodeDB) cleanMultipartLocked(removeNodes bool) error {
 	return nil
 }
 
-func (s *badgerSubtree) multipartMergeWithExisting(dbKey []byte, ptr *node.Pointer) error {
+func (ba *badgerBatch) multipartMergeWithExisting(dbKey []byte, ptr *node.Pointer) error {
 	if dbKey == nil {
 		return nil
 	}
 
-	item, err := s.batch.readTxn.Get(dbKey)
+	item, err := ba.readTxn.Get(dbKey)
 	switch {
 	case err == nil:
 	case err == badger.ErrKeyNotFound:

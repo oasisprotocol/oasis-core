@@ -778,14 +778,6 @@ type badgerBatch struct {
 }
 
 // Implements api.Batch.
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree) api.Subtree {
-	if subtree == nil {
-		return &badgerSubtree{batch: ba}
-	}
-	return subtree
-}
-
-// Implements api.Batch.
 func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
 	if ba.chunk {
 		return fmt.Errorf("mkvs/pathbadger: cannot put write log in chunk mode")
