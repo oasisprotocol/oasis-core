@@ -333,7 +333,7 @@ the [Change Log] for **Removals and Breaking changes**.*
 endef
 
 # Instruct GoReleaser to create a "snapshot" release by default.
-GORELEASER_ARGS ?= release --snapshot --rm-dist
+GORELEASER_ARGS ?= release --snapshot --clean
 # If the appropriate environment variable is set, create a real release.
 ifeq ($(OASIS_CORE_REAL_RELEASE), true)
 # Create temporary file with GitHub release's text.

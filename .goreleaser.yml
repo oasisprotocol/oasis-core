@@ -5,6 +5,7 @@
 # NOTE: The GoReleaser is not meant to be run directly, but rather through
 # Make's release-build target.
 
+version: 2
 project_name: Oasis Core
 
 env:
@@ -85,7 +86,7 @@ checksum:
   algorithm: sha256
 
 snapshot:
-  name_template: "{{.Version}}-dev"
+  version_template: "{{.Version}}-dev"
 
 release:
   name_template: "{{.ProjectName}} {{.Version}}"
