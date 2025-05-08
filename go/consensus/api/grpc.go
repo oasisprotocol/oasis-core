@@ -41,6 +41,8 @@ var (
 	methodGetSignerNonce = serviceName.NewMethod("GetSignerNonce", &GetSignerNonceRequest{})
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
+	// methodGetBlockResults is the GetBlockResults method.
+	methodGetBlockResults = serviceName.NewMethod("GetBlockResults", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
 	// methodGetLatestHeight is the GetLatestHeight method.
@@ -113,6 +115,10 @@ var (
 			{
 				MethodName: methodGetBlock.ShortName(),
 				Handler:    handlerGetBlock,
+			},
+			{
+				MethodName: methodGetBlockResults.ShortName(),
+				Handler:    handlerGetBlockResults,
 			},
 			{
 				MethodName: methodGetLightBlock.ShortName(),
@@ -365,6 +371,29 @@ func handlerGetBlock(
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Services).Core().GetBlock(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetBlockResults(
+	srv any,
+	ctx context.Context,
+	dec func(any) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (any, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Services).Core().GetBlockResults(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetBlockResults.FullName(),
+	}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(Services).Core().GetBlockResults(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -805,6 +834,14 @@ func (c *Client) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest)
 func (c *Client) GetBlock(ctx context.Context, height int64) (*Block, error) {
 	var rsp Block
 	if err := c.conn.Invoke(ctx, methodGetBlock.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *Client) GetBlockResults(ctx context.Context, height int64) (*BlockResults, error) {
+	var rsp BlockResults
+	if err := c.conn.Invoke(ctx, methodGetBlockResults.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

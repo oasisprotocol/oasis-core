@@ -73,7 +73,7 @@ const (
 )
 
 var (
-	_ api.Backend = (*fullService)(nil)
+	_ consensusAPI.Backend = (*fullService)(nil)
 
 	labelCometBFT = prometheus.Labels{"backend": "cometbft"}
 )
@@ -531,7 +531,8 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 	return mapCh, sub, nil
 }
 
-// Implements consensusAPI.Backend.
+// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
+// returned via the `EventDataNewBlock` query.
 func (t *fullService) WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error) {
 	ch := make(chan *cmttypes.Block)
 	sub := t.blockNotifier.Subscribe()

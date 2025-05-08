@@ -3,7 +3,6 @@ package roothash
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -11,15 +10,13 @@ import (
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -51,7 +48,7 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	allBlockNotifier *pubsub.Broker
@@ -63,7 +60,7 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT-based roothash service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/roothash"),
 		consensus:        consensus,
@@ -261,10 +258,9 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 // GetEvents implements api.Backend.
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := tmapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
-		sc.logger.Error("failed to get cometbft block results",
+		sc.logger.Error("failed to get block results",
 			"err", err,
 			"height", height,
 		)
@@ -272,25 +268,25 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.consensus.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, results.Height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,
-			"height", height,
+			"height", results.Height,
 		)
 		return nil, err
 	}
 
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range results.Meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -306,17 +302,13 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.Meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	return events, nil
-}
-
-// Cleanup implements api.Backend.
-func (sc *ServiceClient) Cleanup() {
 }
 
 func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBrokers {
@@ -341,8 +333,8 @@ func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
 }
 
-// DeliverBlock implements api.ServiceClient.
-func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+// DeliverHeight implements roothash.ServiceClient.
+func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error {
 	sc.mu.RLock()
 	trs := slices.Collect(maps.Values(sc.trackedRuntimes))
 	sc.mu.RUnlock()
@@ -356,13 +348,13 @@ func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) 
 		}
 		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
 			RuntimeID: tr.runtimeID,
-			Height:    blk.Height,
+			Height:    height,
 		})
 		if err != nil {
 			sc.logger.Warn("failed to get runtime state",
 				"err", err,
 				"runtime_id", tr.runtimeID,
-				"height", blk.Height,
+				"height", height,
 			)
 			return fmt.Errorf("roothash: failed to get runtime state: %w", err)
 		}
@@ -509,104 +501,6 @@ func (sc *ServiceClient) fetchBlock(ctx context.Context, runtimeID common.Namesp
 func (sc *ServiceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
 	notifiers := sc.getRuntimeNotifiers(runtimeID)
 	notifiers.ecNotifier.Broadcast(ec)
-}
-
-// EventsFromCometBFT extracts staking events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
-	var events []*api.Event
-	var errs error
-EventLoop:
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the roothash app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		var (
-			runtimeID *common.Namespace
-			ev        *api.Event
-		)
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-
-			switch {
-			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
-				// Finalized event.
-				var e api.FinalizedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{Finalized: &e}
-			case eventsAPI.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
-				// An execution discrepancy has been detected.
-				var e api.ExecutionDiscrepancyDetectedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{ExecutionDiscrepancyDetected: &e}
-			case eventsAPI.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
-				// An executor commit has been processed.
-				var e api.ExecutorCommittedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorCommitted event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{ExecutorCommitted: &e}
-			case eventsAPI.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
-				// Incoming message processed event.
-				var e api.InMsgProcessedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
-					continue EventLoop
-				}
-
-				ev = &api.Event{InMsgProcessed: &e}
-			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-				if runtimeID != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
-					continue EventLoop
-				}
-				rtAttribute := api.RuntimeIDAttribute{}
-				if err := eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
-					continue EventLoop
-				}
-				runtimeID = &rtAttribute.ID
-			default:
-				errs = errors.Join(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
-			}
-		}
-
-		if runtimeID == nil {
-			errs = errors.Join(errs, fmt.Errorf("roothash: missing runtime ID attribute"))
-			continue
-		}
-		if ev != nil {
-			ev.RuntimeID = *runtimeID
-			ev.Height = height
-			ev.TxHash = txHash
-			events = append(events, ev)
-		}
-	}
-	return events, errs
 }
 
 func init() {

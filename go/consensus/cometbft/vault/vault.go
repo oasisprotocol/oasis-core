@@ -3,18 +3,15 @@ package vault
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
@@ -26,14 +23,14 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed vault service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/vault"),
 		consensus:     consensus,
@@ -89,10 +86,9 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*vau
 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*vault.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := tmapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
-		sc.logger.Error("failed to get cometbft block results",
+		sc.logger.Error("failed to get block results",
 			"err", err,
 			"height", height,
 		)
@@ -100,25 +96,25 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*vault.
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.consensus.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, results.Height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,
-			"height", height,
+			"height", results.Height,
 		)
 		return nil, err
 	}
 
 	var events []*vault.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range results.Meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -130,7 +126,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*vault.
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.Meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +152,6 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(vault.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
@@ -177,98 +170,4 @@ func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttyp
 	}
 
 	return nil
-}
-
-// EventsFromCometBFT extracts vault events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*vault.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
-	var events []*vault.Event
-	var errs error
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the vault app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-
-			evt := &vault.Event{Height: height, TxHash: txHash}
-			switch {
-			case eventsAPI.IsAttributeKind(key, &vault.ActionSubmittedEvent{}):
-				// Action submitted event.
-				var e vault.ActionSubmittedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionSubmitted event: %w", err))
-					continue
-				}
-
-				evt.ActionSubmitted = &e
-			case eventsAPI.IsAttributeKind(key, &vault.ActionCanceledEvent{}):
-				// Action canceled event.
-				var e vault.ActionCanceledEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionCanceled event: %w", err))
-					continue
-				}
-
-				evt.ActionCanceled = &e
-			case eventsAPI.IsAttributeKind(key, &vault.ActionExecutedEvent{}):
-				// Action executed event.
-				var e vault.ActionExecutedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionExecuted event: %w", err))
-					continue
-				}
-
-				evt.ActionExecuted = &e
-			case eventsAPI.IsAttributeKind(key, &vault.StateChangedEvent{}):
-				// State changed event.
-				var e vault.StateChangedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt StateChanged event: %w", err))
-					continue
-				}
-
-				evt.StateChanged = &e
-			case eventsAPI.IsAttributeKind(key, &vault.PolicyUpdatedEvent{}):
-				// Policy updated event.
-				var e vault.PolicyUpdatedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt PolicyUpdated event: %w", err))
-					continue
-				}
-
-				evt.PolicyUpdated = &e
-			case eventsAPI.IsAttributeKind(key, &vault.AuthorityUpdatedEvent{}):
-				// Action submitted event.
-				var e vault.AuthorityUpdatedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("vault: corrupt AuthorityUpdated event: %w", err))
-					continue
-				}
-
-				evt.AuthorityUpdated = &e
-			default:
-				errs = errors.Join(errs, fmt.Errorf("vault: unknown event type: key: %s, val: %s", key, val))
-				continue
-			}
-
-			events = append(events, evt)
-		}
-	}
-
-	return events, errs
 }

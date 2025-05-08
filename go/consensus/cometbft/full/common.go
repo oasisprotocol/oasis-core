@@ -147,7 +147,7 @@ type commonNode struct {
 	state     uint32
 	startedCh chan struct{}
 
-	parentNode api.Backend
+	parentNode consensusAPI.Backend
 }
 
 func (n *commonNode) initialized() bool {
@@ -236,43 +236,26 @@ func (n *commonNode) initialize() error {
 	// Initialize consensus backend querier.
 	n.querier = abci.NewQueryFactory(state)
 
-	// Initialize the beacon/epochtime backend.
+	// Initialize backends.
 	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.beacon)
-	if err := n.mux.SetEpochtime(n.beacon); err != nil {
-		return err
-	}
-
-	// Initialize the rest of backends.
-	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.keymanager)
-
-	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
-	if cmmetrics.Enabled() {
-		n.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(n.ctx, n.registry), "registry metrics updater")
-	}
-	n.serviceClients = append(n.serviceClients, n.registry)
-	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
-
-	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.staking)
-	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
-
-	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.scheduler)
-	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
-
-	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.roothash)
-	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
-
 	n.governance = tmgovernance.New(n.parentNode, governanceApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.governance)
-	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
-
+	n.keymanager = tmkeymanager.New(keymanagerApp.NewQueryFactory(state))
+	n.registry = tmregistry.New(n.parentNode, registryApp.NewQueryFactory(state))
+	n.roothash = tmroothash.New(n.parentNode, roothashApp.NewQueryFactory(state))
+	n.scheduler = tmscheduler.New(schedulerApp.NewQueryFactory(state))
+	n.staking = tmstaking.New(n.parentNode, stakingApp.NewQueryFactory(state))
 	n.vault = tmvault.New(n.parentNode, vaultApp.NewQueryFactory(state))
-	n.serviceClients = append(n.serviceClients, n.vault)
-	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
+
+	n.serviceClients = []api.ServiceClient{
+		n.beacon,
+		n.governance,
+		n.keymanager,
+		n.registry,
+		n.roothash,
+		n.scheduler,
+		n.staking,
+		n.vault,
+	}
 
 	// Register CometBFT applications.
 	beaconApp := beaconApp.New()
@@ -309,9 +292,20 @@ func (n *commonNode) initialize() error {
 		}
 	}
 
+	// Configure the beacon application as an epochtime.
+	if err := n.mux.SetEpochtime(n.beacon); err != nil {
+		return err
+	}
+
 	// Configure the staking application as a fee handler.
 	if err := n.mux.SetTransactionAuthHandler(stakingApp); err != nil {
 		return err
+	}
+
+	// Start metrics.
+	if cmmetrics.Enabled() {
+		rmu := registry.NewMetricsUpdater(n.ctx, n.registry)
+		n.svcMgr.RegisterCleanupOnly(rmu, "registry metrics updater")
 	}
 
 	atomic.StoreUint32(&n.state, stateInitialized)
@@ -540,7 +534,7 @@ func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSi
 	return acct.General.Nonce, nil
 }
 
-// Implements consensusAPI.Backend.
+// GetCometBFTBlock returns the CometBFT block at the specified height.
 func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
@@ -563,7 +557,8 @@ func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmtty
 	return result.Block, nil
 }
 
-// Implements consensusAPI.Backend.
+// GetCometBFTBlockResults returns the ABCI results from processing a block
+// at a specific height.
 func (n *commonNode) GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
@@ -573,12 +568,12 @@ func (n *commonNode) GetCometBFTBlockResults(ctx context.Context, height int64) 
 	if err != nil {
 		return nil, err
 	}
-	result, err := cmtcore.BlockResults(n.rpcCtx, &tmHeight)
+	results, err := cmtcore.BlockResults(n.rpcCtx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: block results query failed: %w", err)
 	}
 
-	return result, nil
+	return results, nil
 }
 
 // Implements consensusAPI.Backend.
@@ -592,6 +587,16 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 	}
 
 	return api.NewBlock(blk), nil
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*consensusAPI.BlockResults, error) {
+	results, err := n.GetCometBFTBlockResults(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.NewBlockResults(results), nil
 }
 
 // Implements consensusAPI.Backend.

@@ -11,7 +11,7 @@ import (
 	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	cmtp2p "github.com/cometbft/cometbft/p2p"
 	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -157,8 +156,7 @@ func QueryForApp(eventApp string) cmtpubsub.Query {
 	return cmtquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
 }
 
-// BlockMeta is the CometBFT-specific per-block metadata that is
-// exposed via the consensus API.
+// BlockMeta is the CometBFT-specific per-block metadata.
 type BlockMeta struct {
 	// Header is the CometBFT block header.
 	Header *cmttypes.Header `json:"header"`
@@ -199,20 +197,85 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 	}
 }
 
-// Backend is a CometBFT consensus backend.
+// BlockResults are CometBFT-specific consensus block results.
+type BlockResults struct {
+	// Height contains the block height.
+	Height int64 `json:"height"`
+	// Meta contains the block results metadata.
+	Meta *BlockResultsMeta `json:"meta"`
+}
+
+// BlockResultsMeta is the CometBFT-specific per-block results metadata.
+type BlockResultsMeta struct {
+	TxsResults       []*types.ResponseDeliverTx `json:"txs_results"`
+	BeginBlockEvents []types.Event              `json:"begin_block_events"`
+	EndBlockEvents   []types.Event              `json:"end_block_events"`
+}
+
+// NewBlockResultsMeta converts consensus results into CometBFT-specific block
+// results metadata.
+func NewBlockResultsMeta(results *consensus.BlockResults) (*BlockResultsMeta, error) {
+	var meta BlockResultsMeta
+	if err := cbor.Unmarshal(results.Meta, &meta); err != nil {
+		return nil, fmt.Errorf("malformed block results metadata: %w", err)
+	}
+
+	return &meta, nil
+}
+
+// NewBlockResults converts CometBFT-specific block results into consensus results.
+func NewBlockResults(results *cmtcoretypes.ResultBlockResults) *consensus.BlockResults {
+	meta := BlockResultsMeta{
+		TxsResults:       results.TxsResults,
+		BeginBlockEvents: results.BeginBlockEvents,
+		EndBlockEvents:   results.EndBlockEvents,
+	}
+
+	return &consensus.BlockResults{
+		Height: results.Height,
+		Meta:   cbor.Marshal(meta),
+	}
+}
+
+// GetBlockResults returns CometBFT-specific block results at the given height.
+func GetBlockResults(ctx context.Context, height int64, consensus consensus.Backend) (*BlockResults, error) {
+	// Optimize for CometBTF-specific consensus backends.
+	if cmt, ok := consensus.(Backend); ok {
+		results, err := cmt.GetCometBFTBlockResults(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+		return &BlockResults{
+			Height: results.Height,
+			Meta: &BlockResultsMeta{
+				TxsResults:       results.TxsResults,
+				BeginBlockEvents: results.BeginBlockEvents,
+				EndBlockEvents:   results.EndBlockEvents,
+			},
+		}, nil
+
+	}
+
+	results, err := consensus.GetBlockResults(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := NewBlockResultsMeta(results)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BlockResults{
+		Height: results.Height,
+		Meta:   meta,
+	}, nil
+}
+
+// Backend is a CometBFT-specific consensus backend.
 type Backend interface {
-	consensus.Backend
-
-	// GetCometBFTBlock returns the CometBFT block at the specified height.
-	GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
-
 	// GetCometBFTBlockResults returns the ABCI results from processing a block
 	// at a specific height.
-	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtrpctypes.ResultBlockResults, error)
-
-	// WatchCometBFTBlocks returns a stream of CometBFT blocks as they are
-	// returned via the `EventDataNewBlock` query.
-	WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
+	GetCometBFTBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error)
 }
 
 // HaltHook is a function that gets called when consensus needs to halt for some reason.
@@ -297,8 +360,8 @@ type ServiceClient interface {
 	// ServiceDescriptor returns the consensus service descriptor.
 	ServiceDescriptor() ServiceDescriptor
 
-	// DeliverBlock delivers a new block.
-	DeliverBlock(ctx context.Context, blk *cmttypes.Block) error
+	// DeliverHeight delivers a new block height.
+	DeliverHeight(ctx context.Context, height int64) error
 
 	// DeliverEvent delivers an event emitted by the consensus service.
 	DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error
@@ -308,8 +371,8 @@ type ServiceClient interface {
 // all the delivery methods. Implementations should override them as needed.
 type BaseServiceClient struct{}
 
-// DeliverBlock implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverBlock(context.Context, *cmttypes.Block) error {
+// DeliverHeight implements ServiceClient.
+func (bsc *BaseServiceClient) DeliverHeight(context.Context, int64) error {
 	return nil
 }
 

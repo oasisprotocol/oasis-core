@@ -164,9 +164,6 @@ type Backend interface {
 
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]*Event, error)
-
-	// Cleanup cleans up the roothash backend.
-	Cleanup()
 }
 
 // RuntimeRequest is a generic roothash get request for a specific runtime.

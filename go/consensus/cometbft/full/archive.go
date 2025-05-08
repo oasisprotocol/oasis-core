@@ -29,7 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 )
 
-var _ api.Backend = (*archiveService)(nil)
+var _ consensusAPI.Backend = (*archiveService)(nil)
 
 // ArchiveConfig contains configuration parameters for the archive node.
 type ArchiveConfig struct {
@@ -256,16 +256,16 @@ func (srv *archiveService) serviceClientWorker(ctx context.Context, svc api.Serv
 	logger := srv.Logger.With("service", sd.Name())
 	logger.Info("starting command dispatcher")
 
-	latestBlock, err := srv.GetCometBFTBlock(ctx, consensusAPI.HeightLatest)
+	height, err := srv.GetLatestHeight(ctx)
 	if err != nil {
-		logger.Error("failed to fetch latest block",
+		logger.Error("failed to fetch latest height",
 			"err", err,
 		)
 		return
 	}
 
-	if err := svc.DeliverBlock(ctx, latestBlock); err != nil {
-		logger.Error("failed to deliver block to service client",
+	if err := svc.DeliverHeight(ctx, height); err != nil {
+		logger.Error("failed to deliver block height to service client",
 			"err", err,
 		)
 	}

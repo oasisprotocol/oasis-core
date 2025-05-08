@@ -23,7 +23,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 	logger := t.Logger.With("service", svd.Name())
 	logger.Info("starting event dispatcher")
 
-	blkCh, blkSub, err := t.WatchCometBFTBlocks()
+	blkCh, blkSub, err := t.WatchBlocks(ctx)
 	if err != nil {
 		logger.Error("failed to subscribe to cometbft blocks, not starting",
 			"err", err,
@@ -51,9 +51,12 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 					t.Logger.Error("event processing failed", "err", err)
 				}
 			}()
-		case blk := <-blkCh:
-			if err := svc.DeliverBlock(ctx, blk); err != nil {
-				logger.Error("failed to deliver block to service client", "err", err)
+		case blk, ok := <-blkCh:
+			if !ok {
+				return
+			}
+			if err := svc.DeliverHeight(ctx, blk.Height); err != nil {
+				logger.Error("failed to deliver block height to service client", "err", err)
 			}
 		case ev := <-evCh:
 			if err := svc.DeliverEvent(ctx, ev.height, ev.tx, &ev.ev); err != nil {

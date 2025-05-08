@@ -230,6 +230,14 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 		}
 	}
 
+	blockResults, err := q.consensus.GetBlockResults(ctx, height)
+	if err != nil {
+		return fmt.Errorf("GetBlockResults at height %d: %w", height, err)
+	}
+	if blockResults.Height != height {
+		return fmt.Errorf("blockResults.Height: %d == %d violated", blockResults.Height, height)
+	}
+
 	txs, err := q.consensus.GetTransactions(ctx, height)
 	if err != nil {
 		return fmt.Errorf("GetTransactions at height %d: %w", height, err)

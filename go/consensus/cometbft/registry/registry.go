@@ -3,22 +3,18 @@ package registry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -30,7 +26,7 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	entityNotifier   *pubsub.Broker
@@ -41,7 +37,7 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed registry service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/registry"),
 		consensus:        consensus,
@@ -156,9 +152,6 @@ func (sc *ServiceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime
 	return ch, sub, nil
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 func (sc *ServiceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
@@ -178,10 +171,9 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := tmapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
-		sc.logger.Error("failed to get cometbft block results",
+		sc.logger.Error("failed to get block results",
 			"err", err,
 			"height", height,
 		)
@@ -189,25 +181,25 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.consensus.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, results.Height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,
-			"height", height,
+			"height", results.Height,
 		)
 		return nil, err
 	}
 
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, _, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, _, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range results.Meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -219,7 +211,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, _, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, _, err = EventsFromCometBFT(nil, results.Height, results.Meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -285,87 +277,6 @@ func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 	}
 
 	return nil
-}
-
-// EventsFromCometBFT extracts registry events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, []*NodeListEpochInternalEvent, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
-	var events []*api.Event
-	var nodeListEvents []*NodeListEpochInternalEvent
-	var errs error
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the registry app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-
-			switch {
-			case eventsAPI.IsAttributeKind(key, &api.NodeListEpochEvent{}):
-				// Node list epoch event (value is ignored).
-				nodeListEvents = append(nodeListEvents, &NodeListEpochInternalEvent{Height: height})
-			case eventsAPI.IsAttributeKind(key, &api.RuntimeStartedEvent{}):
-				// Runtime started event.
-				var e api.RuntimeStartedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("registry: corrupt RuntimeStarted event: %w", err))
-					continue
-				}
-
-				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeStartedEvent: &e})
-			case eventsAPI.IsAttributeKind(key, &api.RuntimeSuspendedEvent{}):
-				// Runtime suspended event.
-				var e api.RuntimeSuspendedEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("registry: corrupt RuntimeSuspended event: %w", err))
-					continue
-				}
-
-				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeSuspendedEvent: &e})
-			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
-				// Entity event.
-				var e api.EntityEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
-					continue
-				}
-
-				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: &e})
-			case eventsAPI.IsAttributeKind(key, &api.NodeEvent{}):
-				// Node event.
-				var e api.NodeEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
-					continue
-				}
-
-				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: &e})
-			case eventsAPI.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
-				// Node unfrozen event.
-				var e api.NodeUnfrozenEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
-					continue
-				}
-				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeUnfrozenEvent: &e})
-			}
-		}
-	}
-	return events, nodeListEvents, errs
 }
 
 func (sc *ServiceClient) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {

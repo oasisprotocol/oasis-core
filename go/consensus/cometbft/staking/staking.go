@@ -3,19 +3,16 @@ package staking
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
-	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -27,14 +24,14 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed staking service client.
-func New(consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		consensus:     consensus,
@@ -246,10 +243,9 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*api
 
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *cmtrpctypes.ResultBlockResults
-	results, err := sc.consensus.GetCometBFTBlockResults(ctx, height)
+	results, err := tmapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
-		sc.logger.Error("failed to get cometbft block results",
+		sc.logger.Error("failed to get block results",
 			"err", err,
 			"height", height,
 		)
@@ -257,25 +253,25 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.consensus.GetTransactions(ctx, height)
+	txns, err := sc.consensus.GetTransactions(ctx, results.Height)
 	if err != nil {
 		sc.logger.Error("failed to get cometbft transactions",
 			"err", err,
-			"height", height,
+			"height", results.Height,
 		)
 		return nil, err
 	}
 
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.BeginBlockEvents)
+	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.TxsResults {
+	for txIdx, txResult := range results.Meta.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
@@ -287,7 +283,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.EndBlockEvents)
+	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.Meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -313,9 +309,6 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *ServiceClient) Cleanup() {
-}
-
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
@@ -334,110 +327,4 @@ func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttyp
 	}
 
 	return nil
-}
-
-// EventsFromCometBFT extracts staking events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
-	var events []*api.Event
-	var errs error
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the staking app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-
-			switch {
-			case eventsAPI.IsAttributeKind(key, &api.TakeEscrowEvent{}):
-				// Take escrow event.
-				var e api.TakeEscrowEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.TransferEvent{}):
-				// Transfer event.
-				var e api.TransferEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Transfer: &e}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
-				// Reclaim escrow event.
-				var e api.ReclaimEscrowEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.AddEscrowEvent{}):
-				// Add escrow event.
-				var e api.AddEscrowEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
-				// Debonding start escrow event.
-				var e api.DebondingStartEscrowEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{DebondingStart: &e}}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.BurnEvent{}):
-				// Burn event.
-				var e api.BurnEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
-				// Allowance change event.
-				var e api.AllowanceChangeEvent
-				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
-					continue
-				}
-
-				evt := &api.Event{Height: height, TxHash: txHash, AllowanceChange: &e}
-				events = append(events, evt)
-			default:
-				errs = errors.Join(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))
-			}
-		}
-	}
-
-	return events, errs
 }

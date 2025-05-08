@@ -368,9 +368,6 @@ type Backend interface {
 
 	// ConsensusParameters returns the scheduler consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
-
-	// Cleanup cleans up the scheduler backend.
-	Cleanup()
 }
 
 // GetCommitteesRequest is a GetCommittees request.

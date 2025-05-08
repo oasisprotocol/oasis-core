@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
@@ -33,7 +34,7 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus tmapi.Backend
+	consensus consensus.Backend
 	querier   *app.QueryFactory
 
 	epochNotifier     *pubsub.Broker
@@ -53,7 +54,7 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed beacon service client.
-func New(baseEpoch beaconAPI.EpochTime, baseBlock int64, consensus tmapi.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(baseEpoch beaconAPI.EpochTime, baseBlock int64, consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
 		consensus:         consensus,
@@ -246,12 +247,12 @@ func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
-func (sc *ServiceClient) DeliverBlock(ctx context.Context, blk *cmttypes.Block) error {
+func (sc *ServiceClient) DeliverHeight(ctx context.Context, height int64) error {
 	if sc.initialNotify {
 		return nil
 	}
 
-	q, err := sc.querier.QueryAt(ctx, blk.Height)
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return fmt.Errorf("epochtime: failed to query state: %w", err)
 	}
