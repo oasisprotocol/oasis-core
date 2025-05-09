@@ -22,18 +22,18 @@ func TestOne(t *testing.T) {
 
 		// All functions should start and stop if there is big enough time gap
 		// between starts.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.True(one.TryStart(noopFn))
 			time.Sleep(time.Millisecond)
 		}
 
 		// All stops should fail as no function is running.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.False(one.TryStop())
 		}
 
 		// Starting functions again should not be a problem.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.True(one.TryStart(noopFn))
 			time.Sleep(time.Millisecond)
 		}
@@ -46,14 +46,14 @@ func TestOne(t *testing.T) {
 
 		// First function should start, others not.
 		require.True(one.TryStart(blockFn))
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.False(one.TryStart(blockFn))
 		}
 
 		// As one function is running, the first stop should succeed,
 		// others not.
 		require.True(one.TryStop())
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.False(one.TryStop())
 		}
 

@@ -399,7 +399,7 @@ func loadCacheGlibc() (*Cache, error) {
 		return nil, errUnsupported
 	}
 
-	for i := 0; i < nlibs; i++ {
+	for i := range nlibs {
 		rawE := rawLibs[entrySz*i : entrySz*(i+1)]
 
 		e := new(cacheEntry)

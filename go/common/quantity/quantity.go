@@ -4,6 +4,7 @@ import (
 	"encoding"
 	"errors"
 	"math/big"
+	"slices"
 )
 
 var (
@@ -38,7 +39,7 @@ func (q *Quantity) Clone() *Quantity {
 
 // MarshalBinary encodes a Quantity into binary form.
 func (q *Quantity) MarshalBinary() ([]byte, error) {
-	return append([]byte{}, q.inner.Bytes()...), nil
+	return slices.Clone(q.inner.Bytes()), nil
 }
 
 // UnmarshalBinary decodes a byte slice into a Quantity.

@@ -157,7 +157,7 @@ func (e *testEntry) Size() uint64 {
 
 func makeEntries(nr int) []*testEntry {
 	vec := make([]*testEntry, 0, nr)
-	for i := 0; i < nr; i++ {
+	for i := range nr {
 		vec = append(vec, makeEntry(fmt.Sprintf("key-%d", i)))
 	}
 
