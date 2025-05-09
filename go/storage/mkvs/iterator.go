@@ -135,6 +135,8 @@ type treeIterator struct {
 	key      node.Key
 	value    []byte
 
+	subtreeDepth node.Depth
+
 	proofBuilder *syncer.ProofBuilder
 }
 
@@ -167,6 +169,29 @@ func newTreeIterator(ctx context.Context, tree *tree, options ...IteratorOption)
 	for _, v := range options {
 		v(it)
 	}
+	return it
+}
+
+func newSubtreeIterator(ctx context.Context, tree *tree, path []*node.Pointer, options ...IteratorOption) Iterator {
+	i := newTreeIterator(ctx, tree, options...)
+	it := i.(*treeIterator) // TODO
+	if pb := it.GetProofBuilder(); pb != nil {
+		for _, n := range path {
+			pb.Include(n.Node)
+		}
+	}
+
+	var prefixDepth node.Depth
+	for _, n := range path {
+		n, ok := n.Node.(*node.InternalNode) // TODO
+		if !ok {
+			panic("unexpected type")
+		}
+		prefixDepth += n.LabelBitLength
+	}
+
+	it.subtreeDepth = prefixDepth
+
 	return it
 }
 
@@ -226,7 +251,8 @@ func (it *treeIterator) Next() {
 		// next node.
 		key := it.key
 		it.reset()
-		err := it.doNext(atom.ptr, atom.bitDepth, atom.path, key, atom.state)
+		_, suf := key.Split(it.subtreeDepth, key.BitLength()) // TODO
+		err := it.doNext(atom.ptr, atom.bitDepth, atom.path, suf, atom.state)
 		if err != nil {
 			it.setError(err)
 			return
@@ -326,8 +352,8 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			}
 		}
 	case *node.LeafNode:
-		// Reached a leaf node.
-		if n.Key.Compare(key) >= 0 {
+		_, suf := n.Key.Split(min(key.BitLength(), it.subtreeDepth), n.Key.BitLength()) // TODO
+		if suf.Compare(key) >= 0 || len(suf) == 0 {
 			it.key = n.Key
 			it.value = n.Value
 		}
