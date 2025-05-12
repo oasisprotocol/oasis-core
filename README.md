@@ -17,7 +17,7 @@ work around that and make the second (non-header) row also bold. -->
 <!-- markdownlint-disable line-length -->
 [buildkite-badge]: https://badge.buildkite.com/16896a68bd8fba45d7b41fd608f26f87c726da10f7f24694a0.svg?branch=master
 [buildkite-link]: https://buildkite.com/oasisprotocol/oasis-core-ci
-[github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-lint/badge.svg
+[github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/actions/workflows/ci-lint.yml/badge.svg
 [github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint+branch:master
 [github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
 [github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
