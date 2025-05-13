@@ -28,47 +28,8 @@ const (
 	connReadyTimeout = 5 * time.Second
 )
 
-var (
-	// ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
-	ErrNotReady = errors.New(moduleName, 1, "rhp: not ready")
-
-	rhpLatency = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_rhp_latency",
-			Help: "Runtime Host call latency (seconds).",
-		},
-		[]string{"call"},
-	)
-	rhpCallSuccesses = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_rhp_successes",
-			Help: "Number of successful Runtime Host calls.",
-		},
-		[]string{"call"},
-	)
-	rhpCallFailures = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_rhp_failures",
-			Help: "Number of failed Runtime Host calls.",
-		},
-		[]string{"call"},
-	)
-	rhpCallTimeouts = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "oasis_rhp_timeouts",
-			Help: "Number of timed out Runtime Host calls.",
-		},
-	)
-
-	rhpCollectors = []prometheus.Collector{
-		rhpLatency,
-		rhpCallSuccesses,
-		rhpCallFailures,
-		rhpCallTimeouts,
-	}
-
-	metricsOnce sync.Once
-)
+// ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
+var ErrNotReady = errors.New(moduleName, 1, "rhp: not ready")
 
 // Handler is a protocol message handler interface.
 type Handler interface {
@@ -308,18 +269,20 @@ func (c *connection) Call(ctx context.Context, body *Body) (*Body, error) {
 func (c *connection) call(ctx context.Context, body *Body) (result *Body, err error) {
 	start := time.Now()
 	defer func() {
-		if metrics.Enabled() {
-			rhpLatency.With(prometheus.Labels{"call": body.Type()}).Observe(time.Since(start).Seconds())
-			if err != nil {
-				rhpCallFailures.With(prometheus.Labels{"call": body.Type()}).Inc()
+		if !metrics.Enabled() {
+			return
+		}
 
-				// Specifically measure timeouts.
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					rhpCallTimeouts.Inc()
-				}
-			} else {
-				rhpCallSuccesses.With(prometheus.Labels{"call": body.Type()}).Inc()
+		rhpLatency.With(prometheus.Labels{"call": body.Type()}).Observe(time.Since(start).Seconds())
+		if err != nil {
+			rhpCallFailures.With(prometheus.Labels{"call": body.Type()}).Inc()
+
+			// Specifically measure timeouts.
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				rhpCallTimeouts.Inc()
 			}
+		} else {
+			rhpCallSuccesses.With(prometheus.Labels{"call": body.Type()}).Inc()
 		}
 	}()
 
@@ -604,11 +567,9 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 
 // NewConnection creates a new uninitialized RHP connection.
 func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler Handler) (Connection, error) {
-	metricsOnce.Do(func() {
-		prometheus.MustRegister(rhpCollectors...)
-	})
+	initMetrics()
 
-	c := &connection{
+	return &connection{
 		runtimeID:       runtimeID,
 		handler:         handler,
 		state:           stateUninitialized,
@@ -617,7 +578,5 @@ func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler H
 		outCh:           make(chan *Message),
 		closeCh:         make(chan struct{}),
 		logger:          logger,
-	}
-
-	return c, nil
+	}, nil
 }
