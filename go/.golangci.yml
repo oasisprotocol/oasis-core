@@ -1,7 +1,7 @@
 linters-settings:
   goconst:
     ignore-tests: true
-    ignore-strings: 'unix:.*'
+    ignore-strings: "unix:.*"
   goimports:
     # Put local imports after 3rd-party packages.
     local-prefixes: github.com/oasisprotocol/oasis-core
@@ -53,6 +53,7 @@ linters-settings:
           - github.com/tidwall/btree
           - github.com/tyler-smith/go-bip39
           - github.com/mdlayher/vsock
+          - github.com/nxadm/tail
 
 linters:
   disable-all: true

@@ -270,6 +270,7 @@ func (p *sgxProvisioner) getSandboxConfig(cfg host.Config, conn sandbox.Connecto
 
 	logWrapper := host.NewRuntimeLogWrapper(
 		p.logger,
+		cfg.Log.Logger(),
 		"runtime_id", cfg.ID,
 		"runtime_name", cfg.Name,
 		"component", cfg.Component.ID(),

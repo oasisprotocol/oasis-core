@@ -111,6 +111,7 @@ func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) G
 	return func(cfg host.Config, _ Connector, _ string) (process.Config, error) {
 		logWrapper := host.NewRuntimeLogWrapper(
 			logger,
+			cfg.Log.Logger(),
 			"runtime_id", cfg.ID,
 			"runtime_name", cfg.Name,
 			"component", cfg.Component.ID(),

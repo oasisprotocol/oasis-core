@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/log"
 )
 
 // Config contains common configuration for the provisioned runtime component.
@@ -32,6 +33,9 @@ type Config struct {
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]any
+
+	// Log is the runtime log handle to use for writing logs to this runtime.
+	Log *log.Log
 }
 
 // Provisioner is the runtime provisioner interface.

@@ -1,10 +1,12 @@
 package registry
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"maps"
 	"path/filepath"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -15,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/log"
 	rofl "github.com/oasisprotocol/oasis-core/go/runtime/rofl/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
@@ -58,7 +61,7 @@ func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, 
 	}
 }
 
-// handleBundleManagement handles volume management local RPCs.
+// handleVolumeManagement handles volume management local RPCs.
 func (rh *roflHostHandler) handleVolumeManagement(rq *enclaverpc.Request) (any, error) {
 	switch rq.Method {
 	case rofl.MethodVolumeAdd:
@@ -82,6 +85,21 @@ func (rh *roflHostHandler) handleVolumeManagement(rq *enclaverpc.Request) (any, 
 			return nil, err
 		}
 		return rh.handleVolumeList(&args)
+	default:
+		return nil, fmt.Errorf("method not supported")
+	}
+}
+
+// handleLogManagement handles log management local RPCs.
+func (rh *roflHostHandler) handleLogManagement(ctx context.Context, rq *enclaverpc.Request) (any, error) {
+	switch rq.Method {
+	case rofl.MethodLogGet:
+		// Get logs.
+		var args rofl.LogGetRequest
+		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
+			return nil, err
+		}
+		return rh.handleLogGet(ctx, &args)
 	default:
 		return nil, fmt.Errorf("method not supported")
 	}
@@ -246,6 +264,56 @@ func (rh *roflHostHandler) handleVolumeList(rq *rofl.VolumeListRequest) (*rofl.V
 	}, nil
 }
 
+func (rh *roflHostHandler) handleLogGet(ctx context.Context, rq *rofl.LogGetRequest) (*rofl.LogGetResponse, error) {
+	if err := rh.ensureComponentPermissions(runtimeConfig.PermissionLogView); err != nil {
+		return nil, err
+	}
+
+	// Determine labels, make sure to override origin as that is used for isolation.
+	labels := maps.Clone(rq.Labels)
+	maps.Copy(labels, rh.getBundleManagementLabels())
+
+	var requestedComponentID component.ID
+	if err := requestedComponentID.UnmarshalText([]byte(rq.ComponentID)); err != nil {
+		return nil, err
+	}
+	if requestedComponentID.IsRONL() {
+		return nil, fmt.Errorf("RONL component not allowed")
+	}
+
+	// Ensure that the passed component is actually accessible using the given labels.
+	found := false
+	for _, manifest := range rh.parent.env.GetRuntimeRegistry().GetBundleRegistry().ManifestsWithLabels(labels) {
+		_, found = manifest.GetComponentByID(requestedComponentID)
+		if found {
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("component not found")
+	}
+
+	opts := log.WatchOptions{
+		Follow: false,
+		Since:  time.Unix(int64(rq.Since), 0),
+	}
+
+	log, err := rh.getLogManager().Get(rh.parent.runtime.ID(), requestedComponentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Support streaming logs.
+	logs, err := log.Read(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rofl.LogGetResponse{
+		Logs: logs,
+	}, nil
+}
+
 // ensureComponentPermissions ensures that the component has all of the specified permissions.
 func (rh *roflHostHandler) ensureComponentPermissions(perms ...runtimeConfig.ComponentPermission) error {
 	compCfg, ok := config.GlobalConfig.Runtime.GetComponent(rh.parent.runtime.ID(), rh.id)
@@ -266,6 +334,10 @@ func (rh *roflHostHandler) getBundleManager() *bundle.Manager {
 
 func (rh *roflHostHandler) getVolumeManager() *volume.Manager {
 	return rh.parent.env.GetRuntimeRegistry().GetVolumeManager()
+}
+
+func (rh *roflHostHandler) getLogManager() *log.Manager {
+	return rh.parent.env.GetRuntimeRegistry().GetLogManager()
 }
 
 func (rh *roflHostHandler) getBundleManagementLabels() map[string]string {

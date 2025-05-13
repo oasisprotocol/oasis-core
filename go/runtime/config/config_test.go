@@ -107,6 +107,9 @@ func TestNetworkingConfig(t *testing.T) {
 				},
 			},
 		},
+		Log: LogConfig{
+			MaxLogSize: 1024,
+		},
 	}
 	err = cfg.Validate()
 	require.NoError(err)
