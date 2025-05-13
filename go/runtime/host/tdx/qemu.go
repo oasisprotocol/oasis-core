@@ -271,6 +271,7 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 	// Logging.
 	logWrapper := host.NewRuntimeLogWrapper(
 		p.logger,
+		cfg.Log.Logger(),
 		"runtime_id", cfg.ID,
 		"runtime_name", cfg.Name,
 		"component", cfg.Component.ID(),

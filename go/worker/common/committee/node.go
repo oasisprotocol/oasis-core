@@ -919,7 +919,7 @@ func NewNode(
 	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, consensus)
 
 	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler)
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler, rtRegistry.GetLogManager())
 	if err != nil {
 		return nil, err
 	}

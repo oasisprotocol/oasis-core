@@ -171,7 +171,7 @@ func (rh *roflHostHandler) handleHostRPCCall(
 				Response: rsp.Response,
 			},
 		}, nil
-	case rofl.LocalRPCEndpointBundleManager, rofl.LocalRPCEndpointVolumeManager:
+	case rofl.LocalRPCEndpointBundleManager, rofl.LocalRPCEndpointVolumeManager, rofl.LocalRPCEndpointLogManager:
 		// Route management requests to handler.
 		if rq.HostRPCCallRequest.Kind != enclaverpc.KindLocalQuery {
 			return nil, fmt.Errorf("endpoint not supported")
@@ -191,6 +191,10 @@ func (rh *roflHostHandler) handleHostRPCCall(
 			rsp, err = rh.handleBundleManagement(&rpcRq)
 		case rofl.LocalRPCEndpointVolumeManager:
 			rsp, err = rh.handleVolumeManagement(&rpcRq)
+		case rofl.LocalRPCEndpointLogManager:
+			rsp, err = rh.handleLogManagement(ctx, &rpcRq)
+		default:
+			return nil, fmt.Errorf("endpoint not supported")
 		}
 
 		if err != nil {

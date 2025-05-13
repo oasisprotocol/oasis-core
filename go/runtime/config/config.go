@@ -159,6 +159,9 @@ type Config struct {
 
 	// TDX is configuration specific to Intel TDX.
 	TDX TdxConfig `yaml:"tdx,omitempty"`
+
+	// Log is the runtime log config.
+	Log LogConfig `yaml:"log,omitempty"`
 }
 
 // GetComponent returns the configuration for the given component
@@ -204,6 +207,20 @@ type TdxConfig struct {
 	CidStart uint32 `yaml:"cid_start,omitempty"`
 	// CidCount is the number of CIDs allocated to VMs.
 	CidCount uint32 `yaml:"cid_count,omitempty"`
+}
+
+// LogConfig is the runtime log configuration.
+type LogConfig struct {
+	// MaxLogSize is the maximum log size in bytes.
+	MaxLogSize int `yaml:"max_log_size,omitempty"`
+}
+
+// Validate validates the log configuration for correctness.
+func (l *LogConfig) Validate() error {
+	if l.MaxLogSize < 1024 {
+		return fmt.Errorf("maximum log size must be at least 1024 bytes")
+	}
+	return nil
 }
 
 // RuntimeConfig is the runtime configuration.
@@ -327,6 +344,9 @@ const (
 
 	// PermissionVolumeRemove is the permission that grants the component rights to remove volumes.
 	PermissionVolumeRemove ComponentPermission = "volume_remove"
+
+	// PermissionLogView is the permission that grants the component rights to view logs.
+	PermissionLogView ComponentPermission = "log_view"
 )
 
 // NetworkingConfig is the networking configuration.
@@ -412,6 +432,10 @@ func (c *Config) Validate() error {
 
 	if c.LoadBalancer.NumInstances > 128 {
 		return fmt.Errorf("cannot specify more than 128 instances for load balancing")
+	}
+
+	if err := c.Log.Validate(); err != nil {
+		return err
 	}
 
 	for _, rt := range c.Runtimes {
@@ -521,6 +545,9 @@ func DefaultConfig() Config {
 		TDX: TdxConfig{
 			CidStart: 0xA5150000,
 			CidCount: 1024,
+		},
+		Log: LogConfig{
+			MaxLogSize: 1024 * 1024,
 		},
 	}
 }

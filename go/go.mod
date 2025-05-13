@@ -37,6 +37,7 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.13.0
 	github.com/mdlayher/vsock v1.2.1
 	github.com/multiformats/go-multiaddr v0.14.0
+	github.com/nxadm/tail v1.4.11
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v0.0.5

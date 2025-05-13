@@ -26,6 +26,7 @@ import (
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	"github.com/oasisprotocol/oasis-core/go/runtime/log"
 	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -74,6 +75,9 @@ type Registry interface {
 
 	// GetVolumeManager returns the volume manager.
 	GetVolumeManager() *volume.Manager
+
+	// GetLogManager returns the log manager.
+	GetLogManager() *log.Manager
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -485,6 +489,7 @@ type runtimeRegistry struct {
 	bundleRegistry *bundle.Registry
 	bundleManager  *bundle.Manager
 	volumeManager  *volume.Manager
+	logManager     *log.Manager
 }
 
 // GetRuntime implements Registry.
@@ -621,6 +626,11 @@ func (r *runtimeRegistry) GetVolumeManager() *volume.Manager {
 	return r.volumeManager
 }
 
+// GetLogManager implements Registry.
+func (r *runtimeRegistry) GetLogManager() *log.Manager {
+	return r.logManager
+}
+
 // Name implements BackgroundService.
 func (r *runtimeRegistry) Name() string {
 	return "runtime registry"
@@ -716,6 +726,9 @@ func New(
 		return nil, err
 	}
 
+	// Create log manager.
+	logManager := log.NewManager(dataDir)
+
 	// Create history keeper factory.
 	historyFactory, err := createHistoryFactory()
 	if err != nil {
@@ -734,6 +747,7 @@ func New(
 		bundleRegistry: bundleRegistry,
 		bundleManager:  bundleManager,
 		volumeManager:  volumeManager,
+		logManager:     logManager,
 	}
 
 	// Initialize the runtime registry.
