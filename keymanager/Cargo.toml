@@ -15,12 +15,12 @@ base64 = "0.22.1"
 futures = "0.3.31"
 group = "0.13.0"
 lazy_static = "1.3.0"
-lru = "0.12.5"
-rand = "0.8.5"
+lru = "0.14.0"
+rand = "0.9.1"
 rustc-hex = "2.0.1"
 sgx-isa = { version = "0.4.0", features = ["sgxstd"] }
 sp800-185 = "0.2.0"
-thiserror = "1.0"
+thiserror = "2.0"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 tokio = { version = "1.44", features = ["rt"] }
