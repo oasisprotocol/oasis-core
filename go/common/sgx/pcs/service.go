@@ -1,9 +1,11 @@
 package pcs
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -100,17 +102,15 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 
 	// Verify the quote so we can catch errors early (the runtime and later consensus layer will
 	// also do their own verification).
-	// Check bundles in order: fresh first, then cached, then try downloading again if there was
-	// no scheduled refresh this time.
-	getTcbBundle := func(update UpdateType) (*TCBBundle, error) {
+	getTcbBundle := func(tcbEvaluationDataNumber uint32) (*TCBBundle, error) {
 		var fresh *TCBBundle
 
 		cached, refresh := qs.cache.check(pckInfo.FMSPC)
 		if refresh {
-			if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, update); err != nil {
+			if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
 				qs.logger.Warn("error downloading TCB refresh",
 					"err", err,
-					"update", update,
+					"tcb_evaluation_data_number", tcbEvaluationDataNumber,
 				)
 			}
 			if err = qs.verifyBundle(quote, quotePolicy, fresh, "fresh"); err == nil {
@@ -119,7 +119,7 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 			}
 			qs.logger.Warn("error verifying downloaded TCB refresh",
 				"err", err,
-				"update", update,
+				"tcb_evaluation_data_number", tcbEvaluationDataNumber,
 			)
 		}
 
@@ -131,16 +131,16 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 		if refresh {
 			qs.logger.Warn("error verifying cached TCB",
 				"err", err,
-				"update", update,
+				"tcb_evaluation_data_number", tcbEvaluationDataNumber,
 			)
 			return nil, fmt.Errorf("both fresh and cached TCB bundles failed verification, cached error: %w", err)
 		}
 
 		// If not downloaded yet this time round, try forcing. Any errors are fatal.
-		if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, update); err != nil {
+		if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
 			qs.logger.Warn("error downloading TCB",
 				"err", err,
-				"update", update,
+				"tcb_evaluation_data_number", tcbEvaluationDataNumber,
 			)
 			return nil, err
 		}
@@ -150,9 +150,21 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 		qs.cache.cache(fresh, pckInfo.FMSPC)
 		return fresh, nil
 	}
+
+	// Fetch a list of all available TCB evaluation data numbers and try one by one.
+	var tcbEvaluationDataNumbers []uint32
+	tcbEvaluationDataNumbers, err = qs.client.GetTCBEvaluationDataNumbers(ctx, quote.Header().TeeType())
+	if err != nil {
+		return nil, err
+	}
+	// Ensure they are sorted from highest to lowest.
+	slices.SortFunc(tcbEvaluationDataNumbers, func(a, b uint32) int {
+		return -cmp.Compare(a, b)
+	})
+
 	var tcbBundle *TCBBundle
-	for _, update := range []UpdateType{UpdateEarly, UpdateStandard} {
-		if tcbBundle, err = getTcbBundle(update); err == nil {
+	for _, tcbEvaluationDataNumber := range tcbEvaluationDataNumbers {
+		if tcbBundle, err = getTcbBundle(tcbEvaluationDataNumber); err == nil {
 			break
 		}
 	}
