@@ -742,3 +742,25 @@ type EnclaveTCBLevel struct {
 	Status      TCBStatus `json:"tcbStatus"`
 	AdvisoryIDs []string  `json:"advisoryIDs"`
 }
+
+// SignedTCBEvaluationDataNumbers is the signed TCB evaluation data numbers response body.
+type SignedTCBEvaluationDataNumbers struct {
+	Numbers   TCBEvaluationDataNumbers `json:"tcbEvaluationDataNumbers"`
+	Signature string                   `json:"signature"`
+}
+
+// TCBEvaluationDataNumbers is the TCB evaluation data numbers body.
+type TCBEvaluationDataNumbers struct {
+	ID                    string                    `json:"id"`
+	Version               int                       `json:"version"`
+	IssueDate             string                    `json:"issueDate"`
+	NextUpdate            string                    `json:"nextUpdate"`
+	EvaluationDataNumbers []TCBEvaluationDataNumber `json:"tcbEvalNumbers"`
+}
+
+// TCBEvaluationDataNumber is the TCB evaluation data number descriptor.
+type TCBEvaluationDataNumber struct {
+	EvaluationDataNumber uint32 `json:"tcbEvaluationDataNumber"`
+	RecoveryEventDate    string `json:"tcbRecoveryEventDate"`
+	Date                 string `json:"tcbDate"`
+}

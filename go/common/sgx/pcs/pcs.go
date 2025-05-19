@@ -15,22 +15,13 @@ var (
 	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
 )
 
-// UpdateType is the type of update to TCB info.
-type UpdateType string
-
-const (
-	// UpdateStandard indicates standard access to updated TCB Info provided as part of a TCB
-	// recovery event.
-	UpdateStandard UpdateType = "standard"
-	// UpdateEarly indicates an early access to updated TCB Info provided as part of a TCB recovery
-	// event.
-	UpdateEarly UpdateType = "early"
-)
-
 // Client is an Intel SGX PCS client interface.
 type Client interface {
 	// GetTCBBundle retrieves the signed TCB artifacts needed to verify a quote.
-	GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, update UpdateType) (*TCBBundle, error)
+	GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, tcbEvaluationDataNumber uint32) (*TCBBundle, error)
+
+	// GetTCBEvaluationDataNumbers retrieves the list of TCB evaluation data numbers.
+	GetTCBEvaluationDataNumbers(ctx context.Context, teeType TeeType) ([]uint32, error)
 
 	// GetPCKCertificateChain retrieves the PCK certificate chain for the given platform data or PPID.
 	//

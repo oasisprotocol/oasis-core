@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -21,17 +22,19 @@ import (
 
 //nolint:deadcode,varcheck
 const (
-	pcsAPISubscriptionKeyHeader = "Ocp-Apim-Subscription-Key"
-	pcsAPITimeout               = 10 * time.Second
-	pcsAPIBaseURL               = "https://api.trustedservices.intel.com"
-	pcsAPIGetPCKCertificatePath = "/sgx/certification/v4/pckcert"
-	pcsAPIGetRevocationListPath = "/sgx/certification/v4/pckcrl"
-	pcsAPIGetSgxTCBInfoPath     = "/sgx/certification/v4/tcb"
-	pcsAPIGetTdxTCBInfoPath     = "/tdx/certification/v4/tcb"
-	pcsAPIGetSgxQEIdentityPath  = "/sgx/certification/v4/qe/identity"
-	pcsAPIGetTdxQEIdentityPath  = "/tdx/certification/v4/qe/identity"
-	pcsAPICertChainHeader       = "TCB-Info-Issuer-Chain"
-	pcsAPIPCKIIssuerChainHeader = "SGX-PCK-Certificate-Issuer-Chain"
+	pcsAPISubscriptionKeyHeader              = "Ocp-Apim-Subscription-Key"
+	pcsAPITimeout                            = 10 * time.Second
+	pcsAPIBaseURL                            = "https://api.trustedservices.intel.com"
+	pcsAPIGetPCKCertificatePath              = "/sgx/certification/v4/pckcert"
+	pcsAPIGetRevocationListPath              = "/sgx/certification/v4/pckcrl"
+	pcsAPIGetSgxTCBInfoPath                  = "/sgx/certification/v4/tcb"
+	pcsAPIGetTdxTCBInfoPath                  = "/tdx/certification/v4/tcb"
+	pcsAPIGetSgxQEIdentityPath               = "/sgx/certification/v4/qe/identity"
+	pcsAPIGetTdxQEIdentityPath               = "/tdx/certification/v4/qe/identity"
+	pcsAPIGetSgxTCBEvaluationDataNumbersPath = "/sgx/certification/v4/tcbevaluationdatanumbers"
+	pcsAPIGetTdxTCBEvaluationDataNumbersPath = "/tdx/certification/v4/tcbevaluationdatanumbers"
+	pcsAPICertChainHeader                    = "TCB-Info-Issuer-Chain"
+	pcsAPIPCKIIssuerChainHeader              = "SGX-PCK-Certificate-Issuer-Chain"
 )
 
 // HTTPClientConfig is the Intel SGX PCS client configuration.
@@ -90,7 +93,7 @@ func (hc *httpClient) getUrl(p string) *url.URL { // nolint: revive
 	return &u
 }
 
-func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, update UpdateType) (*TCBBundle, error) {
+func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc []byte, tcbEvaluationDataNumber uint32) (*TCBBundle, error) {
 	var (
 		tcbBundle               TCBBundle
 		pcsAPIGetTCBInfoPath    string
@@ -111,7 +114,7 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc [
 	u := hc.getUrl(pcsAPIGetTCBInfoPath)
 	q := u.Query()
 	q.Set("fmspc", hex.EncodeToString(fmspc))
-	q.Set("update", string(update))
+	q.Set("tcbEvaluationDataNumber", strconv.FormatUint(uint64(tcbEvaluationDataNumber), 10))
 	u.RawQuery = q.Encode()
 	rsp, err := hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
 	if err != nil {
@@ -136,7 +139,7 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc [
 	// Then fetch QE identity.
 	u = hc.getUrl(pcsAPIGetQEIdentityPath)
 	q = u.Query()
-	q.Set("update", string(update))
+	q.Set("tcbEvaluationDataNumber", strconv.FormatUint(uint64(tcbEvaluationDataNumber), 10))
 	u.RawQuery = q.Encode()
 	rsp, err = hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
 	if err != nil {
@@ -153,6 +156,40 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, teeType TeeType, fmspc [
 	}
 
 	return &tcbBundle, nil
+}
+
+func (hc *httpClient) GetTCBEvaluationDataNumbers(ctx context.Context, teeType TeeType) ([]uint32, error) {
+	var pcsAPIGetTCBEvaluationDataNumbersPath string
+	switch teeType {
+	case TeeTypeSGX:
+		pcsAPIGetTCBEvaluationDataNumbersPath = pcsAPIGetSgxTCBEvaluationDataNumbersPath
+	case TeeTypeTDX:
+		pcsAPIGetTCBEvaluationDataNumbersPath = pcsAPIGetTdxTCBEvaluationDataNumbersPath
+	default:
+		return nil, fmt.Errorf("pcs: unsupported TEE type: %s", teeType)
+	}
+
+	u := hc.getUrl(pcsAPIGetTCBEvaluationDataNumbersPath)
+	rsp, err := hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: TCB evaluation data numbers request failed: %w", err)
+	}
+	defer rsp.Body.Close()
+
+	raw, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to read TCB evaluation data numbers response body: %w", err)
+	}
+	var tcbEvalDataNums SignedTCBEvaluationDataNumbers
+	if err = json.Unmarshal(raw, &tcbEvalDataNums); err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse TCB evaluation data numbers: %w", err)
+	}
+
+	numbers := make([]uint32, 0, len(tcbEvalDataNums.Numbers.EvaluationDataNumbers))
+	for _, edn := range tcbEvalDataNums.Numbers.EvaluationDataNumbers {
+		numbers = append(numbers, edn.EvaluationDataNumber)
+	}
+	return numbers, nil
 }
 
 func (hc *httpClient) GetPCKCertificateChain(ctx context.Context, platformData []byte, encPpid [384]byte, cpusvn [16]byte, pcesvn uint16, pceid uint16) ([]*x509.Certificate, error) {
