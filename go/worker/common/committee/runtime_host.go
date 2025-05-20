@@ -22,12 +22,12 @@ func (env *nodeEnvironment) GetTxPool() (txpool.TransactionPool, error) {
 	return env.n.TxPool, nil
 }
 
-// GetIdentity implements RuntimeHostHandlerEnvironment.
+// GetNodeIdentity implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 	return env.n.Identity, nil
 }
 
-// GetIdentity implements RuntimeHostHandlerEnvironment.
+// GetLightProvider implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetLightProvider() (consensusAPI.LightProvider, error) {
 	return env.n.LightProvider, nil
 }
