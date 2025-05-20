@@ -12,6 +12,30 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.3 (2025-05-20)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/consensus/api: Add method GetBlockResults
+  ([#6180](https://github.com/oasisprotocol/oasis-core/issues/6180))
+
+  A new method has been added to the consensus backend that returns block
+  results for a specified height.
+
+### Bug Fixes
+
+- runtime: Support HEIGHT_LATEST in `Verifier::sync` implementations
+  ([#6178](https://github.com/oasisprotocol/oasis-core/issues/6178))
+
+- Fix fetch of TCB info structures for interim TCB-R numbers
+  ([#6194](https://github.com/oasisprotocol/oasis-core/issues/6194))
+
 ## 25.2 (2025-04-25)
 
 | Protocol          | Version   |

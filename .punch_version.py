@@ -1,3 +1,3 @@
 year = '25'
-minor = 2
+minor = 3
 micro = 0
