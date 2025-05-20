@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -84,6 +85,9 @@ func (rs *restorer) RestoreChunk(ctx context.Context, idx uint64, r io.Reader) (
 	}
 
 	err = restoreChunk(ctx, rs.ndb, chunk, r)
+	if err != nil {
+		err = fmt.Errorf("restoring chunkg with index %d: %w", idx, err)
+	}
 	switch {
 	case err == nil:
 	case errors.Is(err, ErrChunkProofVerificationFailed):

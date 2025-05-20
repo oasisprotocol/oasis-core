@@ -18,25 +18,25 @@ import (
 
 func createChunk(
 	ctx context.Context,
-	tree mkvs.Tree,
 	root node.Root,
+	subtree mkvs.Subtree,
 	offset node.Key,
 	chunkSize uint64,
 	w io.Writer,
+	count *int64,
 ) (
 	chunkHash hash.Hash,
 	nextOffset node.Key,
 	err error,
 ) {
-	it := tree.NewIterator(
-		ctx,
-		// V1 checkpoints use V0 proofs.
-		mkvs.WithProofBuilder(syncer.NewProofBuilderV0(root.Hash, root.Hash)),
-	)
+
+	// V1 checkpoints use V0 proofs.
+	it := subtree.Iterator(ctx, syncer.NewProofBuilderV0(root.Hash, root.Hash))
 	defer it.Close()
 
 	// We build the chunk until the proof becomes too large or we have reached the end.
 	for it.Seek(offset); it.Valid() && it.GetProofBuilder().Size() < chunkSize; it.Next() {
+		*count++
 		// Check if context got cancelled while iterating to abort early.
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -56,8 +56,10 @@ func createChunk(
 	}
 
 	// Determine the next offset (not included in proof).
-	it.Next()
-	nextOffset = it.Key()
+	if it.Valid() {
+		it.Next()
+		nextOffset = it.Key()
+	}
 
 	hb := hash.NewBuilder()
 	sw := snappy.NewBufferedWriter(io.MultiWriter(w, hb))
