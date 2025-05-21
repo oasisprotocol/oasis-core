@@ -326,6 +326,7 @@ func (c *cache) derefNodePtr(
 	ctx context.Context,
 	ptr *node.Pointer,
 	fetcher readSyncFetcher,
+	localPrefetch int,
 ) (node.Node, error) {
 	if ptr == nil {
 		return nil, nil
@@ -355,13 +356,28 @@ func (c *cache) derefNodePtr(
 	}
 
 	// First, attempt to fetch from the local node database.
-	n, err := c.db.GetNode(c.syncRoot, ptr)
-	switch err {
-	case nil:
+	n, err := c.db.GetNode(c.syncRoot, ptr, localPrefetch)
+	switch {
+	case err == nil:
 		ptr.Node = n
 		// Commit node to cache.
-		c.commitNode(ptr)
-	case db.ErrNodeNotFound:
+		var commitNodes func(*node.Pointer)
+		commitNodes = func(pt *node.Pointer) {
+			if pt == nil || pt.Node == nil {
+				return
+			}
+			c.commitNode(pt)
+			switch n := pt.Node.(type) {
+			case nil, *node.LeafNode:
+				return
+			case *node.InternalNode:
+				commitNodes(n.Left)
+				// commitNodes(n.LeafNode) // TODO: Leaf nodes are always(??) part of internal nodes internally.
+				commitNodes(n.Right)
+			}
+		}
+		commitNodes(ptr)
+	case errors.Is(err, db.ErrNodeNotFound):
 		// Node not found in local node database, try the syncer if available.
 		if c.rs == syncer.NopReadSyncer {
 			return nil, err
