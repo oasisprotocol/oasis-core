@@ -8,7 +8,8 @@ use serde_json::value::RawValue;
 use sgx_isa::Report;
 
 use super::{
-    certificates::PCS_TRUST_ROOT, constants::*, policy::QuotePolicy, quote::TeeType, Error,
+    certificates::PCS_TRUST_ROOT, constants::*, policy::QuotePolicy, quote::TeeType,
+    utils::x509_custom_ts_verify_cb, Error,
 };
 
 /// The TCB bundle contains all the required components to verify a quote's TCB.
@@ -27,7 +28,7 @@ pub struct TCBBundle {
 impl TCBBundle {
     pub(super) fn verify_certificates(
         &self,
-        _ts: DateTime<Utc>,
+        ts: DateTime<Utc>,
     ) -> Result<MbedtlsBox<Certificate>, Error> {
         let raw_certs =
             CString::new(&*self.certificates).map_err(|err| Error::TCBParseError(err.into()))?;
@@ -37,9 +38,14 @@ impl TCBBundle {
             return Err(Error::UnexpectedCertificateChain);
         }
 
-        // TODO: Specify current timestamp.
-        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None, None)
-            .map_err(|_| Error::TCBVerificationFailed)?;
+        Certificate::verify_with_callback(
+            &cert_chain,
+            &PCS_TRUST_ROOT,
+            None,
+            None,
+            x509_custom_ts_verify_cb(ts),
+        )
+        .map_err(|_| Error::TCBVerificationFailed)?;
 
         Ok(cert_chain.pop_front().unwrap())
     }
