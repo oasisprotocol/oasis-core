@@ -2,10 +2,13 @@ package beacon
 
 import (
 	"context"
+	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // QueryFactory is the beacon query factory.
@@ -27,6 +30,33 @@ func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error
 	if err != nil {
 		return nil, err
 	}
+	state := beaconState.NewImmutableState(tree)
+	query := NewQuery(state)
+	return query, nil
+}
+
+// LightQueryFactory is the beacon light query factory.
+type LightQueryFactory struct {
+	rooter abciAPI.StateRooter
+	syncer syncer.ReadSyncer
+}
+
+// NewLightQueryFactory returns a new beacon query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) *LightQueryFactory {
+	return &LightQueryFactory{
+		rooter: rooter,
+		syncer: syncer,
+	}
+}
+
+// QueryAt returns a beacon query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
+	root, err := f.rooter.StateRoot(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state root: %w", err)
+	}
+	tree := mkvs.NewWithRoot(f.syncer, nil, root)
 	state := beaconState.NewImmutableState(tree)
 	query := NewQuery(state)
 	return query, nil

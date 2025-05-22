@@ -10,6 +10,7 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // QueryFactory is a registry query factory implementation.
@@ -57,5 +58,23 @@ func NewStateQueryFactory(state abciAPI.ApplicationState) QueryFactory {
 
 // QueryAt returns a registry query for a specific height.
 func (f *StateQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	return f.querier.QueryAt(ctx, height)
+}
+
+// LightQueryFactory is a registry light query factory.
+type LightQueryFactory struct {
+	querier *app.LightQueryFactory
+}
+
+// NewLightQueryFactory returns a new registry query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) QueryFactory {
+	return &LightQueryFactory{
+		querier: app.NewLightQueryFactory(rooter, syncer),
+	}
+}
+
+// QueryAt returns a registry query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	return f.querier.QueryAt(ctx, height)
 }

@@ -6,6 +6,7 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // QueryFactory is a consensus query factory implementation.
@@ -37,5 +38,23 @@ func NewStateQueryFactory(state abciAPI.ApplicationState) QueryFactory {
 
 // QueryAt returns a consensus query for a specific height.
 func (f *StateQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	return f.querier.QueryAt(ctx, height)
+}
+
+// LightQueryFactory is a consensus light query factory.
+type LightQueryFactory struct {
+	querier *app.LightQueryFactory
+}
+
+// NewLightQueryFactory returns a new consensus query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) QueryFactory {
+	return &LightQueryFactory{
+		querier: app.NewLightQueryFactory(rooter, syncer),
+	}
+}
+
+// QueryAt returns a consensus query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	return f.querier.QueryAt(ctx, height)
 }

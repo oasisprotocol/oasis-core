@@ -9,6 +9,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // QueryFactory is a roothash query factory implementation.
@@ -56,5 +57,23 @@ func NewStateQueryFactory(state abciAPI.ApplicationState) QueryFactory {
 
 // QueryAt returns a roothash query for a specific height.
 func (f *StateQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	return f.querier.QueryAt(ctx, height)
+}
+
+// LightQueryFactory is a roothash light query factory.
+type LightQueryFactory struct {
+	querier *app.LightQueryFactory
+}
+
+// NewLightQueryFactory returns a new roothash query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) QueryFactory {
+	return &LightQueryFactory{
+		querier: app.NewLightQueryFactory(rooter, syncer),
+	}
+}
+
+// QueryAt returns a roothash query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	return f.querier.QueryAt(ctx, height)
 }

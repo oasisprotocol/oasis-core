@@ -2,10 +2,13 @@ package consensus
 
 import (
 	"context"
+	"fmt"
 
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // QueryFactory is the consensus query factory.
@@ -27,6 +30,33 @@ func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error
 	if err != nil {
 		return nil, err
 	}
+	state := consensusState.NewImmutableState(tree)
+	query := NewQuery(state)
+	return query, nil
+}
+
+// LightQueryFactory is the consensus light query factory.
+type LightQueryFactory struct {
+	rooter abciAPI.StateRooter
+	syncer syncer.ReadSyncer
+}
+
+// NewLightQueryFactory returns a new consensus query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) *LightQueryFactory {
+	return &LightQueryFactory{
+		rooter: rooter,
+		syncer: syncer,
+	}
+}
+
+// QueryAt returns a consensus query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
+	root, err := f.rooter.StateRoot(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state root: %w", err)
+	}
+	tree := mkvs.NewWithRoot(f.syncer, nil, root)
 	state := consensusState.NewImmutableState(tree)
 	query := NewQuery(state)
 	return query, nil

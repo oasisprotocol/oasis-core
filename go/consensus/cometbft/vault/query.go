@@ -6,6 +6,7 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
@@ -46,5 +47,23 @@ func NewStateQueryFactory(state abciAPI.ApplicationState) QueryFactory {
 
 // QueryAt returns a vault query for a specific height.
 func (f *StateQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	return f.querier.QueryAt(ctx, height)
+}
+
+// LightQueryFactory is a vault light query factory.
+type LightQueryFactory struct {
+	querier *app.LightQueryFactory
+}
+
+// NewLightQueryFactory returns a new vault query factory
+// backed by a trusted state root provider and an untrusted read syncer.
+func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) QueryFactory {
+	return &LightQueryFactory{
+		querier: app.NewLightQueryFactory(rooter, syncer),
+	}
+}
+
+// QueryAt returns a vault query for a specific height.
+func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	return f.querier.QueryAt(ctx, height)
 }
