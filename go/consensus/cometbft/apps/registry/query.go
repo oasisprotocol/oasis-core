@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -28,26 +29,27 @@ func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
 
 // QueryAt returns a registry query for a specific height.
 func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
+	tree, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return NewQuery(height, f.state, registryState.NewImmutableState(state)), nil
+	state := registryState.NewImmutableState(tree)
+	beacon := beaconState.NewImmutableState(tree)
+	query := NewQuery(state, beacon)
+	return query, nil
 }
 
 // Query is the registry query.
 type Query struct {
-	height     int64
-	queryState abciAPI.ApplicationQueryState
-	state      *registryState.ImmutableState
+	state  *registryState.ImmutableState
+	beacon *beaconState.ImmutableState
 }
 
 // NewQuery returns a new registry query backed by the given state.
-func NewQuery(height int64, queryState abciAPI.ApplicationQueryState, state *registryState.ImmutableState) *Query {
+func NewQuery(state *registryState.ImmutableState, beacon *beaconState.ImmutableState) *Query {
 	return &Query{
-		height:     height,
-		queryState: queryState,
-		state:      state,
+		state:  state,
+		beacon: beacon,
 	}
 }
 
@@ -63,7 +65,7 @@ func (q *Query) Entities(ctx context.Context) ([]*entity.Entity, error) {
 
 // Node implements registry.Query.
 func (q *Query) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	epoch, err := q.queryState.GetEpoch(ctx, q.height)
+	epoch, _, err := q.beacon.GetEpoch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
@@ -92,7 +94,7 @@ func (q *Query) NodeStatus(ctx context.Context, id signature.PublicKey) (*regist
 
 // Nodes implements registry.Query.
 func (q *Query) Nodes(ctx context.Context) ([]*node.Node, error) {
-	epoch, err := q.queryState.GetEpoch(ctx, q.height)
+	epoch, _, err := q.beacon.GetEpoch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}

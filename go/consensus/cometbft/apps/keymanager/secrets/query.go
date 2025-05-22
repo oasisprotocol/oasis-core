@@ -24,11 +24,13 @@ func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
 
 // QueryAt returns a key manager secrets query for a specific height.
 func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
+	tree, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return NewQuery(secretsState.NewImmutableState(state)), nil
+	state := secretsState.NewImmutableState(tree)
+	query := NewQuery(state)
+	return query, nil
 }
 
 // Query is the key manager secrets query.

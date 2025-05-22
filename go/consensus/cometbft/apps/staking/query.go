@@ -25,11 +25,13 @@ func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
 
 // QueryAt returns a staking query for a specific height.
 func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
+	tree, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return NewQuery(stakingState.NewImmutableState(state)), nil
+	state := stakingState.NewImmutableState(tree)
+	query := NewQuery(state)
+	return query, nil
 }
 
 // Query is the staking query.

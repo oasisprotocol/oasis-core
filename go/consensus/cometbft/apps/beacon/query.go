@@ -23,11 +23,13 @@ func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
 
 // QueryAt returns a beacon query for a specific height.
 func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
+	tree, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return NewQuery(beaconState.NewImmutableState(state)), nil
+	state := beaconState.NewImmutableState(tree)
+	query := NewQuery(state)
+	return query, nil
 }
 
 // Query is the beacon query.
