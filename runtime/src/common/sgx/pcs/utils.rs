@@ -1,5 +1,8 @@
 //! Various parsing utilities.
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, convert::TryInto, mem};
+
+use chrono::prelude::*;
+use mbedtls::x509;
 
 use super::Error;
 
@@ -66,5 +69,31 @@ impl TakePrefix for Cow<'_, str> {
                 "unexpected end of quote".to_string(),
             ))
         }
+    }
+}
+
+/// Callback for X509 certificate verification at the given timestamp.
+pub fn x509_custom_ts_verify_cb(ts: DateTime<Utc>) -> impl x509::VerifyCallback {
+    move |cert: &x509::Certificate,
+          _depth: i32,
+          err: &mut x509::VerifyError|
+          -> Result<(), mbedtls::Error> {
+        err.set(
+            x509::VerifyError::CERT_EXPIRED,
+            ts.naive_utc()
+                > cert
+                    .not_after()?
+                    .try_into()
+                    .map_err(|_| mbedtls::Error::X509InvalidDate)?,
+        );
+        err.set(
+            x509::VerifyError::CERT_FUTURE,
+            ts.naive_utc()
+                < cert
+                    .not_before()?
+                    .try_into()
+                    .map_err(|_| mbedtls::Error::X509InvalidDate)?,
+        );
+        Ok(())
     }
 }

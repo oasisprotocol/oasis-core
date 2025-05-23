@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
+	"github.com/oasisprotocol/oasis-core/go/runtime/log"
 )
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
@@ -23,16 +24,18 @@ type RuntimeHostNode struct {
 	runtime     Runtime
 	provisioner host.Provisioner
 	handler     host.RuntimeHandler
+	logManager  *log.Manager
 
 	rofls map[component.ID]version.Version
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler host.RuntimeHandler) (*RuntimeHostNode, error) {
+func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler host.RuntimeHandler, logManager *log.Manager) (*RuntimeHostNode, error) {
 	h := composite.NewHost(runtime.ID())
 
 	return &RuntimeHostNode{
 		host:        h,
+		logManager:  logManager,
 		runtime:     runtime,
 		handler:     handler,
 		provisioner: provisioner,
@@ -57,11 +60,17 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 		return err
 	}
 
+	log, err := n.logManager.Get(n.runtime.ID(), comp.ID())
+	if err != nil {
+		return err
+	}
+
 	cfg := host.Config{
 		ID:             n.runtime.ID(),
 		Component:      comp,
 		MessageHandler: handler,
 		LocalConfig:    getLocalConfig(n.runtime.ID(), comp.ID()),
+		Log:            log,
 	}
 
 	rt, err := n.provisioner.NewRuntime(cfg)
@@ -90,6 +99,8 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 func (n *RuntimeHostNode) RemoveHostedRuntimeComponent(id component.ID) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	n.logManager.Remove(n.runtime.ID(), id)
 
 	if err := n.host.RemoveComponent(id); err != nil {
 		return err
