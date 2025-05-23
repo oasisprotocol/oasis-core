@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	dbm "github.com/cometbft/cometbft-db"
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtcore "github.com/cometbft/cometbft/rpc/core"
 	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
@@ -698,55 +699,9 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		return nil, err
 	}
 
-	txResults := make([]*results.Result, 0, len(txs))
-	for idx, rs := range blockResults.TxsResults {
-		// Transaction result.
-		result := &results.Result{
-			Error: results.Error{
-				Module:  rs.GetCodespace(),
-				Code:    rs.GetCode(),
-				Message: rs.GetLog(),
-			},
-			GasUsed: uint64(rs.GetGasUsed()),
-		}
-
-		// Transaction staking events.
-		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range stakingEvents {
-			result.Events = append(result.Events, &results.Event{Staking: e})
-		}
-
-		// Transaction registry events.
-		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range registryEvents {
-			result.Events = append(result.Events, &results.Event{Registry: e})
-		}
-
-		// Transaction roothash events.
-		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range roothashEvents {
-			result.Events = append(result.Events, &results.Event{RootHash: e})
-		}
-
-		// Transaction governance events.
-		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range governanceEvents {
-			result.Events = append(result.Events, &results.Event{Governance: e})
-		}
-
-		txResults = append(txResults, result)
+	txResults, err := TransactionResultsFromCometBFT(height, txs, blockResults.TxsResults)
+	if err != nil {
+		return nil, err
 	}
 
 	return &consensusAPI.TransactionsWithResults{
@@ -955,4 +910,60 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 		dbCloser:              db.NewCloser(),
 		startedCh:             make(chan struct{}),
 	}
+}
+
+func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmtabcitypes.ResponseDeliverTx) ([]*results.Result, error) {
+	txResults := make([]*results.Result, 0, len(txs))
+
+	for idx, rs := range responses {
+		// Transaction result.
+		result := &results.Result{
+			Error: results.Error{
+				Module:  rs.GetCodespace(),
+				Code:    rs.GetCode(),
+				Message: rs.GetLog(),
+			},
+			GasUsed: uint64(rs.GetGasUsed()),
+		}
+
+		// Transaction staking events.
+		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range stakingEvents {
+			result.Events = append(result.Events, &results.Event{Staking: e})
+		}
+
+		// Transaction registry events.
+		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range registryEvents {
+			result.Events = append(result.Events, &results.Event{Registry: e})
+		}
+
+		// Transaction roothash events.
+		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range roothashEvents {
+			result.Events = append(result.Events, &results.Event{RootHash: e})
+		}
+
+		// Transaction governance events.
+		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range governanceEvents {
+			result.Events = append(result.Events, &results.Event{Governance: e})
+		}
+
+		txResults = append(txResults, result)
+	}
+
+	return txResults, nil
 }
