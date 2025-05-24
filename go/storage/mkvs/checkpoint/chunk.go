@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/golang/snappy"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
-func createChunk(
+func createChunkV1(
 	ctx context.Context,
 	tree mkvs.Tree,
 	root node.Root,
@@ -59,22 +60,40 @@ func createChunk(
 	it.Next()
 	nextOffset = it.Key()
 
+	chunkHash, err = writeProofToChunk(proof, w)
+	return
+}
+
+func createChunkV2(ctx context.Context, pb *syncer.ProofBuilder, dataFilename string) (hash.Hash, error) {
+	proof, err := pb.Build(ctx)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("building proof: %w", err)
+	}
+	var f *os.File
+	defer f.Close()
+	if f, err = os.Create(dataFilename); err != nil {
+		return hash.Hash{}, fmt.Errorf("creating chunk file: %w", err)
+	}
+	h, err := writeProofToChunk(proof, f)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("writing proof to file (filename: %s): %w", dataFilename, err)
+	}
+	return h, nil
+}
+
+func writeProofToChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
 	hb := hash.NewBuilder()
 	sw := snappy.NewBufferedWriter(io.MultiWriter(w, hb))
 	enc := cbor.NewEncoder(sw)
 	for _, entry := range proof.Entries {
-		if err = enc.Encode(entry); err != nil {
-			err = fmt.Errorf("chunk: failed to encode chunk part: %w", err)
-			return
+		if err := enc.Encode(entry); err != nil {
+			return hash.Hash{}, fmt.Errorf("chunk: failed to encode chunk part: %w", err)
 		}
 	}
-	if err = sw.Close(); err != nil {
-		err = fmt.Errorf("chunk: failed to close chunk: %w", err)
-		return
+	if err := sw.Close(); err != nil {
+		return hash.Hash{}, fmt.Errorf("chunk: failed to close chunk: %w", err)
 	}
-
-	chunkHash = hb.Build()
-	return
+	return hb.Build(), nil
 }
 
 func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {

@@ -96,7 +96,7 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	require.NoError(err, "New()")
 	defer ndb.Close()
 	badgerdb := ndb.(*badgerNodeDB)
-	fc, err := checkpoint.NewFileCreator(dir, ndb)
+	fc, err := checkpoint.NewFileCreatorV1(dir, ndb)
 	require.NoError(err, "NewFileCreator()")
 
 	ckRoot := fillDB(ctx, require, values, nil, version, 2, ndb)
@@ -156,7 +156,7 @@ func checkNoLogKeys(require *require.Assertions, badgerdb *badgerNodeDB) {
 }
 
 func restoreCheckpoint(ctx *test, ckMeta *checkpoint.Metadata, ckNodes keySet) checkpoint.Restorer {
-	fc, err := checkpoint.NewFileCreator(ctx.dir, ctx.badgerdb)
+	fc, err := checkpoint.NewFileCreatorV1(ctx.dir, ctx.badgerdb)
 	ctx.require.NoError(err, "NewFileCreator() - 2")
 
 	restorer, err := checkpoint.NewRestorer(ctx.badgerdb)

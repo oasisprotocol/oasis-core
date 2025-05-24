@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
@@ -19,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/pathbadger"
 	dbTesting "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/testing"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -61,7 +64,7 @@ func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// There should be no checkpoints before one is created.
@@ -303,7 +306,7 @@ func testOversizedChunks(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -406,7 +409,7 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator for the first database.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb1)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb1)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -490,4 +493,323 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	// Prune the checkpoint root version.
 	err = ndb2.Prune(checkpointRootVersion)
 	require.NoError(err, "Prune(%d)", checkpointRootVersion)
+}
+
+// TODO:
+//   - Unify style
+//   - Make helpers reusable for other tests.
+//   - Fuzz both backends.
+func FuzzCheckpointCreation(f *testing.F) {
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, depth uint8, chunkSize uint64) {
+		if chunkSize == 0 { // TODO check why this condition is not needed.
+			t.Skip("skipping zero chunk size")
+		}
+		ctx := context.Background()
+		dir, err := os.MkdirTemp("", "mkvs.Checkpoint")
+		if err != nil {
+			t.Fatalf("failed to create new temporary dir: %v", err)
+		}
+		defer os.RemoveAll(dir)
+
+		// Create node database.
+		cfg1 := &dbApi.Config{
+			DB:           filepath.Join(dir, "db1"),
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
+		}
+		ndb1, err := pathbadger.New(cfg1)
+		if err != nil {
+			t.Fatalf("failed to create new pathbadger backend: %v", err)
+		}
+		defer ndb1.Close()
+
+		// Populate node database with random entries.
+		tree1 := mkvs.New(nil, ndb1, node.RootTypeState)
+		defer tree1.Close()
+		root := populateDb(ctx, t, tree1, testNs, n, seed)
+		err = ndb1.Finalize([]node.Root{root})
+		if err != nil {
+			t.Fatalf("Failed to finalized ndb1")
+		}
+
+		// Create a checkpoint.
+		fc, err := NewFileCreatorV2(filepath.Join(dir, "checkpoints"), ndb1)
+		if err != nil {
+			t.Fatalf("failed to create new checkpoint creator: %v", err)
+		}
+		cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+		if err != nil {
+			t.Fatalf("creating checkpoint (rootHash: %.8s, chunkSize: %d): %v", root.Hash, chunkSize, err)
+		}
+
+		// Create a fresh node database.
+		cfg2 := &dbApi.Config{
+			DB:           filepath.Join(dir, "db2"),
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
+		}
+		ndb2, err := pathbadger.New(cfg2)
+		if err != nil {
+			t.Fatalf("failed to create new pathbadger backend: %v", err)
+		}
+		defer ndb2.Close()
+
+		// Restore checkpoints into the second database.
+		restoreCheckpoint(ctx, t, ndb2, cp, fc, root)
+
+		// Iterate over keyset of both databases and ensure equal entries.
+		tree2 := mkvs.NewWithRoot(nil, ndb2, root)
+		defer tree2.Close()
+		it1 := tree1.NewIterator(ctx)
+		defer it1.Close()
+		it2 := tree2.NewIterator(ctx)
+		defer it2.Close()
+		it1.Rewind()
+		it2.Rewind()
+		for ; it1.Valid(); it1.Next() {
+			if !it2.Valid() {
+				t.Error("Key missing in the second database")
+			}
+			key1 := it1.Key()
+			key2 := it2.Key()
+			if !bytes.Equal(key1, key2) {
+				t.Fatalf("Keys not equal: want %s, got %s", key1, key2)
+			}
+			val1 := it1.Key()
+			val2 := it2.Key()
+			if !bytes.Equal(val1, val2) {
+				t.Fatalf("Values not equal: want %s, got %s", val1, val2)
+			}
+			it2.Next()
+		}
+
+	})
+}
+
+// TODO it would be nice to create general purpose Db initiliazer for tests, with
+// various properties (e.g. seq numbers as keys, random byte keys, etc)
+// We could reuse this logic in many places.
+func populateDb(ctx context.Context, t *testing.T, tree mkvs.Tree, ns common.Namespace, n uint16, seed int64) node.Root {
+	t.Helper()
+
+	rnd := rand.New(rand.NewSource(seed))
+
+	for i := 0; i < int(n); i++ {
+		key := make([]byte, rnd.Intn(10)) // TODO Set limit to node.Key max size.
+		val := make([]byte, rnd.Intn(10))
+
+		if _, err := rnd.Read(key); err != nil {
+			t.Fatalf("failed to create random key")
+		}
+		if _, err := rnd.Read(val); err != nil {
+			t.Fatalf("failed to create random value")
+		}
+
+		if err := tree.Insert(ctx, key, val); err != nil {
+			t.Fatalf("Insert(%x, %x): %v", key, val, err)
+		}
+	}
+
+	version := 1
+	_, rootHash, err := tree.Commit(ctx, ns, uint64(version))
+	if err != nil {
+		t.Fatalf("Commit(%.8s, %d): %v", ns, version, err)
+	}
+
+	return node.Root{
+		Namespace: ns,
+		Version:   uint64(version),
+		Type:      node.RootTypeState,
+		Hash:      rootHash,
+	}
+
+}
+
+func TestCheckpointCreationRestoration(t *testing.T) {
+	ndb1 := getSapphireMainnetNodeDB(t)
+	defer ndb1.Close()
+
+	root := getLatestStateRoot(t, ndb1)
+
+	targetDir := os.Getenv("TARGET_DIR")
+	targetDir = filepath.Join(targetDir, "sapphire_mainnet", strconv.Itoa(int(root.Version)))
+	if err := os.MkdirAll(targetDir, 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// Create a checkpoint.
+	// start := time.Now()
+	// fmt.Println(filepath.Join(targetDir, "checkpoints"))
+	// fc, err := NewFileCreatorV2(filepath.Join(targetDir, "checkpoints"), ndb1)
+	// if err != nil {
+	// 	t.Fatalf("Creating new checkpoint creator: %v", err)
+	// }
+
+	// var chunkSize uint64 = 8 * 1024 * 1024
+	// cp, err := fc.CreateCheckpoint(context.Background(), root, chunkSize)
+	// if err != nil {
+	// 	t.Fatalf("Creating checkpoint: %v", err)
+	// }
+	// fmt.Printf("Creating checkpoint took %.2f min", time.Since(start).Minutes())
+
+	// Create a fresh node database.
+	cfg2 := &dbApi.Config{
+		DB:           filepath.Join(targetDir, "db2"),
+		Namespace:    root.Namespace,
+		MaxCacheSize: 16 * 1024 * 1024,
+	}
+	ndb2, err := pathbadger.New(cfg2)
+	if err != nil {
+		t.Fatalf("failed to create new pathbadger backend: %v", err)
+	}
+	defer ndb2.Close()
+
+	fmt.Println(cfg2.DB)
+
+	// v, ok := ndb2.GetLatestVersion()
+	// if !ok {
+	// 	t.Fatalf("Empty nodedb")
+	// }
+	// fmt.Println(v)
+
+	// // Restore checkpoints into the second database.
+	// start = time.Now()
+	// restoreCheckpoint(context.Background(), t, ndb2, cp, fc, root)
+	// fmt.Printf("Restoring checkpoint took %.2f min", time.Since(start).Minutes())
+
+	// //
+
+	// fmt.Println(root)
+	// fmt.Println(ndb1.GetRootsForVersion(v))
+	tree1 := mkvs.NewWithRoot(nil, ndb1, root)
+	defer tree1.Close()
+	tree2 := mkvs.NewWithRoot(nil, ndb2, root)
+	defer tree2.Close()
+	iter1 := tree1.NewIterator(context.Background())
+	defer iter1.Close()
+	iter2 := tree2.NewIterator(context.Background())
+	defer iter2.Close()
+
+	iter2.Rewind()
+
+	var iterated int
+	for iter1.Rewind(); iter1.Valid(); iter1.Next() {
+		iterated++
+		if !iter2.Valid() {
+			fmt.Println(iter1.Key())
+			t.Fatalf("Missing key %d", iterated)
+		}
+		key1, key2 := iter1.Key(), iter2.Key()
+		val1, val2 := iter1.Value(), iter2.Value()
+
+		if !key1.Equal(key2) {
+			t.Fatalf("Keys not equal: got %s, want %s", key1, key2)
+		}
+
+		if !bytes.Equal(val1, val2) {
+			t.Fatalf("Keys not equal: got %v, want %v", val1, val2)
+		}
+
+		iter2.Next()
+	}
+	fmt.Println(iter1.Key())
+
+}
+
+func restoreCheckpoint(ctx context.Context, t *testing.T, ndb2 dbApi.NodeDB, cp *Metadata, fc Creator, root node.Root) {
+	rs, err := NewRestorer(ndb2)
+	if err != nil {
+		t.Fatalf("NewRestorer(ndb2): %v", err)
+	}
+	if err = ndb2.StartMultipartInsert(cp.Root.Version); err != nil {
+		t.Fatalf("StartMultipartInsert(%d): %v", cp.Root.Version, err)
+	}
+
+	if err = rs.StartRestore(ctx, cp); err != nil {
+		t.Fatalf("StartRestore: %v", err)
+	}
+
+	for i := 0; i < len(cp.Chunks); i++ {
+		var cm *ChunkMetadata
+		cm, err = cp.GetChunkMetadata(uint64(i))
+		if err != nil {
+			t.Fatalf("GetChunkMetadata(%d): %v", i, err)
+		}
+		var buf bytes.Buffer
+		if err = fc.GetCheckpointChunk(ctx, cm, &buf); err != nil {
+			t.Fatalf("GetCheckpointChunk: %s", err)
+		}
+		if _, err = rs.RestoreChunk(ctx, uint64(i), &buf); err != nil {
+			t.Fatalf("RestoreChunk: %v", err)
+		}
+	}
+
+	if err = ndb2.Finalize([]node.Root{root}); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+
+}
+
+func TestMeasureKeysSize(t *testing.T) {
+	ndb := getSapphireMainnetNodeDB(t)
+	defer ndb.Close()
+
+	root := getLatestStateRoot(t, ndb)
+	tree := mkvs.NewWithRoot(nil, ndb, root)
+	defer tree.Close()
+
+	it := tree.NewIterator(context.Background())
+	defer it.Close()
+
+	start := time.Now()
+	var keys, keysSize, valsSize uint64
+	for it.Rewind(); it.Valid(); it.Next() {
+		keys++
+		keysSize += uint64(len(it.Key()))
+		valsSize += uint64(len(it.Value()))
+	}
+
+	fmt.Printf("Keys: %d, keys size: %d, vals size: %d\n", keys, keysSize, valsSize)
+	fmt.Println(time.Since(start).Minutes())
+}
+
+func getSapphireMainnetNodeDB(t *testing.T) dbApi.NodeDB {
+	t.Helper()
+
+	var ns common.Namespace
+	ns.UnmarshalHex("000000000000000000000000000000000000000000000000f80306c9858e7279")
+	nodedbDir := os.Getenv("NODEDB_DIR")
+
+	cfg := &dbApi.Config{
+		DB:           nodedbDir,
+		Namespace:    ns,
+		MaxCacheSize: 16 * 1024 * 1024,
+	}
+	ndb, err := pathbadger.New(cfg)
+	if err != nil {
+		t.Fatalf("Creating new pathbadger backend: %v", err)
+	}
+	return ndb
+}
+
+func getLatestStateRoot(t *testing.T, ndb dbApi.NodeDB) node.Root {
+	t.Helper()
+	version, ok := ndb.GetLatestVersion()
+	if !ok {
+		t.Fatalf("Empty nodedb")
+	}
+
+	fmt.Printf("version: %d\n", version)
+
+	roots, err := ndb.GetRootsForVersion(version)
+	if err != nil {
+		t.Fatalf("ndb.GetRootsForVersion(%d): %v", version, err)
+	}
+
+	root := roots[0]
+	if root.Type != node.RootTypeState {
+		t.Fatalf("Expected state root type")
+	}
+
+	return root
 }

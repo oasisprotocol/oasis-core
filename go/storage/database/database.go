@@ -68,7 +68,7 @@ func New(cfg *api.Config) (api.LocalBackend, error) {
 	close(initCh)
 
 	// Create the checkpointer.
-	creator, err := checkpoint.NewFileCreator(filepath.Join(cfg.DB, checkpointDir), ndb)
+	creator, err := checkpoint.NewFileCreatorV1(filepath.Join(cfg.DB, checkpointDir), ndb)
 	if err != nil {
 		ndb.Close()
 		return nil, fmt.Errorf("storage/database: failed to create checkpoint creator: %w", err)
