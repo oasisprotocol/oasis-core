@@ -64,7 +64,7 @@ func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// There should be no checkpoints before one is created.
@@ -306,7 +306,7 @@ func testOversizedChunks(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -409,7 +409,7 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	}
 
 	// Create a file-based checkpoint creator for the first database.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb1)
+	fc, err := NewFileCreatorV1(filepath.Join(dir, "checkpoints"), ndb1)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -514,7 +514,7 @@ func FuzzCreateRestore(f *testing.F) {
 	f.Add(int64(10), uint16(635), uint64(44))
 	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
 		ctx := t.Context()
-		creators := []newCreator{NewFileCreator}
+		creators := []newCreator{NewFileCreatorV1, NewFileCreatorV2}
 		rnd := rand.New(rand.NewSource(seed))
 		for _, creator := range creators {
 			backend1 := db.Backends[rnd.Intn(len(db.Backends))]
@@ -533,7 +533,7 @@ func FuzzCreateDeterministic(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
 		ctx := t.Context()
 		rnd := rand.New(rand.NewSource(seed))
-		creators := []newCreator{NewFileCreator}
+		creators := []newCreator{NewFileCreatorV1, NewFileCreatorV2}
 		for _, creator := range creators {
 			if err := testDeterministicOutput(ctx, creator, n, chunkSize, rnd); err != nil {
 				t.Fatalf("Unable to ensure deterministic output of checkpoint creation: %v", err)
@@ -791,7 +791,6 @@ func TestCheckpointCreationRestoration(t *testing.T) {
 
 	targetDir := os.Getenv("TARGET_DIR")
 	targetDir = filepath.Join(targetDir, "sapphire_mainnet", strconv.Itoa(int(root.Version)))
-
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -799,7 +798,7 @@ func TestCheckpointCreationRestoration(t *testing.T) {
 	// Create a checkpoint.
 	start := time.Now()
 	fmt.Println(filepath.Join(targetDir, "checkpoints"))
-	fc, err := NewFileCreator(filepath.Join(targetDir, "checkpoints"), ndb1)
+	fc, err := NewFileCreatorV2(filepath.Join(targetDir, "checkpoints"), ndb1)
 	if err != nil {
 		t.Fatalf("Creating new checkpoint creator: %v", err)
 	}
