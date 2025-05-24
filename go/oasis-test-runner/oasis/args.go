@@ -3,6 +3,7 @@ package oasis
 import (
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strconv"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -182,23 +183,11 @@ func (args *argBuilder) merge(string) []string {
 	shipped := map[string][]string{}
 	multiValued := map[string][][]string{}
 
-	slicesEqual := func(s1, s2 []string) bool {
-		if len(s1) != len(s2) {
-			return false
-		}
-		for i := range s1 {
-			if s1[i] != s2[i] {
-				return false
-			}
-		}
-		return true
-	}
-
 	for _, arg := range args.vec {
 		if arg.MultiValued {
 			ok := true
 			for _, el := range multiValued[arg.Name] {
-				if slicesEqual(el, arg.Values) {
+				if slices.Equal(el, arg.Values) {
 					ok = false
 					break
 				}
@@ -215,7 +204,7 @@ func (args *argBuilder) merge(string) []string {
 				output = append(output, arg.Values...)
 				shipped[arg.Name] = arg.Values
 			} else {
-				if !slicesEqual(vals, arg.Values) {
+				if !slices.Equal(vals, arg.Values) {
 					panic(fmt.Sprintf("args: single-valued argument given multiple times with different values (%s)", arg.Name))
 				}
 			}
