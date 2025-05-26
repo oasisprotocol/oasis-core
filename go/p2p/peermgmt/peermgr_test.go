@@ -95,7 +95,7 @@ func (s *PeerManagerTestSuite) SetupTest() {
 	require.NoError(err, "NewCommonStore failed")
 
 	// One manager to play with.
-	s.manager = NewPeerManager(s.host, gater, pubsub, nil, "chain context", s.store)
+	s.manager = NewPeerManager(s.host, gater, pubsub, s.store)
 }
 
 func (s *PeerManagerTestSuite) TearDownTest() {

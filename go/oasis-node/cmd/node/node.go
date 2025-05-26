@@ -480,8 +480,31 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
-	// Initialize upgrader backend.
+	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
+	// sure that we don't start it if it is not needed.
+	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+		p2p.DebugForceAllowUnroutableAddresses()
+	}
+
 	isArchive := config.GlobalConfig.Mode == config.ModeArchive
+	if isArchive {
+		node.P2P = p2p.NewNop()
+	} else {
+		node.P2P, err = p2p.New(node.Identity, node.chainContext, node.commonStore)
+		if err != nil {
+			return nil, err
+		}
+	}
+	node.svcMgr.Register(node.P2P)
+
+	if err = node.P2P.Start(); err != nil {
+		logger.Error("failed to start P2P service",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Initialize upgrader backend.
 	node.Upgrader, err = upgrade.New(node.commonStore, node.dataDir, !isArchive)
 	if err != nil {
 		logger.Error("failed to initialize upgrade backend",
@@ -502,7 +525,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Initialize consensus backend.
 	switch backend := genesisDoc.Consensus.Backend; backend {
 	case cometbftAPI.BackendName:
-		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc)
+		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc, node.P2P)
 		if err != nil {
 			logger.Error("failed to initialize cometbft consensus backend",
 				"err", err,
@@ -515,31 +538,6 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	node.svcMgr.Register(node.Consensus)
 	consensusAPI.RegisterService(node.grpcInternal.Server(), node.Consensus)
 
-	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
-	// sure that we don't start it if it is not needed.
-	if !isArchive {
-		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
-			p2p.DebugForceAllowUnroutableAddresses()
-		}
-		node.P2P, err = p2p.New(node.Identity, node.Consensus, node.commonStore)
-		if err != nil {
-			return nil, err
-		}
-		if err = node.Consensus.RegisterP2PService(node.P2P); err != nil {
-			return nil, err
-		}
-	} else {
-		node.P2P = p2p.NewNop()
-	}
-	node.svcMgr.Register(node.P2P)
-
-	if err = node.P2P.Start(); err != nil {
-		logger.Error("failed to start P2P service",
-			"err", err,
-		)
-		return nil, err
-	}
-
 	// Initialize CometBFT light client.
 	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, genesisDoc, node.P2P)
 	if err != nil {
@@ -551,6 +549,16 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 
 	// Register consensus light client P2P protocol server.
 	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus.Core()))
+
+	// Register the consensus service with the peer registry.
+	if mgr := node.P2P.PeerManager(); mgr != nil {
+		if err = mgr.PeerRegistry().RegisterConsensus(node.chainContext, node.Consensus); err != nil {
+			logger.Error("failed to register consensus with peer registry",
+				"err", err,
+			)
+			return nil, err
+		}
+	}
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.

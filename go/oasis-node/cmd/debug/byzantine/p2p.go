@@ -97,9 +97,12 @@ func (ph *p2pHandle) start(ht *honestCometBFT, id *identity.Identity, chainConte
 	}
 
 	var err error
-	ph.service, err = p2p.New(id, ht.service, nil)
+	ph.service, err = p2p.New(id, chainContext, nil)
 	if err != nil {
 		return fmt.Errorf("P2P service New: %w", err)
+	}
+	if err := ph.service.PeerManager().PeerRegistry().RegisterConsensus(chainContext, ht.service); err != nil {
+		return fmt.Errorf("failed to register consensus with peer registry: %w", err)
 	}
 
 	txTopic := protocol.NewTopicKindTxID(chainContext, runtimeID)

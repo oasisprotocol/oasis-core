@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -125,6 +126,9 @@ type PeerRegistry interface {
 
 	// NumPeers returns the number of registered peers.
 	NumPeers() int
+
+	// RegisterConsensus sets the consensus service that provides access to the peer registry.
+	RegisterConsensus(chainContext string, consensus consensus.Service) error
 }
 
 // PeerTagger is an interface for tagging important peers.

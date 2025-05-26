@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/full"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -22,6 +23,7 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
+	p2p p2pAPI.Service,
 ) (consensusAPI.Service, error) {
 	genesisDoc, err := api.GetCometBFTGenesisDocument(doc)
 	if err != nil {
@@ -55,7 +57,7 @@ func New(
 			SkipTimeoutCommit:  doc.Consensus.Parameters.SkipTimeoutCommit,
 			Upgrader:           upgrader,
 		}
-		return full.New(ctx, cfg)
+		return full.New(ctx, p2p, cfg)
 	}
 }
 

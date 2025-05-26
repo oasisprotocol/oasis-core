@@ -493,18 +493,6 @@ func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.Next
 }
 
 // Implements consensusAPI.Backend.
-func (t *fullService) RegisterP2PService(p2p p2pAPI.Service) error {
-	t.Lock()
-	defer t.Unlock()
-	if t.p2p != nil {
-		return fmt.Errorf("p2p service already registered")
-	}
-	t.p2p = p2p
-
-	return nil
-}
-
-// Implements consensusAPI.Backend.
 func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	ch, sub, err := t.WatchCometBFTBlocks()
 	if err != nil {
@@ -721,19 +709,11 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		if config.GlobalConfig.Consensus.StateSync.Enabled {
 			t.Logger.Info("state sync enabled")
 
-			t.Lock()
-			if t.p2p == nil {
-				t.Unlock()
-				t.Logger.Info("failed to create state sync client", "err", "p2p disabled")
-				return fmt.Errorf("failed to create state sync client: p2p disabled")
-			}
-			t.Unlock()
-
 			// Enable state sync in the configuration.
 			cometConfig.StateSync.Enable = true
 			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.LightClient.Trust.Hash
 
-			// Create new state sync state provider.
+			// Create light client.
 			cfg := light.Config{
 				GenesisDocument: t.genesisDoc,
 				TrustOptions: cmtlight.TrustOptions{
@@ -749,6 +729,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 				)
 				return fmt.Errorf("failed to create light client: %w", err)
 			}
+
+			// Create new state sync state provider.
 			stateProvider = newStateProvider(t.chainContext, t.genesisHeight, lightClient)
 		}
 
@@ -975,7 +957,7 @@ func (t *fullService) dumpGenesis(ctx context.Context, height int64) error {
 }
 
 // New creates a new CometBFT consensus backend.
-func New(ctx context.Context, cfg Config) (consensusAPI.Service, error) {
+func New(ctx context.Context, p2p p2pAPI.Service, cfg Config) (consensusAPI.Service, error) {
 	commonNode := newCommonNode(ctx, cfg.CommonConfig)
 
 	t := &fullService{
@@ -985,6 +967,7 @@ func New(ctx context.Context, cfg Config) (consensusAPI.Service, error) {
 		timeoutCommit:      cfg.TimeoutCommit,
 		skipTimeoutCommit:  cfg.SkipTimeoutCommit,
 		emptyBlockInterval: cfg.EmptyBlockInterval,
+		p2p:                p2p,
 		syncedCh:           make(chan struct{}),
 		quitCh:             make(chan struct{}),
 	}

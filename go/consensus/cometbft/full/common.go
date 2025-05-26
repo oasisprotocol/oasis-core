@@ -58,7 +58,6 @@ import (
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
-	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/registry"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -945,11 +944,6 @@ func (n *commonNode) WatchBlocks(context.Context) (<-chan *consensusAPI.Block, p
 // Implements consensusAPI.Backend.
 func (n *commonNode) SubmissionManager() consensusAPI.SubmissionManager {
 	return &consensusAPI.NoOpSubmissionManager{}
-}
-
-// Implements consensusAPI.Backend.
-func (n *commonNode) RegisterP2PService(p2pAPI.Service) error {
-	return consensusAPI.ErrUnsupported
 }
 
 func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {

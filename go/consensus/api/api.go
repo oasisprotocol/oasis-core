@@ -23,7 +23,6 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -416,9 +415,6 @@ type Service interface {
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
-
-	// RegisterP2PService registers the P2P service used for light client state sync.
-	RegisterP2PService(p2pAPI.Service) error
 }
 
 // StatePruner is a state pruner implementation.
