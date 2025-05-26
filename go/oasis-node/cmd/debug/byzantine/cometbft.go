@@ -8,6 +8,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
@@ -31,7 +32,7 @@ func (ht *honestCometBFT) start(id *identity.Identity, dataDir string) error {
 	}
 
 	var err error
-	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis, ht.genesisDoc)
+	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis, ht.genesisDoc, p2p.NewNop())
 	if err != nil {
 		return fmt.Errorf("cometbft New: %w", err)
 	}

@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/backup"
 )
@@ -82,8 +81,6 @@ func NewPeerManager(
 	h host.Host,
 	g connmgr.ConnectionGater,
 	ps *pubsub.PubSub,
-	consensus consensus.Service,
-	chainContext string,
 	cs *persistent.CommonStore,
 	opts ...PeerManagerOption,
 ) *PeerManager {
@@ -100,7 +97,7 @@ func NewPeerManager(
 		logger:    l,
 		host:      h,
 		pubsub:    ps,
-		registry:  newPeerRegistry(consensus, chainContext),
+		registry:  newPeerRegistry(),
 		connector: newPeerConnector(h, g),
 		tagger:    newPeerTagger(cm),
 		backup:    newPeerstoreBackup(h.Peerstore(), cstore),

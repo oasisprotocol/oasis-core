@@ -26,7 +26,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
@@ -360,7 +359,7 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 }
 
 // New creates a new P2P node.
-func New(identity *identity.Identity, consensus consensus.Service, store *persistent.CommonStore) (api.Service, error) {
+func New(identity *identity.Identity, chainContext string, store *persistent.CommonStore) (api.Service, error) {
 	var cfg Config
 	if err := cfg.Load(); err != nil {
 		return nil, fmt.Errorf("p2p: failed to load peer config: %w", err)
@@ -395,13 +394,6 @@ func New(identity *identity.Identity, consensus consensus.Service, store *persis
 		return nil, fmt.Errorf("p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
-	chainContext, err := consensus.Core().GetChainContext(ctx)
-	if err != nil {
-		ctxCancel()
-		_ = host.Close()
-		return nil, fmt.Errorf("p2p: failed to get consensus chain context: %w", err)
-	}
-
 	// Initialize the peer manager.
 	opts := make([]peermgmt.PeerManagerOption, 0, 1)
 
@@ -416,9 +408,22 @@ func New(identity *identity.Identity, consensus consensus.Service, store *persis
 		opts = append(opts, peermgmt.WithBootstrapDiscovery(seeds))
 	}
 
-	mgr := peermgmt.NewPeerManager(host, cg, pubsub, consensus, chainContext, store, opts...)
+	mgr := peermgmt.NewPeerManager(host, cg, pubsub, store, opts...)
 
-	p := &p2p{
+	// Initialize the logger.
+	logger := logging.GetLogger("p2p")
+
+	logger.Info("p2p host initialized",
+		"address", fmt.Sprintf("%+v", host.Addrs()),
+	)
+
+	if len(cfg.BlockedPeers) > 0 {
+		logger.Info("p2p blacklist initialized",
+			"num_blocked_peers", len(cfg.BlockedPeers),
+		)
+	}
+
+	return &p2p{
 		ctx:               ctx,
 		ctxCancel:         ctxCancel,
 		quitCh:            make(chan struct{}),
@@ -431,20 +436,8 @@ func New(identity *identity.Identity, consensus consensus.Service, store *persis
 		pubsub:            pubsub,
 		registerAddresses: cfg.Addresses,
 		topics:            make(map[string]*topicHandler),
-		logger:            logging.GetLogger("p2p"),
-	}
-
-	p.logger.Info("p2p host initialized",
-		"address", fmt.Sprintf("%+v", host.Addrs()),
-	)
-
-	if len(cfg.BlockedPeers) > 0 {
-		p.logger.Info("p2p blacklist initialized",
-			"num_blocked_peers", len(cfg.BlockedPeers),
-		)
-	}
-
-	return p, nil
+		logger:            logger,
+	}, nil
 }
 
 // Config describes a set of P2P settings for a peer.

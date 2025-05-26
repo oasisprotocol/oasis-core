@@ -19,7 +19,7 @@ use super::{
     policy::QuotePolicy,
     report::{SgxReport, TdAttributes, TdReport},
     tcb::{QEIdentity, TCBBundle, TCBInfo, TCBLevel, TCBStatus},
-    utils::TakePrefix,
+    utils::{x509_custom_ts_verify_cb, TakePrefix},
     Error,
 };
 use crate::common::sgx::{EnclaveIdentity, MrEnclave, MrSigner, VerifiedQuote};
@@ -81,7 +81,7 @@ impl QuoteBundle {
 
         // Perform quote verification.
         if !unsafe_skip_quote_verification {
-            let tcb_level = quote.verify(tcb_info, qe_identity)?;
+            let tcb_level = quote.verify(tcb_info, qe_identity, ts)?;
 
             // Validate TCB level.
             match tcb_level.status {
@@ -250,11 +250,16 @@ impl<'a> Quote<'a> {
     }
 
     /// Verify quote.
-    pub fn verify(&self, tcb_info: TCBInfo, qe_identity: QEIdentity) -> Result<TCBLevel, Error> {
+    pub fn verify(
+        &self,
+        tcb_info: TCBInfo,
+        qe_identity: QEIdentity,
+        ts: DateTime<Utc>,
+    ) -> Result<TCBLevel, Error> {
         let tdx_comp_svn = self.report_body.tdx_comp_svn();
 
         let mut verifier: QeEcdsaP256Verifier =
-            QeEcdsaP256Verifier::new(tcb_info, qe_identity, tdx_comp_svn);
+            QeEcdsaP256Verifier::new(tcb_info, qe_identity, tdx_comp_svn, ts);
         self.signature.verify(&self.signed_data, &mut verifier)?;
 
         Ok(verifier.tcb_level().unwrap())
@@ -790,6 +795,7 @@ impl<'a> CertificationDataQeReport<'a> {
 
 /// Quoting Enclave ECDSA P-256 verifier.
 pub struct QeEcdsaP256Verifier {
+    ts: DateTime<Utc>,
     tcb_info: TCBInfo,
     qe_identity: QEIdentity,
     tdx_comp_svn: Option<[u32; 16]>,
@@ -802,8 +808,10 @@ impl QeEcdsaP256Verifier {
         tcb_info: TCBInfo,
         qe_identity: QEIdentity,
         tdx_comp_svn: Option<[u32; 16]>,
+        ts: DateTime<Utc>,
     ) -> Self {
         Self {
+            ts,
             tcb_info,
             qe_identity,
             tdx_comp_svn,
@@ -840,10 +848,14 @@ impl QuoteSignatureEcdsaP256Verifier for QeEcdsaP256Verifier {
                 .map_err(|_| Error::MalformedPCK)?;
             cert_chain.push(cert);
         }
-        // TODO: Specify current timestamp.
-        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None, None).map_err(|_| {
-            Error::VerificationFailed("PCK certificate chain is invalid".to_string())
-        })?;
+        Certificate::verify_with_callback(
+            &cert_chain,
+            &PCS_TRUST_ROOT,
+            None,
+            None,
+            x509_custom_ts_verify_cb(self.ts),
+        )
+        .map_err(|_| Error::VerificationFailed("PCK certificate chain is invalid".to_string()))?;
 
         // Extract TCB parameters from the PCK certificate.
         let mut pck_cert = cert_chain.pop_front().unwrap();

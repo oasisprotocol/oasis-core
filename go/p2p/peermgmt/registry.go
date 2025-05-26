@@ -17,48 +17,67 @@ import (
 )
 
 type peerRegistry struct {
-	logger *logging.Logger
+	mu sync.Mutex
 
-	consensus    consensus.Service
-	chainContext string
-
-	mu            sync.Mutex
 	peers         map[core.PeerID]peer.AddrInfo
 	protocolPeers map[core.ProtocolID]map[core.PeerID]struct{}
 	topicPeers    map[string]map[core.PeerID]struct{}
+
+	chainContext string
+	consensusCh  chan consensus.Service
 
 	initCh   chan struct{}
 	initOnce sync.Once
 
 	startOne cmSync.One
+
+	logger *logging.Logger
 }
 
-func newPeerRegistry(consensus consensus.Service, chainContext string) *peerRegistry {
-	l := logging.GetLogger("p2p/peer-manager/registry")
+func newPeerRegistry() *peerRegistry {
+	logger := logging.GetLogger("p2p/peer-manager/registry")
 
 	return &peerRegistry{
-		logger:        l,
-		consensus:     consensus,
-		chainContext:  chainContext,
 		peers:         make(map[core.PeerID]peer.AddrInfo),
 		protocolPeers: make(map[core.ProtocolID]map[core.PeerID]struct{}),
 		topicPeers:    make(map[string]map[core.PeerID]struct{}),
+		consensusCh:   make(chan consensus.Service, 1),
 		initCh:        make(chan struct{}),
 		startOne:      cmSync.NewOne(),
+		logger:        logger,
 	}
 }
 
-// Implements api.PeerRegistry.
+// Initialized implements api.PeerRegistry.
 func (r *peerRegistry) Initialized() <-chan struct{} {
 	return r.initCh
 }
 
-// Implements api.PeerRegistry.
+// NumPeers implements api.PeerRegistry.
 func (r *peerRegistry) NumPeers() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	return len(r.peers)
+}
+
+// RegisterConsensus implements api.PeerRegistry.
+func (r *peerRegistry) RegisterConsensus(chainContext string, consensus consensus.Service) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if chainContext == "" {
+		return fmt.Errorf("invalid chain context")
+	}
+
+	if r.chainContext != "" {
+		return fmt.Errorf("consensus already registered")
+	}
+
+	r.chainContext = chainContext
+	r.consensusCh <- consensus
+
+	return nil
 }
 
 func (r *peerRegistry) findProtocolPeers(ctx context.Context, p core.ProtocolID) <-chan peer.AddrInfo {
@@ -124,19 +143,23 @@ func (r *peerRegistry) stop() {
 }
 
 func (r *peerRegistry) watch(ctx context.Context) {
-	if r.consensus == nil {
+	// Wait for consensus to be registered.
+	var consensus consensus.Service
+	select {
+	case consensus = <-r.consensusCh:
+	case <-ctx.Done():
 		return
 	}
 
 	// Wait for consensus sync before proceeding.
 	select {
-	case <-r.consensus.Synced():
+	case <-consensus.Synced():
 	case <-ctx.Done():
 		return
 	}
 
 	// Listen to nodes on epoch transitions.
-	nodeListCh, nlSub, err := r.consensus.Registry().WatchNodeList(ctx)
+	nodeListCh, nlSub, err := consensus.Registry().WatchNodeList(ctx)
 	if err != nil {
 		r.logger.Error("failed to watch registry for node list changes",
 			"err", err,
@@ -146,7 +169,7 @@ func (r *peerRegistry) watch(ctx context.Context) {
 	defer nlSub.Close()
 
 	// Listen to nodes on node events.
-	nodeCh, nSub, err := r.consensus.Registry().WatchNodes(ctx)
+	nodeCh, nSub, err := consensus.Registry().WatchNodes(ctx)
 	if err != nil {
 		r.logger.Error("failed to watch registry for node changes",
 			"err", err,

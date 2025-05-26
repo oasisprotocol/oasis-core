@@ -21,7 +21,7 @@ byteorder = "1.4.3"
 anyhow = "1.0"
 thiserror = "1.0"
 sgx-isa = { version = "0.4.1", features = ["sgxstd"] }
-mbedtls = { version = "0.12.3", features = ["x509"] }
+mbedtls = { version = "0.12.3", features = ["x509", "chrono"] }
 yasna = { version = "0.5.0", features = ["num-bigint"] }
 bincode = "1.3.3"
 bitflags = "2.6.0"
@@ -32,11 +32,18 @@ base64 = "0.22.1"
 rustc-hex = "2.0.1"
 rand = "0.8.5"
 futures = "0.3.31"
-tokio = { version = "1.44", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.44", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 tokio-retry = "0.3.0"
 tendermint = "0.40.3"
 tendermint-proto = "0.40.3"
-tendermint-light-client = { version = "0.40.3", features = ["rust-crypto"], default-features = false }
+tendermint-light-client = { version = "0.40.3", features = [
+    "rust-crypto",
+], default-features = false }
 tendermint-rpc = { version = "0.40.3", default-features = false }
 curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
