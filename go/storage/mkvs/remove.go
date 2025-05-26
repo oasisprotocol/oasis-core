@@ -63,7 +63,7 @@ func (t *tree) doRemove(
 	}
 
 	// Dereference the node, possibly making a remote request.
-	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, true))
+	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, true), 1)
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -99,11 +99,11 @@ func (t *tree) doRemove(
 			// NOTE: The leaf node is always included with the internal node.
 			remainingLeaf = n.LeafNode.Node
 		}
-		remainingLeft, err := t.cache.derefNodePtr(ctx, n.Left, t.newFetcherSyncGet(key, true))
+		remainingLeft, err := t.cache.derefNodePtr(ctx, n.Left, t.newFetcherSyncGet(key, true), 1)
 		if err != nil {
 			return nil, false, nil, err
 		}
-		remainingRight, err := t.cache.derefNodePtr(ctx, n.Right, t.newFetcherSyncGet(key, true))
+		remainingRight, err := t.cache.derefNodePtr(ctx, n.Right, t.newFetcherSyncGet(key, true), 1)
 		if err != nil {
 			return nil, false, nil, err
 		}

@@ -68,7 +68,7 @@ func (t *tree) doInsert(
 	}
 
 	// Dereference the node, possibly making a remote request.
-	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, false))
+	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, false), 1)
 	if err != nil {
 		return insertResult{}, err
 	}
