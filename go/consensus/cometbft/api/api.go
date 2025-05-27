@@ -157,22 +157,8 @@ func QueryForApp(eventApp string) cmtpubsub.Query {
 	return cmtquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
 }
 
-// BlockMeta is the CometBFT-specific per-block metadata.
-type BlockMeta struct {
-	// Header is the CometBFT block header.
-	Header *cmttypes.Header `json:"header"`
-	// LastCommit is the CometBFT last commit info.
-	LastCommit *cmttypes.Commit `json:"last_commit"`
-}
-
 // NewBlock creates a new consensus.Block from a CometBFT block.
 func NewBlock(blk *cmttypes.Block) *consensus.Block {
-	meta := BlockMeta{
-		Header:     &blk.Header,
-		LastCommit: blk.LastCommit,
-	}
-	rawMeta := cbor.Marshal(meta)
-
 	var stateRoot hash.Hash
 	switch blk.Header.AppHash {
 	case nil:
@@ -194,7 +180,6 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 			Hash:    stateRoot,
 		},
 		Size: uint64(blk.Size()),
-		Meta: rawMeta,
 	}
 }
 
