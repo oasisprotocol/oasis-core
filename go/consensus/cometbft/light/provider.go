@@ -1,5 +1,4 @@
-// Package p2p implements the Oasis Core libp2p backed light client provider.
-package p2p
+package light
 
 import (
 	"context"
@@ -8,7 +7,6 @@ import (
 	"sync"
 
 	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/libp2p/go-libp2p/core"
 
@@ -19,11 +17,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
-// LightClientProvidersPool manages a pool of light client providers.
+// ProviderPool manages a pool of light client providers.
 //
 // Pool ensures that that every instantiated provider is backed by a single distinct libp2p peer
 // at all times.
-type LightClientProvidersPool struct {
+type ProviderPool struct {
 	ctx context.Context
 
 	chainID string
@@ -35,8 +33,8 @@ type LightClientProvidersPool struct {
 	peerRegistry map[core.PeerID]bool
 }
 
-// NewLightClientProviderPool returns a light client provider pool.
-func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rpc.P2P) *LightClientProvidersPool {
+// NewProviderPool returns a light client provider pool.
+func NewProviderPool(ctx context.Context, chainContext string, p2p rpc.P2P) *ProviderPool {
 	chainID := cmtAPI.CometBFTChainID(chainContext)
 	pid := light.ProtocolID(chainContext)
 
@@ -44,7 +42,7 @@ func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rp
 	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)
 
-	return &LightClientProvidersPool{
+	return &ProviderPool{
 		ctx:          ctx,
 		chainID:      chainID,
 		peerRegistry: make(map[core.PeerID]bool),
@@ -53,12 +51,12 @@ func NewLightClientProviderPool(ctx context.Context, chainContext string, p2p rp
 	}
 }
 
-// NewLightClientProvider creates a new provider for the CometBFT's light client backed by the
+// NewProvider creates a new provider for the CometBFT's light client backed by the
 // Oasis Core LightBlocks P2P protocol.
 //
 // Each instantiated provider is backed by a distinct P2P Peer.
-func (p *LightClientProvidersPool) NewLightClientProvider() *LightClientProvider {
-	provider := &LightClientProvider{
+func (p *ProviderPool) NewProvider() *Provider {
+	provider := &Provider{
 		chainID:   p.chainID,
 		p2pMgr:    p.p2pMgr,
 		rc:        p.rc,
@@ -72,7 +70,7 @@ func (p *LightClientProvidersPool) NewLightClientProvider() *LightClientProvider
 	return provider
 }
 
-type LightClientProvider struct {
+type Provider struct {
 	logger *logging.Logger
 
 	chainID string
@@ -86,30 +84,30 @@ type LightClientProvider struct {
 	l      sync.RWMutex
 	peerID *core.PeerID
 
-	pool *LightClientProvidersPool
+	pool *ProviderPool
 }
 
-func (lp *LightClientProvider) worker(ctx context.Context) {
-	ch, sub, err := lp.p2pMgr.WatchUpdates()
+func (p *Provider) worker(ctx context.Context) {
+	ch, sub, err := p.p2pMgr.WatchUpdates()
 	if err != nil {
-		lp.logger.Error("peer manager watch updates failure", "err", err)
+		p.logger.Error("peer manager watch updates failure", "err", err)
 		return
 	}
 	defer sub.Close()
 
-	lp.refreshPeer()
+	p.refreshPeer()
 
 	for {
 		select {
-		case <-lp.refreshCh:
+		case <-p.refreshCh:
 			// Explicitly requested peer refresh.
-			lp.refreshPeer()
+			p.refreshPeer()
 		case update := <-ch:
-			peerID := lp.getPeer()
+			peerID := p.getPeer()
 			switch {
 			case peerID == nil:
 				// If we have no peer and update was received try obtaining a peer.
-				lp.refreshPeer()
+				p.refreshPeer()
 			default:
 				// If we have a peer, ensure it was not removed.
 				if update.ID != *peerID {
@@ -119,65 +117,65 @@ func (lp *LightClientProvider) worker(ctx context.Context) {
 					continue
 				}
 				// Peer was removed, try obtaining a new peer.
-				lp.refreshPeer()
+				p.refreshPeer()
 			}
 		case <-ctx.Done():
-			lp.dropPeer()
+			p.dropPeer()
 			return
 		}
 	}
 }
 
-func (lp *LightClientProvider) dropPeer() {
-	lp.l.Lock()
-	defer lp.l.Unlock()
-	lp.pool.l.Lock()
-	defer lp.pool.l.Unlock()
+func (p *Provider) dropPeer() {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.pool.l.Lock()
+	defer p.pool.l.Unlock()
 	// Remove peer from pool.
-	if lp.peerID != nil {
-		delete(lp.pool.peerRegistry, *lp.peerID)
+	if p.peerID != nil {
+		delete(p.pool.peerRegistry, *p.peerID)
 	}
-	lp.peerID = nil
+	p.peerID = nil
 }
 
-func (lp *LightClientProvider) getPeer() *core.PeerID {
-	lp.l.RLock()
-	defer lp.l.RUnlock()
-	return lp.peerID
+func (p *Provider) getPeer() *core.PeerID {
+	p.l.RLock()
+	defer p.l.RUnlock()
+	return p.peerID
 }
 
-func (lp *LightClientProvider) refreshPeer() {
-	lp.l.Lock()
-	defer lp.l.Unlock()
-	lp.pool.l.Lock()
-	defer lp.pool.l.Unlock()
+func (p *Provider) refreshPeer() {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.pool.l.Lock()
+	defer p.pool.l.Unlock()
 
-	lp.logger.Debug("refreshing peer", "peer", lp.peerID)
+	p.logger.Debug("refreshing peer", "peer", p.peerID)
 
 	// Remove selected peer.
-	if lp.peerID != nil {
-		delete(lp.pool.peerRegistry, *lp.peerID)
+	if p.peerID != nil {
+		delete(p.pool.peerRegistry, *p.peerID)
 	}
-	lp.peerID = nil
+	p.peerID = nil
 
 	// Select new peer.
-	peers := lp.p2pMgr.GetBestPeers()
+	peers := p.p2pMgr.GetBestPeers()
 	for _, peerID := range peers {
-		if _, found := lp.pool.peerRegistry[peerID]; found {
+		if _, found := p.pool.peerRegistry[peerID]; found {
 			continue
 		}
-		lp.logger.Debug("peer obtained", "peer_id", peerID)
-		p := peerID
-		lp.peerID = &p
-		lp.pool.peerRegistry[peerID] = true
+		p.logger.Debug("peer obtained", "peer_id", peerID)
+		pid := peerID
+		p.peerID = &pid
+		p.pool.peerRegistry[peerID] = true
 		return
 	}
-	lp.logger.Debug("no p2p peer available")
+	p.logger.Debug("no p2p peer available")
 }
 
 // PeerID implements api.Provider.
-func (lp *LightClientProvider) PeerID() string {
-	peer := lp.getPeer()
+func (p *Provider) PeerID() string {
+	peer := p.getPeer()
 	if peer == nil {
 		// This happens if a provider is not yet initialized, or
 		// (less likely) if a peer was just dropped and no new peer is available.
@@ -187,20 +185,20 @@ func (lp *LightClientProvider) PeerID() string {
 }
 
 // RefreshPeer implements api.Provider.
-func (lp *LightClientProvider) RefreshPeer() {
+func (p *Provider) RefreshPeer() {
 	select {
-	case lp.refreshCh <- struct{}{}:
+	case p.refreshCh <- struct{}{}:
 	default:
 	}
 }
 
 // MalevolentProvider implements api.Provider.
-func (lp *LightClientProvider) MalevolentProvider(peerID string) {
-	lp.p2pMgr.RecordBadPeer(core.PeerID(peerID))
+func (p *Provider) MalevolentProvider(peerID string) {
+	p.p2pMgr.RecordBadPeer(core.PeerID(peerID))
 }
 
 // ReportEvidence implements api.Provider.
-func (lp *LightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.Evidence) error {
+func (p *Provider) ReportEvidence(ctx context.Context, ev cmttypes.Evidence) error {
 	proto, err := cmttypes.EvidenceToProto(ev)
 	if err != nil {
 		return fmt.Errorf("failed to convert evidence: %w", err)
@@ -210,18 +208,18 @@ func (lp *LightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.E
 		return fmt.Errorf("failed to marshal evidence: %w", err)
 	}
 
-	_, err = lp.SubmitEvidence(ctx, &consensus.Evidence{Meta: meta})
+	_, err = p.SubmitEvidence(ctx, &consensus.Evidence{Meta: meta})
 	return err
 }
 
 // SubmitEvidence implements api.Provider.
-func (lp *LightClientProvider) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) (rpc.PeerFeedback, error) {
-	peerID := lp.getPeer()
+func (p *Provider) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) (rpc.PeerFeedback, error) {
+	peerID := p.getPeer()
 	if peerID == nil {
 		return nil, fmt.Errorf("no peer available")
 	}
 
-	pf, err := lp.rc.Call(ctx, *peerID, light.MethodSubmitEvidence, evidence, nil)
+	pf, err := p.rc.Call(ctx, *peerID, light.MethodSubmitEvidence, evidence, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -230,20 +228,20 @@ func (lp *LightClientProvider) SubmitEvidence(ctx context.Context, evidence *con
 }
 
 // GetStoredLightBlock implements api.Provider.
-func (lp *LightClientProvider) GetStoredLightBlock(_ int64) (*consensus.LightBlock, error) {
+func (p *Provider) GetStoredLightBlock(int64) (*consensus.LightBlock, error) {
 	// The remote client provider stores no blocks locally.
 	return nil, consensus.ErrVersionNotFound
 }
 
 // GetLightBlock implements api.Provider.
-func (lp *LightClientProvider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	peerID := lp.getPeer()
+func (p *Provider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+	peerID := p.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
 	}
 
 	var rsp consensus.LightBlock
-	pf, err := lp.rc.Call(ctx, *peerID, light.MethodGetLightBlock, height, &rsp)
+	pf, err := p.rc.Call(ctx, *peerID, light.MethodGetLightBlock, height, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -258,14 +256,14 @@ func (lp *LightClientProvider) GetLightBlock(ctx context.Context, height int64) 
 }
 
 // GetParameters implements api.Provider.
-func (lp *LightClientProvider) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
-	peerID := lp.getPeer()
+func (p *Provider) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+	peerID := p.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
 	}
 
 	var rsp consensus.Parameters
-	pf, err := lp.rc.Call(ctx, *peerID, light.MethodGetParameters, height, &rsp)
+	pf, err := p.rc.Call(ctx, *peerID, light.MethodGetParameters, height, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -280,19 +278,19 @@ func (lp *LightClientProvider) GetParameters(ctx context.Context, height int64) 
 }
 
 // ChainID implements api.Provider.
-func (lp *LightClientProvider) ChainID() string {
-	return lp.chainID
+func (p *Provider) ChainID() string {
+	return p.chainID
 }
 
 // LightBlock implements api.Provider.
-func (lp *LightClientProvider) LightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
-	lb, _, err := lp.LightBlockWithPeerID(ctx, height)
+func (p *Provider) LightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
+	lb, _, err := p.LightBlockWithPeerID(ctx, height)
 	return lb, err
 }
 
 // LightBlockWithPeerID implements api.Provider.
-func (lp *LightClientProvider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
-	rsp, pf, err := lp.GetLightBlock(ctx, height)
+func (p *Provider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
+	rsp, pf, err := p.GetLightBlock(ctx, height)
 	switch {
 	case err == nil:
 	case errors.Is(err, consensus.ErrVersionNotFound):
@@ -301,21 +299,15 @@ func (lp *LightClientProvider) LightBlockWithPeerID(ctx context.Context, height 
 		return nil, "", cmtlightprovider.ErrNoResponse
 	}
 
-	// Decode CometBFT-specific light block.
-	var protoLb cmtproto.LightBlock
-	if err = protoLb.Unmarshal(rsp.Meta); err != nil {
-		pf.RecordBadPeer()
-		return nil, "", cmtlightprovider.ErrNoResponse
-	}
-	tlb, err := cmttypes.LightBlockFromProto(&protoLb)
+	clb, err := DecodeLightBlock(rsp)
 	if err != nil {
 		pf.RecordBadPeer()
 		return nil, "", cmtlightprovider.ErrNoResponse
 	}
-	if err = tlb.ValidateBasic(lp.chainID); err != nil {
+	if err = clb.ValidateBasic(p.chainID); err != nil {
 		pf.RecordFailure()
 		return nil, "", cmtlightprovider.ErrNoResponse
 	}
 
-	return tlb, string(pf.PeerID()), nil
+	return clb, string(pf.PeerID()), nil
 }

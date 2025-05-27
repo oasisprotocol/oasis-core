@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
@@ -186,7 +187,7 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 	return &consensus.Block{
 		Height: blk.Header.Height,
 		Hash:   hash.LoadFromHexBytes(blk.Header.Hash()),
-		Time:   blk.Header.Time,
+		Time:   blk.Header.Time.Truncate(time.Second),
 		StateRoot: mkvsNode.Root{
 			Version: uint64(blk.Header.Height) - 1,
 			Type:    mkvsNode.RootTypeState,
