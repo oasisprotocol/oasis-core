@@ -22,7 +22,9 @@ const maxLogBufferSize = 10_000
 // It hardcodes some assumptions about the format of the runtime logs.
 type RuntimeLogWrapper struct {
 	// Logger for wrapper-internal info/errors.
-	logger *logging.Logger
+	internalLogger *logging.Logger
+	// Runtime-specific logger that should be used as an additional log sink.
+	runtimeLogger *logging.Logger
 	// Loggers for the runtime, one for each module inside the runtime.
 	rtLoggers map[string]*logging.Logger
 	// Key-value pairs to append to each log entry.
@@ -32,11 +34,12 @@ type RuntimeLogWrapper struct {
 }
 
 // NewRuntimeLogWrapper creates a new RuntimeLogWrapper.
-func NewRuntimeLogWrapper(logger *logging.Logger, suffixes ...any) *RuntimeLogWrapper {
+func NewRuntimeLogWrapper(internalLogger *logging.Logger, runtimeLogger *logging.Logger, suffixes ...any) *RuntimeLogWrapper {
 	return &RuntimeLogWrapper{
-		logger:    logger,
-		suffixes:  suffixes,
-		rtLoggers: make(map[string]*logging.Logger),
+		internalLogger: internalLogger,
+		runtimeLogger:  runtimeLogger,
+		suffixes:       suffixes,
+		rtLoggers:      make(map[string]*logging.Logger),
 	}
 }
 
@@ -57,7 +60,7 @@ func (w *RuntimeLogWrapper) Write(chunk []byte) (int, error) {
 	// Prevent the buffer from growing indefinitely in case runtime logs
 	// don't contain newlines (e.g. because of unexpected log format).
 	if len(w.buf) > maxLogBufferSize {
-		w.logger.Warn("runtime log buffer is too large, dropping logs")
+		w.internalLogger.Warn("runtime log buffer is too large, dropping logs")
 		w.buf = w.buf[:0]
 	}
 
@@ -71,7 +74,10 @@ func (w *RuntimeLogWrapper) rtLogger(module string) *logging.Logger {
 	if l, ok := w.rtLoggers[module]; ok {
 		return l
 	}
-	l := logging.GetBaseLogger(module).With(w.suffixes...)
+
+	l := logging.GetBaseLogger(module)
+	l = logging.NewMultiLogger(l, w.runtimeLogger)
+	l = l.With(w.suffixes...)
 	w.rtLoggers[module] = l
 	return l
 }
@@ -98,7 +104,7 @@ func (w RuntimeLogWrapper) processLogLine(line []byte) {
 			if _msg, ok := v.(string); ok {
 				msg = _msg
 			} else {
-				w.logger.Warn("malformed log line from runtime", "log_line", string(line), "err", "msg is not a string")
+				w.internalLogger.Warn("malformed log line from runtime", "log_line", string(line), "err", "msg is not a string")
 				return
 			}
 		} else if k == "level" {
@@ -129,7 +135,7 @@ func (w RuntimeLogWrapper) processLogLine(line []byte) {
 	case "ERRO":
 		rtLogger.Error(msg, kv...)
 	default:
-		w.logger.Warn("log line from runtime has no known error level set, using INFO", "log_line", string(line))
+		w.internalLogger.Warn("log line from runtime has no known error level set, using INFO", "log_line", string(line))
 		rtLogger.Info(msg, kv...)
 	}
 }

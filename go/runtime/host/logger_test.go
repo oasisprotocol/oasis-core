@@ -36,7 +36,7 @@ func TestRuntimeLogWrapper(t *testing.T) {
 	}
 
 	// Feed data to RuntimeLogWrapper.
-	w := NewRuntimeLogWrapper(logging.GetLogger("testenv"))
+	w := NewRuntimeLogWrapper(logging.GetLogger("testenv"), logging.NewNopLogger())
 	for _, chunk := range logChunks {
 		n, err := w.Write([]byte(chunk))
 		require.Equal(len(chunk), n)
