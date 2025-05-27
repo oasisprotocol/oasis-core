@@ -500,7 +500,7 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 //   - Make helpers reusable for other tests.
 //   - Fuzz both backends.
 func FuzzCheckpointCreation(f *testing.F) {
-	f.Add(int64(0), uint16(4), uint64(45))
+	f.Add(int64(10), uint16(635), uint64(44))
 	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
 		if chunkSize == 0 { // TODO check why this condition is not needed.
 			t.Skip("skipping zero chunk size")
@@ -640,22 +640,22 @@ func TestCheckpointCreationRestoration(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	// Create a checkpoint.
-	// start := time.Now()
-	// fmt.Println(filepath.Join(targetDir, "checkpoints"))
-	// fc, err := NewFileCreatorV2(filepath.Join(targetDir, "checkpoints"), ndb1)
-	// if err != nil {
-	// 	t.Fatalf("Creating new checkpoint creator: %v", err)
-	// }
+	//Create a checkpoint.
+	start := time.Now()
+	fmt.Println(filepath.Join(targetDir, "checkpoints"))
+	fc, err := NewFileCreatorV2(filepath.Join(targetDir, "checkpoints"), ndb1)
+	if err != nil {
+		t.Fatalf("Creating new checkpoint creator: %v", err)
+	}
 
-	// var chunkSize uint64 = 8 * 1024 * 1024
-	// cp, err := fc.CreateCheckpoint(context.Background(), root, chunkSize)
-	// if err != nil {
-	// 	t.Fatalf("Creating checkpoint: %v", err)
-	// }
-	// fmt.Printf("Creating checkpoint took %.2f min", time.Since(start).Minutes())
+	var chunkSize uint64 = 8 * 1024 * 1024
+	cp, err := fc.CreateCheckpoint(context.Background(), root, chunkSize)
+	if err != nil {
+		t.Fatalf("Creating checkpoint: %v", err)
+	}
+	fmt.Printf("Creating checkpoint took %.2f min", time.Since(start).Minutes())
 
-	// Create a fresh node database.
+	//Create a fresh node database.
 	cfg2 := &dbApi.Config{
 		DB:           filepath.Join(targetDir, "db2"),
 		Namespace:    root.Namespace,
@@ -667,18 +667,10 @@ func TestCheckpointCreationRestoration(t *testing.T) {
 	}
 	defer ndb2.Close()
 
-	fmt.Println(cfg2.DB)
-
-	// v, ok := ndb2.GetLatestVersion()
-	// if !ok {
-	// 	t.Fatalf("Empty nodedb")
-	// }
-	// fmt.Println(v)
-
-	// // Restore checkpoints into the second database.
-	// start = time.Now()
-	// restoreCheckpoint(context.Background(), t, ndb2, cp, fc, root)
-	// fmt.Printf("Restoring checkpoint took %.2f min", time.Since(start).Minutes())
+	// Restore checkpoints into the second database.
+	start = time.Now()
+	restoreCheckpoint(context.Background(), t, ndb2, cp, fc, root)
+	fmt.Printf("Restoring checkpoint took %.2f min", time.Since(start).Minutes())
 
 	// //
 

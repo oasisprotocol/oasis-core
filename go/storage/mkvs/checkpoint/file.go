@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -284,7 +285,7 @@ func (fc *fileCreatorV2) CreateCheckpoint(ctx context.Context, root node.Root, c
 	}
 
 	// Create chunks.
-	chunks, err := createChunksV2(ctx, fc.ndb, chunkSize, root, chunksDir)
+	chunks, err := createChunksV2(ctx, fc.ndb, chunkSize, root, chunksDir, 20)
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
 	}
@@ -366,6 +367,7 @@ type chunkTask struct {
 	path []node.Node
 	// state is a state of subtree chunking.
 	state []pathAtom
+	idx   int
 	// res is a hash of latest chunk created.
 	res hash.Hash
 	err error
@@ -390,8 +392,8 @@ func newTask(ctx context.Context, ndb db.NodeDB, root node.Root) (*chunkTask, er
 	}, nil
 }
 
-func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root, chunkSize uint64, chunksDir string, chunkIndex int) {
-	dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
+func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root, chunkSize uint64, chunksDir string) {
+	dataFilename := filepath.Join(chunksDir, strconv.Itoa(ct.idx))
 	f, err := os.Create(dataFilename)
 	if err != nil {
 		ct.err = err
@@ -403,10 +405,8 @@ func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root,
 }
 
 func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, w io.Writer, chunkSize uint64) {
-	defer func() { // trim state.
-		for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
-			ct.state = ct.state[:len(ct.state)-1]
-		}
+	defer func() {
+		ct.trim()
 	}()
 
 	if root.Hash.IsEmpty() { // TODO
@@ -498,16 +498,106 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 }
 
 func (ct *chunkTask) isFinished() bool {
-	for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
-		ct.state = ct.state[:len(ct.state)-1]
-	}
-
+	ct.trim()
 	return len(ct.state) == 0
 }
 
+func (ct *chunkTask) trim() {
+	for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
+		ct.state = ct.state[:len(ct.state)-1]
+	}
+}
+
+func copySlice[T any](s []T) []T {
+	return append([]T{}, s...)
+}
+
+func (ct *chunkTask) split(ctx context.Context, ndb db.NodeDB, root node.Root) ([]*chunkTask, error) {
+	if ct.isFinished() {
+		return nil, nil
+	}
+
+	first := ct.state[0]
+	nd, ok := first.nd.(*node.InternalNode)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type")
+	}
+
+	var tasks []*chunkTask
+	addTask := func(ptr *node.Pointer, parent node.Node) error {
+		if ptr == nil {
+			return nil
+		}
+
+		nd, err := ndb.GetNode(root, ptr)
+		if err != nil {
+			return err
+		}
+
+		pathCopy := append([]node.Node(nil), ct.path...)
+		task := &chunkTask{
+			path: append(pathCopy, parent),
+			state: []pathAtom{
+				{
+					nd:    nd,
+					state: visitBefore,
+				},
+			},
+		}
+
+		tasks = append(tasks, task)
+		return nil
+	}
+
+	switch first.state {
+	case visitBefore, visitAt:
+		if nd.Left == nil && nd.Right == nil {
+			return []*chunkTask{ct}, nil
+		}
+		if err := addTask(nd.Left, nd); err != nil {
+			return nil, err
+		}
+		if err := addTask(nd.Right, nd); err != nil {
+			return nil, err
+		}
+	case visitAtLeft:
+		if len(ct.state) == 1 {
+			return []*chunkTask{ct}, nil
+		}
+
+		if err := addTask(nd.Right, nd); err != nil {
+			return nil, err
+		}
+		ct.path = append(ct.path, nd)
+		ct.state = ct.state[1:]
+
+		// consider removing / sanity
+		if !ct.isFinished() {
+			tasks = append(tasks, ct)
+		}
+		if len(tasks) == 0 {
+			panic("unexpected zero tasks")
+		}
+	case visitAfter:
+		ct.path = append(ct.path, nd)
+		ct.state = ct.state[1:] // since we trim len(ct.state) must be > 1.
+
+		// consider removing / sanity
+		if !ct.isFinished() {
+			tasks = append(tasks, ct)
+		}
+		if len(tasks) == 0 {
+			panic("unexpected zero tasks")
+		}
+	default:
+		return nil, fmt.Errorf("unexpected state")
+	}
+
+	return tasks, nil
+}
+
 // TODO consider using V1 proofs so that checkpoints size is reduced.
-// TODO parallelize.
-func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root node.Root, chunksDir string) ([]hash.Hash, error) {
+func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root node.Root, chunksDir string, minThreads int) ([]hash.Hash, error) {
 	if root.Hash.IsEmpty() {
 		return []hash.Hash{}, nil
 	}
@@ -517,30 +607,59 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 		return nil, err
 	}
 
-	var chunks []hash.Hash
+	chunks := make(map[int]hash.Hash, 0)
 	var chunkIndex int
 	tasks := []*chunkTask{initTask}
-	for ; len(tasks) > 0; chunkIndex++ {
+	for len(tasks) > 0 {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
 
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			task.idx = chunkIndex
+			chunkIndex++
+			go func() {
+				defer wg.Done()
+				task.process(ctx, ndb, root, chunkSize, chunksDir)
+			}()
+		}
+		wg.Wait()
+
 		var newTasks []*chunkTask
 		for _, task := range tasks {
-			task.process(ctx, ndb, root, chunkSize, chunksDir, chunkIndex)
 			if task.err != nil {
-				return nil, err
+				return nil, task.err
 			}
-			chunks = append(chunks, task.res)
+			chunks[task.idx] = task.res
 			if !task.isFinished() {
-				task.err, task.res = nil, hash.Hash{}
+				task.err, task.res, task.idx = nil, hash.Hash{}, -1
 				newTasks = append(newTasks, task)
 			}
 		}
 		tasks = newTasks
+
+		if len(tasks) < minThreads {
+			newTasks = nil
+			// TODO sort so that output is deterministic
+			for _, task := range tasks {
+				childTasks, err := task.split(ctx, ndb, root)
+				if err != nil {
+					return nil, err
+				}
+				newTasks = append(newTasks, childTasks...)
+			}
+			tasks = newTasks
+		}
 	}
 
-	return chunks, nil
+	hashes := make([]hash.Hash, 0, len(chunks))
+	for i := 0; i < len(chunks); i++ {
+		hashes = append(hashes, chunks[i])
+	}
+
+	return hashes, nil
 }
