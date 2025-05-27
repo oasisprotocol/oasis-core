@@ -16,7 +16,7 @@ import (
 )
 
 // MakeConsensusEquivocationEvidence creates consensus evidence of equivocation.
-func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.Block, genesis *genesis.Document, totalVotingPower, votingPower int64) (*consensus.Evidence, error) {
+func MakeConsensusEquivocationEvidence(ident *identity.Identity, height int64, ts time.Time, genesis *genesis.Document, totalVotingPower, votingPower int64) (*consensus.Evidence, error) {
 	// Create empty directory for private validator metadata.
 	tmpDir, err := os.MkdirTemp("", "oasis-slash-test")
 	if err != nil {
@@ -67,11 +67,11 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 	chainID := api.CometBFTChainID(genesis.ChainContext())
 
 	ev := &cmttypes.DuplicateVoteEvidence{
-		Timestamp:        blk.Time,
+		Timestamp:        ts,
 		TotalVotingPower: totalVotingPower,
 		ValidatorPower:   votingPower,
-		VoteA:            makeVote(pv1, chainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
-		VoteB:            makeVote(pv2, chainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
+		VoteA:            makeVote(pv1, chainID, 0, height, 2, 1, blockID1, ts),
+		VoteB:            makeVote(pv2, chainID, 0, height, 2, 1, blockID2, ts),
 	}
 
 	proto, err := cmttypes.EvidenceToProto(ev)

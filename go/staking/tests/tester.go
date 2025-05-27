@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	cmtTests "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -1228,13 +1229,15 @@ func testSlashConsensusEquivocation(
 
 	// Broadcast evidence. This is CometBFT-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
-	blk, err := consensus.Core().GetBlock(ctx, 1)
-	require.NoError(err, "GetBlock")
+	lb, err := consensus.Core().GetLightBlock(ctx, 1)
+	require.NoError(err, "GetLightBlock")
+	clb, err := light.DecodeLightBlock(lb)
+	require.NoError(err, "DecodeLightBlock")
 
 	genesis, err := consensus.Core().GetGenesisDocument(ctx)
 	require.NoError(err, "GetGenesisDocument")
 
-	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(ident, blk, genesis, 1, 1)
+	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(ident, clb.Height, clb.Time, genesis, 1, 1)
 	require.NoError(err, "MakeConsensusEquivocationEvidence")
 	err = consensus.Core().SubmitEvidence(ctx, evidence)
 	require.NoError(err, "SubmitEvidence")

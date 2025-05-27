@@ -5,17 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"path/filepath"
 	"time"
-
-	cmtstore "github.com/cometbft/cometbft/store"
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tmBadger "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	cmtTests "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -126,12 +123,6 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 		return fmt.Errorf("failed to get genesis document: %w", err)
 	}
 
-	// Load first block.
-	blk, err := ctrl.Consensus.GetBlock(ctx, 1)
-	if err != nil {
-		return fmt.Errorf("failed to get block 1: %w", err)
-	}
-
 	// Load validator and its entity.
 	ent := sc.Net.Entities()[1]
 	entAddr := staking.NewAddress(ent.ID())
@@ -141,7 +132,6 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 		return err
 	}
 
-	// Stop validator and load CometBFT block from the DB.
 	// XXX: for constructing the equivocation evidence we need nanosecond precision
 	// timestemp of the block, as that is what CometBFT uses for verifying the evidence.
 	// oasis-core CBOR encoding uses second precision timestamps, therefore block obtained
@@ -150,17 +140,14 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 	if err = validator.Stop(); err != nil {
 		return fmt.Errorf("stopping validator: %w", err)
 	}
-	tmDb, err := tmBadger.New(filepath.Join(validator.DataDir(), "consensus/data/blockstore.badger.db"), true)
+	lb, err := ctrl.Consensus.GetLightBlock(ctx, 1)
 	if err != nil {
-		return fmt.Errorf("CometBFT badger db: %w", err)
+		return fmt.Errorf("failed to get light block: %w", err)
 	}
-	tmBlkStore := cmtstore.NewBlockStore(tmDb)
-	tmBlk := tmBlkStore.LoadBlock(1)
-	if tmBlk == nil {
-		return fmt.Errorf("loading CometBFT block failed")
+	clb, err := light.DecodeLightBlock(lb)
+	if err != nil {
+		return fmt.Errorf("failed to decode light block: %w", err)
 	}
-	// Fix block time to nanosecond precision time.
-	blk.Time = tmBlk.Time
 
 	// Escrow some to the entity.
 	sc.Logger.Info("escrowing to validator entity")
@@ -184,7 +171,7 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 	sc.Logger.Info("submitting equivocation evidence")
 
 	// Prepare and submit equivocation evidence.
-	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(identity, blk, doc, 4, 1)
+	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(identity, clb.Height, clb.Time, doc, 4, 1)
 	if err != nil {
 		return fmt.Errorf("failed to make consensus equivocation evidence: %w", err)
 	}

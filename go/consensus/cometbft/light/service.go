@@ -7,7 +7,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	p2pLight "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -22,7 +21,7 @@ const (
 type ClientService struct {
 	logger *logging.Logger
 
-	providers []*p2pLight.LightClientProvider
+	providers []*Provider
 }
 
 // GetStatus implements api.LightService.
@@ -45,7 +44,7 @@ func (c *ClientService) TrustedLightBlock(int64) (*consensus.LightBlock, error) 
 
 // LightBlock implements the LightProvider interface.
 func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
-	lb, _, err := tryProviders(ctx, c.providers, func(p *p2pLight.LightClientProvider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+	lb, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 		return p.GetLightBlock(ctx, height)
 	})
 	if err != nil {
@@ -62,10 +61,10 @@ func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensu
 //
 // This light client is initialized with a trusted blocks obtained from the local consensus backend.
 func New(ctx context.Context, chainContext string, p2p rpc.P2P) (*ClientService, error) {
-	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, p2p)
-	providers := make([]*p2pLight.LightClientProvider, 0, numWitnesses)
+	pool := NewProviderPool(ctx, chainContext, p2p)
+	providers := make([]*Provider, 0, numWitnesses)
 	for range numWitnesses {
-		p := pool.NewLightClientProvider()
+		p := pool.NewProvider()
 		providers = append(providers, p)
 	}
 
