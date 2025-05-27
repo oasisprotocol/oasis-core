@@ -243,7 +243,7 @@ type Block struct {
 	// Size is the size of the block in bytes.
 	Size uint64 `json:"size,omitempty"`
 	// Meta contains the consensus backend specific block metadata.
-	Meta cbor.RawMessage `json:"meta"`
+	Meta cbor.RawMessage `json:"meta,omitempty"`
 }
 
 // BlockResults are consensus block results.
