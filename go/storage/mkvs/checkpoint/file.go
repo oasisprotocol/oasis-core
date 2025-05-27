@@ -21,7 +21,7 @@ const (
 	chunksDir              = "chunks"
 	checkpointMetadataFile = "meta"
 	checkpointV1           = 1
-	checkpointV2           = 1 // TODO same version was used to first ensure equal logic. (sanity)
+	checkpointV2           = 2
 
 	// Versions 1 of checkpoint chunks use proofs version 0. Consider bumping
 	// this to latest version when introducing new checkpoint versions.
@@ -342,25 +342,36 @@ func NewFileCreatorV2(dataDir string, ndb db.NodeDB) (Creator, error) {
 	}, nil
 }
 
-// TODO consider using V1 proofs so that checkpoints size is reduced.
-// TODO parallelize dynamically and keep output constant.
-func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root node.Root, chunksDir string) ([]hash.Hash, error) {
-	type visitState uint8
-	const (
-		visitBefore visitState = iota
-		visitAt
-		visitAtLeft
-		visitAfter
-	)
-	type pathAtom struct {
-		nd    node.Node
-		state visitState
-	}
+type chunkCreator struct {
+}
 
-	if root.Hash.IsEmpty() {
-		return []hash.Hash{}, nil
-	}
+type visitState uint8
 
+const (
+	visitBefore visitState = iota
+	visitAt
+	visitAtLeft
+	visitAfter
+)
+
+type pathAtom struct {
+	nd    node.Node
+	state visitState
+}
+
+// chunkTask is a task of creating a chunk in a given subtree,
+// that may have been partially chunked already.
+type chunkTask struct {
+	// path is a path from root to subroot.
+	path []node.Node
+	// state is a state of subtree chunking.
+	state []pathAtom
+	// res is a hash of latest chunk created.
+	res hash.Hash
+	err error
+}
+
+func newTask(ctx context.Context, ndb db.NodeDB, root node.Root) (*chunkTask, error) {
 	rootPtr := node.Pointer{
 		Clean: true,
 		Hash:  root.Hash,
@@ -370,54 +381,70 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 		return nil, fmt.Errorf("getting node from nodedb (hash: %.8s): %w", rootPtr.Hash, err)
 	}
 
-	path := []pathAtom{
-		pathAtom{
-			nd:    rootNode,
-			state: visitBefore,
-		},
+	initState := []pathAtom{
+		{nd: rootNode, state: visitBefore},
+	}
+
+	return &chunkTask{
+		state: initState,
+	}, nil
+}
+
+func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root, chunkSize uint64, chunksDir string, chunkIndex int) {
+	dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
+	f, err := os.Create(dataFilename)
+	if err != nil {
+		ct.err = err
+		return
+	}
+	defer f.Close()
+
+	ct.create(ctx, ndb, root, f, chunkSize)
+}
+
+func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, w io.Writer, chunkSize uint64) {
+	defer func() { // trim state.
+		for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
+			ct.state = ct.state[:len(ct.state)-1]
+		}
+	}()
+
+	if root.Hash.IsEmpty() { // TODO
+		ct.err = fmt.Errorf("failed to create chunk for empty root")
+		return
 	}
 
 	pb := syncer.NewProofBuilderV0(root.Hash, root.Hash)
-	var chunks []hash.Hash
-	var chunkIndex int
-	var lastIncludedIsLeaf bool
-	for len(path) > 0 {
+	for _, nd := range ct.path {
+		pb.Include(nd)
+	}
+	for _, pa := range ct.state { // Consider checking this does not overflow proof size already
+		pb.Include(pa.nd)
+	}
+
+	var lastIsLeaf bool
+	for len(ct.state) > 0 {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			ct.err = ctx.Err()
+			return
 		default:
 		}
 
-		current := path[len(path)-1]
-		path = path[:len(path)-1]
-
-		if pb.Size() >= chunkSize && lastIncludedIsLeaf { // Just like existing code this does not respect chunkSize boundary...
-			// Write proof to chunk file.
-			dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
-			hash, err := createChunkV2(ctx, pb, dataFilename)
-			if err != nil {
-				return nil, fmt.Errorf("creating chunk (chunk index: %d): %w", chunkIndex, err)
-			}
-			chunks = append(chunks, hash)
-			chunkIndex++
-
-			// Reset proof builder and include access path.
-			pb = syncer.NewProofBuilderV0(root.Hash, root.Hash)
-			lastIncludedIsLeaf = false
-			for _, nd := range path {
-				pb.Include(nd.nd)
-			}
-			if current.state != visitBefore {
-				pb.Include(current.nd)
-			}
+		if pb.Size() >= chunkSize && lastIsLeaf {
+			ct.res, ct.err = createChunkV2(ctx, pb, w)
+			return
 		}
+
+		current := ct.state[len(ct.state)-1]
+		ct.state = ct.state[:len(ct.state)-1]
 
 		switch currNode := current.nd.(type) {
 		case nil:
 			continue
 		case *node.LeafNode:
 			pb.Include(currNode)
-			lastIncludedIsLeaf = true
+			lastIsLeaf = true
 		case *node.InternalNode:
 			visitNext := func(ptr *node.Pointer) error {
 				if ptr != nil {
@@ -425,7 +452,7 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 					if err != nil {
 						return fmt.Errorf("getting node from nodedb (ptr hash: %.8s): %w", ptr.Hash, err)
 					}
-					path = append(path, pathAtom{nd, visitBefore})
+					ct.state = append(ct.state, pathAtom{nd, visitBefore})
 				}
 				return nil
 			}
@@ -433,38 +460,87 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 			case visitBefore:
 				pb.Include(currNode)
 				if currNode.LeafNode != nil {
-					lastIncludedIsLeaf = true
+					lastIsLeaf = true
 				} else {
-					lastIncludedIsLeaf = false
+					lastIsLeaf = false
 				}
-				path = append(path, pathAtom{currNode, visitAt})
+				ct.state = append(ct.state, pathAtom{currNode, visitAt})
 			case visitAt:
-				path = append(path, pathAtom{currNode, visitAtLeft})
+				ct.state = append(ct.state, pathAtom{currNode, visitAtLeft})
 				if err := visitNext(currNode.Left); err != nil {
-					return nil, err
+					ct.err = err
+					return
 				}
 			case visitAtLeft:
-				path = append(path, pathAtom{currNode, visitAfter})
+				ct.state = append(ct.state, pathAtom{currNode, visitAfter})
 				if err := visitNext(currNode.Right); err != nil {
-					return nil, err
+					ct.err = err
+					return
 				}
 			case visitAfter:
 				continue
 			default:
-				return nil, fmt.Errorf("unexpected atom state")
+				ct.err = fmt.Errorf("unexpected atom state")
+				return
 			}
 		default:
-			return nil, fmt.Errorf("unexpected node type")
+			ct.err = fmt.Errorf("unexpected node type")
+			return
 		}
 	}
 
-	// Write last proof to chunk file.
-	dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
-	hash, err := createChunkV2(ctx, pb, dataFilename)
-	if err != nil {
-		return nil, fmt.Errorf("creating chunk (chunk index: %d): %w", chunkIndex, err)
+	if pb.Size() > 0 {
+		ct.res, ct.err = createChunkV2(ctx, pb, w)
+	} else {
+		ct.err = fmt.Errorf("no nodes were included in final chunk")
 	}
-	chunks = append(chunks, hash)
+	return
+}
+
+func (ct *chunkTask) isFinished() bool {
+	for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
+		ct.state = ct.state[:len(ct.state)-1]
+	}
+
+	return len(ct.state) == 0
+}
+
+// TODO consider using V1 proofs so that checkpoints size is reduced.
+// TODO parallelize.
+func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root node.Root, chunksDir string) ([]hash.Hash, error) {
+	if root.Hash.IsEmpty() {
+		return []hash.Hash{}, nil
+	}
+
+	initTask, err := newTask(ctx, ndb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	var chunks []hash.Hash
+	var chunkIndex int
+	tasks := []*chunkTask{initTask}
+	for ; len(tasks) > 0; chunkIndex++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		var newTasks []*chunkTask
+		for _, task := range tasks {
+			task.process(ctx, ndb, root, chunkSize, chunksDir, chunkIndex)
+			if task.err != nil {
+				return nil, err
+			}
+			chunks = append(chunks, task.res)
+			if !task.isFinished() {
+				task.err, task.res = nil, hash.Hash{}
+				newTasks = append(newTasks, task)
+			}
+		}
+		tasks = newTasks
+	}
 
 	return chunks, nil
 }

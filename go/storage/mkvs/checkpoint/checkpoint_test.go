@@ -500,7 +500,8 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 //   - Make helpers reusable for other tests.
 //   - Fuzz both backends.
 func FuzzCheckpointCreation(f *testing.F) {
-	f.Fuzz(func(t *testing.T, seed int64, n uint16, depth uint8, chunkSize uint64) {
+	f.Add(int64(0), uint16(4), uint64(45))
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
 		if chunkSize == 0 { // TODO check why this condition is not needed.
 			t.Skip("skipping zero chunk size")
 		}
@@ -566,9 +567,10 @@ func FuzzCheckpointCreation(f *testing.F) {
 		defer it2.Close()
 		it1.Rewind()
 		it2.Rewind()
+		var iterated int
 		for ; it1.Valid(); it1.Next() {
 			if !it2.Valid() {
-				t.Error("Key missing in the second database")
+				t.Errorf("Key %d missing in the second database", iterated)
 			}
 			key1 := it1.Key()
 			key2 := it2.Key()
@@ -581,6 +583,7 @@ func FuzzCheckpointCreation(f *testing.F) {
 				t.Fatalf("Values not equal: want %s, got %s", val1, val2)
 			}
 			it2.Next()
+			iterated++
 		}
 
 	})
@@ -737,10 +740,10 @@ func restoreCheckpoint(ctx context.Context, t *testing.T, ndb2 dbApi.NodeDB, cp 
 		}
 		var buf bytes.Buffer
 		if err = fc.GetCheckpointChunk(ctx, cm, &buf); err != nil {
-			t.Fatalf("GetCheckpointChunk: %s", err)
+			t.Fatalf("GetCheckpointChunk(%v): %v", cm, err)
 		}
 		if _, err = rs.RestoreChunk(ctx, uint64(i), &buf); err != nil {
-			t.Fatalf("RestoreChunk: %v", err)
+			t.Fatalf("RestoreChunk(index: %d): %v", i, err)
 		}
 	}
 

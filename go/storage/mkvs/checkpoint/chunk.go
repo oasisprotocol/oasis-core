@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/golang/snappy"
 
@@ -64,19 +63,14 @@ func createChunkV1(
 	return
 }
 
-func createChunkV2(ctx context.Context, pb *syncer.ProofBuilder, dataFilename string) (hash.Hash, error) {
+func createChunkV2(ctx context.Context, pb *syncer.ProofBuilder, w io.Writer) (hash.Hash, error) {
 	proof, err := pb.Build(ctx)
 	if err != nil {
 		return hash.Hash{}, fmt.Errorf("building proof: %w", err)
 	}
-	var f *os.File
-	defer f.Close()
-	if f, err = os.Create(dataFilename); err != nil {
-		return hash.Hash{}, fmt.Errorf("creating chunk file: %w", err)
-	}
-	h, err := writeProofToChunk(proof, f)
+	h, err := writeProofToChunk(proof, w)
 	if err != nil {
-		return hash.Hash{}, fmt.Errorf("writing proof to file (filename: %s): %w", dataFilename, err)
+		return hash.Hash{}, fmt.Errorf("writing proof: %w", err)
 	}
 	return h, nil
 }
