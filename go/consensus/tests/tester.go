@@ -131,7 +131,7 @@ func ConsensusImplementationTests(t *testing.T, consensus api.Backend) {
 	})
 	require.NoError(err, "EstimateGas")
 
-	nonce, err := consensus.GetSignerNonce(ctx, &api.GetSignerNonceRequest{
+	nonce, err := consensus.GetSignerNonce(ctx, &api.GetSignerNonceRequest{ //nolint:staticcheck
 		AccountAddress: staking.NewAddress(
 			signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		),

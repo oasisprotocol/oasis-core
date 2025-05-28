@@ -169,7 +169,7 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	}
 
 	sc.Logger.Info("testing GetSignerNonce")
-	_, err = archiveCtrl.Consensus.GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{})
+	_, err = archiveCtrl.Consensus.GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{}) //nolint:staticcheck
 	if err != consensusAPI.ErrUnsupported {
 		return fmt.Errorf("archive node GetSignerNonce should fail with unsupported")
 	}

@@ -159,6 +159,8 @@ type Backend interface {
 
 	// GetSignerNonce returns the nonce that should be used by the given
 	// signer for transmitting the next transaction.
+	//
+	// Deprecated: Use staking backend instead.
 	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
 
 	// GetTransactions returns a list of all transactions contained within a
