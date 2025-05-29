@@ -168,12 +168,6 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 		return fmt.Errorf("archive node GetUnconfirmedTransactions should work: %w", err)
 	}
 
-	sc.Logger.Info("testing GetSignerNonce")
-	_, err = archiveCtrl.Consensus.GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{}) //nolint:staticcheck
-	if err != consensusAPI.ErrUnsupported {
-		return fmt.Errorf("archive node GetSignerNonce should fail with unsupported")
-	}
-
 	sc.Logger.Info("testing GetLightBlock")
 	_, err = archiveCtrl.Consensus.GetLightBlock(ctx, consensusAPI.HeightLatest)
 	if err != nil {

@@ -143,11 +143,6 @@ func (srv *archiveService) EstimateGas(context.Context, *consensusAPI.EstimateGa
 }
 
 // Implements consensusAPI.Backend.
-func (srv *archiveService) GetSignerNonce(context.Context, *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	return 0, consensusAPI.ErrUnsupported
-}
-
-// Implements consensusAPI.Backend.
 func (srv *archiveService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 	ch := make(chan *consensusAPI.Block)
