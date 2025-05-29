@@ -204,13 +204,14 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 		if err != nil {
 			return err
 		}
-		nonce, err := sc.Net.Controller().Consensus.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-			AccountAddress: staking.NewAddress(identity.NodeSigner.Public()),
-			Height:         consensus.HeightLatest,
+		account, err := sc.Net.Controller().Staking.Account(ctx, &staking.OwnerQuery{
+			Height: consensus.HeightLatest,
+			Owner:  staking.NewAddress(identity.NodeSigner.Public()),
 		})
 		if err != nil {
 			return err
 		}
+		nonce := account.General.Nonce
 		tx := registry.NewRegisterNodeTx(nonce, &transaction.Fee{Gas: 50000}, sigNode)
 		sigTx, err := transaction.Sign(identity.NodeSigner, tx)
 		if err != nil {

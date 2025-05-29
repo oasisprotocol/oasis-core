@@ -220,13 +220,14 @@ func (r *registration) Run( // nolint: gocyclo
 	// XXX: currently entities are only registered at start. Could also
 	// periodically register new entities.
 	for i := range entityAccs {
-		entityAccs[i].reckonedNonce, err = consensus.Core().GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{
-			AccountAddress: entityAccs[i].address,
-			Height:         consensusAPI.HeightLatest,
+		account, err := consensus.Staking().Account(ctx, &staking.OwnerQuery{
+			Height: consensusAPI.HeightLatest,
+			Owner:  entityAccs[i].address,
 		})
 		if err != nil {
-			return fmt.Errorf("GetSignerNonce error: %w", err)
+			return fmt.Errorf("failed to query account: %w", err)
 		}
+		entityAccs[i].reckonedNonce = account.General.Nonce
 
 		ent := &entity.Entity{
 			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
@@ -245,16 +246,15 @@ func (r *registration) Run( // nolint: gocyclo
 			}
 			nodeDesc := getNodeDesc(rng, ident, entityAccs[i].signer.Public(), r.ns)
 
-			var nodeAccNonce uint64
 			nodeAccAddress := staking.NewAddress(ident.NodeSigner.Public())
-			nodeAccNonce, err = consensus.Core().GetSignerNonce(ctx, &consensusAPI.GetSignerNonceRequest{
-				AccountAddress: nodeAccAddress,
-				Height:         consensusAPI.HeightLatest,
+			account, err := consensus.Staking().Account(ctx, &staking.OwnerQuery{
+				Height: consensusAPI.HeightLatest,
+				Owner:  nodeAccAddress,
 			})
 			if err != nil {
-				return fmt.Errorf("GetSignerNonce error for accout %s: %w", nodeAccAddress, err)
+				return fmt.Errorf("failed to query account %s: %w", nodeAccAddress, err)
 			}
-
+			nodeAccNonce := account.General.Nonce
 			entityAccs[i].nodeIdentities = append(entityAccs[i].nodeIdentities, &nodeAcc{ident, nodeDesc, nodeAccNonce})
 			ent.Nodes = append(ent.Nodes, ident.NodeSigner.Public())
 

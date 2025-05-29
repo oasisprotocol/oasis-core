@@ -104,7 +104,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create submission manager: %w", err)
 	}
-	sm := consensusAPI.NewSubmissionManager(consensus.Core(), pd, 0)
+	sm := consensusAPI.NewSubmissionManager(consensus, pd, 0)
 
 	// Wait for sync before transferring control to the workload.
 	ncc := api.NewNodeControllerClient(conn)

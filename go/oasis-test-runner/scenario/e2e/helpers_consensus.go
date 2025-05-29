@@ -12,8 +12,6 @@ import (
 	"strconv"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -21,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // TrustRoot is a consensus trust root.
@@ -97,36 +94,6 @@ func (sc *Scenario) TrustRoot(ctx context.Context) (*TrustRoot, error) {
 		Hash:         block.Hash.Hex(),
 		ChainContext: chainContext,
 	}, nil
-}
-
-// TestEntityNonce returns the nonce of the test entity.
-func (sc *Scenario) TestEntityNonce(ctx context.Context) (uint64, error) {
-	ent, _, err := entity.TestEntity()
-	if err != nil {
-		return 0, err
-	}
-	return sc.EntityNonce(ctx, ent)
-}
-
-// EntityNonce returns the nonce of the specified entity.
-func (sc *Scenario) EntityNonce(ctx context.Context, ent *entity.Entity) (uint64, error) {
-	addr := staking.NewAddress(ent.ID)
-	return sc.Net.ClientController().Consensus.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-		Height:         consensus.HeightLatest,
-		AccountAddress: addr,
-	})
-}
-
-// EntityNonceByID returns the nonce of the specified entity.
-func (sc *Scenario) EntityNonceByID(ctx context.Context, id signature.PublicKey) (uint64, error) {
-	ent, err := sc.Net.ClientController().Registry.GetEntity(ctx, &registry.IDQuery{
-		Height: consensus.HeightLatest,
-		ID:     id,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return sc.EntityNonce(ctx, ent)
 }
 
 // ExportedGenesisFiles gathers exported genesis files and ensures all exported genesis files match.

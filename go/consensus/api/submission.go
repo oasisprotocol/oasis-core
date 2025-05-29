@@ -51,7 +51,7 @@ type SubmissionManager interface {
 }
 
 type submissionManager struct {
-	consensus      Backend
+	consensus      Services
 	priceDiscovery PriceDiscovery
 	maxFee         quantity.Quantity
 
@@ -77,7 +77,7 @@ func (m *submissionManager) EstimateGasAndSetFee(ctx context.Context, signer sig
 		gas transaction.Gas
 		err error
 	)
-	gas, err = m.consensus.EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
+	gas, err = m.consensus.Core().EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
 	if err != nil {
 		return fmt.Errorf("failed to estimate gas: %w", err)
 	}
@@ -118,14 +118,14 @@ func (m *submissionManager) getSignerNonce(ctx context.Context, signerAddr staki
 	nonce, ok := m.nonces[signerAddr]
 	if !ok {
 		// Query latest nonce when one is not available.
-		var err error
-		nonce, err = m.consensus.GetSignerNonce(ctx, &GetSignerNonceRequest{
-			AccountAddress: signerAddr,
-			Height:         HeightLatest,
+		account, err := m.consensus.Staking().Account(ctx, &staking.OwnerQuery{
+			Height: HeightLatest,
+			Owner:  signerAddr,
 		})
 		if err != nil {
 			return 0, err
 		}
+		nonce = account.General.Nonce
 	}
 
 	m.nonces[signerAddr] = nonce + 1
@@ -171,9 +171,9 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 
 	var proof *transaction.Proof
 	if withProof {
-		proof, err = m.consensus.SubmitTxWithProof(ctx, sigTx)
+		proof, err = m.consensus.Core().SubmitTxWithProof(ctx, sigTx)
 	} else {
-		err = m.consensus.SubmitTx(ctx, sigTx)
+		err = m.consensus.Core().SubmitTx(ctx, sigTx)
 	}
 	if err != nil {
 		// If the transaction check fails (which cannot be determined from
@@ -236,7 +236,7 @@ func (m *submissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer
 }
 
 // NewSubmissionManager creates a new transaction submission manager.
-func NewSubmissionManager(consensus Backend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
+func NewSubmissionManager(consensus Services, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
 	sm := &submissionManager{
 		consensus:      consensus,
 		priceDiscovery: priceDiscovery,
