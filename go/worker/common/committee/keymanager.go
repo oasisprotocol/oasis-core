@@ -337,6 +337,12 @@ func (nt *nodeTracker) Nodes(nodes []signature.PublicKey) map[core.PeerID]signat
 }
 
 func (nt *nodeTracker) trackKeymanagerNodes(ctx context.Context) {
+	select {
+	case <-nt.consensus.Synced():
+	case <-ctx.Done():
+		return
+	}
+
 	stCh, stSub, err := nt.consensus.KeyManager().Secrets().WatchStatuses(ctx)
 	if err != nil {
 		nt.logger.Error("failed to watch key manager secrets statuses",
