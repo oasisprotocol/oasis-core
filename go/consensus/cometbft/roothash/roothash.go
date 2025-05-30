@@ -329,7 +329,7 @@ func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
 }
 

@@ -115,7 +115,7 @@ func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 

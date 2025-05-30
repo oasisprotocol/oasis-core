@@ -307,38 +307,15 @@ type ServiceEvent struct {
 }
 
 // ServiceDescriptor is a CometBFT consensus service descriptor.
-type ServiceDescriptor interface {
-	// Name returns the name of this service.
-	Name() string
-
-	// EventType returns the event type associated with the consensus service.
-	EventType() string
-
-	// Queries returns a channel that emits queries that need to be subscribed to.
-	Queries() <-chan cmtpubsub.Query
-}
-
-type serviceDescriptor struct {
+type ServiceDescriptor struct {
 	name      string
 	eventType string
 	queryCh   <-chan cmtpubsub.Query
 }
 
-func (sd *serviceDescriptor) Name() string {
-	return sd.name
-}
-
-func (sd *serviceDescriptor) EventType() string {
-	return sd.eventType
-}
-
-func (sd *serviceDescriptor) Queries() <-chan cmtpubsub.Query {
-	return sd.queryCh
-}
-
 // NewServiceDescriptor creates a new consensus service descriptor.
-func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query) ServiceDescriptor {
-	return &serviceDescriptor{
+func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query) *ServiceDescriptor {
+	return &ServiceDescriptor{
 		name:      name,
 		eventType: eventType,
 		queryCh:   queryCh,
@@ -346,7 +323,7 @@ func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query
 }
 
 // NewStaticServiceDescriptor creates a new static consensus service descriptor.
-func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) ServiceDescriptor {
+func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) *ServiceDescriptor {
 	ch := make(chan cmtpubsub.Query)
 	go func() {
 		for _, q := range queries {
@@ -356,10 +333,25 @@ func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Quer
 	return NewServiceDescriptor(name, eventType, ch)
 }
 
+// Name returns the name of this service.
+func (sd *ServiceDescriptor) Name() string {
+	return sd.name
+}
+
+// EventType returns the event type associated with the consensus service.
+func (sd *ServiceDescriptor) EventType() string {
+	return sd.eventType
+}
+
+// Queries returns a channel that emits queries that need to be subscribed to.
+func (sd *ServiceDescriptor) Queries() <-chan cmtpubsub.Query {
+	return sd.queryCh
+}
+
 // ServiceClient is a consensus service client.
 type ServiceClient interface {
 	// ServiceDescriptor returns the consensus service descriptor.
-	ServiceDescriptor() ServiceDescriptor
+	ServiceDescriptor() *ServiceDescriptor
 
 	// DeliverHeight delivers a new block height.
 	DeliverHeight(ctx context.Context, height int64) error

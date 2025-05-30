@@ -63,7 +63,7 @@ func (sc *ServiceClient) Churp() churpAPI.Backend {
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 

@@ -243,7 +243,7 @@ func (sc *ServiceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI
 	return ch, sub, nil
 }
 
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
