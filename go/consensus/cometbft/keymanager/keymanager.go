@@ -22,13 +22,18 @@ import (
 type ServiceClient struct {
 	tmapi.BaseServiceClient
 
+	descriptor *tmapi.ServiceDescriptor
+
 	secretsClient *secrets.ServiceClient
 	churpClient   *churp.ServiceClient
 }
 
 // New constructs a new CometBFT backed key manager service client.
 func New(querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+
 	return &ServiceClient{
+		descriptor:    descriptor,
 		secretsClient: secrets.New(querier),
 		churpClient:   churp.New(querier),
 	}
@@ -64,7 +69,7 @@ func (sc *ServiceClient) Churp() churpAPI.Backend {
 
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.

@@ -24,18 +24,22 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
-	querier   *app.QueryFactory
+	consensus  consensus.Backend
+	querier    *app.QueryFactory
+	descriptor *tmapi.ServiceDescriptor
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed staking service client.
 func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		consensus:     consensus,
 		querier:       querier,
+		descriptor:    descriptor,
 		eventNotifier: pubsub.NewBroker(false),
 	}
 }
@@ -311,7 +315,7 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.

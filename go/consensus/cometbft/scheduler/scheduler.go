@@ -25,15 +25,19 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	querier  *app.QueryFactory
-	notifier *pubsub.Broker
+	querier    *app.QueryFactory
+	descriptor *tmapi.ServiceDescriptor
+	notifier   *pubsub.Broker
 }
 
 // New constructs a new CometBFT-based scheduler service client.
 func New(querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+
 	sc := &ServiceClient{
-		logger:  logging.GetLogger("cometbft/scheduler"),
-		querier: querier,
+		logger:     logging.GetLogger("cometbft/scheduler"),
+		querier:    querier,
+		descriptor: descriptor,
 	}
 	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		currentCommittees, err := sc.getCurrentCommittees()
@@ -116,7 +120,7 @@ func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {
 
 // ServiceDescriptor implements api.ServiceClient.
 func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.

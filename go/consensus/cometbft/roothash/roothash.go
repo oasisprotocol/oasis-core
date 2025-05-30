@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	cmtapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -42,14 +42,15 @@ type trackedRuntime struct {
 
 // ServiceClient is the roothash service client.
 type ServiceClient struct {
-	tmapi.BaseServiceClient
+	cmtapi.BaseServiceClient
 
 	mu sync.RWMutex
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
-	querier   *app.QueryFactory
+	consensus  consensus.Backend
+	querier    *app.QueryFactory
+	descriptor *cmtapi.ServiceDescriptor
 
 	allBlockNotifier *pubsub.Broker
 	runtimeNotifiers map[common.Namespace]*runtimeBrokers
@@ -61,14 +62,17 @@ type ServiceClient struct {
 
 // New constructs a new CometBFT-based roothash service client.
 func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+	queryCh := make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount)
+	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, queryCh)
+
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/roothash"),
 		consensus:        consensus,
 		querier:          querier,
+		descriptor:       descriptor,
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
-		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntimes:  make(map[common.Namespace]*trackedRuntime),
 	}
 }
@@ -258,7 +262,7 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 // GetEvents implements api.Backend.
 func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	results, err := tmapi.GetBlockResults(ctx, height, sc.consensus)
+	results, err := cmtapi.GetBlockResults(ctx, height, sc.consensus)
 	if err != nil {
 		sc.logger.Error("failed to get block results",
 			"err", err,
@@ -329,8 +333,8 @@ func (sc *ServiceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
-	return tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, sc.queryCh)
+func (sc *ServiceClient) ServiceDescriptor() *cmtapi.ServiceDescriptor {
+	return sc.descriptor
 }
 
 // DeliverHeight implements roothash.ServiceClient.
