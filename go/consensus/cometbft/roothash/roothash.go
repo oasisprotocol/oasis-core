@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -23,7 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 const crashPointBlockBeforeIndex = "roothash.before_index"
@@ -56,14 +55,12 @@ type ServiceClient struct {
 	runtimeNotifiers map[common.Namespace]*runtimeBrokers
 	genesisBlocks    map[common.Namespace]*block.Block
 
-	queryCh         chan cmtpubsub.Query
 	trackedRuntimes map[common.Namespace]*trackedRuntime
 }
 
 // New constructs a new CometBFT-based roothash service client.
 func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
-	queryCh := make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount)
-	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, queryCh)
+	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, registry.MaxRuntimeCount)
 
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/roothash"),
@@ -237,7 +234,8 @@ func (sc *ServiceClient) trackRuntime(id common.Namespace) {
 	}
 
 	// Request subscription to events for this runtime.
-	sc.queryCh <- app.QueryForRuntime(id)
+	query := app.QueryForRuntime(id)
+	sc.descriptor.AddQuery(query)
 }
 
 // StateToGenesis implements api.Backend.

@@ -310,27 +310,16 @@ type ServiceEvent struct {
 type ServiceDescriptor struct {
 	name      string
 	eventType string
-	queryCh   <-chan cmtpubsub.Query
+	queryCh   chan cmtpubsub.Query
 }
 
 // NewServiceDescriptor creates a new consensus service descriptor.
-func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query) *ServiceDescriptor {
+func NewServiceDescriptor(name, eventType string, capacity int) *ServiceDescriptor {
 	return &ServiceDescriptor{
 		name:      name,
 		eventType: eventType,
-		queryCh:   queryCh,
+		queryCh:   make(chan cmtpubsub.Query, capacity),
 	}
-}
-
-// NewStaticServiceDescriptor creates a new static consensus service descriptor.
-func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) *ServiceDescriptor {
-	ch := make(chan cmtpubsub.Query)
-	go func() {
-		for _, q := range queries {
-			ch <- q
-		}
-	}()
-	return NewServiceDescriptor(name, eventType, ch)
 }
 
 // Name returns the name of this service.
@@ -346,6 +335,14 @@ func (sd *ServiceDescriptor) EventType() string {
 // Queries returns a channel that emits queries that need to be subscribed to.
 func (sd *ServiceDescriptor) Queries() <-chan cmtpubsub.Query {
 	return sd.queryCh
+}
+
+// AddQuery enqueues query that need to be subscribed to.
+//
+// This method blocks if the query channel is full, which can occur when the
+// number of pending queries exceeds the channel's capacity.
+func (sd *ServiceDescriptor) AddQuery(query cmtpubsub.Query) {
+	sd.queryCh <- query
 }
 
 // ServiceClient is a consensus service client.

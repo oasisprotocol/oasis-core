@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
@@ -56,7 +55,8 @@ type ServiceClient struct {
 
 // New constructs a new CometBFT backed beacon service client.
 func New(baseEpoch api.EpochTime, baseBlock int64, consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
-	descriptor := cmtapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
+	descriptor.AddQuery(app.QueryApp)
 
 	return &ServiceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
