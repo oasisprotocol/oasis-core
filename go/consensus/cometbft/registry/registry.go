@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
@@ -26,8 +25,9 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
-	querier   *app.QueryFactory
+	consensus  consensus.Backend
+	querier    *app.QueryFactory
+	descriptor *tmapi.ServiceDescriptor
 
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
@@ -38,10 +38,14 @@ type ServiceClient struct {
 
 // New constructs a new CometBFT backed registry service client.
 func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
+	descriptor.AddQuery(app.QueryApp)
+
 	return &ServiceClient{
 		logger:           logging.GetLogger("cometbft/registry"),
 		consensus:        consensus,
 		querier:          querier,
+		descriptor:       descriptor,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(false),
@@ -238,8 +242,8 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.

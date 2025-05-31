@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 )
 
@@ -14,7 +13,8 @@ func TestServiceDescriptor(t *testing.T) {
 
 	q1 := cmtquery.MustParse("a='b'")
 
-	sd := NewStaticServiceDescriptor("test", "test_type", []cmtpubsub.Query{q1})
+	sd := NewServiceDescriptor("test", "test_type", 1)
+	sd.AddQuery(q1)
 	require.Equal("test", sd.Name())
 	require.Equal("test_type", sd.EventType())
 	recvQ1 := <-sd.Queries()
