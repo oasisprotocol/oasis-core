@@ -31,6 +31,19 @@ const (
 
 // Implements api.NodeDB.
 func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
+	nodes, err := d.GetNodes(root, ptr, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	return nodes[ptr.Hash], nil
+}
+
+func (d *badgerNodeDB) GetNodes(root node.Root, ptr *node.Pointer, maxNodes int) (map[hash.Hash]node.Node, error) {
+	if maxNodes <= 0 {
+		return nil, fmt.Errorf("mkvs/pathbadger: maxNodes must be greater or equal then 1")
+	}
+
 	if ptr == nil || !ptr.IsClean() {
 		return nil, fmt.Errorf("mkvs/pathbadger: invalid node pointer")
 	}
@@ -50,13 +63,88 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	if err := d.checkRootExists(tx, root); err != nil {
 		return nil, err
 	}
-	rootHash := api.TypedHashFromRoot(root)
 
+	var count int
+	stack := []*node.Pointer{ptr}
+	res := make(map[hash.Hash]node.Node, maxNodes)
+
+	for ; len(stack) > 0 && count < maxNodes; count++ {
+		ptr := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		nd, err := d.getNode(root, ptr, tx)
+		if err != nil {
+			return nil, err
+		}
+
+		if n, ok := nd.(*node.InternalNode); ok {
+			if n.LeafNode != nil && n.LeafNode.Node == nil {
+				n.LeafNode.Node, err = d.getNode(root, n.LeafNode, tx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			for _, ptr := range []*node.Pointer{n.Right, n.Left} {
+				if ptr != nil {
+					stack = append(stack, ptr)
+				}
+			}
+		}
+
+		res[ptr.Hash] = nd
+	}
+
+	return res, nil
+
+	// var prefetch func(node.Root, *node.Pointer, *badger.Txn) (node.Node, error)
+	// prefetch = func(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {
+	// 	if count >= maxNodes {
+	// 		return nil, nil
+	// 	}
+
+	// 	nd, err := d.getNode(root, ptr, tx)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	count++
+
+	// 	switch n := nd.(type) {
+	// 	case *node.InternalNode:
+	// 		if n.LeafNode != nil && n.LeafNode.Node == nil {
+	// 			if n.LeafNode.Node, err = d.getNode(root, n.LeafNode, tx); err != nil {
+	// 				return nil, err
+	// 			}
+	// 		}
+
+	// 		if n.Left != nil {
+	// 			if n.Left.Node, err = prefetch(root, n.Left, tx); err != nil {
+	// 				return nil, err
+	// 			}
+	// 		}
+	// 		if n.Right != nil {
+	// 			if n.Right.Node, err = prefetch(root, n.Right, tx); err != nil {
+	// 				return nil, err
+	// 			}
+	// 		}
+	// 	case *node.LeafNode:
+	// 		return n, nil
+	// 	default:
+	// 		return nil, fmt.Errorf("mkvs/pathbadger: unexpected type")
+	// 	}
+
+	//  	return nd, nil
+	// }
+	// return prefetch(root, ptr, tx)
+}
+
+func (d *badgerNodeDB) getNode(root node.Root, ptr *node.Pointer, tx *badger.Txn) (node.Node, error) {
 	var (
 		item  *badger.Item
 		dbKey []byte
 		err   error
 	)
+	rootHash := api.TypedHashFromRoot(root)
+
 	switch {
 	case ptr.Hash.Equal(&root.Hash):
 		// Requesting the root node which is special.

@@ -321,6 +321,10 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
+func (d *badgerNodeDB) GetNodes(root node.Root, ptr *node.Pointer, maxNodes int) (map[hash.Hash]node.Node, error) {
+	panic("not implemented")
+}
+
 func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error) {
 	if d.discardWriteLogs {
 		return nil, api.ErrWriteLogNotFound

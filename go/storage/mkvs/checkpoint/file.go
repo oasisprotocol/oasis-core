@@ -285,7 +285,7 @@ func (fc *fileCreatorV2) CreateCheckpoint(ctx context.Context, root node.Root, c
 	}
 
 	// Create chunks.
-	chunks, err := createChunksV2(ctx, fc.ndb, chunkSize, root, chunksDir, 20)
+	chunks, err := createChunksV2(ctx, fc.ndb, chunkSize, root, chunksDir, 15)
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
 	}
@@ -363,6 +363,9 @@ type pathAtom struct {
 // chunkTask is a task of creating a chunk in a given subtree,
 // that may have been partially chunked already.
 type chunkTask struct {
+	ndb   db.NodeDB
+	root  node.Root
+	cache map[hash.Hash]node.Node
 	// path is a path from root to subroot.
 	path []node.Node
 	// state is a state of subtree chunking.
@@ -388,11 +391,13 @@ func newTask(ctx context.Context, ndb db.NodeDB, root node.Root) (*chunkTask, er
 	}
 
 	return &chunkTask{
+		ndb:   ndb,
+		root:  root,
 		state: initState,
 	}, nil
 }
 
-func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root, chunkSize uint64, chunksDir string) {
+func (ct *chunkTask) process(ctx context.Context, chunkSize uint64, chunksDir string) {
 	dataFilename := filepath.Join(chunksDir, strconv.Itoa(ct.idx))
 	f, err := os.Create(dataFilename)
 	if err != nil {
@@ -401,20 +406,20 @@ func (ct *chunkTask) process(ctx context.Context, ndb db.NodeDB, root node.Root,
 	}
 	defer f.Close()
 
-	ct.create(ctx, ndb, root, f, chunkSize)
+	ct.create(ctx, f, chunkSize)
 }
 
-func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, w io.Writer, chunkSize uint64) {
+func (ct *chunkTask) create(ctx context.Context, w io.Writer, chunkSize uint64) {
 	defer func() {
 		ct.trim()
 	}()
 
-	if root.Hash.IsEmpty() { // TODO
+	if ct.root.Hash.IsEmpty() { // TODO
 		ct.err = fmt.Errorf("failed to create chunk for empty root")
 		return
 	}
 
-	pb := syncer.NewProofBuilderV0(root.Hash, root.Hash)
+	pb := syncer.NewProofBuilderV0(ct.root.Hash, ct.root.Hash)
 	for _, nd := range ct.path {
 		pb.Include(nd)
 	}
@@ -448,9 +453,9 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 		case *node.InternalNode:
 			visitNext := func(ptr *node.Pointer) error {
 				if ptr != nil {
-					nd, err := ndb.GetNode(root, ptr)
+					nd, err := ct.fetchNodeFromCacheOrDB(ptr)
 					if err != nil {
-						return fmt.Errorf("getting node from nodedb (ptr hash: %.8s): %w", ptr.Hash, err)
+						return fmt.Errorf("fetching node from cache or ndb (ptr hash: %.8s): %w", ptr.Hash, err)
 					}
 					ct.state = append(ct.state, pathAtom{nd, visitBefore})
 				}
@@ -497,6 +502,23 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 	return
 }
 
+func (ct *chunkTask) fetchNodeFromCacheOrDB(ptr *node.Pointer) (node.Node, error) {
+	if nd, ok := ct.cache[ptr.Hash]; ok {
+		return nd, nil
+	}
+
+	for h := range ct.cache {
+		delete(ct.cache, h)
+	}
+
+	ct.cache, ct.err = ct.ndb.GetNodes(ct.root, ptr, 100)
+	if ct.err != nil {
+		return nil, fmt.Errorf("prefetching 1000 nodes: %w", ct.err)
+	}
+
+	return ct.cache[ptr.Hash], nil
+}
+
 func (ct *chunkTask) isFinished() bool {
 	ct.trim()
 	return len(ct.state) == 0
@@ -512,7 +534,7 @@ func copySlice[T any](s []T) []T {
 	return append([]T{}, s...)
 }
 
-func (ct *chunkTask) split(ctx context.Context, ndb db.NodeDB, root node.Root) ([]*chunkTask, error) {
+func (ct *chunkTask) split(ctx context.Context) ([]*chunkTask, error) {
 	if ct.isFinished() {
 		return nil, nil
 	}
@@ -529,13 +551,15 @@ func (ct *chunkTask) split(ctx context.Context, ndb db.NodeDB, root node.Root) (
 			return nil
 		}
 
-		nd, err := ndb.GetNode(root, ptr)
+		nd, err := ct.ndb.GetNode(ct.root, ptr)
 		if err != nil {
 			return err
 		}
 
 		pathCopy := append([]node.Node(nil), ct.path...)
 		task := &chunkTask{
+			ndb:  ct.ndb,
+			root: ct.root,
 			path: append(pathCopy, parent),
 			state: []pathAtom{
 				{
@@ -624,7 +648,7 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 			chunkIndex++
 			go func() {
 				defer wg.Done()
-				task.process(ctx, ndb, root, chunkSize, chunksDir)
+				task.process(ctx, chunkSize, chunksDir)
 			}()
 		}
 		wg.Wait()
@@ -646,7 +670,7 @@ func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root n
 			newTasks = nil
 			// TODO sort so that output is deterministic
 			for _, task := range tasks {
-				childTasks, err := task.split(ctx, ndb, root)
+				childTasks, err := task.split(ctx)
 				if err != nil {
 					return nil, err
 				}

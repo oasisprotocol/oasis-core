@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
@@ -132,6 +133,10 @@ type NodeDB interface {
 	// GetNode looks up a node in the database.
 	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
 
+	// GetNodes looks up a node in the database and fetches all its children
+	// following inorder traversal, up to maxNodes.
+	GetNodes(root node.Root, ptr *node.Pointer, maxNodes int) (map[hash.Hash]node.Node, error)
+
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error)
 
@@ -250,6 +255,10 @@ func NewNopNodeDB() (NodeDB, error) {
 
 func (d *nopNodeDB) GetNode(node.Root, *node.Pointer) (node.Node, error) {
 	return nil, ErrNodeNotFound
+}
+
+func (d *nopNodeDB) GetNodes(root node.Root, ptr *node.Pointer, maxNodes int) (map[hash.Hash]node.Node, error) {
+	panic("not implemented")
 }
 
 func (d *nopNodeDB) GetWriteLog(context.Context, node.Root, node.Root) (writelog.Iterator, error) {
