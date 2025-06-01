@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
@@ -25,15 +24,20 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	querier  *app.QueryFactory
-	notifier *pubsub.Broker
+	querier    *app.QueryFactory
+	descriptor *tmapi.ServiceDescriptor
+	notifier   *pubsub.Broker
 }
 
 // New constructs a new CometBFT-based scheduler service client.
 func New(querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
+	descriptor.AddQuery(app.QueryApp)
+
 	sc := &ServiceClient{
-		logger:  logging.GetLogger("cometbft/scheduler"),
-		querier: querier,
+		logger:     logging.GetLogger("cometbft/scheduler"),
+		querier:    querier,
+		descriptor: descriptor,
 	}
 	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		currentCommittees, err := sc.getCurrentCommittees()
@@ -115,8 +119,8 @@ func (sc *ServiceClient) getCurrentCommittees() ([]*api.Committee, error) {
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.

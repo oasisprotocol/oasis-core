@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -24,18 +23,23 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	consensus consensus.Backend
-	querier   *app.QueryFactory
+	consensus  consensus.Backend
+	querier    *app.QueryFactory
+	descriptor *tmapi.ServiceDescriptor
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed governance service client.
 func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
+	descriptor.AddQuery(app.QueryApp)
+
 	return &ServiceClient{
 		logger:        logging.GetLogger("cometbft/staking"),
 		consensus:     consensus,
 		querier:       querier,
+		descriptor:    descriptor,
 		eventNotifier: pubsub.NewBroker(false),
 	}
 }
@@ -163,8 +167,8 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 }
 
 // ServiceDescriptor implements api.ServiceClient.
-func (sc *ServiceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
+func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
+	return sc.descriptor
 }
 
 // DeliverEvent implements api.ServiceClient.
