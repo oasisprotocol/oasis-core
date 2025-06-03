@@ -353,7 +353,7 @@ func verifyPolicyFromFlags() error {
 	return nil
 }
 
-// / unmarshalPolicyChor checks whether given CBOR is a valid secrets.PolicySGX struct.
+// unmarshalPolicyCBOR checks whether given CBOR is a valid secrets.PolicySGX struct.
 func unmarshalPolicyCBOR(pb []byte) (*secrets.PolicySGX, error) {
 	var p *secrets.PolicySGX = &secrets.PolicySGX{}
 	if err := cbor.Unmarshal(pb, p); err != nil {
