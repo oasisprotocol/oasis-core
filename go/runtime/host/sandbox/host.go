@@ -81,7 +81,7 @@ func (h *sandboxHost) ID() common.Namespace {
 	return h.id
 }
 
-// GetInfo implements host.Runtime.
+// GetActiveVersion implements host.Runtime.
 func (h *sandboxHost) GetActiveVersion() (*version.Version, error) {
 	h.RLock()
 	defer h.RUnlock()
