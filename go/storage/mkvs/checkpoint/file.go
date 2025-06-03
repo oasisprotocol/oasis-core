@@ -21,26 +21,25 @@ import (
 const (
 	chunksDir              = "chunks"
 	checkpointMetadataFile = "meta"
-	checkpointV1           = 1
-	checkpointV2           = 2
+
+	checkpointV1 = 1
+	checkpointV2 = 2
+	threadsV2    = 20
 
 	// Versions 1 of checkpoint chunks use proofs version 0. Consider bumping
 	// this to latest version when introducing new checkpoint versions.
 	checkpointProofsVersion = 0
 )
 
-type fileCreatorV1 struct {
-	dataDir string
-	ndb     db.NodeDB
+type chunker interface {
+	createChunks(ctx context.Context, root node.Root, chunksDir string, chunkSize uint64) ([]hash.Hash, error)
+	Version() uint16
 }
 
-func (fc *fileCreatorV1) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
-	tree := mkvs.NewWithRoot(nil, fc.ndb, root)
-	defer tree.Close()
-
+func createCheckpoint(ctx context.Context, ndb db.NodeDB, root node.Root, dataDir string, chunkSize uint64, chunker chunker) (meta *Metadata, err error) {
 	// Create checkpoint directory.
 	checkpointDir := filepath.Join(
-		fc.dataDir,
+		dataDir,
 		strconv.FormatUint(root.Version, 10),
 		root.Hash.String(),
 	)
@@ -61,6 +60,9 @@ func (fc *fileCreatorV1) CreateCheckpoint(ctx context.Context, root node.Root, c
 		if err = cbor.Unmarshal(data, &existing); err != nil {
 			return nil, fmt.Errorf("checkpoint: corrupted checkpoint metadata: %w", err)
 		}
+		if existing.Version != chunker.Version() {
+			return nil, fmt.Errorf("checkpoint: version mismatch: %w", err) // TODO fix this
+		}
 		return &existing, nil
 	}
 
@@ -70,36 +72,16 @@ func (fc *fileCreatorV1) CreateCheckpoint(ctx context.Context, root node.Root, c
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
 
-	// Create chunks until we are done.
+	// Create chunks.
 	var chunks []hash.Hash
-	var nextOffset node.Key
-	for chunkIndex := 0; ; chunkIndex++ {
-		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
-
-		// Generate chunk.
-		var f *os.File
-		if f, err = os.Create(dataFilename); err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", chunkIndex, err)
-		}
-
-		var chunkHash hash.Hash
-		chunkHash, nextOffset, err = createChunkV1(ctx, tree, root, nextOffset, chunkSize, f)
-		f.Close()
-		if err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk %d: %w", chunkIndex, err)
-		}
-
-		chunks = append(chunks, chunkHash)
-
-		// Check if we are finished.
-		if nextOffset == nil {
-			break
-		}
+	chunks, err = chunker.createChunks(ctx, root, chunksDir, chunkSize)
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
 	}
 
 	// Generate and write checkpoint metadata.
 	meta = &Metadata{
-		Version: checkpointV1,
+		Version: chunker.Version(),
 		Root:    root,
 		Chunks:  chunks,
 	}
@@ -108,6 +90,20 @@ func (fc *fileCreatorV1) CreateCheckpoint(ctx context.Context, root node.Root, c
 		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
 	}
 	return meta, nil
+
+}
+
+type fileCreatorV1 struct {
+	dataDir string
+	ndb     db.NodeDB
+}
+
+func (fc *fileCreatorV1) Version() uint16 {
+	return checkpointV1
+}
+
+func (fc *fileCreatorV1) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
+	return createCheckpoint(ctx, fc.ndb, root, fc.dataDir, chunkSize, fc)
 }
 
 func (fc *fileCreatorV1) GetCheckpoints(_ context.Context, request *GetCheckpointsRequest) ([]*Metadata, error) {
@@ -139,6 +135,10 @@ func (fc *fileCreatorV1) GetCheckpoints(_ context.Context, request *GetCheckpoin
 			return nil, fmt.Errorf("checkpoint: corrupted checkpoint metadata at %s: %w", m, err)
 		}
 
+		if cp.Version != request.Version {
+			continue
+		}
+
 		cps = append(cps, &cp)
 	}
 	return cps, nil
@@ -165,6 +165,11 @@ func (fc *fileCreatorV1) GetCheckpoint(_ context.Context, version uint16, root n
 	if err = cbor.Unmarshal(data, &cp); err != nil {
 		return nil, fmt.Errorf("checkpoint: corrupted checkpoint metadata: %w", err)
 	}
+
+	if cp.Version != version {
+		return nil, ErrCheckpointNotFound
+	}
+
 	return &cp, nil
 }
 
@@ -177,7 +182,16 @@ func (fc *fileCreatorV1) DeleteCheckpoint(_ context.Context, version uint16, roo
 	versionDir := filepath.Join(fc.dataDir, strconv.FormatUint(root.Version, 10))
 	checkpointDir := filepath.Join(versionDir, root.Hash.String())
 	checkpointFilename := filepath.Join(checkpointDir, checkpointMetadataFile)
-	if err := os.Remove(checkpointFilename); err != nil {
+
+	data, err := os.ReadFile(checkpointFilename)
+	if err != nil {
+		return ErrCheckpointNotFound
+	}
+	var cp Metadata
+	if err = cbor.Unmarshal(data, &cp); err != nil {
+		return fmt.Errorf("checkpoint: corrupted checkpoint metadata: %w", err)
+	}
+	if cp.Version != version {
 		return ErrCheckpointNotFound
 	}
 
@@ -207,6 +221,7 @@ func (fc *fileCreatorV1) DeleteCheckpoint(_ context.Context, version uint16, roo
 	return nil
 }
 
+// TODO this is not safe from possible version mismatch.
 func (fc *fileCreatorV1) GetCheckpointChunk(_ context.Context, chunk *ChunkMetadata, w io.Writer) error {
 	// Currently we only support two versions.
 	if chunk.Version != checkpointV1 && chunk.Version != checkpointV2 {
@@ -246,61 +261,12 @@ type fileCreatorV2 struct {
 	ndb     db.NodeDB
 }
 
-// This is first iteration of CreateCheckpoint that should produce exactly equal checkpoint as V1.
-// Internally instead of relying on Iterator for preparing proofs we build them manually.
-//
-// Next iteration is to use more compact V1 proofs.
-// Final iteration is to dynamically parallelize and generate proofs/chunks in parallel.
+func (fc *fileCreatorV2) Version() uint16 {
+	return checkpointV1
+}
+
 func (fc *fileCreatorV2) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
-	// Create checkpoint directory.
-	checkpointDir := filepath.Join(
-		fc.dataDir,
-		strconv.FormatUint(root.Version, 10),
-		root.Hash.String(),
-	)
-	if err = common.Mkdir(checkpointDir); err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create checkpoint directory: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			// In case we have failed to create a checkpoint, make sure to clean up after ourselves.
-			_ = os.RemoveAll(checkpointDir)
-		}
-	}()
-
-	// Check if the checkpoint already exists and just return the existing metadata in this case.
-	data, err := os.ReadFile(filepath.Join(checkpointDir, checkpointMetadataFile))
-	if err == nil {
-		var existing Metadata
-		if err = cbor.Unmarshal(data, &existing); err != nil {
-			return nil, fmt.Errorf("checkpoint: corrupted checkpoint metadata: %w", err)
-		}
-		return &existing, nil
-	}
-
-	// Create chunks directory.
-	chunksDir := filepath.Join(checkpointDir, chunksDir)
-	if err = common.Mkdir(chunksDir); err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
-	}
-
-	// Create chunks.
-	chunks, err := createChunksV2(ctx, fc.ndb, chunkSize, root, chunksDir, 20)
-	if err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
-	}
-
-	// Generate and write checkpoint metadata.
-	meta = &Metadata{
-		Version: checkpointV1,
-		Root:    root,
-		Chunks:  chunks,
-	}
-
-	if err = os.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0o600); err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
-	}
-	return meta, nil
+	return createCheckpoint(ctx, fc.ndb, root, fc.dataDir, chunkSize, fc)
 }
 
 func (fc *fileCreatorV2) GetCheckpoint(ctx context.Context, version uint16, root node.Root) (*Metadata, error) {
@@ -343,7 +309,103 @@ func NewFileCreatorV2(dataDir string, ndb db.NodeDB) (Creator, error) {
 	}, nil
 }
 
-type chunkCreator struct {
+func (fc *fileCreatorV1) createChunks(ctx context.Context, root node.Root, chunksDir string, chunkSize uint64) ([]hash.Hash, error) {
+	tree := mkvs.NewWithRoot(nil, fc.ndb, root)
+	defer tree.Close()
+
+	// Create chunks until we are done.
+	var chunks []hash.Hash
+	var nextOffset node.Key
+	for chunkIndex := 0; ; chunkIndex++ {
+		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
+
+		// Generate chunk.
+		f, err := os.Create(dataFilename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create chunk file for chunk %d: %w", chunkIndex, err)
+		}
+
+		var hash hash.Hash
+		hash, nextOffset, err = createChunkV1(ctx, tree, root, nextOffset, chunkSize, f)
+		f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create chunk %d: %w", chunkIndex, err)
+		}
+
+		chunks = append(chunks, hash)
+
+		// Check if we are finished.
+		if nextOffset == nil {
+			break
+		}
+	}
+	return chunks, nil
+}
+
+func (fc *fileCreatorV2) createChunks(ctx context.Context, root node.Root, chunksDir string, chunkSize uint64) ([]hash.Hash, error) {
+	if root.Hash.IsEmpty() {
+		return []hash.Hash{}, nil
+	}
+
+	initTask, err := newTask(ctx, fc.ndb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := make(map[int]hash.Hash, 0)
+	var chunkIndex int
+	tasks := []*chunkTask{initTask}
+	for len(tasks) > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			task.idx = chunkIndex
+			chunkIndex++
+			go func() {
+				defer wg.Done()
+				task.process(ctx, fc.ndb, root, chunkSize, chunksDir)
+			}()
+		}
+		wg.Wait()
+
+		var newTasks []*chunkTask
+		for _, task := range tasks {
+			if task.err != nil {
+				return nil, task.err
+			}
+			chunks[task.idx] = task.hash
+			if !task.isFinished() {
+				task.err, task.hash, task.idx = nil, hash.Hash{}, -1
+				newTasks = append(newTasks, task)
+			}
+		}
+		tasks = newTasks
+
+		if len(tasks) < threadsV2 {
+			newTasks = nil
+			for _, task := range tasks {
+				childTasks, err := task.split(ctx, fc.ndb, root)
+				if err != nil {
+					return nil, err
+				}
+				newTasks = append(newTasks, childTasks...)
+			}
+			tasks = newTasks
+		}
+	}
+
+	hashes := make([]hash.Hash, 0, len(chunks))
+	for i := 0; i < len(chunks); i++ {
+		hashes = append(hashes, chunks[i])
+	}
+
+	return hashes, nil
 }
 
 type visitState uint8
@@ -356,8 +418,8 @@ const (
 )
 
 type pathAtom struct {
-	nd    node.Node
-	state visitState
+	nd         node.Node
+	visitState visitState
 }
 
 // chunkTask is a task of creating a chunk in a given subtree,
@@ -367,10 +429,11 @@ type chunkTask struct {
 	path []node.Node
 	// state is a state of subtree chunking.
 	state []pathAtom
-	idx   int
-	// res is a hash of latest chunk created.
-	res hash.Hash
-	err error
+	// idx is chunk index as written into file.
+	idx int
+	// hash is a result of chunk task.
+	hash hash.Hash
+	err  error
 }
 
 func newTask(ctx context.Context, ndb db.NodeDB, root node.Root) (*chunkTask, error) {
@@ -384,7 +447,7 @@ func newTask(ctx context.Context, ndb db.NodeDB, root node.Root) (*chunkTask, er
 	}
 
 	initState := []pathAtom{
-		{nd: rootNode, state: visitBefore},
+		{nd: rootNode, visitState: visitBefore},
 	}
 
 	return &chunkTask{
@@ -409,11 +472,6 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 		ct.trim()
 	}()
 
-	if root.Hash.IsEmpty() { // TODO
-		ct.err = fmt.Errorf("failed to create chunk for empty root")
-		return
-	}
-
 	pb := syncer.NewProofBuilderV0(root.Hash, root.Hash)
 	for _, nd := range ct.path {
 		pb.Include(nd)
@@ -432,7 +490,7 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 		}
 
 		if pb.Size() >= chunkSize && lastIsLeaf {
-			ct.res, ct.err = createChunkV2(ctx, pb, w)
+			ct.hash, ct.err = createChunkV2(ctx, pb, w)
 			return
 		}
 
@@ -456,14 +514,10 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 				}
 				return nil
 			}
-			switch current.state {
+			switch current.visitState {
 			case visitBefore:
 				pb.Include(currNode)
-				if currNode.LeafNode != nil {
-					lastIsLeaf = true
-				} else {
-					lastIsLeaf = false
-				}
+				lastIsLeaf = currNode.LeafNode != nil
 				ct.state = append(ct.state, pathAtom{currNode, visitAt})
 			case visitAt:
 				ct.state = append(ct.state, pathAtom{currNode, visitAtLeft})
@@ -480,20 +534,21 @@ func (ct *chunkTask) create(ctx context.Context, ndb db.NodeDB, root node.Root, 
 			case visitAfter:
 				continue
 			default:
-				ct.err = fmt.Errorf("checkpoint: unexpected atom state")
+				ct.err = fmt.Errorf("unexpected atom state")
 				return
 			}
 		default:
-			ct.err = fmt.Errorf("checkpoint: unexpected node type")
+			ct.err = fmt.Errorf("unexpected node type")
 			return
 		}
 	}
 
-	if pb.Size() > 0 {
-		ct.res, ct.err = createChunkV2(ctx, pb, w)
-	} else {
-		ct.err = fmt.Errorf("no nodes were included in final chunk")
+	if pb.Size() <= 0 {
+		ct.err = fmt.Errorf("chunk cannot be empty")
+		return
 	}
+
+	ct.hash, ct.err = createChunkV2(ctx, pb, w)
 	return
 }
 
@@ -503,7 +558,7 @@ func (ct *chunkTask) isFinished() bool {
 }
 
 func (ct *chunkTask) trim() {
-	for len(ct.state) > 0 && ct.state[len(ct.state)-1].state == visitAfter {
+	for len(ct.state) > 0 && ct.state[len(ct.state)-1].visitState == visitAfter {
 		ct.state = ct.state[:len(ct.state)-1]
 	}
 }
@@ -533,14 +588,14 @@ func (ct *chunkTask) split(ctx context.Context, ndb db.NodeDB, root node.Root) (
 		pathCopy := append([]node.Node(nil), ct.path...)
 		task := &chunkTask{
 			path:  append(pathCopy, parent),
-			state: []pathAtom{{nd: nd, state: visitBefore}},
+			state: []pathAtom{{nd: nd, visitState: visitBefore}},
 		}
 
 		tasks = append(tasks, task)
 		return nil
 	}
 
-	switch first.state {
+	switch first.visitState {
 	case visitBefore, visitAt:
 		if nd.Left == nil && nd.Right == nil {
 			return []*chunkTask{ct}, nil
@@ -585,70 +640,4 @@ func (ct *chunkTask) split(ctx context.Context, ndb db.NodeDB, root node.Root) (
 	}
 
 	return tasks, nil
-}
-
-func createChunksV2(ctx context.Context, ndb db.NodeDB, chunkSize uint64, root node.Root, chunksDir string, minThreads int) ([]hash.Hash, error) {
-	if root.Hash.IsEmpty() {
-		return []hash.Hash{}, nil
-	}
-
-	initTask, err := newTask(ctx, ndb, root)
-	if err != nil {
-		return nil, err
-	}
-
-	chunks := make(map[int]hash.Hash, 0)
-	var chunkIndex int
-	tasks := []*chunkTask{initTask}
-	for len(tasks) > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		var wg sync.WaitGroup
-		for _, task := range tasks {
-			wg.Add(1)
-			task.idx = chunkIndex
-			chunkIndex++
-			go func() {
-				defer wg.Done()
-				task.process(ctx, ndb, root, chunkSize, chunksDir)
-			}()
-		}
-		wg.Wait()
-
-		var newTasks []*chunkTask
-		for _, task := range tasks {
-			if task.err != nil {
-				return nil, task.err
-			}
-			chunks[task.idx] = task.res
-			if !task.isFinished() {
-				task.err, task.res, task.idx = nil, hash.Hash{}, -1
-				newTasks = append(newTasks, task)
-			}
-		}
-		tasks = newTasks
-
-		if len(tasks) < minThreads {
-			newTasks = nil
-			for _, task := range tasks {
-				childTasks, err := task.split(ctx, ndb, root)
-				if err != nil {
-					return nil, err
-				}
-				newTasks = append(newTasks, childTasks...)
-			}
-			tasks = newTasks
-		}
-	}
-
-	hashes := make([]hash.Hash, 0, len(chunks))
-	for i := 0; i < len(chunks); i++ {
-		hashes = append(hashes, chunks[i])
-	}
-
-	return hashes, nil
 }
