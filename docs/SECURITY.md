@@ -5,13 +5,13 @@ any effort to discover and fix vulnerabilities in [Oasis Core] and other
 projects powering the [Oasis Network].
 
 We prefer that security reports be sent through our [private bug bounty program
-linked on our website](https://oasisprotocol.org/security).
+linked on our website](https://oasis.net/security-and-tees).
 
 We sketch out the general classification of the kinds of errors
 below. This is not intended to be an exhaustive list.
 
 <!-- markdownlint-disable line-length -->
-[Oasis Foundation]: https://oasisprotocol.org/
+[Oasis Foundation]: https://oasis.net/
 [Oasis Core]: https://github.com/oasisprotocol/oasis-core
 [Oasis Network]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/README.md
 <!-- markdownlint-enable line-length -->
@@ -33,7 +33,9 @@ expected.
 - Mismatch between specifications and implementation of any subsystems
   / modules, when the implementation is considered complete.
 
-[papers]: https://oasisprotocol.org/papers
+<!-- markdownlint-disable line-length -->
+[papers]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/papers.mdx
+<!-- markdownlint-enable line-length -->
 
 ## Contract Computational/Data Integrity
 
