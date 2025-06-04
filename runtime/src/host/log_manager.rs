@@ -28,15 +28,19 @@ impl LogManager for Protocol {
     }
 }
 
-/// Request to add a volume.
+/// Request to fetch logs.
 ///
-/// The `PermissionVolumeAdd` permission is required to call this method.
+/// The `PermissionLogView` permission is required to call this method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct LogGetRequest {
     /// Labels to filter the bundles by. All labels must match and only the first bundle is used.
     pub labels: BTreeMap<String, String>,
     /// Identifier of the component in the bundle.
     pub component_id: String,
+    /// An optional UNIX timestamp to filter log entries by. Only entries with higher timestamps
+    /// will be returned.
+    #[cbor(optional)]
+    pub since: u64,
 }
 
 /// Response from the LogGet method.
