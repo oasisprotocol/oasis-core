@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"

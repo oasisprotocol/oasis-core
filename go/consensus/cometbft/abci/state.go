@@ -22,8 +22,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -484,7 +484,7 @@ func (s *applicationState) doCommitOrInitChainLocked() error {
 
 	// Update cache of consensus parameters (the only places where consensus parameters can be
 	// changed are InitChain and EndBlock, so we can safely update the cache here).
-	state := abciState.NewMutableState(s.canonicalState)
+	state := consensusState.NewMutableState(s.canonicalState)
 	params, err := state.ConsensusParameters(s.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load consensus parameters: %w", err)

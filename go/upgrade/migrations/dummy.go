@@ -7,8 +7,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -83,7 +83,7 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(privateCtx any) error {
 		}
 	case abciAPI.ContextEndBlock:
 		// Update a consensus parameter during EndBlock.
-		state := abciState.NewMutableState(abciCtx.State())
+		state := consensusState.NewMutableState(abciCtx.State())
 
 		params, err := state.ConsensusParameters(abciCtx)
 		if err != nil {

@@ -508,7 +508,6 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 				if !ok {
 					return
 				}
-
 				mapCh <- api.NewBlock(tmBlk)
 			case <-ctx.Done():
 				return

@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	consensusApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus"
 	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
 	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
@@ -373,7 +374,7 @@ func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error
 }
 
 func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis, error) {
-	qf := abci.NewQueryFactory(qs)
+	qf := consensusApp.NewQueryFactory(qs)
 	q, err := qf.QueryAt(ctx, qs.BlockHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create consensus query: %w", err)

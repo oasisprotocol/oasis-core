@@ -1,10 +1,10 @@
-package abci
+package consensus
 
 import (
 	"context"
 
-	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 )
 

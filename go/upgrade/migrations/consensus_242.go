@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 )
 
 // Consensus242 is the name of the upgrade that enables features introduced in Oasis Core 24.2.

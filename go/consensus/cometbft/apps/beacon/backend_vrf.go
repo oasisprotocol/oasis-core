@@ -12,9 +12,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
@@ -485,7 +485,7 @@ func MustGetChainContext(ctx *api.Context) []byte {
 	// Using panic on errors is ok because if this isn't present, something
 	// has went horrifically wrong (the key is inserted by the ABCI mux
 	// during initialization).
-	state := abciState.NewMutableState(ctx.State())
+	state := consensusState.NewMutableState(ctx.State())
 	b, err := state.ChainContext(ctx)
 	if err != nil {
 		panic("BUG: failed to get chain context: " + err.Error())

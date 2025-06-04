@@ -25,8 +25,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -310,7 +310,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// nothing writes to the state till the Commit() call, along with
 	// clearly separating chain instances based on the initialization
 	// state, forever.
-	state := abciState.NewMutableState(ctx.State())
+	state := consensusState.NewMutableState(ctx.State())
 	chainContext := st.ChainContext()
 	if err = state.SetChainContext(ctx, chainContext); err != nil {
 		panic(err)
@@ -971,7 +971,7 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 	// Ensure that if state is initialized it matches the genesis file. There could be a discrepancy
 	// in case someone copied over the state from one network but is using a genesis file from
 	// another.
-	cs := abciState.NewMutableState(state.canonicalState)
+	cs := consensusState.NewMutableState(state.canonicalState)
 	chainContext, err := cs.ChainContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch chain context from state: %w", err)

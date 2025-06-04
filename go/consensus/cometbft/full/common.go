@@ -33,6 +33,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	consensusApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus"
 	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
 	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
@@ -127,7 +128,7 @@ type commonNode struct {
 	publicKeyBlacklist []signature.PublicKey
 
 	mux     *abci.ApplicationServer
-	querier *abci.QueryFactory
+	querier *consensusApp.QueryFactory
 
 	beacon     *tmbeacon.ServiceClient
 	governance *tmgovernance.ServiceClient
@@ -233,7 +234,7 @@ func (n *commonNode) initialize() error {
 	md := n.mux.MessageDispatcher()
 
 	// Initialize consensus backend querier.
-	n.querier = abci.NewQueryFactory(state)
+	n.querier = consensusApp.NewQueryFactory(state)
 
 	// Initialize backends.
 	n.beacon = tmbeacon.New(n.baseEpoch, n.baseHeight, n.parentNode, beaconApp.NewQueryFactory(state))

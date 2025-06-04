@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 )
 
 // IsFeatureVersion returns true iff the consensus feature version is high
