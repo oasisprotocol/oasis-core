@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
@@ -31,6 +32,8 @@ type Config struct {
 // Client is a CometBFT consensus light client that talks with remote oasis-nodes that are using
 // the CometBFT consensus backend and verifies responses.
 type Client struct {
+	mu sync.Mutex
+
 	providers []*Provider
 
 	// lightClient is a wrapped CometBFT light client used for verifying headers.
@@ -88,11 +91,15 @@ func (c *Client) LastTrustedHeight() (int64, error) {
 
 // VerifyHeader verifies the given header.
 func (c *Client) VerifyHeader(ctx context.Context, header *cmttypes.Header) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.lightClient.VerifyHeader(ctx, header, time.Now())
 }
 
 // VerifyLightBlockAt returns a verified light block at the given height.
 func (c *Client) VerifyLightBlockAt(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.lightClient.VerifyLightBlockAtHeight(ctx, height, time.Now())
 }
 
