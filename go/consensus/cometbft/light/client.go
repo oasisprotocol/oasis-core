@@ -74,6 +74,23 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 	}, nil
 }
 
+// LastTrustedHeight returns the last trusted height.
+func (c *Client) LastTrustedHeight() (int64, error) {
+	height, err := c.lightClient.LastTrustedHeight()
+	if err != nil {
+		return 0, err
+	}
+	if height == -1 {
+		return 0, fmt.Errorf("no trusted headers")
+	}
+	return height, nil
+}
+
+// VerifyHeader verifies the given header.
+func (c *Client) VerifyHeader(ctx context.Context, header *cmttypes.Header) error {
+	return c.lightClient.VerifyHeader(ctx, header, time.Now())
+}
+
 // VerifyLightBlockAt returns a verified light block at the given height.
 func (c *Client) VerifyLightBlockAt(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
 	return c.lightClient.VerifyLightBlockAtHeight(ctx, height, time.Now())
