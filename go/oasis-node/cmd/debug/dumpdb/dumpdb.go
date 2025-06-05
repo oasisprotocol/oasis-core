@@ -18,8 +18,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	consensusApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus"
 	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
-	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
+	keymanagerChurpApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp"
+	keymanagerSecretsApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
 	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler"
@@ -31,6 +33,8 @@ import (
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -314,23 +318,44 @@ func dumpStaking(ctx context.Context, qs *dumpQueryState) (*staking.Genesis, err
 }
 
 func dumpKeyManager(ctx context.Context, qs *dumpQueryState) (*keymanager.Genesis, error) {
-	qf := keymanagerApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	secrets, err := dumpKeyManagerSecrets(ctx, qs)
 	if err != nil {
-		return nil, fmt.Errorf("dumpdb: failed to create key manager query: %w", err)
+		return nil, err
 	}
-	secrets, err := q.Secrets().Genesis(ctx)
+	churp, err := dumpKeyManagerChurp(ctx, qs)
 	if err != nil {
-		return nil, fmt.Errorf("dumpdb: failed to dump key manager state: %w", err)
-	}
-	churp, err := q.Churp().Genesis(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("dumpdb: failed to dump key manager state: %w", err)
+		return nil, err
 	}
 	return &keymanager.Genesis{
 		Genesis: *secrets,
 		Churp:   churp,
 	}, nil
+}
+
+func dumpKeyManagerSecrets(ctx context.Context, qs *dumpQueryState) (*secrets.Genesis, error) {
+	qf := keymanagerSecretsApp.NewQueryFactory(qs)
+	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to create key manager secrets query: %w", err)
+	}
+	secrets, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to dump key manager secrets state: %w", err)
+	}
+	return secrets, nil
+}
+
+func dumpKeyManagerChurp(ctx context.Context, qs *dumpQueryState) (*churp.Genesis, error) {
+	qf := keymanagerChurpApp.NewQueryFactory(qs)
+	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to create key manager CHURP query: %w", err)
+	}
+	churp, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to dump key manager CHURP state: %w", err)
+	}
+	return churp, nil
 }
 
 func dumpScheduler(ctx context.Context, qs *dumpQueryState) (*scheduler.Genesis, error) {
@@ -373,7 +398,7 @@ func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error
 }
 
 func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis, error) {
-	qf := abci.NewQueryFactory(qs)
+	qf := consensusApp.NewQueryFactory(qs)
 	q, err := qf.QueryAt(ctx, qs.BlockHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create consensus query: %w", err)

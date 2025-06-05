@@ -3,41 +3,24 @@ package scheduler
 import (
 	"context"
 
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-// Query is the scheduler query interface.
-type Query interface {
-	Validators(context.Context) ([]*scheduler.Validator, error)
-	AllCommittees(context.Context) ([]*scheduler.Committee, error)
-	KindsCommittees(context.Context, []scheduler.CommitteeKind) ([]*scheduler.Committee, error)
-	Genesis(context.Context) (*scheduler.Genesis, error)
-	ConsensusParameters(context.Context) (*scheduler.ConsensusParameters, error)
-}
-
-// QueryFactory is the scheduler query factory.
-type QueryFactory struct {
-	state abciAPI.ApplicationQueryState
-}
-
-// QueryAt returns the scheduler query interface for a specific height.
-func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
-	if err != nil {
-		return nil, err
-	}
-	return &schedulerQuerier{
-		state: schedulerState.NewImmutableState(state),
-	}, nil
-}
-
-type schedulerQuerier struct {
+// Query is the scheduler query.
+type Query struct {
 	state *schedulerState.ImmutableState
 }
 
-func (q *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
+// NewQuery returns a new scheduler query backed by the given state.
+func NewQuery(state *schedulerState.ImmutableState) *Query {
+	return &Query{
+		state: state,
+	}
+}
+
+// Validators implements scheduler.Query.
+func (q *Query) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
 	vals, err := q.state.CurrentValidators(ctx)
 	if err != nil {
 		return nil, err
@@ -51,20 +34,17 @@ func (q *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validat
 	return ret, nil
 }
 
-func (q *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Committee, error) {
+// AllCommittees implements scheduler.Query.
+func (q *Query) AllCommittees(ctx context.Context) ([]*scheduler.Committee, error) {
 	return q.state.AllCommittees(ctx)
 }
 
-func (q *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
+// KindsCommittees implements scheduler.Query.
+func (q *Query) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
 	return q.state.KindsCommittees(ctx, kinds)
 }
 
-func (q *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler.ConsensusParameters, error) {
+// ConsensusParameters implements scheduler.Query.
+func (q *Query) ConsensusParameters(ctx context.Context) (*scheduler.ConsensusParameters, error) {
 	return q.state.ConsensusParameters(ctx)
-}
-
-// NewQueryFactory returns a new QueryFactory backed by the given state
-// instance.
-func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
-	return &QueryFactory{state}
 }

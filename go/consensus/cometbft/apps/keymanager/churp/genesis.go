@@ -62,8 +62,8 @@ func (ext *churpExt) InitChain(ctx *tmapi.Context, _ types.RequestInitChain, doc
 	return nil
 }
 
-// Genesis implements Query.
-func (q *querier) Genesis(ctx context.Context) (*churp.Genesis, error) {
+// Genesis implements churp.Query.
+func (q *Query) Genesis(ctx context.Context) (*churp.Genesis, error) {
 	parameters, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err

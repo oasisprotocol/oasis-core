@@ -24,13 +24,13 @@ type ServiceClient struct {
 
 	logger *logging.Logger
 
-	querier    *app.QueryFactory
+	querier    QueryFactory
 	descriptor *tmapi.ServiceDescriptor
 	notifier   *pubsub.Broker
 }
 
-// New constructs a new CometBFT-based scheduler service client.
-func New(querier *app.QueryFactory) *ServiceClient {
+// New constructs a new CometBFT backed scheduler service client.
+func New(querier QueryFactory) *ServiceClient {
 	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
 	descriptor.AddQuery(app.QueryApp)
 

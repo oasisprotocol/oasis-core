@@ -52,8 +52,8 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 	return nil
 }
 
-// Genesis exports current state in genesis format.
-func (q *vaultQuerier) Genesis(ctx context.Context) (*vault.Genesis, error) {
+// Genesis implements vault.Query.
+func (q *Query) Genesis(ctx context.Context) (*vault.Genesis, error) {
 	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err

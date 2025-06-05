@@ -24,14 +24,14 @@ type ServiceClient struct {
 	logger *logging.Logger
 
 	consensus  consensus.Backend
-	querier    *app.QueryFactory
+	querier    QueryFactory
 	descriptor *tmapi.ServiceDescriptor
 
 	eventNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed staking service client.
-func New(consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(consensus consensus.Backend, querier QueryFactory) *ServiceClient {
 	descriptor := tmapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
 	descriptor.AddQuery(app.QueryApp)
 

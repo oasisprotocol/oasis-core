@@ -219,7 +219,7 @@ func TestGenesis(t *testing.T) {
 		tc.init()
 
 		qf := NewQueryFactory(appState)
-		var q Query
+		var q *Query
 		// Need to use blockHeight+1, so that request is treated like it was
 		// made from an ABCI application context.
 		q, err = qf.QueryAt(ctx, 1)

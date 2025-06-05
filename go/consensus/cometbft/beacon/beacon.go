@@ -34,7 +34,7 @@ type ServiceClient struct {
 	logger *logging.Logger
 
 	consensus  consensus.Backend
-	querier    *app.QueryFactory
+	querier    QueryFactory
 	descriptor *cmtapi.ServiceDescriptor
 
 	epochNotifier     *pubsub.Broker
@@ -54,7 +54,7 @@ type ServiceClient struct {
 }
 
 // New constructs a new CometBFT backed beacon service client.
-func New(baseEpoch api.EpochTime, baseBlock int64, consensus consensus.Backend, querier *app.QueryFactory) *ServiceClient {
+func New(baseEpoch api.EpochTime, baseBlock int64, consensus consensus.Backend, querier QueryFactory) *ServiceClient {
 	descriptor := cmtapi.NewServiceDescriptor(api.ModuleName, app.EventType, 1)
 	descriptor.AddQuery(app.QueryApp)
 

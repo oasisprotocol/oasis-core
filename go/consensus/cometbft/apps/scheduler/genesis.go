@@ -174,8 +174,9 @@ func (app *Application) InitChain(ctx *abciAPI.Context, req types.RequestInitCha
 	return nil
 }
 
-func (sq *schedulerQuerier) Genesis(ctx context.Context) (*scheduler.Genesis, error) {
-	params, err := sq.state.ConsensusParameters(ctx)
+// Genesis implements scheduler.Query.
+func (q *Query) Genesis(ctx context.Context) (*scheduler.Genesis, error) {
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}

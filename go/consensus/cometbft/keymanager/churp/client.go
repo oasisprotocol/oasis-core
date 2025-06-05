@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
-	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -19,12 +18,12 @@ import (
 type ServiceClient struct {
 	logger *logging.Logger
 
-	querier        *app.QueryFactory
+	querier        QueryFactory
 	statusNotifier *pubsub.Broker
 }
 
 // New constructs a new CometBFT backed key manager CHURP service client.
-func New(querier *app.QueryFactory) *ServiceClient {
+func New(querier QueryFactory) *ServiceClient {
 	return &ServiceClient{
 		logger:         logging.GetLogger("cometbft/keymanager/churp"),
 		querier:        querier,
@@ -39,7 +38,7 @@ func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) 
 		return nil, err
 	}
 
-	return q.Churp().ConsensusParameters(ctx)
+	return q.ConsensusParameters(ctx)
 }
 
 // Status implements churp.Backend.
@@ -49,7 +48,7 @@ func (sc *ServiceClient) Status(ctx context.Context, query *churp.StatusQuery) (
 		return nil, err
 	}
 
-	return q.Churp().Status(ctx, query.RuntimeID, query.ChurpID)
+	return q.Status(ctx, query.RuntimeID, query.ChurpID)
 }
 
 // Statuses implements churp.Backend.
@@ -59,7 +58,7 @@ func (sc *ServiceClient) Statuses(ctx context.Context, query *api.NamespaceQuery
 		return nil, err
 	}
 
-	return q.Churp().Statuses(ctx, query.ID)
+	return q.Statuses(ctx, query.ID)
 }
 
 // AllStatuses implements churp.Backend.
@@ -69,7 +68,7 @@ func (sc *ServiceClient) AllStatuses(ctx context.Context, height int64) ([]*chur
 		return nil, err
 	}
 
-	return q.Churp().AllStatuses(ctx)
+	return q.AllStatuses(ctx)
 }
 
 // StateToGenesis implements churp.Backend.
@@ -79,7 +78,7 @@ func (sc *ServiceClient) StateToGenesis(ctx context.Context, height int64) (*chu
 		return nil, err
 	}
 
-	return q.Churp().Genesis(ctx)
+	return q.Genesis(ctx)
 }
 
 // WatchStatuses implements churp.Backend.

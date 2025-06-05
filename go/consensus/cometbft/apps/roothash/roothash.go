@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -29,13 +28,13 @@ import (
 
 // Application is a roothash application.
 type Application struct {
-	state tmapi.ApplicationState
+	state api.ApplicationState
 	md    api.MessageDispatcher
-	ecn   tmapi.ExecutorCommitmentNotifier
+	ecn   api.ExecutorCommitmentNotifier
 }
 
 // New constructs a new roothash application.
-func New(state api.ApplicationState, md tmapi.MessageDispatcher, ecn tmapi.ExecutorCommitmentNotifier) *Application {
+func New(state api.ApplicationState, md api.MessageDispatcher, ecn api.ExecutorCommitmentNotifier) *Application {
 	return &Application{
 		state: state,
 		md:    md,
@@ -85,7 +84,7 @@ func (app *Application) OnCleanup() {
 }
 
 // BeginBlock implements api.Application.
-func (app *Application) BeginBlock(ctx *tmapi.Context) error {
+func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
 	// Check if there was an epoch transition.
@@ -101,7 +100,7 @@ func (app *Application) BeginBlock(ctx *tmapi.Context) error {
 	return nil
 }
 
-func (app *Application) onCommitteeChanged(ctx *tmapi.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
+func (app *Application) onCommitteeChanged(ctx *api.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
 	schedState := schedulerState.NewMutableState(ctx.State())
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes(ctx)
@@ -241,7 +240,7 @@ func (app *Application) onCommitteeChanged(ctx *tmapi.Context, state *roothashSt
 }
 
 // ExecuteMessage implements api.MessageSubscriber.
-func (app *Application) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, error) {
+func (app *Application) ExecuteMessage(ctx *api.Context, kind, msg any) (any, error) {
 	switch kind {
 	case registryApi.MessageNewRuntimeRegistered:
 		// A new runtime has been registered.
@@ -285,7 +284,7 @@ func (app *Application) ExecuteMessage(ctx *tmapi.Context, kind, msg any) (any, 
 	}
 }
 
-func (app *Application) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Runtime) error {
+func (app *Application) verifyRuntimeUpdate(ctx *api.Context, rt *registry.Runtime) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	params, err := state.ConsensusParameters(ctx)
@@ -297,7 +296,7 @@ func (app *Application) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Run
 }
 
 // ExecuteTx implements api.Application.
-func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
+func (app *Application) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	ctx.SetPriority(AppPriority)
@@ -329,7 +328,7 @@ func (app *Application) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transactio
 	}
 }
 
-func (app *Application) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
+func (app *Application) onNewRuntime(ctx *api.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
 	if !runtime.IsCompute() {
 		ctx.Logger().Debug("onNewRuntime: ignoring non-compute runtime",
 			"runtime", runtime,
@@ -396,7 +395,7 @@ func (app *Application) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runti
 	)
 
 	ctx.EmitEvent(
-		tmapi.NewEventBuilder(app.Name()).
+		api.NewEventBuilder(app.Name()).
 			TypedAttribute(&roothash.FinalizedEvent{Round: genesisBlock.Header.Round}).
 			TypedAttribute(&roothash.RuntimeIDAttribute{ID: runtime.ID}),
 	)
@@ -404,7 +403,7 @@ func (app *Application) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runti
 }
 
 // EndBlock implements api.Application.
-func (app *Application) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
+func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	if err := app.tryFinalizeRounds(ctx); err != nil {
 		return types.ResponseEndBlock{}, err
 	}

@@ -56,12 +56,13 @@ func (app *Application) doInitBackend(params *beacon.ConsensusParameters) error 
 	return nil
 }
 
-func (bq *beaconQuerier) Genesis(ctx context.Context) (*beacon.Genesis, error) {
-	params, err := bq.state.ConsensusParameters(ctx)
+// Genesis implements beacon.Query.
+func (q *Query) Genesis(ctx context.Context) (*beacon.Genesis, error) {
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
-	epoch, _, err := bq.state.GetEpoch(ctx)
+	epoch, _, err := q.state.GetEpoch(ctx)
 	if err != nil {
 		return nil, err
 	}

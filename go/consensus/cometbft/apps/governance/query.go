@@ -3,69 +3,49 @@ package governance
 import (
 	"context"
 
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-// Query is the governance query interface.
-type Query interface {
-	ActiveProposals(context.Context) ([]*governance.Proposal, error)
-	Proposals(context.Context) ([]*governance.Proposal, error)
-	Proposal(context.Context, uint64) (*governance.Proposal, error)
-	Votes(context.Context, uint64) ([]*governance.VoteEntry, error)
-	PendingUpgrades(context.Context) ([]*upgrade.Descriptor, error)
-	Genesis(context.Context) (*governance.Genesis, error)
-	ConsensusParameters(context.Context) (*governance.ConsensusParameters, error)
-}
-
-// QueryFactory is the governance query factory.
-type QueryFactory struct {
-	state abciAPI.ApplicationQueryState
-}
-
-// QueryAt returns the governance query interface for a specific height.
-func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
-	if err != nil {
-		return nil, err
-	}
-	return &governanceQuerier{
-		state: governanceState.NewImmutableState(state),
-	}, nil
-}
-
-type governanceQuerier struct {
+// Query is the governance query.
+type Query struct {
 	state *governanceState.ImmutableState
 }
 
-func (q *governanceQuerier) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
+// NewQuery returns a new governance query backed by the given state.
+func NewQuery(state *governanceState.ImmutableState) *Query {
+	return &Query{
+		state: state,
+	}
+}
+
+// ActiveProposals implements governance.Query.
+func (q *Query) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
 	return q.state.ActiveProposals(ctx)
 }
 
-func (q *governanceQuerier) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
+// Proposals implements governance.Query.
+func (q *Query) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
 	return q.state.Proposals(ctx)
 }
 
-func (q *governanceQuerier) Proposal(ctx context.Context, id uint64) (*governance.Proposal, error) {
+// Proposal implements governance.Query.
+func (q *Query) Proposal(ctx context.Context, id uint64) (*governance.Proposal, error) {
 	return q.state.Proposal(ctx, id)
 }
 
-func (q *governanceQuerier) Votes(ctx context.Context, id uint64) ([]*governance.VoteEntry, error) {
+// Votes implements governance.Query.
+func (q *Query) Votes(ctx context.Context, id uint64) ([]*governance.VoteEntry, error) {
 	return q.state.Votes(ctx, id)
 }
 
-func (q *governanceQuerier) PendingUpgrades(ctx context.Context) ([]*upgrade.Descriptor, error) {
+// PendingUpgrades implements governance.Query.
+func (q *Query) PendingUpgrades(ctx context.Context) ([]*upgrade.Descriptor, error) {
 	return q.state.PendingUpgrades(ctx)
 }
 
-func (q *governanceQuerier) ConsensusParameters(ctx context.Context) (*governance.ConsensusParameters, error) {
+// ConsensusParameters implements governance.Query.
+func (q *Query) ConsensusParameters(ctx context.Context) (*governance.ConsensusParameters, error) {
 	return q.state.ConsensusParameters(ctx)
-}
-
-// NewQueryFactory returns a new QueryFactory backed by the given state
-// instance.
-func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
-	return &QueryFactory{state}
 }

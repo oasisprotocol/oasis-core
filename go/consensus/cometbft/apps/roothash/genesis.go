@@ -53,8 +53,9 @@ func (app *Application) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain
 	return nil
 }
 
-func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, error) {
-	runtimes, err := rq.state.RuntimeStates(ctx)
+// Genesis implements roothash.Query.
+func (q *Query) Genesis(ctx context.Context) (*roothashAPI.Genesis, error) {
+	runtimes, err := q.state.RuntimeStates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch runtimes: %w", err)
 	}
@@ -63,7 +64,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 	rtStates := make(map[common.Namespace]*roothashAPI.GenesisRuntimeState)
 	for _, rt := range runtimes {
 		var lastRoundResults *roothashAPI.RoundResults
-		lastRoundResults, err = rq.LastRoundResults(ctx, rt.Runtime.ID)
+		lastRoundResults, err = q.LastRoundResults(ctx, rt.Runtime.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch last round results for runtime '%s': %w", rt.Runtime.ID, err)
 		}
@@ -79,7 +80,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 		rtStates[rt.Runtime.ID] = &rtState
 	}
 
-	params, err := rq.state.ConsensusParameters(ctx)
+	params, err := q.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
