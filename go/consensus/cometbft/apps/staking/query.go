@@ -2,67 +2,12 @@ package staking
 
 import (
 	"context"
-	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
-
-// QueryFactory is the staking query factory.
-type QueryFactory struct {
-	state abciAPI.ApplicationQueryState
-}
-
-// NewQueryFactory returns a new staking query factory
-// backed by the given application state.
-func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
-	return &QueryFactory{
-		state: state,
-	}
-}
-
-// QueryAt returns a staking query for a specific height.
-func (f *QueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	tree, err := abciAPI.NewImmutableStateAt(ctx, f.state, height)
-	if err != nil {
-		return nil, err
-	}
-	state := stakingState.NewImmutableState(tree)
-	query := NewQuery(state)
-	return query, nil
-}
-
-// LightQueryFactory is the staking light query factory.
-type LightQueryFactory struct {
-	rooter abciAPI.StateRooter
-	syncer syncer.ReadSyncer
-}
-
-// NewLightQueryFactory returns a new staking query factory
-// backed by a trusted state root provider and an untrusted read syncer.
-func NewLightQueryFactory(rooter abciAPI.StateRooter, syncer syncer.ReadSyncer) *LightQueryFactory {
-	return &LightQueryFactory{
-		rooter: rooter,
-		syncer: syncer,
-	}
-}
-
-// QueryAt returns a staking query for a specific height.
-func (f *LightQueryFactory) QueryAt(ctx context.Context, height int64) (*Query, error) {
-	root, err := f.rooter.StateRoot(ctx, height)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state root: %w", err)
-	}
-	tree := mkvs.NewWithRoot(f.syncer, nil, root)
-	state := stakingState.NewImmutableState(tree)
-	query := NewQuery(state)
-	return query, nil
-}
 
 // Query is the staking query.
 type Query struct {
