@@ -25,7 +25,7 @@ type stateProvider struct {
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, error) {
 	// We have to fetch the next height, which contains the app hash for the previous height.
-	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height+1))
+	lb, err := sp.lightClient.VerifyLightBlockAt(ctx, int64(height+1))
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, er
 
 // Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.Commit, error) {
-	lb, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height))
+	lb, err := sp.lightClient.VerifyLightBlockAt(ctx, int64(height))
 	if err != nil {
 		return nil, err
 	}
@@ -59,15 +59,15 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	//
 	// We need to fetch the NextValidators from height+2 because if the application changed
 	// the validator set at the snapshot height then this only takes effect at height+2.
-	lastLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height))
+	lastLightBlock, err := sp.lightClient.VerifyLightBlockAt(ctx, int64(height))
 	if err != nil {
 		return cmtstate.State{}, err
 	}
-	curLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height)+1)
+	curLightBlock, err := sp.lightClient.VerifyLightBlockAt(ctx, int64(height)+1)
 	if err != nil {
 		return cmtstate.State{}, err
 	}
-	nextLightBlock, err := sp.lightClient.GetVerifiedLightBlock(ctx, int64(height)+2)
+	nextLightBlock, err := sp.lightClient.VerifyLightBlockAt(ctx, int64(height)+2)
 	if err != nil {
 		return cmtstate.State{}, err
 	}
@@ -82,14 +82,14 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.Sta
 	state.LastHeightValidatorsChanged = nextLightBlock.Height
 
 	// Fetch consensus parameters with light client verification.
-	params, err := sp.lightClient.GetVerifiedParameters(ctx, nextLightBlock.Height)
+	params, err := sp.lightClient.VerifyParametersAt(ctx, nextLightBlock.Height)
 	if err != nil {
 		return cmtstate.State{}, fmt.Errorf("failed to fetch consensus parameters for height %d: %w",
 			nextLightBlock.Height,
 			err,
 		)
 	}
-	state.ConsensusParams = cmttypes.ConsensusParamsFromProto(*params)
+	state.ConsensusParams = *params
 
 	return state, nil
 }

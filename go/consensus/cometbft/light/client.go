@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
@@ -31,98 +32,12 @@ type Config struct {
 // Client is a CometBFT consensus light client that talks with remote oasis-nodes that are using
 // the CometBFT consensus backend and verifies responses.
 type Client struct {
+	mu sync.Mutex
+
 	providers []*Provider
 
 	// lightClient is a wrapped CometBFT light client used for verifying headers.
 	lightClient *lazyClient
-}
-
-func tryProviders[R any](
-	ctx context.Context,
-	providers []*Provider,
-	fn func(*Provider) (R, rpc.PeerFeedback, error),
-) (R, rpc.PeerFeedback, error) {
-	var (
-		result R
-		err    error
-	)
-	for _, provider := range providers {
-		if ctx.Err() != nil {
-			return result, nil, ctx.Err()
-		}
-
-		var pf rpc.PeerFeedback
-		result, pf, err = fn(provider)
-		if err == nil {
-			return result, pf, nil
-		}
-	}
-
-	// Trigger primary provider refresh if everything fails.
-	providers[0].RefreshPeer()
-
-	return result, nil, err
-}
-
-// GetLightBlock queries peers for a specific light block.
-func (c *Client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-		return p.GetLightBlock(ctx, height)
-	})
-}
-
-// GetParameters queries peers for consensus parameters for a specific height.
-func (c *Client) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
-	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Parameters, rpc.PeerFeedback, error) {
-		return p.GetParameters(ctx, height)
-	})
-}
-
-// GetVerifiedLightBlock returns a verified light block.
-func (c *Client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
-	return c.lightClient.VerifyLightBlockAtHeight(ctx, height, time.Now())
-}
-
-// GetVerifiedParameters returns verified consensus parameters.
-func (c *Client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
-	p, pf, err := c.GetParameters(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-	if p.Height <= 0 {
-		pf.RecordBadPeer()
-		return nil, fmt.Errorf("malformed height in response: %d", p.Height)
-	}
-
-	// Decode CometBFT-specific parameters.
-	var paramsPB cmtproto.ConsensusParams
-	if err = paramsPB.Unmarshal(p.Meta); err != nil {
-		pf.RecordBadPeer()
-		return nil, fmt.Errorf("malformed parameters: %w", err)
-	}
-	params := cmttypes.ConsensusParamsFromProto(paramsPB)
-	if err = params.ValidateBasic(); err != nil {
-		pf.RecordBadPeer()
-		return nil, fmt.Errorf("malformed parameters: %w", err)
-	}
-
-	// Fetch the header from the light client.
-	l, err := c.lightClient.VerifyLightBlockAtHeight(ctx, p.Height, time.Now())
-	if err != nil {
-		pf.RecordBadPeer()
-		return nil, fmt.Errorf("failed to fetch header %d from light client: %w", p.Height, err)
-	}
-
-	// Verify hash.
-	if localHash := params.Hash(); !bytes.Equal(localHash, l.ConsensusHash) {
-		pf.RecordBadPeer()
-		return nil, fmt.Errorf("mismatched parameters hash (expected: %X got: %X)",
-			l.ConsensusHash,
-			localHash,
-		)
-	}
-
-	return &paramsPB, nil
 }
 
 // NewClient creates an internal and non-persistent light client.
@@ -160,4 +75,105 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 		providers:   providers,
 		lightClient: lightClient,
 	}, nil
+}
+
+// LastTrustedHeight returns the last trusted height.
+func (c *Client) LastTrustedHeight() (int64, error) {
+	height, err := c.lightClient.LastTrustedHeight()
+	if err != nil {
+		return 0, err
+	}
+	if height == -1 {
+		return 0, fmt.Errorf("no trusted headers")
+	}
+	return height, nil
+}
+
+// VerifyHeader verifies the given header.
+func (c *Client) VerifyHeader(ctx context.Context, header *cmttypes.Header) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lightClient.VerifyHeader(ctx, header, time.Now())
+}
+
+// VerifyLightBlockAt returns a verified light block at the given height.
+func (c *Client) VerifyLightBlockAt(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lightClient.VerifyLightBlockAtHeight(ctx, height, time.Now())
+}
+
+// VerifyParametersAt returns a verified consensus parameters at the given height.
+func (c *Client) VerifyParametersAt(ctx context.Context, height int64) (*cmttypes.ConsensusParams, error) {
+	params, pf, err := c.getParameters(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	if params.Height <= 0 {
+		pf.RecordBadPeer()
+		return nil, fmt.Errorf("malformed height in response: %d", params.Height)
+	}
+
+	// Decode CometBFT-specific parameters.
+	var proto cmtproto.ConsensusParams
+	if err = proto.Unmarshal(params.Meta); err != nil {
+		pf.RecordBadPeer()
+		return nil, fmt.Errorf("malformed parameters: %w", err)
+	}
+	cmtparams := cmttypes.ConsensusParamsFromProto(proto)
+	if err = cmtparams.ValidateBasic(); err != nil {
+		pf.RecordBadPeer()
+		return nil, fmt.Errorf("malformed parameters: %w", err)
+	}
+
+	// Fetch the header from the light client.
+	l, err := c.lightClient.VerifyLightBlockAtHeight(ctx, params.Height, time.Now())
+	if err != nil {
+		pf.RecordBadPeer()
+		return nil, fmt.Errorf("failed to fetch header %d from light client: %w", params.Height, err)
+	}
+
+	// Verify hash.
+	if hash := cmtparams.Hash(); !bytes.Equal(hash, l.ConsensusHash) {
+		pf.RecordBadPeer()
+		return nil, fmt.Errorf("mismatched parameters hash (expected: %X got: %X)",
+			l.ConsensusHash,
+			hash,
+		)
+	}
+
+	return &cmtparams, nil
+}
+
+func (c *Client) getParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Parameters, rpc.PeerFeedback, error) {
+		return p.GetParameters(ctx, height)
+	})
+}
+
+func tryProviders[R any](
+	ctx context.Context,
+	providers []*Provider,
+	fn func(*Provider) (R, rpc.PeerFeedback, error),
+) (R, rpc.PeerFeedback, error) {
+	var (
+		result R
+		err    error
+	)
+	for _, provider := range providers {
+		if ctx.Err() != nil {
+			return result, nil, ctx.Err()
+		}
+
+		var pf rpc.PeerFeedback
+		result, pf, err = fn(provider)
+		if err == nil {
+			return result, pf, nil
+		}
+	}
+
+	// Trigger primary provider refresh if everything fails.
+	providers[0].RefreshPeer()
+
+	return result, nil, err
 }
