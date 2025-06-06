@@ -3,7 +3,6 @@
 Oasis Core nodes communicate between themselves over various protocols. One of
 those protocols is [gRPC] which is currently used for the following:
 
-* Compute nodes talking to storage nodes.
 * Compute nodes talking to key manager nodes.
 * Key manager nodes talking to other key manager nodes.
 * Clients talking to compute nodes.
