@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -130,15 +129,6 @@ func ConsensusImplementationTests(t *testing.T, consensus api.Backend) {
 		Transaction: transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{}),
 	})
 	require.NoError(err, "EstimateGas")
-
-	nonce, err := consensus.GetSignerNonce(ctx, &api.GetSignerNonceRequest{ //nolint:staticcheck
-		AccountAddress: staking.NewAddress(
-			signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-		),
-		Height: api.HeightLatest,
-	})
-	require.NoError(err, "GetSignerNonce")
-	require.Equal(uint64(0), nonce, "Nonce should be zero")
 
 	// Light client API.
 	shdr, err := consensus.GetLightBlock(ctx, blk.Height)
