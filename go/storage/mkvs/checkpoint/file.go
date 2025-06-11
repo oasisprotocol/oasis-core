@@ -30,7 +30,7 @@ type fileCreator struct {
 	ndb     db.NodeDB
 }
 
-func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
+func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64, chunkerThreads uint16) (meta *Metadata, err error) {
 	// Create checkpoint directory.
 	cpDir := filepath.Join(
 		fc.dataDir,
@@ -62,13 +62,21 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 	if err = common.Mkdir(chunksDir); err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
-
+	// Create chunks.
 	fp := &fileProvider{dir: chunksDir}
-	chunker := seqChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize}
-	var chunks []hash.Hash
-	chunks, err = chunker.chunk(ctx, fp)
+	type chunker interface {
+		chunk(ctx context.Context, w writerFactory) ([]hash.Hash, error)
+	}
+	var ch chunker
+	switch {
+	case chunkerThreads > 0:
+		ch = &parallChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize, chunkerThreads: chunkerThreads}
+	default:
+		ch = &seqChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize}
+	}
+	chunks, err := ch.chunk(ctx, fp)
 	if err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
+		return nil, fmt.Errorf("checkpoint: failed to create chunks (chunker threads: %d): %w", chunkerThreads, err)
 	}
 
 	meta = &Metadata{

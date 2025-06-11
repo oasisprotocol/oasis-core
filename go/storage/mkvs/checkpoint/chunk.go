@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/golang/snappy"
 
@@ -98,6 +99,95 @@ func (sc *seqChunker) createChunk(ctx context.Context, tree mkvs.Tree, offset no
 
 	chunkHash, err = writeChunk(proof, w)
 	return
+}
+
+type parallChunker struct {
+	ndb            db.NodeDB
+	root           node.Root
+	chunkSize      uint64
+	chunkerThreads uint16
+}
+
+func (pc *parallChunker) chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error) {
+	initTask, err := rootTask(pc.ndb, pc.root)
+	if err != nil {
+		return nil, err
+	}
+
+	// chunking must be deterministic!
+	chunks := make(map[int]hash.Hash, 0)
+	tasks := []*chunkTask{initTask}
+	for len(tasks) > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			idx, w, err := wf.next()
+			if err != nil {
+				return nil, fmt.Errorf("chunk: get writer for chunk %d: %w", idx, err)
+			}
+
+			task.idx = idx
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				task.process(ctx, pc.ndb, pc.root, w, pc.chunkSize)
+			}()
+		}
+		wg.Wait()
+
+		pending, err := pc.processResults(tasks, chunks)
+		if err != nil {
+			return nil, err
+		}
+		tasks, err = pc.splitTasks(pending)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	hashes := make([]hash.Hash, 0, len(chunks))
+	for i := 0; i < len(chunks); i++ {
+		hashes = append(hashes, chunks[i])
+	}
+
+	return hashes, nil
+}
+
+func (pc *parallChunker) processResults(tasks []*chunkTask, chunks map[int]hash.Hash) ([]*chunkTask, error) {
+	var pending []*chunkTask
+	for _, task := range tasks {
+		if task.err != nil {
+			return nil, task.err
+		}
+		chunks[task.idx] = task.res
+		if !task.isFinished() {
+			task.err, task.res, task.idx = nil, hash.Hash{}, -1
+			pending = append(pending, task)
+		}
+	}
+	return pending, nil
+}
+
+func (pc *parallChunker) splitTasks(tasks []*chunkTask) ([]*chunkTask, error) {
+	var pending []*chunkTask
+	for i, task := range tasks {
+		if len(pending)+len(tasks)-i >= int(pc.chunkerThreads)-1 {
+			pending = append(pending, tasks[i:]...)
+			break
+		}
+		childTasks, err := task.split(pc.ndb, pc.root)
+		if err != nil {
+			return nil, err
+		}
+		pending = append(pending, childTasks...)
+	}
+	return pending, nil
 }
 
 func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {

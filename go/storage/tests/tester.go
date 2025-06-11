@@ -184,7 +184,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, storage api.Backend,
 	// Test checkpoints.
 	t.Run("Checkpoints", func(t *testing.T) {
 		// Create a new checkpoint with the local backend.
-		cp, err := localBackend.Checkpointer().CreateCheckpoint(ctx, newRoot, 16*1024)
+		cp, err := localBackend.Checkpointer().CreateCheckpoint(ctx, newRoot, 16*1024, 0)
 		require.NoError(t, err, "CreateCheckpoint")
 
 		cps, err := storage.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: namespace})

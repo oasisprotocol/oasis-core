@@ -61,7 +61,7 @@ type Creator interface {
 	ChunkProvider
 
 	// CreateCheckpoint creates a new checkpoint at the given root.
-	CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (*Metadata, error)
+	CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64, chunkerThreads uint16) (*Metadata, error)
 
 	// GetCheckpoint retrieves checkpoint metadata for a specific checkpoint.
 	GetCheckpoint(ctx context.Context, version uint16, root node.Root) (*Metadata, error)
