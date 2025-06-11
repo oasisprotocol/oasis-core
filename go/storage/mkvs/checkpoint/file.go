@@ -10,7 +10,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -20,8 +19,12 @@ const (
 	metaFilename  = "meta"
 	v1            = 1
 
-	// Versions 1 of checkpoint chunks use proofs version 0. Consider bumping
-	// this to latest version when introducing new checkpoint versions.
+	// Versions 1 of checkpoint chunks use proofs version 0.
+	//
+	// Using proof version 1 (latest), does not reduce chunk size and would require
+	// releasing new checkpoint version.
+	//
+	// Consider reevaluating when introducing a new checkpoint version.
 	v1ProofsVersion = 0
 )
 
@@ -30,7 +33,7 @@ type fileCreator struct {
 	ndb     db.NodeDB
 }
 
-func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
+func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64, chunkerThreads uint16) (meta *Metadata, err error) {
 	// Create checkpoint directory.
 	cpDir := filepath.Join(
 		fc.dataDir,
@@ -62,13 +65,19 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 	if err = common.Mkdir(chunksDir); err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
-
+	// Create chunks.
 	fp := &fileProvider{dir: chunksDir}
-	chunker := seqChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize}
-	var chunks []hash.Hash
-	chunks, err = chunker.chunk(ctx, fp)
+	var ch chunker
+	switch {
+	case chunkerThreads > 0:
+		ch = &parallelChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize, threads: chunkerThreads}
+	default:
+		// Deprecated.
+		ch = &seqChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize}
+	}
+	chunks, err := ch.chunk(ctx, fp)
 	if err != nil {
-		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
+		return nil, fmt.Errorf("checkpoint: failed to create chunks (chunker threads: %d): %w", chunkerThreads, err)
 	}
 
 	meta = &Metadata{

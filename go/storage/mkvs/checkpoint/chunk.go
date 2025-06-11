@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/golang/snappy"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -16,14 +18,26 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
+// Chunker enables splitting database state into chunks, where chunks are merkle proofs
+// representing part of the state.
+type chunker interface {
+	// Chunk creates chunks and writes each into writer provided by the factory.
+	//
+	// A list of hashes corresponding to created chunks is returned.
+	//
+	// A chunker implementation is expected to produce a deterministic result.
+	// This allows using chunks from multiple chunker instances for state
+	// restoration.
+	chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error)
+}
+
 // writerFactor is a factory that provides writers a chunker can write to.
 type writerFactory interface {
 	// next returns the next writer together with its index.
 	next() (int, io.WriteCloser, error)
 }
 
-// seqChunker enables splitting database state at the given root into chunks,
-// where chunks are merkle proofs representing part of the state.
+// seqChunker implements chunker interface.
 //
 // Chunks are created by (sequentially) iterating over database keyset.
 //
@@ -36,9 +50,7 @@ type seqChunker struct {
 	chunkSize uint64
 }
 
-// Chunk creates chunks and writes each into writer provided by the factory.
-//
-// A list of hashes corresponding to created chunks is returned.
+// chunk implements chunker's chunk method.
 func (sc *seqChunker) chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error) {
 	tree := mkvs.NewWithRoot(nil, sc.ndb, sc.root)
 	defer tree.Close()
@@ -111,6 +123,126 @@ func (sc *seqChunker) createChunk(ctx context.Context, tree mkvs.Tree, offset no
 
 	chunkHash, err = writeChunk(proof, w)
 	return
+}
+
+// parallelChunker implements chunker interface.
+//
+// Chunks are created in parallel using target number of subtrees (threads).
+// For every subtree, we trigger sequential iteration for each subtree keyset.
+//
+// Internally, this triggers pre-order traversal of state trie (proof).
+// When we reach a key that makes proof greater or equal than chunk size,
+// it marks the end of the chunk.
+type parallelChunker struct {
+	ndb       db.NodeDB
+	root      node.Root
+	chunkSize uint64
+	threads   uint16
+}
+
+// chunk implements chunker's chunk method.
+func (pc *parallelChunker) chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error) {
+	root, err := newSubtree(pc.ndb, pc.root)
+	if err != nil {
+		return nil, err
+	}
+	pending := []*subtree{root}
+
+	// Chunking result must be deterministic, so we should be careful with parallelization.
+	// This is achieved by:
+	//    1. Always splitting subtree tasks from left to right.
+	//    2. Process single chunk for each subtree in parallel.
+	//    3. Wait for all subtrees to finish creating single chunk.
+	//    4. Repeat from 1., filtering out finished tasks.
+	// As benchmarked, the wait time for 3. is negligible.
+	var chunks []hash.Hash
+	for len(pending) > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		pending, err = pc.splitTasks(pending)
+		if err != nil {
+			return nil, fmt.Errorf("chunk: splitting chunking tasks: %w", err)
+		}
+
+		hashes, err := pc.createChunks(ctx, wf, pending)
+		if err != nil {
+			return nil, fmt.Errorf("chunk: processing chunking tasks: %w", err)
+		}
+
+		chunks = append(chunks, hashes...)
+
+		pending = pc.filterFinished(pending)
+	}
+
+	return chunks, nil
+}
+
+func (pc *parallelChunker) splitTasks(tasks []*subtree) ([]*subtree, error) {
+	for i := 0; i < 10; i++ {
+		var nextTasks []*subtree
+		for i, task := range tasks {
+			if len(nextTasks)+len(tasks)-i >= int(pc.threads) {
+				nextTasks = append(nextTasks, tasks[i:]...)
+				return nextTasks, nil
+			}
+			children, err := task.split()
+			if err != nil {
+				return nil, fmt.Errorf("splitting chunking task: %w", err)
+			}
+			nextTasks = append(nextTasks, children...)
+		}
+
+		tasks = nextTasks
+	}
+
+	return tasks, nil
+}
+
+func (pc *parallelChunker) createChunks(ctx context.Context, wf writerFactory, tasks []*subtree) ([]hash.Hash, error) {
+	group, ctx := errgroup.WithContext(ctx)
+
+	chunks := make([]hash.Hash, len(tasks))
+	var mu sync.Mutex
+	for i, task := range tasks {
+		idx, w, err := wf.next()
+		if err != nil {
+			return nil, fmt.Errorf("getting writer for chunk %d: %w", idx, err)
+		}
+
+		group.Go(func() error {
+			hash, err := task.nextChunk(ctx, w, pc.chunkSize)
+			if err != nil {
+				return fmt.Errorf("creating new chunk with index %d", idx)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			chunks[i] = hash
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	return chunks, nil
+}
+
+func (pc *parallelChunker) filterFinished(tasks []*subtree) []*subtree {
+	var pending []*subtree
+	for _, task := range tasks {
+		if task.hasNext() {
+			continue
+		}
+		pending = append(pending, task)
+	}
+	return pending
 }
 
 func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
