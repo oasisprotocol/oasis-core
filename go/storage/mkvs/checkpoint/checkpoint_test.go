@@ -756,3 +756,102 @@ func ensureEqualEntries(ctx context.Context, ndb1, ndb2 dbApi.NodeDB, root node.
 	}
 	return nil
 }
+
+// This is only for benchmarking on my machine.
+// TODO: Will be removed.
+// func TestCheckpointCreationRestoration(t *testing.T) {
+// 	ctx := t.Context()
+
+// 	ndb1 := getSapphireMainnetNodeDB(t)
+// 	defer ndb1.Close()
+
+// 	root := getLatestStateRoot(t, ndb1)
+
+// 	targetDir := os.Getenv("TARGET_DIR")
+// 	targetDir = filepath.Join(targetDir, "sapphire_mainnet", strconv.Itoa(int(root.Version)))
+// 	if err := os.MkdirAll(targetDir, 0o700); err != nil {
+// 		t.Fatalf("MkdirAll: %v", err)
+// 	}
+
+// 	// Create a checkpoint.
+// 	start := time.Now()
+// 	fmt.Println(filepath.Join(targetDir, "checkpoints"))
+// 	fc, err := NewFileCreator(filepath.Join(targetDir, "checkpoints"), ndb1)
+// 	if err != nil {
+// 		t.Fatalf("Creating new checkpoint creator: %v", err)
+// 	}
+
+// 	var chunkSize uint64 = 8 * 1024 * 1024
+// 	cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+// 	if err != nil {
+// 		t.Fatalf("Creating checkpoint: %v", err)
+// 	}
+// 	fmt.Printf("Creating checkpoint took %.2f min", time.Since(start).Minutes())
+
+// 	// Create a fresh node database.
+// 	cfg2 := &dbApi.Config{
+// 		DB:           filepath.Join(targetDir, "db2"),
+// 		Namespace:    root.Namespace,
+// 		MaxCacheSize: 16 * 1024 * 1024,
+// 	}
+// 	ndb2, err := pathbadger.New(cfg2)
+// 	if err != nil {
+// 		t.Fatalf("failed to create new pathbadger backend: %v", err)
+// 	}
+// 	defer ndb2.Close()
+
+// 	// Restore checkpoint into the second database.
+// 	start = time.Now()
+// 	if err := restoreCheckpoint(ctx, ndb2, cp, fc, root); err != nil {
+// 		t.Fatalf("Restore checkpoint failed: %v", err)
+// 	}
+// 	fmt.Printf("Restoring checkpoint took %.2f min", time.Since(start).Minutes())
+
+// 	// Iterate over keyset of both databases and ensure equal entries.
+// 	if err := ensureEqualEntries(ctx, ndb1, ndb2, root); err != nil {
+// 		t.Fatalf("ensure equal db entries for root %+v: %v", root, err)
+// 	}
+// }
+
+// func getSapphireMainnetNodeDB(t *testing.T) dbApi.NodeDB {
+// 	t.Helper()
+
+// 	var ns common.Namespace
+// 	if err := ns.UnmarshalHex("000000000000000000000000000000000000000000000000f80306c9858e7279"); err != nil {
+// 		t.Fatalf("UnmarshalHex: %v", err)
+// 	}
+// 	nodedbDir := os.Getenv("NODEDB_DIR")
+
+// 	cfg := &dbApi.Config{
+// 		DB:           nodedbDir,
+// 		Namespace:    ns,
+// 		MaxCacheSize: 16 * 1024 * 1024,
+// 	}
+// 	ndb, err := pathbadger.New(cfg)
+// 	if err != nil {
+// 		t.Fatalf("Creating new pathbadger backend: %v", err)
+// 	}
+// 	return ndb
+// }
+
+// func getLatestStateRoot(t *testing.T, ndb dbApi.NodeDB) node.Root {
+// 	t.Helper()
+// 	version, ok := ndb.GetLatestVersion()
+// 	if !ok {
+// 		t.Fatalf("Empty nodedb")
+// 	}
+
+// 	fmt.Printf("version: %d\n", version)
+
+// 	roots, err := ndb.GetRootsForVersion(version)
+// 	if err != nil {
+// 		t.Fatalf("ndb.GetRootsForVersion(%d): %v", version, err)
+// 	}
+
+// 	root := roots[0]
+// 	if root.Type != node.RootTypeState {
+// 		t.Fatalf("Expected state root type")
+// 	}
+
+// 	return root
+// }
