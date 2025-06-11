@@ -65,6 +65,11 @@ type CreationParameters struct {
 
 	// InitialVersion is the initial version.
 	InitialVersion uint64
+
+	// ChunkerThreads specifies the target number of parallel subtree chunkers
+	// used during checkpoint creation. The actual number may vary at runtime.
+	// Setting it to 0, will use old sequential chunking algorithm.
+	ChunkerThreads uint16
 }
 
 // Checkpointer is a checkpointer.
@@ -177,7 +182,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 			"chunk_size", params.ChunkSize,
 		)
 
-		_, err = c.creator.CreateCheckpoint(ctx, root, params.ChunkSize)
+		_, err = c.creator.CreateCheckpoint(ctx, root, params.ChunkSize, params.ChunkerThreads)
 		if err != nil {
 			c.logger.Error("failed to create checkpoint",
 				"root", root,
