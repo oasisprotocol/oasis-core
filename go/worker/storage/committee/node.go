@@ -231,6 +231,7 @@ func NewNode(
 				NumKept:        rt.Storage.CheckpointNumKept,
 				ChunkSize:      rt.Storage.CheckpointChunkSize,
 				InitialVersion: blk.Header.Round,
+				ChunkerThreads: config.GlobalConfig.Storage.Checkpointer.ChunkerSubtreesCount,
 			}, nil
 		},
 		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {

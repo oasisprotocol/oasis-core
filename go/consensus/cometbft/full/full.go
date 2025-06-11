@@ -554,6 +554,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		Identity:                  t.identity,
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
+		ChunkerThreads:            config.GlobalConfig.Consensus.Checkpointer.ChunkerSubtreesCount,
 		InitialHeight:             uint64(t.genesisHeight),
 		ChainContext:              t.chainContext,
 	}
