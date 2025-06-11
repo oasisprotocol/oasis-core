@@ -70,6 +70,12 @@ const (
 	tmSubscriberID = "oasis-core"
 
 	exportsSubDir = "exports"
+
+	// chunkerThreads is target number of subtrees during parallel checkpoint creation.
+	// It is intentionally non-configurable since we want operators to produce
+	// same checkpoint hashes. The current value was chosen based on the benchmarks
+	// done on the modern developer machine.
+	chunkerThreads = 12
 )
 
 var (
@@ -544,6 +550,11 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	pruneCfg.NumKept = config.GlobalConfig.Consensus.Prune.NumKept
 	pruneCfg.PruneInterval = max(config.GlobalConfig.Consensus.Prune.Interval, time.Second)
 
+	var threads uint16
+	if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+		threads = chunkerThreads
+	}
+
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
 		StorageBackend:            config.GlobalConfig.Storage.Backend,
@@ -554,6 +565,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		Identity:                  t.identity,
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
+		ChunkerThreads:            threads,
 		InitialHeight:             uint64(t.genesisHeight),
 		ChainContext:              t.chainContext,
 	}
