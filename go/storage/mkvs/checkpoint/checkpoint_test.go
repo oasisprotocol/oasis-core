@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -490,4 +491,270 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	// Prune the checkpoint root version.
 	err = ndb2.Prune(checkpointRootVersion)
 	require.NoError(err, "Prune(%d)", checkpointRootVersion)
+}
+
+// FuzzCreateRestore tests checkpoint creation and restoration.
+//
+// It does so by:
+//  1. Create two databases, with possible distinct nodedb impl,
+//  2. Populate first db with n random entries,
+//  3. Create checkpoint from first db with random chunk size,
+//  4. Restore created checkpoint in a fresh db,
+//  5. Compare both databases have same keys.
+//
+// Invariants:
+//  1. Keyset after restore should be equal.
+//  2. Checkpoint creation should be agnostic from nodedb implementation.
+func FuzzCreateRestore(f *testing.F) {
+	f.Add(int64(0), uint16(0), uint64(0))
+	f.Add(int64(10), uint16(635), uint64(44))
+	f.Add(int64(10), uint16(635), uint64(44))
+	f.Add(int64(10), uint16(1999), uint64(256))
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
+		ctx := t.Context()
+		rnd := rand.New(rand.NewSource(seed))
+		backend1 := db.Backends[rnd.Intn(len(db.Backends))]
+		backend2 := db.Backends[rnd.Intn(len(db.Backends))]
+		if err := testCreateRestoreRoundtrip(ctx, backend1, backend2, n, chunkSize, rnd); err != nil {
+			t.Errorf("Restoring checkpoint with %d keys from db1 (%s) into db2 (%s) failed: %v", n, backend1.Name(), backend2.Name(), err)
+		}
+	})
+}
+
+// FuzzCreateDeterministic ensures that for every possible state (captured by root),
+// creating a checkpoint of a given version for this state, should always produce
+// equal checkpoint hash.
+func FuzzCreateDeterministic(f *testing.F) {
+	f.Add(int64(0), uint16(0), uint64(0))
+	f.Add(int64(10), uint16(635), uint64(44))
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
+		ctx := t.Context()
+		rnd := rand.New(rand.NewSource(seed))
+		backend := db.Backends[rnd.Intn(len(db.Backends))]
+		if err := testDeterministicOutput(ctx, backend, n, chunkSize, rnd); err != nil {
+			t.Fatalf("Unable to ensure deterministic output of checkpoint creation: %v", err)
+		}
+	})
+}
+
+func testCreateRestoreRoundtrip(ctx context.Context, backend1, backend2 dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand) error {
+	dir, err := os.MkdirTemp("", "mkvs.checkpoint.CreateRestoreRoundtrip")
+	if err != nil {
+		return fmt.Errorf("create new temporary dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create node database.
+	cfg1 := &dbApi.Config{
+		DB:           filepath.Join(dir, "db1"),
+		Namespace:    testNs,
+		MaxCacheSize: 16 * 1024 * 1024,
+	}
+	ndb1, err := backend1.New(cfg1)
+	if err != nil {
+		return fmt.Errorf("create new node database %v", err)
+	}
+	defer ndb1.Close()
+
+	// Populate node database with random entries.
+	root, err := populateDB(ctx, ndb1, testNs, n, rnd)
+	if err != nil {
+		return fmt.Errorf("populate db with random entries: %v", err)
+	}
+
+	// Create a checkpoint.
+	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb1)
+	if err != nil {
+		return fmt.Errorf("create new file creator: %v", err)
+	}
+	cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+	if err != nil {
+		return fmt.Errorf("create checkpoint (rootHash: %.8s, chunkSize: %d): %v", root.Hash, chunkSize, err)
+	}
+
+	// Create a fresh node database.
+	cfg2 := &dbApi.Config{
+		DB:           filepath.Join(dir, "db2"),
+		Namespace:    testNs,
+		MaxCacheSize: 16 * 1024 * 1024,
+	}
+	ndb2, err := backend2.New(cfg2)
+	if err != nil {
+		return fmt.Errorf("create new node database: %v", err)
+	}
+	defer ndb2.Close()
+
+	// Restore checkpoint into the second database.
+	if err := restoreCheckpoint(ctx, ndb2, cp, fc, root); err != nil {
+		return fmt.Errorf("restore checkpoint into fresh ndb: %v", err)
+	}
+
+	// Iterate over keyset of both databases and ensure equal entries.
+	if err := ensureEqualEntries(ctx, ndb1, ndb2, root); err != nil {
+		return fmt.Errorf("ensure equal db entries for root %+v: %v", root, err)
+	}
+
+	return nil
+}
+
+func testDeterministicOutput(ctx context.Context, backend dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand) error {
+	dir, err := os.MkdirTemp("", "mkvs.checkpoint.CreateDeterministic")
+	if err != nil {
+		return fmt.Errorf("create new temporary dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create node database.
+	cfg1 := &dbApi.Config{
+		DB:           dir,
+		Namespace:    testNs,
+		MaxCacheSize: 16 * 1024 * 1024,
+	}
+	ndb, err := backend.New(cfg1)
+	if err != nil {
+		return fmt.Errorf("create new node database %v", err)
+	}
+	defer ndb.Close()
+
+	// Populate node database with random entries.
+	root, err := populateDB(ctx, ndb, testNs, n, rnd)
+	if err != nil {
+		return fmt.Errorf("populate dbs with random entries: %v", err)
+	}
+
+	// Ensure deterministic checkpoint creation.
+	var result hash.Hash
+	result.Empty()
+	for i := 0; i < 3; i++ {
+		// Create a checkpoint.
+		fc, err := NewFileCreator(filepath.Join(dir, fmt.Sprintf("db-%d/checkpoints", i)), ndb)
+		if err != nil {
+			return fmt.Errorf("create new file creator: %v", err)
+		}
+		cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+		if err != nil {
+			return fmt.Errorf("create checkpoint (rootHash: %.8s, chunkSize: %d): %v", root.Hash, chunkSize, err)
+		}
+
+		// Ensure checkpoint hash equality.
+		hash := cp.EncodedHash()
+		if result.IsEmpty() {
+			result = hash
+			continue
+		}
+		if !result.Equal(&hash) {
+			return fmt.Errorf("checkpoint creation is not determistic")
+		}
+	}
+	return nil
+}
+
+// populateDB populates database with n random entries.
+func populateDB(ctx context.Context, ndb dbApi.NodeDB, ns common.Namespace, n uint16, rnd *rand.Rand) (node.Root, error) {
+	tree := mkvs.New(nil, ndb, node.RootTypeState)
+	defer tree.Close()
+
+	for i := 0; i < int(n); i++ {
+		key := make([]byte, rnd.Intn(100))
+		val := make([]byte, rnd.Intn(100))
+
+		if _, err := rnd.Read(key); err != nil {
+			return node.Root{}, fmt.Errorf("failed to create random key")
+		}
+		if _, err := rnd.Read(val); err != nil {
+			return node.Root{}, fmt.Errorf("failed to create random value")
+		}
+
+		if err := tree.Insert(ctx, key, val); err != nil {
+			return node.Root{}, fmt.Errorf("insert entry into tree (%x, %x): %v", key, val, err)
+		}
+	}
+
+	version := 1
+	_, rootHash, err := tree.Commit(ctx, ns, uint64(version))
+	if err != nil {
+		return node.Root{}, fmt.Errorf("commit tree for version %d: %v", version, err)
+	}
+
+	root := node.Root{
+		Namespace: ns,
+		Version:   uint64(version),
+		Type:      node.RootTypeState,
+		Hash:      rootHash,
+	}
+
+	err = ndb.Finalize([]node.Root{root})
+	if err != nil {
+		return node.Root{}, fmt.Errorf("finalize ndb: %v", err)
+	}
+
+	return root, nil
+}
+
+func restoreCheckpoint(ctx context.Context, ndb dbApi.NodeDB, cp *Metadata, fc Creator, root node.Root) error {
+	rs, err := NewRestorer(ndb)
+	if err != nil {
+		return fmt.Errorf("new restorer: %v", err)
+	}
+
+	if err = ndb.StartMultipartInsert(cp.Root.Version); err != nil {
+		return fmt.Errorf("start multipart insert for version %d: %v", cp.Root.Version, err)
+	}
+
+	if err = rs.StartRestore(ctx, cp); err != nil {
+		return fmt.Errorf("start restore (checkpoint: %+v): %v", cp, err)
+	}
+
+	for i := 0; i < len(cp.Chunks); i++ {
+		var cm *ChunkMetadata
+		cm, err = cp.GetChunkMetadata(uint64(i))
+		if err != nil {
+			return fmt.Errorf("get chunk %d metadata: %v", i, err)
+		}
+		var buf bytes.Buffer
+		if err = fc.GetCheckpointChunk(ctx, cm, &buf); err != nil {
+			return fmt.Errorf("get checkpoint chunk %+v: %v", cm, err)
+		}
+		if _, err = rs.RestoreChunk(ctx, uint64(i), &buf); err != nil {
+			return fmt.Errorf("restore chunk (index: %d): %v", i, err)
+		}
+	}
+
+	if err = ndb.Finalize([]node.Root{root}); err != nil {
+		return fmt.Errorf("finalize %+v: %v", root, err)
+	}
+
+	return nil
+}
+
+func ensureEqualEntries(ctx context.Context, ndb1, ndb2 dbApi.NodeDB, root node.Root) error {
+	tree1 := mkvs.NewWithRoot(nil, ndb1, root)
+	defer tree1.Close()
+	it1 := tree1.NewIterator(ctx)
+	defer it1.Close()
+	tree2 := mkvs.NewWithRoot(nil, ndb2, root)
+	defer tree2.Close()
+	it2 := tree2.NewIterator(ctx)
+	defer it2.Close()
+	it1.Rewind()
+	it2.Rewind()
+	for count := 0; it1.Valid(); it1.Next() {
+		if !it2.Valid() {
+			return fmt.Errorf("key missing in the second database (index %d)", count)
+		}
+		key1, key2 := it1.Key(), it2.Key()
+		if !bytes.Equal(key1, key2) {
+			return fmt.Errorf("keys not equal (index %d): want %s, got %s", count, key1, key2)
+		}
+		val1, val2 := it1.Value(), it2.Value()
+		if !bytes.Equal(val1, val2) {
+			return fmt.Errorf("values not equal (index %d): want %s, got %s", count, val1, val2)
+		}
+		it2.Next()
+		count++
+	}
+	if it2.Valid() {
+		return fmt.Errorf("unexpected additional entries in the second database")
+	}
+	return nil
 }
