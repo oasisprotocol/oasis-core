@@ -2,11 +2,12 @@ package committee
 
 import (
 	"bytes"
+	"cmp"
 	"container/heap"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -289,14 +290,17 @@ func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 		return nil, err
 	}
 
-	// Sort checkpoints by version, descending.
-	sort.Slice(list, func(i, j int) bool {
-		// Descending!
-		if list[j].Root.Version == list[i].Root.Version {
-			return bytes.Compare(list[j].Root.Hash[:], list[i].Root.Hash[:]) < 0
+	// Sort checkpoints by version, then by number of peers, descending.
+	slices.SortFunc(list, func(a, b *storageSync.Checkpoint) int {
+		if cmp := cmp.Compare(b.Root.Version, a.Root.Version); cmp != 0 {
+			return cmp
 		}
-		return list[j].Root.Version < list[i].Root.Version
+		if cmp := cmp.Compare(len(b.Peers), len(a.Peers)); cmp != 0 {
+			return cmp
+		}
+		return bytes.Compare(b.Root.Hash[:], a.Root.Hash[:])
 	})
+
 	return list, nil
 }
 
