@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -32,9 +31,6 @@ type fileCreator struct {
 }
 
 func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (meta *Metadata, err error) {
-	tree := mkvs.NewWithRoot(nil, fc.ndb, root)
-	defer tree.Close()
-
 	// Create checkpoint directory.
 	cpDir := filepath.Join(
 		fc.dataDir,
@@ -67,34 +63,14 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		return nil, fmt.Errorf("checkpoint: failed to create chunk directory: %w", err)
 	}
 
-	// Create chunks until we are done.
+	fp := &fileProvider{dir: chunksDir}
+	chunker := seqChunker{ndb: fc.ndb, root: root, chunkSize: chunkSize}
 	var chunks []hash.Hash
-	var nextOffset node.Key
-	for chunkIndex := 0; ; chunkIndex++ {
-		dataFilename := filepath.Join(chunksDir, strconv.Itoa(chunkIndex))
-
-		// Generate chunk.
-		var f *os.File
-		if f, err = os.Create(dataFilename); err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk file for chunk %d: %w", chunkIndex, err)
-		}
-
-		var chunkHash hash.Hash
-		chunkHash, nextOffset, err = createChunk(ctx, tree, root, nextOffset, chunkSize, f)
-		f.Close()
-		if err != nil {
-			return nil, fmt.Errorf("checkpoint: failed to create chunk %d: %w", chunkIndex, err)
-		}
-
-		chunks = append(chunks, chunkHash)
-
-		// Check if we are finished.
-		if nextOffset == nil {
-			break
-		}
+	chunks, err = chunker.chunk(ctx, fp)
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint: failed to create chunks: %w", err)
 	}
 
-	// Generate and write checkpoint metadata.
 	meta = &Metadata{
 		Version: v1,
 		Root:    root,
@@ -236,4 +212,25 @@ func NewFileCreator(dataDir string, ndb db.NodeDB) (Creator, error) {
 		dataDir: dataDir,
 		ndb:     ndb,
 	}, nil
+}
+
+// fileProvider implements writerFactory.
+//
+// Writers are created on demand by opening a new OS file that the chunker can use
+// for writing chunk data.
+type fileProvider struct {
+	idx int
+	dir string
+}
+
+// Implements writerFactory's next method.
+func (fp *fileProvider) next() (int, io.WriteCloser, error) {
+	fname := filepath.Join(fp.dir, strconv.Itoa(fp.idx))
+	f, err := os.Create(fname)
+	idx := fp.idx
+	if err != nil {
+		return idx, nil, err
+	}
+	fp.idx++
+	return idx, f, nil
 }
