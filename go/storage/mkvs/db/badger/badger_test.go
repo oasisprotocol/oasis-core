@@ -100,7 +100,7 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	require.NoError(err, "NewFileCreator()")
 
 	ckRoot := fillDB(ctx, require, values, nil, version, 2, ndb)
-	ckMeta, err := fc.CreateCheckpoint(ctx, ckRoot, 1024*1024)
+	ckMeta, err := fc.CreateCheckpoint(ctx, ckRoot, 1024*1024, 0)
 	require.NoError(err, "CreateCheckpoint()")
 
 	nodeKeys := keySet{}
