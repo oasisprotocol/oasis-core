@@ -16,14 +16,62 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
-func createChunk(
-	ctx context.Context,
-	tree mkvs.Tree,
-	root node.Root,
-	offset node.Key,
-	chunkSize uint64,
-	w io.Writer,
-) (
+// writerFactor is a factory that provides writers a chunker can write to.
+type writerFactory interface {
+	// next returns the next writer together with its index.
+	next() (int, io.WriteCloser, error)
+}
+
+// seqChunker enables splitting database state at the given root into chunks,
+// where chunks are merkle proofs representing part of the state.
+//
+// Chunks are created by (sequentially) iterating over database keyset.
+//
+// Internally, this triggers pre-order traversal of state trie (proof).
+// When we reach a key that makes proof greater or equal than chunk size,
+// it marks the end of the chunk.
+type seqChunker struct {
+	ndb       db.NodeDB
+	root      node.Root
+	chunkSize uint64
+}
+
+// Chunk creates chunks and writes each into writer provided by the factory.
+//
+// A list of hashes corresponding to created chunks is returned.
+func (sc *seqChunker) chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error) {
+	tree := mkvs.NewWithRoot(nil, sc.ndb, sc.root)
+	defer tree.Close()
+
+	// Create chunks until we are done.
+	var chunks []hash.Hash
+	var nextOffset node.Key
+	for {
+		// Generate chunk.
+		idx, f, err := wf.next()
+		if err != nil {
+			return nil, fmt.Errorf("chunk: get writer for chunk %d: %w", idx, err)
+		}
+
+		var chunkHash hash.Hash
+		chunkHash, nextOffset, err = sc.createChunk(ctx, tree, nextOffset, f)
+		f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("chunk: create chunk %d: %w", idx, err)
+		}
+
+		chunks = append(chunks, chunkHash)
+
+		// Check if we are finished.
+		if nextOffset == nil {
+			break
+		}
+	}
+
+	return chunks, nil
+}
+
+func (sc *seqChunker) createChunk(ctx context.Context, tree mkvs.Tree, offset node.Key, w io.Writer) (
 	chunkHash hash.Hash,
 	nextOffset node.Key,
 	err error,
@@ -31,12 +79,12 @@ func createChunk(
 	it := tree.NewIterator(
 		ctx,
 		// V1 checkpoints use V0 proofs.
-		mkvs.WithProofBuilder(syncer.NewProofBuilderV0(root.Hash, root.Hash)),
+		mkvs.WithProofBuilder(syncer.NewProofBuilderV0(sc.root.Hash, sc.root.Hash)),
 	)
 	defer it.Close()
 
 	// We build the chunk until the proof becomes too large or we have reached the end.
-	for it.Seek(offset); it.Valid() && it.GetProofBuilder().Size() < chunkSize; it.Next() {
+	for it.Seek(offset); it.Valid() && it.GetProofBuilder().Size() < sc.chunkSize; it.Next() {
 		// Check if context got cancelled while iterating to abort early.
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -44,37 +92,41 @@ func createChunk(
 		}
 	}
 	if it.Err() != nil {
-		err = fmt.Errorf("chunk: failed to iterate: %w", it.Err())
+		err = fmt.Errorf("failed to iterate: %w", it.Err())
 		return
 	}
 
 	// Build our chunk.
 	proof, err := it.GetProof()
 	if err != nil {
-		err = fmt.Errorf("chunk: failed to build proof: %w", err)
+		err = fmt.Errorf("failed to build proof: %w", err)
 		return
 	}
 
 	// Determine the next offset (not included in proof).
-	it.Next()
-	nextOffset = it.Key()
+	if it.Valid() {
+		it.Next()
+		nextOffset = it.Key()
+	}
 
+	chunkHash, err = writeChunk(proof, w)
+	return
+}
+
+func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
 	hb := hash.NewBuilder()
 	sw := snappy.NewBufferedWriter(io.MultiWriter(w, hb))
 	enc := cbor.NewEncoder(sw)
 	for _, entry := range proof.Entries {
-		if err = enc.Encode(entry); err != nil {
-			err = fmt.Errorf("chunk: failed to encode chunk part: %w", err)
-			return
+		if err := enc.Encode(entry); err != nil {
+			return hash.Hash{}, fmt.Errorf("failed to encode chunk part: %w", err)
 		}
 	}
-	if err = sw.Close(); err != nil {
-		err = fmt.Errorf("chunk: failed to close chunk: %w", err)
-		return
+	if err := sw.Close(); err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to close chunk: %w", err)
 	}
 
-	chunkHash = hb.Build()
-	return
+	return hb.Build(), nil
 }
 
 func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {
