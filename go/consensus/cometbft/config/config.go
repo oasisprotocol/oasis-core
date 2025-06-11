@@ -115,6 +115,8 @@ type CheckpointerConfig struct {
 	Disabled bool `yaml:"disabled"`
 	// ABCI state checkpointer check interval.
 	CheckInterval time.Duration `yaml:"check_interval"`
+	// ParallelChunker specifies if the new parallel chunking algorithm is used.
+	ParallelChunker bool `yaml:"parallel_chunker"`
 }
 
 // StateSyncConfig is the consensus state sync configuration structure.
@@ -247,8 +249,9 @@ func DefaultConfig() Config {
 			NumLightBlocksKept: 10000,
 		},
 		Checkpointer: CheckpointerConfig{
-			Disabled:      false,
-			CheckInterval: 1 * time.Minute,
+			Disabled:        false,
+			CheckInterval:   1 * time.Minute,
+			ParallelChunker: false,
 		},
 		StateSync: StateSyncConfig{
 			Enabled: false,
