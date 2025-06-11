@@ -289,13 +289,22 @@ func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 		return nil, err
 	}
 
-	// Sort checkpoints by version, descending.
-	sort.Slice(list, func(i, j int) bool {
-		// Descending!
-		if list[j].Root.Version == list[i].Root.Version {
-			return bytes.Compare(list[j].Root.Hash[:], list[i].Root.Hash[:]) < 0
+	// Sort checkpoints by version, then by number of peers, descending.
+	sort.Slice(list, func(i, j int) bool { // TODO add a unit test for that.
+		a, b := list[i], list[j]
+		switch { // Descending!
+		case a.Root.Version > b.Root.Version:
+			return true
+		case a.Root.Version < b.Root.Version:
+			return false
+		case len(a.Peers) > len(b.Peers):
+			return true
+		case len(a.Peers) < len(b.Peers):
+			return false
+		default:
+			return bytes.Compare(a.Root.Hash[:], b.Root.Hash[:]) > 0
+
 		}
-		return list[j].Root.Version < list[i].Root.Version
 	})
 	return list, nil
 }
