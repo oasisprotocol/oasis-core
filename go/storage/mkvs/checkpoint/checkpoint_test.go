@@ -74,7 +74,7 @@ func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	require.Error(err, "GetCheckpoint should fail with non-existent checkpoint")
 
 	// Create a checkpoint and check that it has been created correctly.
-	cp, err := fc.CreateCheckpoint(ctx, root, 16*1024)
+	cp, err := fc.CreateCheckpoint(ctx, root, 16*1024, 0)
 	require.NoError(err, "CreateCheckpoint")
 	require.EqualValues(1, cp.Version, "version should be correct")
 	require.EqualValues(root, cp.Root, "checkpoint root should be correct")
@@ -102,7 +102,7 @@ func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	require.Equal(cp, gcp)
 
 	// Try re-creating the same checkpoint again and make sure we get the same metadata.
-	existingCp, err := fc.CreateCheckpoint(ctx, root, 16*1024)
+	existingCp, err := fc.CreateCheckpoint(ctx, root, 16*1024, 0)
 	require.NoError(err, "CreateCheckpoint on an existing root should work")
 	require.Equal(cp, existingCp, "created checkpoint should be correct")
 
@@ -261,7 +261,7 @@ func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	// Create a checkpoint with unknown root.
 	invalidRoot := root
 	invalidRoot.Hash.FromBytes([]byte("mkvs checkpoint test invalid root"))
-	_, err = fc.CreateCheckpoint(ctx, invalidRoot, 16*1024)
+	_, err = fc.CreateCheckpoint(ctx, invalidRoot, 16*1024, 0)
 	require.Error(err, "CreateCheckpoint should fail for invalid root")
 }
 
@@ -308,7 +308,7 @@ func testOversizedChunks(t *testing.T, factory dbApi.Factory) {
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
-	cp, err := fc.CreateCheckpoint(ctx, root, 128)
+	cp, err := fc.CreateCheckpoint(ctx, root, 128, 0)
 	require.NoError(err, "CreateCheckpoint")
 	require.EqualValues(1, cp.Version, "version should be correct")
 	require.EqualValues(root, cp.Root, "checkpoint root should be correct")
@@ -411,7 +411,7 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
-	cp, err := fc.CreateCheckpoint(ctx, root, 16*1024)
+	cp, err := fc.CreateCheckpoint(ctx, root, 16*1024, 0)
 	require.NoError(err, "CreateCheckpoint")
 
 	// Restore checkpoints in the second database.
@@ -506,17 +506,18 @@ func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 //  1. Keyset after restore should be equal.
 //  2. Checkpoint creation should be agnostic from nodedb implementation.
 func FuzzCreateRestore(f *testing.F) {
-	f.Add(int64(0), uint16(0), uint64(0))
-	f.Add(int64(10), uint16(635), uint64(44))
-	f.Add(int64(10), uint16(635), uint64(44))
-	f.Add(int64(10), uint16(2000), uint64(256))
-	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
+	f.Add(int64(0), uint16(0), uint64(0), uint8(1))
+	f.Add(int64(10), uint16(635), uint64(44), uint8(0))
+	f.Add(int64(10), uint16(635), uint64(44), uint8(8))
+	f.Add(int64(10), uint16(2000), uint64(256), uint8(15))
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64, threads uint8) {
+		threads %= 20
 		n %= 2000
 		ctx := t.Context()
 		rnd := rand.New(rand.NewSource(seed))
 		backend1 := db.Backends[rnd.Intn(len(db.Backends))]
 		backend2 := db.Backends[rnd.Intn(len(db.Backends))]
-		if err := testCreateRestoreRoundtrip(ctx, backend1, backend2, n, chunkSize, rnd); err != nil {
+		if err := testCreateRestoreRoundtrip(ctx, backend1, backend2, n, chunkSize, rnd, threads); err != nil {
 			t.Errorf("Restoring checkpoint with %d keys from db1 (%s) into db2 (%s) failed: %v", n, backend1.Name(), backend2.Name(), err)
 		}
 	})
@@ -526,19 +527,20 @@ func FuzzCreateRestore(f *testing.F) {
 // creating a checkpoint of a given version for this state, should always produce
 // equal checkpoint hash.
 func FuzzCreateDeterministic(f *testing.F) {
-	f.Add(int64(0), uint16(0), uint64(0))
-	f.Add(int64(10), uint16(635), uint64(44))
-	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64) {
+	f.Add(int64(0), uint16(0), uint64(0), uint8(1))
+	f.Add(int64(10), uint16(635), uint64(44), uint8(0))
+	f.Fuzz(func(t *testing.T, seed int64, n uint16, chunkSize uint64, threads uint8) {
+		threads = threads % 20
 		ctx := t.Context()
 		rnd := rand.New(rand.NewSource(seed))
 		backend := db.Backends[rnd.Intn(len(db.Backends))]
-		if err := testDeterministicOutput(ctx, backend, n, chunkSize, rnd); err != nil {
-			t.Fatalf("Unable to ensure deterministic output of checkpoint creation: %v", err)
+		if err := testDeterministicOutput(ctx, backend, n, chunkSize, rnd, threads); err != nil {
+			t.Fatalf("Unable to ensure deterministic output of checkpoint creation (threads: %d): %v", threads, err)
 		}
 	})
 }
 
-func testCreateRestoreRoundtrip(ctx context.Context, backend1, backend2 dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand) error {
+func testCreateRestoreRoundtrip(ctx context.Context, backend1, backend2 dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand, threads uint8) error {
 	dir, err := os.MkdirTemp("", "mkvs.checkpoint.CreateRestoreRoundtrip")
 	if err != nil {
 		return fmt.Errorf("create new temporary dir: %v", err)
@@ -568,7 +570,7 @@ func testCreateRestoreRoundtrip(ctx context.Context, backend1, backend2 dbApi.Fa
 	if err != nil {
 		return fmt.Errorf("create new file creator: %v", err)
 	}
-	cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+	cp, err := fc.CreateCheckpoint(ctx, root, chunkSize, uint16(threads))
 	if err != nil {
 		return fmt.Errorf("create checkpoint (rootHash: %.8s, chunkSize: %d): %v", root.Hash, chunkSize, err)
 	}
@@ -598,7 +600,7 @@ func testCreateRestoreRoundtrip(ctx context.Context, backend1, backend2 dbApi.Fa
 	return nil
 }
 
-func testDeterministicOutput(ctx context.Context, backend dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand) error {
+func testDeterministicOutput(ctx context.Context, backend dbApi.Factory, n uint16, chunkSize uint64, rnd *rand.Rand, threads uint8) error {
 	dir, err := os.MkdirTemp("", "mkvs.checkpoint.CreateDeterministic")
 	if err != nil {
 		return fmt.Errorf("create new temporary dir: %v", err)
@@ -632,7 +634,7 @@ func testDeterministicOutput(ctx context.Context, backend dbApi.Factory, n uint1
 		if err != nil {
 			return fmt.Errorf("create new file creator: %v", err)
 		}
-		cp, err := fc.CreateCheckpoint(ctx, root, chunkSize)
+		cp, err := fc.CreateCheckpoint(ctx, root, chunkSize, uint16(threads))
 		if err != nil {
 			return fmt.Errorf("create checkpoint (rootHash: %.8s, chunkSize: %d): %v", root.Hash, chunkSize, err)
 		}
