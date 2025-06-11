@@ -31,6 +31,8 @@ type CheckpointerConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Storage checkpointer check interval.
 	CheckInterval time.Duration `yaml:"check_interval"`
+	// ParallelChunker specifies if the new parallel chunking algorithm is used.
+	ParallelChunker bool `yaml:"parallel_chunker"`
 }
 
 // Validate validates the configuration settings.
@@ -51,8 +53,9 @@ func DefaultConfig() Config {
 		PublicRPCEnabled:       false,
 		CheckpointSyncDisabled: false,
 		Checkpointer: CheckpointerConfig{
-			Enabled:       false,
-			CheckInterval: 1 * time.Minute,
+			Enabled:         false,
+			CheckInterval:   1 * time.Minute,
+			ParallelChunker: false,
 		},
 	}
 }

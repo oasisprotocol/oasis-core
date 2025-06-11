@@ -544,6 +544,11 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	pruneCfg.NumKept = config.GlobalConfig.Consensus.Prune.NumKept
 	pruneCfg.PruneInterval = max(config.GlobalConfig.Consensus.Prune.Interval, time.Second)
 
+	var chunkerThreads uint16
+	if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+		chunkerThreads = 12
+	}
+
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
 		StorageBackend:            config.GlobalConfig.Storage.Backend,
@@ -554,6 +559,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		Identity:                  t.identity,
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
+		ChunkerThreads:            chunkerThreads,
 		InitialHeight:             uint64(t.genesisHeight),
 		ChainContext:              t.chainContext,
 	}

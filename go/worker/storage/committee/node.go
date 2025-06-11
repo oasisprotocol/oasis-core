@@ -226,11 +226,17 @@ func NewNode(
 				return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
 			}
 
+			var threads uint16
+			if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+				threads = 12
+			}
+
 			return &checkpoint.CreationParameters{
 				Interval:       rt.Storage.CheckpointInterval,
 				NumKept:        rt.Storage.CheckpointNumKept,
 				ChunkSize:      rt.Storage.CheckpointChunkSize,
 				InitialVersion: blk.Header.Round,
+				ChunkerThreads: threads,
 			}, nil
 		},
 		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
