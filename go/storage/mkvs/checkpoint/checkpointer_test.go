@@ -122,7 +122,7 @@ func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, inte
 		// Make sure that there are always the correct number of checkpoints.
 		if round > earliestVersion+(testNumKept+1)*interval {
 			cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{
-				Version:   checkpointVersion,
+				Version:   v1,
 				Namespace: testNs,
 			})
 			require.NoError(err, "GetCheckpoints")
@@ -151,7 +151,7 @@ func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, inte
 
 		// Make sure that the correct checkpoint was created.
 		cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{
-			Version:   checkpointVersion,
+			Version:   v1,
 			Namespace: testNs,
 		})
 		require.NoError(err, "GetCheckpoints")
