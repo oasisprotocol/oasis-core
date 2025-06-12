@@ -86,7 +86,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	// Reconstruct the proof.
 	var decodeErr error
 	var p syncer.Proof
-	p.V = checkpointProofsVersion
+	p.V = v1ProofsVersion
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
