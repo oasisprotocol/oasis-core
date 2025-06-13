@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmnSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -40,6 +41,7 @@ type roflHostHandler struct {
 	parent *runtimeHostHandler
 
 	id    component.ID
+	comp  *bundle.ExplodedComponent
 	comps map[component.ID]host.Runtime
 
 	client        runtimeClient.RuntimeClient
@@ -48,7 +50,7 @@ type roflHostHandler struct {
 	logger *logging.Logger
 }
 
-func newSubHandlerROFL(id component.ID, parent *runtimeHostHandler) (*roflHostHandler, error) {
+func newSubHandlerROFL(comp *bundle.ExplodedComponent, parent *runtimeHostHandler) (*roflHostHandler, error) {
 	client, err := parent.env.GetRuntimeRegistry().Client()
 	if err != nil {
 		return nil, err
@@ -56,11 +58,12 @@ func newSubHandlerROFL(id component.ID, parent *runtimeHostHandler) (*roflHostHa
 
 	logger := logging.GetLogger("runtime/registry/host").
 		With("runtime_id", parent.runtime.ID()).
-		With("component_id", id)
+		With("component_id", comp.ID())
 
 	return &roflHostHandler{
 		parent:        parent,
-		id:            id,
+		id:            comp.ID(),
+		comp:          comp,
 		comps:         make(map[component.ID]host.Runtime),
 		client:        client,
 		eventNotifier: newROFLEventNotifier(parent.runtime, client, logger),
@@ -69,7 +72,7 @@ func newSubHandlerROFL(id component.ID, parent *runtimeHostHandler) (*roflHostHa
 }
 
 // Implements host.RuntimeHandler.
-func (rh *roflHostHandler) NewSubHandler(component.ID) (host.RuntimeHandler, error) {
+func (rh *roflHostHandler) NewSubHandler(*bundle.ExplodedComponent) (host.RuntimeHandler, error) {
 	return nil, fmt.Errorf("cannot create sub-component for leaf handler")
 }
 
@@ -171,7 +174,8 @@ func (rh *roflHostHandler) handleHostRPCCall(
 				Response: rsp.Response,
 			},
 		}, nil
-	case rofl.LocalRPCEndpointBundleManager, rofl.LocalRPCEndpointVolumeManager, rofl.LocalRPCEndpointLogManager:
+	case rofl.LocalRPCEndpointBundleManager, rofl.LocalRPCEndpointVolumeManager, rofl.LocalRPCEndpointLogManager,
+		rofl.LocalRPCEndpointAttestation:
 		// Route management requests to handler.
 		if rq.HostRPCCallRequest.Kind != enclaverpc.KindLocalQuery {
 			return nil, fmt.Errorf("endpoint not supported")
@@ -193,6 +197,8 @@ func (rh *roflHostHandler) handleHostRPCCall(
 			rsp, err = rh.handleVolumeManagement(&rpcRq)
 		case rofl.LocalRPCEndpointLogManager:
 			rsp, err = rh.handleLogManagement(ctx, &rpcRq)
+		case rofl.LocalRPCEndpointAttestation:
+			rsp, err = rh.handleAttestation(&rpcRq)
 		default:
 			return nil, fmt.Errorf("endpoint not supported")
 		}
@@ -265,6 +271,67 @@ func (rh *roflHostHandler) handleHostRegisterNotify(
 	}
 
 	return &protocol.Empty{}, nil
+}
+
+// handleAttestation handles attestation local RPCs.
+func (rh *roflHostHandler) handleAttestation(rq *enclaverpc.Request) (any, error) {
+	switch rq.Method {
+	case rofl.MethodAttestLabels:
+		// Attest component labels.
+		var args rofl.AttestLabelsRequest
+		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
+			return nil, err
+		}
+		return rh.handleAttestLabels(&args)
+	default:
+		return nil, fmt.Errorf("method not supported")
+	}
+}
+
+func (rh *roflHostHandler) handleAttestLabels(args *rofl.AttestLabelsRequest) (*rofl.AttestLabelsResponse, error) {
+	if len(args.Labels) == 0 {
+		return nil, fmt.Errorf("no labels specified")
+	}
+	if len(args.Labels) > rofl.MaxAttestLabels {
+		return nil, fmt.Errorf("too many labels specified (max: %d)", rofl.MaxAttestLabels)
+	}
+
+	labels := make([]*rofl.AttestedLabel, 0, len(args.Labels))
+	for _, key := range args.Labels {
+		// NOTE: We do not discriminate between an empty value and label not being set.
+		value := rh.comp.Labels[key]
+		labels = append(labels, &rofl.AttestedLabel{Key: key, Value: value})
+	}
+
+	identity, err := rh.parent.env.GetNodeIdentity()
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve label attestation key")
+	}
+
+	ri, ok := rh.comps[rh.id]
+	if !ok {
+		return nil, fmt.Errorf("failed to retrieve component")
+	}
+	teeCap, err := ri.GetCapabilityTEE()
+	if err != nil || teeCap == nil {
+		return nil, fmt.Errorf("failed to retrieve component RAK")
+	}
+
+	la := rofl.LabelAttestation{
+		Labels: labels,
+		RAK:    teeCap.RAK,
+	}
+
+	signature, err := rofl.AttestLabels(identity.NodeSigner, la)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign label attestation")
+	}
+
+	return &rofl.AttestLabelsResponse{
+		Attestation: la,
+		NodeID:      identity.NodeSigner.Public(),
+		Signature:   *signature,
+	}, nil
 }
 
 type roflAttachRuntimeCmd struct {

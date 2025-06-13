@@ -100,7 +100,7 @@ type RuntimeHandler interface {
 	protocol.Handler
 
 	// NewSubHandler creates a sub-handler specialized for the given runtime component.
-	NewSubHandler(id component.ID) (RuntimeHandler, error)
+	NewSubHandler(comp *bundle.ExplodedComponent) (RuntimeHandler, error)
 
 	// AttachRuntime attaches a given hosted runtime instance to this handler.
 	AttachRuntime(id component.ID, host Runtime) error

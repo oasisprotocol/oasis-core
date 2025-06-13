@@ -38,6 +38,9 @@ type ExplodedComponent struct {
 	// containing the component has been extracted.
 	ExplodedDataDir string
 
+	// Labels are labels attached to this exploded component.
+	Labels map[string]string
+
 	// Volumes are the volumes attached to this exploded component.
 	Volumes map[string]*volume.Volume
 }
