@@ -212,7 +212,11 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 			"err", err,
 		)
 
-		return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_REJECT_SNAPSHOT}
+		// Given that snapshot was invalid, the sender must have been malicious.
+		return types.ResponseApplySnapshotChunk{
+			Result:        types.ResponseApplySnapshotChunk_REJECT_SNAPSHOT,
+			RejectSenders: []string{req.Sender},
+		}
 	default:
 		// Unspecified error during restoration.
 		mux.logger.Error("error during chunk restoration, aborting state sync",

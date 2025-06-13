@@ -115,6 +115,11 @@ type CheckpointerConfig struct {
 	Disabled bool `yaml:"disabled"`
 	// ABCI state checkpointer check interval.
 	CheckInterval time.Duration `yaml:"check_interval"`
+	// ChunkerSubtreesCount specifies the target number of parallel subtree chunkers
+	// used during checkpoint creation.
+	//
+	// Setting it to 0, will use the old sequential chunker.
+	ChunkerSubtreesCount uint16 `yaml:"chunker_subtrees_count"`
 }
 
 // StateSyncConfig is the consensus state sync configuration structure.
@@ -247,8 +252,9 @@ func DefaultConfig() Config {
 			NumLightBlocksKept: 10000,
 		},
 		Checkpointer: CheckpointerConfig{
-			Disabled:      false,
-			CheckInterval: 1 * time.Minute,
+			Disabled:             false,
+			CheckInterval:        1 * time.Minute,
+			ChunkerSubtreesCount: 0,
 		},
 		StateSync: StateSyncConfig{
 			Enabled: false,
