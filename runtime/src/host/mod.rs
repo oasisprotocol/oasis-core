@@ -10,6 +10,7 @@ use crate::{
     types::{self, Body},
 };
 
+pub mod attestation;
 pub mod bundle_manager;
 pub mod log_manager;
 pub mod volume_manager;
@@ -81,6 +82,9 @@ pub trait Host: Send + Sync {
 
     /// Log manager interface.
     fn log_manager(&self) -> &dyn log_manager::LogManager;
+
+    /// Attestation interface.
+    fn attestation(&self) -> &dyn attestation::Attestation;
 }
 
 #[async_trait]
@@ -153,6 +157,10 @@ impl Host for Protocol {
     }
 
     fn log_manager(&self) -> &dyn log_manager::LogManager {
+        self
+    }
+
+    fn attestation(&self) -> &dyn attestation::Attestation {
         self
     }
 }

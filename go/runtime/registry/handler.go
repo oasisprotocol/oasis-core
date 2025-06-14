@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -120,12 +121,12 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 }
 
 // Implements host.RuntimeHandler.
-func (h *runtimeHostHandler) NewSubHandler(id component.ID) (host.RuntimeHandler, error) {
-	switch id.Kind {
+func (h *runtimeHostHandler) NewSubHandler(comp *bundle.ExplodedComponent) (host.RuntimeHandler, error) {
+	switch comp.Kind {
 	case component.ROFL:
-		return newSubHandlerROFL(id, h)
+		return newSubHandlerROFL(comp, h)
 	default:
-		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", id.Kind)
+		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", comp.Kind)
 	}
 }
 

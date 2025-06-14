@@ -119,6 +119,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			TEEKind:         teeKind,
 			Detached:        detached,
 			ExplodedDataDir: manifest.ExplodedDataDir,
+			Labels:          manifest.Labels,
 			Volumes:         manifest.Volumes,
 		}
 

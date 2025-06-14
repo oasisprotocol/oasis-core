@@ -192,7 +192,7 @@ func (n *RuntimeHostNode) createMessageHandler(comp *bundle.ExplodedComponent) (
 	case component.RONL:
 		return n.handler, nil
 	case component.ROFL:
-		handler, err := n.handler.NewSubHandler(comp.ID())
+		handler, err := n.handler.NewSubHandler(comp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create sub-handler: %w", err)
 		}

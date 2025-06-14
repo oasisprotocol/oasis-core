@@ -40,7 +40,7 @@ const (
 	maxDefaultBundleSizeBytes = 20 * 1024 * 1024 // 20 MB
 
 	// maxLabelSize is the maximum size of a single label key or value.
-	maxLabelSize = 512
+	maxLabelSize = 1024
 	// maxLabelCount is the maximum number of labels.
 	maxLabelCount = 1024
 )

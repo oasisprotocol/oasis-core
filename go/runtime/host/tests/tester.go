@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -35,7 +36,7 @@ const (
 type mockMessageHandler struct{}
 
 // Implements host.RuntimeHandler.
-func (h *mockMessageHandler) NewSubHandler(component.ID) (host.RuntimeHandler, error) {
+func (h *mockMessageHandler) NewSubHandler(*bundle.ExplodedComponent) (host.RuntimeHandler, error) {
 	return nil, fmt.Errorf("method not supported")
 }
 
