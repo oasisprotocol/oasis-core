@@ -31,6 +31,11 @@ type CheckpointerConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Storage checkpointer check interval.
 	CheckInterval time.Duration `yaml:"check_interval"`
+	// ChunkerSubtreesCount specifies the target number of parallel subtree chunkers
+	// used during checkpoint creation.
+	//
+	// Setting it to 0, will use old sequential chunker.
+	ChunkerSubtreesCount uint16 `yaml:"chunker_subtrees_count"`
 }
 
 // Validate validates the configuration settings.
@@ -51,8 +56,9 @@ func DefaultConfig() Config {
 		PublicRPCEnabled:       false,
 		CheckpointSyncDisabled: false,
 		Checkpointer: CheckpointerConfig{
-			Enabled:       false,
-			CheckInterval: 1 * time.Minute,
+			Enabled:              false,
+			CheckInterval:        1 * time.Minute,
+			ChunkerSubtreesCount: 0,
 		},
 	}
 }
