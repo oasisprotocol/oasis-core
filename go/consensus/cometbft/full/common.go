@@ -912,6 +912,8 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 	}
 }
 
+// TransactionResultsFromCometBFT converts CometBFT transactions and responses
+// into transaction results.
 func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmtabcitypes.ResponseDeliverTx) ([]*results.Result, error) {
 	txResults := make([]*results.Result, 0, len(txs))
 
