@@ -239,7 +239,11 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Consensus: oasis.ConsensusFixture{}},
 		},
 		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
-			{Runtime: 0, Serial: 1, MasterSecretRotationInterval: 0},
+			{
+				Runtime:                      0,
+				Serial:                       1,
+				MasterSecretRotationInterval: 0,
+			},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
 			{
@@ -251,7 +255,11 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			{RuntimeProvisioner: runtimeProvisioner, Entity: 1, Runtimes: []int{1}},
+			{
+				RuntimeProvisioner: runtimeProvisioner,
+				Entity:             1,
+				Runtimes:           []int{1},
+			},
 			{
 				RuntimeProvisioner: runtimeProvisioner,
 				Entity:             1,
@@ -265,17 +273,19 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				},
 			},
 			{
-				RuntimeProvisioner: runtimeProvisioner,
-				Entity:             1,
-				Runtimes:           []int{1},
-				// Use a parallel chunking algorithm for the second compute node to show interoperability.
-				CheckpointParallelChunker: true,
+				RuntimeProvisioner:        runtimeProvisioner,
+				Entity:                    1,
+				Runtimes:                  []int{1},
+				CheckpointParallelChunker: true, // Use a parallel chunking algorithm to show interoperability.
 			},
 		},
 		Sentries: []oasis.SentryFixture{},
 		Seeds:    []oasis.SeedFixture{{}},
 		Clients: []oasis.ClientFixture{
-			{RuntimeProvisioner: runtimeProvisioner, Runtimes: []int{1}},
+			{
+				RuntimeProvisioner: runtimeProvisioner,
+				Runtimes:           []int{1},
+			},
 		},
 	}
 

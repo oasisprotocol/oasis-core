@@ -18,14 +18,14 @@ const (
 type Client struct {
 	*Node
 
-	runtimes           []int
-	runtimeProvisioner runtimeConfig.RuntimeProvisioner
-	runtimeConfig      map[int]map[string]any
-
-	batchSize uint16
-
 	consensusPort uint16
 	p2pPort       uint16
+
+	runtimes           []int
+	runtimeConfig      map[int]map[string]any
+	runtimeProvisioner runtimeConfig.RuntimeProvisioner
+
+	batchSize uint16
 }
 
 // ClientCfg is the Oasis client node provisioning configuration.
@@ -33,9 +33,10 @@ type ClientCfg struct {
 	NodeCfg
 
 	Runtimes           []int
-	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 	RuntimeConfig      map[int]map[string]any
-	BatchSize          uint16
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
+
+	BatchSize uint16
 }
 
 // UpdateRuntimes updates the client node runtimes.
@@ -85,14 +86,14 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		return nil, err
 	}
 
-	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
-	}
-
 	// Pre-provision the node identity so that we can identify the entity.
 	err = host.setProvisionedIdentity(fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/client: failed to provision node identity: %w", err)
+	}
+
+	if cfg.RuntimeProvisioner == "" {
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 
 	client := &Client{
