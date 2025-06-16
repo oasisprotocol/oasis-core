@@ -434,7 +434,6 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		RuntimeProvisioner:      f.RuntimeProvisioner,
 		StorageBackend:          f.StorageBackend,
 		SentryIndices:           f.Sentries,
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
@@ -444,6 +443,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		DisablePublicRPC:       f.DisablePublicRPC,
 		Runtimes:               f.Runtimes,
 		RuntimeConfig:          f.RuntimeConfig,
+		RuntimeProvisioner:     f.RuntimeProvisioner,
 		RuntimeStatePaths:      f.RuntimeStatePaths,
 	})
 }

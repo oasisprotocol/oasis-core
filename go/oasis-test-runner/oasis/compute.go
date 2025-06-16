@@ -33,32 +33,30 @@ type Compute struct { // nolint: maligned
 
 	*Node
 
+	consensusPort uint16
+	p2pPort       uint16
+
+	runtimes           []int
+	runtimeConfig      map[int]map[string]any
 	runtimeProvisioner runtimeConfig.RuntimeProvisioner
 
 	sentryIndices []int
+	sentryPubKey  signature.PublicKey
 
 	storageBackend          string
 	disablePublicRPC        bool
 	checkpointSyncDisabled  bool
 	checkpointCheckInterval time.Duration
-
-	sentryPubKey  signature.PublicKey
-	consensusPort uint16
-	p2pPort       uint16
-
-	runtimes      []int
-	runtimeConfig map[int]map[string]any
 }
 
 // ComputeCfg is the Oasis compute node configuration.
 type ComputeCfg struct {
 	NodeCfg
 
+	Runtimes           []int
+	RuntimeConfig      map[int]map[string]any
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
-
-	Runtimes          []int
-	RuntimeConfig     map[int]map[string]any
-	RuntimeStatePaths map[int]string
+	RuntimeStatePaths  map[int]string
 
 	SentryIndices []int
 
