@@ -296,11 +296,10 @@ func (rh *roflHostHandler) handleAttestLabels(args *rofl.AttestLabelsRequest) (*
 		return nil, fmt.Errorf("too many labels specified (max: %d)", rofl.MaxAttestLabels)
 	}
 
-	labels := make([]*rofl.AttestedLabel, 0, len(args.Labels))
+	labels := make(map[string]string, len(args.Labels))
 	for _, key := range args.Labels {
-		// NOTE: We do not discriminate between an empty value and label not being set.
-		value := rh.comp.Labels[key]
-		labels = append(labels, &rofl.AttestedLabel{Key: key, Value: value})
+		// NOTE: We do not discriminate between a zero value and label not being set.
+		labels[key] = rh.comp.Labels[key]
 	}
 
 	identity, err := rh.parent.env.GetNodeIdentity()

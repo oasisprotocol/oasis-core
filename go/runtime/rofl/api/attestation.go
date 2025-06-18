@@ -37,20 +37,10 @@ var AttestLabelsSignatureContext = signature.NewContext("oasis-core/node: attest
 
 // LabelAttestation is an attestation of component labels.
 type LabelAttestation struct {
-	// Labels are the attested labels, in order.
-	Labels []*AttestedLabel `json:"labels"`
+	// Labels are the attested labels.
+	Labels map[string]string `json:"labels"`
 	// RAK is the component RAK.
 	RAK signature.PublicKey `json:"rak"`
-}
-
-// AttestedLabel is a label key/value pair that is used for label attestation.
-type AttestedLabel struct {
-	_ struct{} `cbor:",toarray"` //nolint
-
-	// Key is the label key.
-	Key string `json:"key"`
-	// Value is the label value.
-	Value string `json:"value"`
 }
 
 // AttestLabels signs the given label attestation and returns the signature.
