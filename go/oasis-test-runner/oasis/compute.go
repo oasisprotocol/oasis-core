@@ -37,10 +37,11 @@ type Compute struct { // nolint: maligned
 
 	sentryIndices []int
 
-	storageBackend          string
-	disablePublicRPC        bool
-	checkpointSyncDisabled  bool
-	checkpointCheckInterval time.Duration
+	storageBackend            string
+	disablePublicRPC          bool
+	checkpointSyncDisabled    bool
+	checkpointCheckInterval   time.Duration
+	checkpointParallelChunker bool
 
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
@@ -62,10 +63,11 @@ type ComputeCfg struct {
 
 	SentryIndices []int
 
-	StorageBackend          string
-	DisablePublicRPC        bool
-	CheckpointSyncDisabled  bool
-	CheckpointCheckInterval time.Duration
+	StorageBackend            string
+	DisablePublicRPC          bool
+	CheckpointSyncDisabled    bool
+	CheckpointCheckInterval   time.Duration
+	CheckpointParallelChunker bool
 }
 
 // UpdateRuntimes updates the worker node runtimes.
@@ -172,6 +174,7 @@ func (worker *Compute) ModifyConfig() error {
 	worker.Config.Storage.CheckpointSyncDisabled = worker.checkpointSyncDisabled
 	worker.Config.Storage.Checkpointer.Enabled = true
 	worker.Config.Storage.Checkpointer.CheckInterval = worker.checkpointCheckInterval
+	worker.Config.Storage.Checkpointer.ParallelChunker = worker.checkpointParallelChunker
 
 	// Sentry configuration.
 	sentries, err := resolveSentries(worker.net, worker.sentryIndices)
@@ -230,18 +233,19 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 
 	worker := &Compute{
-		Node:                    host,
-		storageBackend:          cfg.StorageBackend,
-		sentryIndices:           cfg.SentryIndices,
-		disablePublicRPC:        cfg.DisablePublicRPC,
-		checkpointSyncDisabled:  cfg.CheckpointSyncDisabled,
-		checkpointCheckInterval: cfg.CheckpointCheckInterval,
-		sentryPubKey:            sentryPubKey,
-		runtimeProvisioner:      cfg.RuntimeProvisioner,
-		consensusPort:           host.getProvisionedPort(nodePortConsensus),
-		p2pPort:                 host.getProvisionedPort(nodePortP2P),
-		runtimes:                cfg.Runtimes,
-		runtimeConfig:           cfg.RuntimeConfig,
+		Node:                      host,
+		storageBackend:            cfg.StorageBackend,
+		sentryIndices:             cfg.SentryIndices,
+		disablePublicRPC:          cfg.DisablePublicRPC,
+		checkpointSyncDisabled:    cfg.CheckpointSyncDisabled,
+		checkpointCheckInterval:   cfg.CheckpointCheckInterval,
+		checkpointParallelChunker: cfg.CheckpointParallelChunker,
+		sentryPubKey:              sentryPubKey,
+		runtimeProvisioner:        cfg.RuntimeProvisioner,
+		consensusPort:             host.getProvisionedPort(nodePortConsensus),
+		p2pPort:                   host.getProvisionedPort(nodePortP2P),
+		runtimes:                  cfg.Runtimes,
+		runtimeConfig:             cfg.RuntimeConfig,
 	}
 
 	// Remove any exploded bundles on cleanup.
