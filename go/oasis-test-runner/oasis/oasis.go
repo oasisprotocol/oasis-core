@@ -303,6 +303,13 @@ func (n *Node) Start() error {
 		n.Config.Mode = config.ModeArchive
 	}
 
+	switch n.Config.Mode {
+	case config.ModeStatelessClient:
+		for _, worker := range n.net.computeWorkers {
+			n.Config.Consensus.Providers = append(n.Config.Consensus.Providers, "unix:"+worker.SocketPath())
+		}
+	}
+
 	args.extraArgs(n.extraArgs)
 
 	if customStart != nil {
