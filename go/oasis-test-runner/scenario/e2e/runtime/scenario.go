@@ -264,7 +264,13 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 			},
-			{RuntimeProvisioner: runtimeProvisioner, Entity: 1, Runtimes: []int{1}},
+			{
+				RuntimeProvisioner: runtimeProvisioner,
+				Entity:             1,
+				Runtimes:           []int{1},
+				// Use a parallel chunking algorithm for the second compute node to show interoperability.
+				CheckpointParallelChunker: true,
+			},
 		},
 		Sentries: []oasis.SentryFixture{},
 		Seeds:    []oasis.SeedFixture{{}},
