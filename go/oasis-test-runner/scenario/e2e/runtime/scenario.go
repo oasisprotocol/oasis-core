@@ -287,8 +287,8 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				Runtimes:           []int{1},
 			},
 		},
+		StatelessClients: []oasis.StatelessClientFixture{},
 	}
-
 	if epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval); epochInterval > 0 {
 		ff.Network.Beacon.InsecureParameters = &beacon.InsecureParameters{
 			Interval: epochInterval,
@@ -398,6 +398,8 @@ func RegisterScenarios() error {
 		EarlyQueryRuntime,
 		// ROFL.
 		ROFL,
+		// Stateless client tests.
+		StatelessClient,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err
