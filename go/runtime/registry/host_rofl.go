@@ -321,13 +321,13 @@ func (rh *roflHostHandler) handleAttestLabels(args *rofl.AttestLabelsRequest) (*
 		RAK:    teeCap.RAK,
 	}
 
-	signature, err := rofl.AttestLabels(identity.NodeSigner, la)
+	encLa, signature, err := rofl.AttestLabels(identity.NodeSigner, la)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign label attestation")
 	}
 
 	return &rofl.AttestLabelsResponse{
-		Attestation: la,
+		Attestation: encLa,
 		NodeID:      identity.NodeSigner.Public(),
 		Signature:   *signature,
 	}, nil

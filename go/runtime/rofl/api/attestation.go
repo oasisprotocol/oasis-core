@@ -24,8 +24,8 @@ type AttestLabelsRequest struct {
 
 // AttestLabelsResponse is the response from the AttestLabels method.
 type AttestLabelsResponse struct {
-	// Attestation is the label attestation.
-	Attestation LabelAttestation `json:"attstation"`
+	// Attestation is the CBOR-serialized label attestation.
+	Attestation []byte `json:"attstation"`
 	// NodeID is the public key of the node attesting to the labels.
 	NodeID signature.PublicKey `json:"node_id"`
 	// Signature is the signature of the attested labels.
@@ -43,7 +43,12 @@ type LabelAttestation struct {
 	RAK signature.PublicKey `json:"rak"`
 }
 
-// AttestLabels signs the given label attestation and returns the signature.
-func AttestLabels(signer signature.Signer, la LabelAttestation) (*signature.RawSignature, error) {
-	return signature.SignRaw(signer, AttestLabelsSignatureContext, cbor.Marshal(la))
+// AttestLabels signs the given label attestation and returns the encoded attestation with signature.
+func AttestLabels(signer signature.Signer, la LabelAttestation) ([]byte, *signature.RawSignature, error) {
+	enc := cbor.Marshal(la)
+	sig, err := signature.SignRaw(signer, AttestLabelsSignatureContext, enc)
+	if err != nil {
+		return nil, nil, err
+	}
+	return enc, sig, nil
 }

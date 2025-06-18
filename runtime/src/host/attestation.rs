@@ -52,8 +52,8 @@ pub struct AttestLabelsRequest {
 /// Response from the AttestLabels method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct AttestLabelsResponse {
-    /// Label attestation.
-    pub attestation: LabelAttestation,
+    /// CBOR-serialized label attestation.
+    pub attestation: Vec<u8>,
     /// Public key of the node attesting to the labels.
     pub node_id: PublicKey,
     /// Signature of the attested labels.
