@@ -25,12 +25,17 @@ func (ft *fakeTime) get() time.Time {
 func testStorageRoundtrip(t *testing.T, store *persistent.ServiceStore, bundle *TCBBundle) {
 	require := require.New(t)
 	fmspc := []byte("fmspc")
+	numbers := []uint32{17, 18, 19}
 
 	tcbCache := newMockTcbCache(store, logging.GetLogger(loggerModule), time.Now)
-	tcbCache.cache(bundle, fmspc)
+	tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
+	tcbCache.cacheEvaluationDataNumbers(TeeTypeSGX, numbers)
 
-	cached, _ := tcbCache.check(fmspc)
-	require.EqualValues(cached, bundle, "tcbCache.check")
+	cachedBundle, _ := tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.EqualValues(cachedBundle, bundle, "tcbCache.checkBundle")
+
+	cachedNumbers, _ := tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.EqualValues(cachedNumbers, numbers, "tcbCache.checkEvaluationDataNumbers")
 }
 
 func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle *TCBBundle) {
@@ -47,18 +52,18 @@ func testFMSPCInvalidation(t *testing.T, store *persistent.ServiceStore, bundle 
 	var refresh bool
 
 	// Cache initial and check.
-	tcbCache.cache(bundle, fmspc)
-	cached, refresh = tcbCache.check(fmspc)
+	tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
+	cached, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
 	require.NotNil(cached, "tcbCache.check 1")
 	require.False(refresh, "tcbCache.check 1")
 
 	// Check again with bogus fmspc; shouldn't return anything
 	// but should still be available.
-	cached, refresh = tcbCache.check([]byte("different"))
+	cached, refresh = tcbCache.checkBundle(TeeTypeSGX, []byte("different"))
 	require.Nil(cached, "tcbCache.check 2")
 	require.True(refresh, "tcbCache.check 2")
 
-	cached, refresh = tcbCache.check(fmspc)
+	cached, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
 	require.NotNil(cached, "tcbCache.check 3")
 	require.False(refresh, "tcbCache.check 3")
 }
@@ -75,54 +80,81 @@ func testCheckIntervals(t *testing.T, store *persistent.ServiceStore, bundle *TC
 	tcbCache := newMockTcbCache(store, logging.GetLogger(loggerModule), timer.get)
 
 	// Initially, always needs to be refreshed.
-	cache, refresh := tcbCache.check(fmspc)
-	require.Nil(cache, "tcbCache.check pre-cache")
-	require.True(refresh, "tcbCache.check pre-cache")
+	cache, refresh := tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.Nil(cache, "tcbCache.checkBundle pre-cache")
+	require.True(refresh, "tcbCache.checkBundle pre-cache")
+
+	cachedNumbers, refresh := tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.Nil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers pre-cache")
+	require.True(refresh, "tcbCache.checkEvaluationDataNumbers pre-cache")
 
 	// Cache it, pretend it's a day before the first check will need to be performed.
 	timer.now = expiryTime.Add(-(tcbCacheRefreshThreshold + 24*time.Hour))
-	tcbCache.cache(bundle, fmspc)
+	tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
+	tcbCache.cacheEvaluationDataNumbers(TeeTypeSGX, []uint32{17, 18, 19})
 
 	// An hour after the initial cache, shouldn't be refreshed.
 	timer.now = timer.now.Add(time.Hour)
-	cache, refresh = tcbCache.check(fmspc)
-	require.NotNil(cache, "tcbCache.check 1")
-	require.False(refresh, "tcbCache.check 1")
+	cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.NotNil(cache, "tcbCache.checkBundle 1")
+	require.False(refresh, "tcbCache.checkBundle 1")
+
+	cachedNumbers, refresh = tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.NotNil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers 1")
+	require.False(refresh, "tcbCache.checkEvaluationDataNumbers 1")
 
 	// Another day later, we're in the slow refresh cycle. First check should refresh.
 	// Advance by 25 hours, because 24 would still be within the slow refresh interval.
 	timer.now = timer.now.Add(25 * time.Hour)
-	cache, refresh = tcbCache.check(fmspc)
-	require.NotNil(cache, "tcbCache.check 2")
-	require.True(refresh, "tcbCache.check 2")
-	tcbCache.cache(bundle, fmspc)
+	cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.NotNil(cache, "tcbCache.checkBundle 2")
+	require.True(refresh, "tcbCache.checkBundle 2")
+	tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
+
+	cachedNumbers, refresh = tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.NotNil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers 2")
+	require.True(refresh, "tcbCache.checkEvaluationDataNumbers 2")
+	tcbCache.cacheEvaluationDataNumbers(TeeTypeSGX, []uint32{17, 18, 19})
 
 	// An hour later, don't check again.
 	timer.now = timer.now.Add(time.Hour)
-	cache, refresh = tcbCache.check(fmspc)
-	require.NotNil(cache, "tcbCache.check 3")
-	require.False(refresh, "tcbCache.check 3")
+	cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.NotNil(cache, "tcbCache.checkBundle 3")
+	require.False(refresh, "tcbCache.checkBundle 3")
+
+	cachedNumbers, refresh = tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.NotNil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers 3")
+	require.False(refresh, "tcbCache.checkEvaluationDataNumbers 3")
 
 	// 22 hours later, still don't check (within slow refresh interval).
 	// Two hours after that, do check.
 	timer.now = timer.now.Add(22 * time.Hour)
-	cache, refresh = tcbCache.check(fmspc)
-	require.NotNil(cache, "tcbCache.check 4")
-	require.False(refresh, "tcbCache.check 4")
+	cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.NotNil(cache, "tcbCache.checkBundle 4")
+	require.False(refresh, "tcbCache.checkBundle 4")
+
+	cachedNumbers, refresh = tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.NotNil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers 4")
+	require.False(refresh, "tcbCache.checkEvaluationDataNumbers 4")
 
 	timer.now = timer.now.Add(2 * time.Hour)
-	cache, refresh = tcbCache.check(fmspc)
-	require.NotNil(cache, "tcbCache.check 5")
-	require.True(refresh, "tcbCache.check 5")
-	tcbCache.cache(bundle, fmspc)
+	cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+	require.NotNil(cache, "tcbCache.checkBundle 5")
+	require.True(refresh, "tcbCache.checkBundle 5")
+	tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
+
+	cachedNumbers, refresh = tcbCache.checkEvaluationDataNumbers(TeeTypeSGX)
+	require.NotNil(cachedNumbers, "tcbCache.checkEvaluationDataNumbers 5")
+	require.True(refresh, "tcbCache.checkEvaluationDataNumbers 5")
+	tcbCache.cacheEvaluationDataNumbers(TeeTypeSGX, []uint32{17, 18, 19})
 
 	// After the bundle expires, check all the time.
 	timer.now = expiryTime
 	for i := 0; i < 4; i++ {
-		cache, refresh = tcbCache.check(fmspc)
-		require.NotNil(cache, "tcbCache.check loop")
-		require.True(refresh, "tcbCache.check loop")
-		tcbCache.cache(bundle, fmspc)
+		cache, refresh = tcbCache.checkBundle(TeeTypeSGX, fmspc)
+		require.NotNil(cache, "tcbCache.checkBundle loop")
+		require.True(refresh, "tcbCache.checkBundle loop")
+		tcbCache.cacheBundle(TeeTypeSGX, bundle, fmspc)
 		timer.now = timer.now.Add(time.Hour)
 	}
 }
@@ -169,7 +201,8 @@ func TestTCBCache(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fun(t, store, &tcbBundle)
-			_ = store.Delete([]byte(tcbCacheKey))
+			_ = store.Delete(tcbBundleCacheKey(TeeTypeSGX))
+			_ = store.Delete(tcbEvaluationDataNumbersCacheKey(TeeTypeSGX))
 		})
 	}
 }
