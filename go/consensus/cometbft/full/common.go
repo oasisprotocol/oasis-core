@@ -587,7 +587,7 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 		return nil, consensusAPI.ErrNoCommittedBlocks
 	}
 
-	return api.NewBlock(blk), nil
+	return api.NewBlock(blk)
 }
 
 // Implements consensusAPI.Backend.
