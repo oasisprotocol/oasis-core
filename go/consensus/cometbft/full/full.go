@@ -514,7 +514,12 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 				if !ok {
 					return
 				}
-				mapCh <- api.NewBlock(tmBlk)
+				blk, err := api.NewBlock(tmBlk)
+				if err != nil {
+					t.Logger.Error("failed to create new block: %w", err)
+					return
+				}
+				mapCh <- blk
 			case <-ctx.Done():
 				return
 			}

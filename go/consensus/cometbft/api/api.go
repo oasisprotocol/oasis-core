@@ -160,18 +160,25 @@ func QueryForApp(eventApp string) cmtpubsub.Query {
 // BlockMeta is the CometBFT-specific per-block metadata.
 type BlockMeta struct {
 	// Header is the CometBFT block header.
-	Header *cmttypes.Header `json:"header"`
+	Header []byte `json:"header"`
 	// LastCommit is the CometBFT last commit info.
-	LastCommit *cmttypes.Commit `json:"last_commit"`
+	LastCommit []byte `json:"last_commit"`
 }
 
 // NewBlock creates a new consensus.Block from a CometBFT block.
-func NewBlock(blk *cmttypes.Block) *consensus.Block {
-	meta := BlockMeta{
-		Header:     &blk.Header,
-		LastCommit: blk.LastCommit,
+func NewBlock(blk *cmttypes.Block) (*consensus.Block, error) {
+	header, err := blk.Header.ToProto().Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal header: %w", err)
 	}
-	rawMeta := cbor.Marshal(meta)
+	lastCommit, err := blk.LastCommit.ToProto().Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal last commit: %w", err)
+	}
+	meta := BlockMeta{
+		Header:     header,
+		LastCommit: lastCommit,
+	}
 
 	var stateRoot hash.Hash
 	switch blk.Header.AppHash {
@@ -194,8 +201,8 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 			Hash:    stateRoot,
 		},
 		Size: uint64(blk.Size()),
-		Meta: rawMeta,
-	}
+		Meta: cbor.Marshal(meta),
+	}, nil
 }
 
 // BlockResults are CometBFT-specific consensus block results.
