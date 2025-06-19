@@ -100,21 +100,23 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 		return nil, fmt.Errorf("PCK verification failed: %w", err)
 	}
 
+	teeType := quote.Header().TeeType()
+
 	// Verify the quote so we can catch errors early (the runtime and later consensus layer will
 	// also do their own verification).
 	getTcbBundle := func(tcbEvaluationDataNumber uint32) (*TCBBundle, error) {
 		var fresh *TCBBundle
 
-		cached, refresh := qs.cache.check(pckInfo.FMSPC)
+		cached, refresh := qs.cache.checkBundle(teeType, pckInfo.FMSPC)
 		if refresh {
-			if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
+			if fresh, err = qs.client.GetTCBBundle(ctx, teeType, pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
 				qs.logger.Warn("error downloading TCB refresh",
 					"err", err,
 					"tcb_evaluation_data_number", tcbEvaluationDataNumber,
 				)
 			}
 			if err = qs.verifyBundle(quote, quotePolicy, fresh, "fresh"); err == nil {
-				qs.cache.cache(fresh, pckInfo.FMSPC)
+				qs.cache.cacheBundle(teeType, fresh, pckInfo.FMSPC)
 				return fresh, nil
 			}
 			qs.logger.Warn("error verifying downloaded TCB refresh",
@@ -137,7 +139,7 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 		}
 
 		// If not downloaded yet this time round, try forcing. Any errors are fatal.
-		if fresh, err = qs.client.GetTCBBundle(ctx, quote.Header().TeeType(), pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
+		if fresh, err = qs.client.GetTCBBundle(ctx, teeType, pckInfo.FMSPC, tcbEvaluationDataNumber); err != nil {
 			qs.logger.Warn("error downloading TCB",
 				"err", err,
 				"tcb_evaluation_data_number", tcbEvaluationDataNumber,
@@ -147,15 +149,22 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 		if err = qs.verifyBundle(quote, quotePolicy, fresh, "downloaded"); err != nil {
 			return nil, err
 		}
-		qs.cache.cache(fresh, pckInfo.FMSPC)
+		qs.cache.cacheBundle(teeType, fresh, pckInfo.FMSPC)
 		return fresh, nil
 	}
 
 	// Fetch a list of all available TCB evaluation data numbers and try one by one.
-	var tcbEvaluationDataNumbers []uint32
-	tcbEvaluationDataNumbers, err = qs.client.GetTCBEvaluationDataNumbers(ctx, quote.Header().TeeType())
-	if err != nil {
-		return nil, err
+	tcbEvaluationDataNumbers, refresh := qs.cache.checkEvaluationDataNumbers(teeType)
+	if refresh {
+		tcbEvaluationDataNumbers, err = qs.client.GetTCBEvaluationDataNumbers(ctx, teeType)
+		switch err {
+		case nil:
+			qs.cache.cacheEvaluationDataNumbers(teeType, tcbEvaluationDataNumbers)
+		default:
+			qs.logger.Warn("error downloading TCB evaluation data numbers",
+				"err", err,
+			)
+		}
 	}
 	// Ensure they are sorted from highest to lowest.
 	slices.SortFunc(tcbEvaluationDataNumbers, func(a, b uint32) int {
@@ -170,6 +179,9 @@ func (qs *cachingQuoteService) ResolveQuote(ctx context.Context, rawQuote []byte
 	}
 	if err != nil {
 		return nil, err
+	}
+	if tcbBundle == nil {
+		return nil, fmt.Errorf("failed to fetch any valid TCB bundles")
 	}
 
 	// Prepare quote structure.
