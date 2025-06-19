@@ -12,6 +12,34 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.4 (2025-06-19)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/runtime: Add log manager
+  ([#6197](https://github.com/oasisprotocol/oasis-core/issues/6197))
+
+  Components can access logs of the bundles they deployed via the API as long
+  as they have the proper `log_view` permissions.
+
+- Add support for component label attestation
+  ([#6224](https://github.com/oasisprotocol/oasis-core/issues/6224))
+
+  This allows apps to request that the node attests to labels attached to those
+  apps have specific values which can be used to prove specific statements
+  about individual components hosted by a specific node.
+
+### Bug Fixes
+
+- go/runtime/localstorage: Fix nil dereference after close
+  ([#6231](https://github.com/oasisprotocol/oasis-core/issues/6231))
+
 ## 25.3 (2025-05-20)
 
 | Protocol          | Version   |
