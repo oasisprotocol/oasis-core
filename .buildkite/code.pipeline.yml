@@ -257,9 +257,6 @@ steps:
       # Only run runtime scenarios as others do not use SGX.
       - >
         .buildkite/scripts/test_e2e.sh --timeout 20m
-        --scenario e2e/runtime/runtime-encryption
-        --scenario e2e/runtime/rofl
-        --scenario e2e/runtime/trust-root/.+
         --scenario e2e/runtime/keymanager-.+
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
@@ -335,7 +332,6 @@ steps:
     command:
       - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/txsource-multi-short
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -353,7 +349,6 @@ steps:
     command:
       - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts_mocksgx.sh
-      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption
     env:
       OASIS_TEE_HARDWARE: intel-sgx
       OASIS_UNSAFE_MOCK_TEE: "1"

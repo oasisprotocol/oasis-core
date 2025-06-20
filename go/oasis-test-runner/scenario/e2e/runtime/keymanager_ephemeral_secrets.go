@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -33,16 +34,16 @@ import (
 //   - Start all managers and test that ephemeral secrets can be replicated.
 //   - Run managers for few epochs and test that everything works.
 //   - Publish transactions that use ephemeral keys to encrypt/decrypt messages.
-var KeymanagerEphemeralSecrets scenario.Scenario = newKmEphemeralSecretsImpl()
+var KeymanagerEphemeralSecrets = newKmEphemeralSecretsImpl
 
 type kmEphemeralSecretsImpl struct {
 	Scenario
 }
 
-func newKmEphemeralSecretsImpl() scenario.Scenario {
+func newKmEphemeralSecretsImpl(id int) scenario.Scenario {
 	return &kmEphemeralSecretsImpl{
 		Scenario: *NewScenario(
-			"keymanager-ephemeral-secrets",
+			fmt.Sprintf("keymanager-ephemeral-secrets-%d", id),
 			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
@@ -181,14 +182,14 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 
 	// Wait until the next ephemeral secret is published.
-	sc.Logger.Info("waiting for the first ephemeral secret")
+	sc.Logger.Info("waiting for the next ephemeral secret")
 
 	sigSecret, err = sc.WaitEphemeralSecrets(ctx, 1)
 	if err != nil {
 		return err
 	}
 	if len(sigSecret.Secret.Secret.Ciphertexts) != 1 {
-		return fmt.Errorf("the first ephemeral secret should be encrypted for one enclave only")
+		return fmt.Errorf("the next ephemeral secret should be encrypted for one enclave only")
 	}
 
 	// Wait for the ephemeral secret epoch.
@@ -200,7 +201,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 		return err
 	}
 
-	// Fetch public key which will be used to test replication.
+	// Fetch ephemeral public key which will be used to test replication.
 	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
 	if err != nil {
 		return err
@@ -220,33 +221,24 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 		return err
 	}
 
-	// Test if the last ephemeral secret was copied.
-	sc.Logger.Info("testing ephemeral keys - replication",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-	keyCopy, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, secondKmPeerID)
-	if err != nil {
-		return err
-	}
-	if keyCopy == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
-	}
-	if *key != *keyCopy {
-		return fmt.Errorf("ephemeral keys should be the same")
-	}
+	// Wait a bit so that key managers finish copying ephemeral secrets.
+	time.Sleep(10 * time.Second)
 
-	sc.Logger.Info("testing ephemeral keys - replication",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-	keyCopy, err = rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, thirdKmPeerID)
-	if err != nil {
-		return err
-	}
-	if keyCopy == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
-	}
-	if *key != *keyCopy {
-		return fmt.Errorf("ephemeral keys should be the same")
+	// Test if the last ephemeral secret was copied.
+	for _, kmPeerID := range []peer.ID{secondKmPeerID, thirdKmPeerID} {
+		sc.Logger.Info("testing ephemeral keys - replication",
+			"epoch", sigSecret.Secret.Epoch,
+		)
+		keyCopy, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, kmPeerID)
+		if err != nil {
+			return err
+		}
+		if keyCopy == nil {
+			return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
+		}
+		if *key != *keyCopy {
+			return fmt.Errorf("ephemeral keys should be the same")
+		}
 	}
 
 	// Test that all key managers derive the same keys.

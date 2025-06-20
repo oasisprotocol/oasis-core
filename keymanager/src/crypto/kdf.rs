@@ -10,12 +10,14 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use lru::LruCache;
 use sgx_isa::Keypolicy;
+use slog::{debug, error, info, warn, Logger};
 use sp800_185::{CShake, KMac};
 use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
         crypto::{mrae::nonce::Nonce, signature, x25519},
+        logger::{self, get_logger},
         namespace::Namespace,
         sgx::seal::new_deoxysii,
     },
@@ -383,23 +385,49 @@ impl Kdf {
         };
 
         // On startup replicate ephemeral secrets.
+        let logger = get_logger("xxxx");
+        info!(logger, "starting copying ephemeral secrets");
+
         if next_generation == 0 {
             let to = epoch + 1;
             let from = to.saturating_sub(EPHEMERAL_SECRET_CACHE_SIZE as u64);
 
+            info!(logger, "copying ephemeral secrets";
+                "to" => to,
+                "from" => from,
+            );
+
             for epoch in (from..=to).rev() {
+                info!(logger, "copying ephemeral secret";
+                    "epoch" => epoch,
+                );
+
                 let secret = match provider.ephemeral_secret_iter(epoch).next() {
                     Some(secret) => secret,
                     _ => {
                         if epoch == to {
+                            info!(logger, "break ephemeral secret";
+                                "epoch" => epoch,
+                            );
                             continue;
                         }
+                        info!(logger, "break ephemeral secret";
+                            "epoch" => epoch,
+                        );
                         break;
                     }
                 };
+                info!(logger, "found ephemeral secret";
+                    "epoch" => epoch,
+                );
+
                 let mut inner = self.inner.write().unwrap();
                 inner.verify_runtime_id(&runtime_id)?;
                 inner.add_ephemeral_secret(secret, epoch);
+
+                info!(logger, "stored ephemeral secret";
+                    "epoch" => epoch,
+                );
             }
         }
 
