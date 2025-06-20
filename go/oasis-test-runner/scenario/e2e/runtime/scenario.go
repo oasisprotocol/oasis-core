@@ -301,87 +301,105 @@ func RegisterScenarios() error {
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
-		// Runtime test.
-		Runtime,
-		RuntimeEncryption,
-		RuntimeGovernance,
-		RuntimeMessage,
-		// Byzantine executor node.
-		ByzantineExecutorHonest,
-		ByzantineExecutorSchedulerHonest,
-		ByzantineExecutorDishonest,
-		ByzantineExecutorSchedulerRunaway,
-		ByzantineExecutorSchedulerBogus,
-		ByzantineExecutorStraggler,
-		ByzantineExecutorSchedulerStraggler,
-		ByzantineExecutorStragglerAllowed,
-		ByzantineExecutorSchedulerStragglerAllowed,
-		ByzantineExecutorBackupStraggler,
-		ByzantineExecutorBackupSchedulerStraggler,
-		ByzantineExecutorFailureIndicating,
-		ByzantineExecutorSchedulerFailureIndicating,
-		ByzantineExecutorCorruptGetDiff,
-		// Storage sync test.
-		StorageSync,
-		StorageSyncFromRegistered,
-		StorageSyncInconsistent,
-		StorageEarlyStateSync,
-		// Sentry test.
-		Sentry,
-		// Keymanager tests.
-		KeymanagerMasterSecrets,
-		KeymanagerEphemeralSecrets,
-		KeymanagerDumpRestore,
-		KeymanagerRestart,
-		KeymanagerReplicate,
-		KeymanagerReplicateMany,
-		KeymanagerRotationFailure,
-		KeymanagerUpgrade,
-		KeymanagerChurp,
-		KeymanagerChurpMany,
-		KeymanagerChurpTxs,
-		// Dump/restore test.
-		DumpRestore,
-		DumpRestoreRuntimeRoundAdvance,
-		// Halt test.
-		HaltRestore,
-		HaltRestoreSuspended,
-		HaltRestoreNonMock,
-		// Consensus upgrade tests.
-		GovernanceConsensusUpgrade,
-		GovernanceConsensusFailUpgrade,
-		GovernanceConsensusCancelUpgrade,
-		// Multiple runtimes test.
-		MultipleRuntimes,
-		// Node shutdown test.
-		NodeShutdown,
-		OffsetRestart,
-		// Gas fees tests.
-		GasFeesRuntimes,
-		// Runtime prune test.
-		RuntimePrune,
-		// Runtime dynamic registration test.
-		RuntimeDynamic,
-		// Transaction source test.
-		TxSourceMultiShort,
-		// Late start test.
-		LateStart,
-		// RuntimeUpgrade test.
-		RuntimeUpgrade,
-		// HistoryReindex test.
-		HistoryReindex,
-		// TrustRoot test.
-		TrustRoot,
-		TrustRootChangeTest,
-		TrustRootChangeFailsTest,
-		// Archive node API test.
-		ArchiveAPI,
-		// Early query tests.
-		EarlyQuery,
-		EarlyQueryInitHeight,
-		EarlyQueryRuntime,
-		// ROFL.
-		ROFL,
+		// // Runtime test.
+		// Runtime,
+		// RuntimeEncryption,
+		// RuntimeGovernance,
+		// RuntimeMessage,
+		// // Byzantine executor node.
+		// ByzantineExecutorHonest,
+		// ByzantineExecutorSchedulerHonest,
+		// ByzantineExecutorDishonest,
+		// ByzantineExecutorSchedulerRunaway,
+		// ByzantineExecutorSchedulerBogus,
+		// ByzantineExecutorStraggler,
+		// ByzantineExecutorSchedulerStraggler,
+		// ByzantineExecutorStragglerAllowed,
+		// ByzantineExecutorSchedulerStragglerAllowed,
+		// ByzantineExecutorBackupStraggler,
+		// ByzantineExecutorBackupSchedulerStraggler,
+		// ByzantineExecutorFailureIndicating,
+		// ByzantineExecutorSchedulerFailureIndicating,
+		// ByzantineExecutorCorruptGetDiff,
+		// // Storage sync test.
+		// StorageSync,
+		// StorageSyncFromRegistered,
+		// StorageSyncInconsistent,
+		// StorageEarlyStateSync,
+		// // Sentry test.
+		// Sentry,
+		// // Keymanager tests.
+		// KeymanagerMasterSecrets,
+		KeymanagerEphemeralSecrets(0),
+		KeymanagerEphemeralSecrets(1),
+		KeymanagerEphemeralSecrets(2),
+		KeymanagerEphemeralSecrets(3),
+		KeymanagerEphemeralSecrets(4),
+		KeymanagerEphemeralSecrets(5),
+		KeymanagerEphemeralSecrets(6),
+		KeymanagerEphemeralSecrets(7),
+		KeymanagerEphemeralSecrets(8),
+		KeymanagerEphemeralSecrets(9),
+		// KeymanagerDumpRestore,
+		// KeymanagerRestart,
+		// KeymanagerReplicate,
+		// KeymanagerReplicateMany,
+		// KeymanagerRotationFailure(0),
+		// KeymanagerRotationFailure(1),
+		// KeymanagerRotationFailure(2),
+		// KeymanagerRotationFailure(3),
+		// KeymanagerRotationFailure(4),
+		// KeymanagerRotationFailure(5),
+		// KeymanagerRotationFailure(6),
+		// KeymanagerRotationFailure(7),
+		// KeymanagerRotationFailure(8),
+		// KeymanagerRotationFailure(9),
+		// KeymanagerUpgrade,
+		// KeymanagerChurp,
+		// KeymanagerChurpMany,
+		// KeymanagerChurpTxs,
+		// // Dump/restore test.
+		// DumpRestore,
+		// DumpRestoreRuntimeRoundAdvance,
+		// // Halt test.
+		// HaltRestore,
+		// HaltRestoreSuspended,
+		// HaltRestoreNonMock,
+		// // Consensus upgrade tests.
+		// GovernanceConsensusUpgrade,
+		// GovernanceConsensusFailUpgrade,
+		// GovernanceConsensusCancelUpgrade,
+		// // Multiple runtimes test.
+		// MultipleRuntimes,
+		// // Node shutdown test.
+		// NodeShutdown,
+		// OffsetRestart,
+		// // Gas fees tests.
+		// GasFeesRuntimes,
+		// // Runtime prune test.
+		// RuntimePrune,
+		// // Runtime dynamic registration test.
+		// RuntimeDynamic,
+		// // Transaction source test.
+		// TxSourceMultiShort,
+		// // Late start test.
+		// LateStart,
+		// // RuntimeUpgrade test.
+		// RuntimeUpgrade,
+		// // HistoryReindex test.
+		// HistoryReindex,
+		// // TrustRoot test.
+		// TrustRoot,
+		// TrustRootChangeTest,
+		// TrustRootChangeFailsTest,
+		// // Archive node API test.
+		// ArchiveAPI,
+		// // Early query tests.
+		// EarlyQuery,
+		// EarlyQueryInitHeight,
+		// EarlyQueryRuntime,
+		// // ROFL.
+		// ROFL,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

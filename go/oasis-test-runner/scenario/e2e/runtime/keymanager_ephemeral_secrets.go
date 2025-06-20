@@ -33,16 +33,16 @@ import (
 //   - Start all managers and test that ephemeral secrets can be replicated.
 //   - Run managers for few epochs and test that everything works.
 //   - Publish transactions that use ephemeral keys to encrypt/decrypt messages.
-var KeymanagerEphemeralSecrets scenario.Scenario = newKmEphemeralSecretsImpl()
+var KeymanagerEphemeralSecrets = newKmEphemeralSecretsImpl
 
 type kmEphemeralSecretsImpl struct {
 	Scenario
 }
 
-func newKmEphemeralSecretsImpl() scenario.Scenario {
+func newKmEphemeralSecretsImpl(id int) scenario.Scenario {
 	return &kmEphemeralSecretsImpl{
 		Scenario: *NewScenario(
-			"keymanager-ephemeral-secrets",
+			fmt.Sprintf("keymanager-ephemeral-secrets-%d", id),
 			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}

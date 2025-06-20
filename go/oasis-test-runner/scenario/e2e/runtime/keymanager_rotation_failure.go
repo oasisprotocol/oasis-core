@@ -26,15 +26,15 @@ import (
 //   - Stop the third key manager.
 //   - Verify that the next proposal is not accepted.
 //   - Repeat these steps N times.
-var KeymanagerRotationFailure scenario.Scenario = newKmRotationFailureImpl()
+var KeymanagerRotationFailure = newKmRotationFailureImpl
 
 type kmRotationFailureImpl struct {
 	Scenario
 }
 
-func newKmRotationFailureImpl() scenario.Scenario {
+func newKmRotationFailureImpl(id int) scenario.Scenario {
 	return &kmRotationFailureImpl{
-		Scenario: *NewScenario("keymanager-rotation-failure", nil),
+		Scenario: *NewScenario(fmt.Sprintf("keymanager-rotation-failure-%d", id), nil),
 	}
 }
 
