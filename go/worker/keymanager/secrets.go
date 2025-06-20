@@ -294,7 +294,24 @@ func (w *secretsWorker) GetStatus() *workerKm.SecretsStatus {
 }
 
 func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
-	w.logger.Info("starting master and ephemeral secrets worker")
+	w.logger.Info("xxxx starting master and ephemeral secrets worker")
+
+	// Don't block node registration.
+	// w.roleProvider.SetAvailable(func(_ *node.Node) error { return nil })
+	chann := make(chan struct{})
+
+	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
+		return nil
+	}, func(context.Context) error {
+		w.logger.Info("xxxx key manager registered")
+
+		close(chann)
+		return nil
+	})
+
+	w.logger.Info("xxxx waiting until we are registered")
+	<-chann
+	w.logger.Info("xxxx registered")
 
 	// Signal that the worker started.
 	w.mu.Lock()
@@ -364,9 +381,6 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.Runtime) {
 		return
 	}
 	defer blkSub.Close()
-
-	// Don't block node registration.
-	w.roleProvider.SetAvailable(func(_ *node.Node) error { return nil })
 
 	for run := true; run; {
 		select {
