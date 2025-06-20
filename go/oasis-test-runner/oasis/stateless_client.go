@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	clientIdentitySeedTemplate = "ekiden node client %d"
+	statelessClientIdentitySeedTemplate = "ekiden node stateless client %d"
 )
 
-// Client is an Oasis client node.
-type Client struct {
+// StatelessClient is an Oasis stateless client node.
+type StatelessClient struct {
 	*Node
 
 	consensusPort uint16
@@ -24,27 +24,18 @@ type Client struct {
 	runtimes           []int
 	runtimeConfig      map[int]map[string]any
 	runtimeProvisioner runtimeConfig.RuntimeProvisioner
-
-	batchSize uint16
 }
 
-// ClientCfg is the Oasis client node provisioning configuration.
-type ClientCfg struct {
+// StatelessClientCfg is the Oasis stateless client node provisioning configuration.
+type StatelessClientCfg struct {
 	NodeCfg
 
 	Runtimes           []int
 	RuntimeConfig      map[int]map[string]any
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
-
-	BatchSize uint16
 }
 
-// UpdateRuntimes updates the client node runtimes.
-func (client *Client) UpdateRuntimes(runtimes []int) {
-	client.runtimes = runtimes
-}
-
-func (client *Client) AddArgs(args *argBuilder) error {
+func (client *StatelessClient) AddArgs(args *argBuilder) error {
 	args.appendNetwork(client.net)
 
 	for _, idx := range client.runtimes {
@@ -56,7 +47,7 @@ func (client *Client) AddArgs(args *argBuilder) error {
 	return nil
 }
 
-func (client *Client) ModifyConfig() error {
+func (client *StatelessClient) ModifyConfig() error {
 	client.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(client.consensusPort))
 	client.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(client.consensusPort))
 
@@ -67,41 +58,39 @@ func (client *Client) ModifyConfig() error {
 
 	client.Config.P2P.Port = client.p2pPort
 
-	if len(client.runtimes) > 0 {
-		client.Config.Mode = config.ModeClient
-		client.Config.Runtime.Provisioner = client.runtimeProvisioner
-		client.Config.Runtime.Indexer.BatchSize = client.batchSize
-	}
+	client.Config.Mode = config.ModeStatelessClient
+	client.Config.Runtime.Provisioner = client.runtimeProvisioner
+	client.Config.Runtime.SGX.Loader = client.net.cfg.RuntimeSGXLoaderBinary
+	client.Config.Runtime.AttestInterval = client.net.cfg.RuntimeAttestInterval
 
 	client.AddSeedNodesToConfig()
 
 	return nil
 }
 
-// NewClient provisions a new client node and adds it to the network.
-func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
-	clientName := fmt.Sprintf("client-%d", len(net.clients))
+// NewStatelessClient provisions a new stateless client node and adds it to the network.
+func (net *Network) NewStatelessClient(cfg *StatelessClientCfg) (*StatelessClient, error) {
+	clientName := fmt.Sprintf("client-stateless-%d", len(net.statelessClients))
 	host, err := net.GetNamedNode(clientName, &cfg.NodeCfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Pre-provision the node identity so that we can identify the entity.
-	err = host.setProvisionedIdentity(fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))
+	err = host.setProvisionedIdentity(fmt.Sprintf(statelessClientIdentitySeedTemplate, len(net.statelessClients)))
 	if err != nil {
-		return nil, fmt.Errorf("oasis/client: failed to provision node identity: %w", err)
+		return nil, fmt.Errorf("oasis/client-stateless: failed to provision node identity: %w", err)
 	}
 
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 
-	client := &Client{
+	client := &StatelessClient{
 		Node:               host,
 		runtimes:           cfg.Runtimes,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
 		runtimeConfig:      cfg.RuntimeConfig,
-		batchSize:          cfg.BatchSize,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}
@@ -111,7 +100,7 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		_ = os.RemoveAll(bundle.ExplodedPath(client.dir.String()))
 	})
 
-	net.clients = append(net.clients, client)
+	net.statelessClients = append(net.statelessClients, client)
 	host.features = append(host.features, client)
 
 	return client, nil

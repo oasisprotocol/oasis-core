@@ -53,16 +53,17 @@ type Network struct { // nolint: maligned
 	baseDir *env.Dir
 	running bool
 
-	nodes          []*Node
-	entities       []*Entity
-	validators     []*Validator
-	runtimes       []*Runtime
-	keymanagers    []*Keymanager
-	computeWorkers []*Compute
-	sentries       []*Sentry
-	clients        []*Client
-	byzantine      []*Byzantine
-	seeds          []*Seed
+	nodes            []*Node
+	entities         []*Entity
+	validators       []*Validator
+	runtimes         []*Runtime
+	keymanagers      []*Keymanager
+	computeWorkers   []*Compute
+	sentries         []*Sentry
+	clients          []*Client
+	statelessClients []*StatelessClient
+	byzantine        []*Byzantine
+	seeds            []*Seed
 
 	keymanagerPolicies []*KeymanagerPolicy
 
@@ -236,6 +237,11 @@ func (net *Network) Sentries() []*Sentry {
 // Clients returns the client nodes associated with the network.
 func (net *Network) Clients() []*Client {
 	return net.clients
+}
+
+// StatelessClients returns the stateless client nodes associated with the network.
+func (net *Network) StatelessClients() []*StatelessClient {
+	return net.statelessClients
 }
 
 // Byzantine returns the byzantine nodes associated with the network.

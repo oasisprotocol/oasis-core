@@ -10,8 +10,8 @@ import (
 )
 
 // EncodeLightBlock creates a new consensus light bock from a CometBFT light block.
-func EncodeLightBlock(clb *cmttypes.LightBlock) (*consensus.LightBlock, error) {
-	plb, err := clb.ToProto()
+func EncodeLightBlock(lb *cmttypes.LightBlock) (*consensus.LightBlock, error) {
+	plb, err := lb.ToProto()
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert light block: %w", err)
 	}
@@ -21,7 +21,7 @@ func EncodeLightBlock(clb *cmttypes.LightBlock) (*consensus.LightBlock, error) {
 	}
 
 	return &consensus.LightBlock{
-		Height: clb.Height,
+		Height: lb.Height,
 		Meta:   meta,
 	}, nil
 }
