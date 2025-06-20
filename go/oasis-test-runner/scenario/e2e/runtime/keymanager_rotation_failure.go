@@ -82,14 +82,21 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 		return err
 	}
 
-	for i := 0; i < 2; i++ {
-		// Verify that master secret generation works with all key managers.
-		for j := 0; j < 2; j++ {
-			if err := sc.verifyMasterSecret(ctx, generation, 3); err != nil {
-				return err
-			}
-			generation++
+	for range 2 {
+		// Key managers that have been started should join the committee in
+		// the following epoch, unless consensus sync takes a lot of time.
+		// Due to uncertainty about the committee size, we skip validation
+		// of the next generation.
+		if _, err := sc.WaitMasterSecret(ctx, generation); err != nil {
+			return err
 		}
+		generation++
+
+		// Verify that master secret generation works with all key managers in the committee.
+		if err := sc.verifyMasterSecret(ctx, generation, 3); err != nil {
+			return err
+		}
+		generation++
 
 		// Give key managers enough time to apply the last proposal and register with the latests
 		// checksum. This process can take several blocks.
@@ -116,7 +123,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 
 		// Verify that master secret generation works with one key manager
 		// after registrations expire.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			if err := sc.verifyMasterSecret(ctx, generation, 1); err != nil {
 				return err
 			}
@@ -133,15 +140,6 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 		if err := sc.StartKeymanagers([]int{1, 2}); err != nil {
 			return err
 		}
-
-		// Key managers that have been started should join the committee in
-		// the following epoch, unless consensus sync takes a lot of time.
-		// Due to uncertainty about the committee size, we skip validation
-		// of the next generation.
-		if _, err := sc.WaitMasterSecret(ctx, generation); err != nil {
-			return err
-		}
-		generation++
 	}
 
 	return nil
