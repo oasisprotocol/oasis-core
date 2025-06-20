@@ -1,14 +1,15 @@
 package provisioner
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	iasAPI "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -34,6 +35,7 @@ func New(
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
 	consensus consensus.Service,
+	genesisDoc *genesisAPI.Document,
 ) (runtimeHost.Provisioner, error) {
 	// Initialize the IAS proxy client.
 	ias, err := ias.New(identity)
@@ -42,7 +44,7 @@ func New(
 	}
 
 	// Configure host environment information.
-	hostInfo, err := createHostInfo(consensus)
+	hostInfo, err := createHostInfo(genesisDoc)
 	if err != nil {
 		return nil, err
 	}
@@ -57,21 +59,11 @@ func New(
 	return createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs)
 }
 
-func createHostInfo(consensus consensus.Service) (*hostProtocol.HostInfo, error) {
-	cs, err := consensus.Core().GetStatus(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
-	}
-
-	chainCtx, err := consensus.Core().GetChainContext(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chain context: %w", err)
-	}
-
+func createHostInfo(genesisDoc *genesisAPI.Document) (*hostProtocol.HostInfo, error) {
 	return &hostProtocol.HostInfo{
-		ConsensusBackend:         cs.Backend,
-		ConsensusProtocolVersion: cs.Version,
-		ConsensusChainContext:    chainCtx,
+		ConsensusBackend:         genesisDoc.Consensus.Backend,
+		ConsensusProtocolVersion: version.ConsensusProtocol,
+		ConsensusChainContext:    genesisDoc.ChainContext(),
 	}, nil
 }
 
