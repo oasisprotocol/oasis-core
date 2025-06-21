@@ -194,8 +194,7 @@ func New(
 ) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
-	case config.ModeValidator, config.ModeSeed:
-		enabled = false
+	case config.ModeValidator, config.ModeSeed, config.ModeKeyManager:
 	case config.ModeArchive:
 		enabled = len(runtimeRegistry.Runtimes()) > 0
 	default:
