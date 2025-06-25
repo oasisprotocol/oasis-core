@@ -1068,7 +1068,7 @@ func (n *Node) worker() { // nolint: gocyclo
 				"awaiting_retry", syncing.awaitingRetry,
 			)
 
-			prev := hashCache[i-1] // Closures take refs, so they need new variables here.
+			prev := hashCache[i-1]
 			this := hashCache[i]
 			prevRoots := make([]storageApi.Root, len(prev.Roots))
 			copy(prevRoots, prev.Roots)
@@ -1090,12 +1090,10 @@ func (n *Node) worker() { // nolint: gocyclo
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
 					fetcherGroup.Add(1)
-					n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
-						return func() {
-							defer fetcherGroup.Done()
-							n.fetchDiff(round, prevRoot, thisRoot)
-						}
-					}(this.Round, prevRoots[i], this.Roots[i]))
+					n.fetchPool.Submit(func() {
+						defer fetcherGroup.Done()
+						n.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
+					})
 				}
 			}
 		}
@@ -1184,10 +1182,10 @@ mainLoop:
 		if len(*outOfOrderFinalizable) > 0 && cachedLastRound+1 == (*outOfOrderFinalizable)[0].GetRound() {
 			lastSummary := heap.Pop(outOfOrderFinalizable).(*blockSummary)
 			fetcherGroup.Add(1)
-			go func(lastSummary *blockSummary) {
+			go func() {
 				defer fetcherGroup.Done()
 				n.finalize(lastSummary)
-			}(lastSummary)
+			}()
 			continue
 		}
 
