@@ -67,21 +67,21 @@ type roundItem interface {
 	GetRound() uint64
 }
 
-// outOfOrderRoundQueue is a Round()-based min priority queue.
-type outOfOrderRoundQueue []roundItem
+// minRoundQueue is a Round()-based min priority queue.
+type minRoundQueue []roundItem
 
 // Sorting interface.
-func (q outOfOrderRoundQueue) Len() int           { return len(q) }
-func (q outOfOrderRoundQueue) Less(i, j int) bool { return q[i].GetRound() < q[j].GetRound() }
-func (q outOfOrderRoundQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
+func (q minRoundQueue) Len() int           { return len(q) }
+func (q minRoundQueue) Less(i, j int) bool { return q[i].GetRound() < q[j].GetRound() }
+func (q minRoundQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
 
 // Push appends x as the last element in the heap's array.
-func (q *outOfOrderRoundQueue) Push(x any) {
+func (q *minRoundQueue) Push(x any) {
 	*q = append(*q, x.(roundItem))
 }
 
 // Pop removes and returns the last element in the heap's array.
-func (q *outOfOrderRoundQueue) Pop() any {
+func (q *minRoundQueue) Pop() any {
 	old := *q
 	n := len(old)
 	x := old[n-1]
@@ -800,8 +800,6 @@ func (n *Node) worker() { // nolint: gocyclo
 		}
 	}
 
-	var fetcherGroup sync.WaitGroup
-
 	n.syncedLock.RLock()
 	cachedLastRound := n.syncedState.Round
 	n.syncedLock.RUnlock()
@@ -953,13 +951,7 @@ func (n *Node) worker() { // nolint: gocyclo
 		"last_synced", cachedLastRound,
 	)
 
-	outOfOrderDoneDiffs := &outOfOrderRoundQueue{}
-	outOfOrderFinalizable := &outOfOrderRoundQueue{}
-	syncingRounds := make(map[uint64]*inFlight)
-	hashCache := make(map[uint64]*blockSummary)
 	lastFullyAppliedRound := cachedLastRound
-
-	heap.Init(outOfOrderDoneDiffs)
 
 	// Try to perform initial sync from state and io checkpoints if either:
 	//
@@ -1040,6 +1032,9 @@ func (n *Node) worker() { // nolint: gocyclo
 	heartbeat := heartbeat{}
 	heartbeat.reset()
 
+	var wg sync.WaitGroup
+	syncingRounds := make(map[uint64]*inFlight)
+	summaryCache := make(map[uint64]*blockSummary)
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
 			syncing, ok := syncingRounds[i]
@@ -1068,8 +1063,8 @@ func (n *Node) worker() { // nolint: gocyclo
 				"awaiting_retry", syncing.awaitingRetry,
 			)
 
-			prev := hashCache[i-1]
-			this := hashCache[i]
+			prev := summaryCache[i-1]
+			this := summaryCache[i]
 			prevRoots := make([]storageApi.Root, len(prev.Roots))
 			copy(prevRoots, prev.Roots)
 			for i := range prevRoots {
@@ -1089,9 +1084,9 @@ func (n *Node) worker() { // nolint: gocyclo
 				rootType := prevRoots[i].Type
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
-					fetcherGroup.Add(1)
+					wg.Add(1)
 					n.fetchPool.Submit(func() {
-						defer fetcherGroup.Done()
+						defer wg.Done()
 						n.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
 					})
 				}
@@ -1103,13 +1098,16 @@ func (n *Node) worker() { // nolint: gocyclo
 	n.status = api.StatusSyncingRounds
 	n.statusLock.Unlock()
 
+	pendingApply := &minRoundQueue{}
+	pendingFinalize := &minRoundQueue{}
+
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
-	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are
+	// writelogs fetched from peers in case we don't have them locally yet. Fetches are
 	// asynchronous and, once complete, trigger local Apply operations. These are serialized
-	// per round (all applies for a given round have to be complete before applying anyting for following
-	// rounds) using the outOfOrderDoneDiffs priority queue and outOfOrderFinalizable. Once a round has all its write
+	// per round (all applies for a given round have to be complete before applying anything for following
+	// rounds) using the fetched diffs and pending finalization priority queue. Once a round has all its write
 	// logs applied, a Finalize for it is triggered, again serialized by round but otherwise asynchronous
-	// (outOfOrderFinalizable and cachedLastRound).
+	// (pendingFinalization and cachedLastRound).
 mainLoop:
 	for {
 		// Drain the Apply and Finalize queues first, before waiting for new events in the select
@@ -1118,8 +1116,8 @@ mainLoop:
 
 		// Apply any writelogs that came in through fetchDiff, but only if they are for the round
 		// after the last fully applied one (lastFullyAppliedRound).
-		if len(*outOfOrderDoneDiffs) > 0 && lastFullyAppliedRound+1 == (*outOfOrderDoneDiffs)[0].GetRound() {
-			lastDiff := heap.Pop(outOfOrderDoneDiffs).(*fetchedDiff)
+		if len(*pendingApply) > 0 && lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() {
+			lastDiff := heap.Pop(pendingApply).(*fetchedDiff)
 			// Apply the write log if one exists.
 			err = nil
 			if lastDiff.fetched {
@@ -1160,8 +1158,8 @@ mainLoop:
 			// We have fully synced the given round.
 			n.logger.Debug("finished syncing round", "round", lastDiff.round)
 			delete(syncingRounds, lastDiff.round)
-			summary := hashCache[lastDiff.round]
-			delete(hashCache, lastDiff.round-1)
+			summary := summaryCache[lastDiff.round]
+			delete(summaryCache, lastDiff.round-1)
 			lastFullyAppliedRound = lastDiff.round
 
 			storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
@@ -1169,7 +1167,7 @@ mainLoop:
 
 			// Finalize storage for this round. This happens asynchronously
 			// with respect to Apply operations for subsequent rounds.
-			heap.Push(outOfOrderFinalizable, summary)
+			heap.Push(pendingFinalize, summary)
 
 			continue
 		}
@@ -1179,11 +1177,11 @@ mainLoop:
 		// The finalization happens asynchronously with respect to this worker loop and any
 		// applies that happen for subsequent rounds (which can proceed while earlier rounds are
 		// still finalizing).
-		if len(*outOfOrderFinalizable) > 0 && cachedLastRound+1 == (*outOfOrderFinalizable)[0].GetRound() {
-			lastSummary := heap.Pop(outOfOrderFinalizable).(*blockSummary)
-			fetcherGroup.Add(1)
+		if len(*pendingFinalize) > 0 && cachedLastRound+1 == (*pendingFinalize)[0].GetRound() {
+			lastSummary := heap.Pop(pendingFinalize).(*blockSummary)
+			wg.Add(1)
 			go func() {
-				defer fetcherGroup.Done()
+				defer wg.Done()
 				n.finalize(lastSummary)
 			}()
 			continue
@@ -1202,7 +1200,7 @@ mainLoop:
 			latestBlockRound = blk.Header.Round
 			n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
-			if _, ok := hashCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
+			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
 					Round:     lastFullyAppliedRound + 1,
@@ -1219,7 +1217,7 @@ mainLoop:
 				}
 				dummy.Roots[0].Empty()
 				dummy.Roots[1].Empty()
-				hashCache[lastFullyAppliedRound] = &dummy
+				summaryCache[lastFullyAppliedRound] = &dummy
 			}
 			// Determine if we need to fetch any old block summaries. In case the first
 			// round is an undefined round, we need to start with the following round
@@ -1230,7 +1228,7 @@ mainLoop:
 				startSummaryRound++
 			}
 			for i := startSummaryRound; i < blk.Header.Round; i++ {
-				if _, ok := hashCache[i]; ok {
+				if _, ok := summaryCache[i]; ok {
 					continue
 				}
 				var oldBlock *block.Block
@@ -1243,10 +1241,10 @@ mainLoop:
 					)
 					panic("can't get block in storage worker")
 				}
-				hashCache[i] = summaryFromBlock(oldBlock)
+				summaryCache[i] = summaryFromBlock(oldBlock)
 			}
-			if _, ok := hashCache[blk.Header.Round]; !ok {
-				hashCache[blk.Header.Round] = summaryFromBlock(blk)
+			if _, ok := summaryCache[blk.Header.Round]; !ok {
+				summaryCache[blk.Header.Round] = summaryFromBlock(blk)
 			}
 
 			triggerRoundFetches()
@@ -1271,7 +1269,7 @@ mainLoop:
 				break
 			}
 
-			heap.Push(outOfOrderDoneDiffs, item)
+			heap.Push(pendingApply, item)
 			// Item was successfully processed, trigger more round fetches.
 			// This ensures that new rounds are processed as fast as possible
 			// when we're syncing and are far behind.
@@ -1310,7 +1308,7 @@ mainLoop:
 		}
 	}
 
-	fetcherGroup.Wait()
+	wg.Wait()
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
