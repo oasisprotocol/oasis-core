@@ -12,10 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
-// maxPendingVersions is the maximum number of allowed non-finalized versions. Increasing this too
-// much can result in the metadata growing too much.
-const maxPendingVersions = 5000
-
 // serializedMetadata is the on-disk serialized metadata.
 type serializedMetadata struct {
 	// Version is the database schema version.
@@ -123,7 +119,7 @@ func (m *metadata) reserveRootSeqNo(version uint64, rootType uint8) (uint16, err
 	m.Lock()
 	defer m.Unlock()
 
-	if len(m.value.NextPendingRootSeq) >= maxPendingVersions {
+	if len(m.value.NextPendingRootSeq) > api.MaxPendingVersions {
 		return math.MaxUint16, fmt.Errorf("mkvs/pathbadger: too many non-finalized versions")
 	}
 
@@ -146,7 +142,7 @@ func (m *metadata) setPendingRootSeqNo(version uint64, rootHash api.TypedHash, s
 	m.Lock()
 	defer m.Unlock()
 
-	if len(m.value.PendingRootSeqs) >= maxPendingVersions {
+	if len(m.value.PendingRootSeqs) > api.MaxPendingVersions {
 		return fmt.Errorf("mkvs/pathbadger: too many non-finalized versions")
 	}
 

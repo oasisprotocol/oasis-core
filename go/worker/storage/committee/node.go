@@ -26,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -1101,22 +1102,21 @@ func (n *Node) worker() { // nolint: gocyclo
 	pendingApply := &minRoundQueue{}
 	pendingFinalize := &minRoundQueue{}
 
-	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
-	// writelogs fetched from peers in case we don't have them locally yet. Fetches are
-	// asynchronous and, once complete, trigger local Apply operations. These are serialized
-	// per round (all applies for a given round have to be complete before applying anything for following
-	// rounds) using the fetched diffs and pending finalization priority queue. Once a round has all its write
-	// logs applied, a Finalize for it is triggered, again serialized by round but otherwise asynchronous
-	// (pendingFinalization and cachedLastRound).
+	// Main processing loop. When a new block arrives, its state and I/O roots are inspected.
+	// If missing locally, diffs are fetched from peers, possibly for many rounds in parallel,
+	// including all missing rounds since the last fully applied one. Fetched diffs are then applied
+	// in round order, ensuring no gaps. Once a round has all its roots applied, background finalization
+	// for that round is triggered asynchronously, not blocking concurrent fetching and diff application.
 mainLoop:
 	for {
-		// Drain the Apply and Finalize queues first, before waiting for new events in the select
-		// below. Applies are drained first, followed by finalizations (which are asynchronous
-		// but serialized, i.e. only one Finalize can be in progress at a time).
+		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
 
-		// Apply any writelogs that came in through fetchDiff, but only if they are for the round
-		// after the last fully applied one (lastFullyAppliedRound).
-		if len(*pendingApply) > 0 && lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() {
+		// Apply fetched writelogs, but only if they are for the round after the last fully applied one
+		// and current number of pending roots to be finalized is smaller than max allowed.
+		applyNext := pendingApply.Len() > 0 &&
+			lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() &&
+			pendingFinalize.Len() < dbApi.MaxPendingVersions-1 // -1 since one may be already finalizing.
+		if applyNext {
 			lastDiff := heap.Pop(pendingApply).(*fetchedDiff)
 			// Apply the write log if one exists.
 			err = nil
@@ -1172,15 +1172,13 @@ mainLoop:
 			continue
 		}
 
-		// Check if any new rounds were fully applied and need to be finalized. Only finalize
-		// if it's the round after the one that was finalized last (cachedLastRound).
-		// The finalization happens asynchronously with respect to this worker loop and any
-		// applies that happen for subsequent rounds (which can proceed while earlier rounds are
-		// still finalizing).
+		// Check if any new rounds were fully applied and need to be finalized.
+		// Only finalize if it's the round after the one that was finalized last.
+		// As a consequence at most one finalization can be happening at the time.
 		if len(*pendingFinalize) > 0 && cachedLastRound+1 == (*pendingFinalize)[0].GetRound() {
 			lastSummary := heap.Pop(pendingFinalize).(*blockSummary)
 			wg.Add(1)
-			go func() {
+			go func() { // Don't block fetching and applying remaining rounds.
 				defer wg.Done()
 				n.finalize(lastSummary)
 			}()
