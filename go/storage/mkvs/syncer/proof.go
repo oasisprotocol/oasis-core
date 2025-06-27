@@ -184,6 +184,13 @@ func (b *ProofBuilder) GetSubtreeRoot() hash.Hash {
 }
 
 // Size returns the current size of this proof.
+//
+// Warning: Size is only an approximation and can be misleading.
+//
+// E.g. for V0 proofs, if you add an internal node (with its leaf) and then later
+// add the same leaf node separately, the resulting proof is identical
+// to adding only the internal node with its leaf. However, in this case,
+// the leaf node will be counted twice in the size estimate.
 func (b *ProofBuilder) Size() uint64 {
 	return b.size
 }

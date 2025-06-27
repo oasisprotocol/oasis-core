@@ -63,6 +63,7 @@ type ApplicationConfig struct { // nolint: maligned
 
 	DisableCheckpointer       bool
 	CheckpointerCheckInterval time.Duration
+	ChunkerThreads            uint16
 
 	// Identity is the local node identity.
 	Identity *identity.Identity

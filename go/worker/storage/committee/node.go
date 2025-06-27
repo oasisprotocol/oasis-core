@@ -62,6 +62,12 @@ const (
 	// maxInFlightRounds is the maximum number of rounds that should be fetched before waiting
 	// for them to be applied.
 	maxInFlightRounds = 100
+
+	// chunkerThreads is target number of subtrees during parallel checkpoint creation.
+	// It is intentionally non-configurable since we want operators to produce
+	// same checkpoint hashes. The current value was chosen based on the benchmarks
+	// done on the modern developer machine.
+	chunkerThreads = 12
 )
 
 type roundItem interface {
@@ -227,11 +233,17 @@ func NewNode(
 				return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
 			}
 
+			var threads uint16
+			if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+				threads = chunkerThreads
+			}
+
 			return &checkpoint.CreationParameters{
 				Interval:       rt.Storage.CheckpointInterval,
 				NumKept:        rt.Storage.CheckpointNumKept,
 				ChunkSize:      rt.Storage.CheckpointChunkSize,
 				InitialVersion: blk.Header.Round,
+				ChunkerThreads: threads,
 			}, nil
 		},
 		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {

@@ -477,8 +477,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var computeWorkers []oasis.ComputeWorkerFixture
 	for i := 0; i < sc.numComputeNodes; i++ {
 		computeWorkers = append(computeWorkers, oasis.ComputeWorkerFixture{
-			Entity:   1,
-			Runtimes: []int{1},
+			Entity:                    1,
+			Runtimes:                  []int{1},
+			CheckpointParallelChunker: i%2 == 0, // use a mix of new and old checkpointing algorithm
 		})
 	}
 	f.ComputeWorkers = computeWorkers
