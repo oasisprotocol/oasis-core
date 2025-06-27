@@ -10,8 +10,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
-// ModuleName is the module name.
-const ModuleName = "storage/mkvs/db"
+const (
+	// ModuleName is the module name.
+	ModuleName = "storage/mkvs/db"
+
+	// MaxPendingVersions is the maximum number of allowed non-finalized versions.
+	// Increasing this too much can result in the metadata growing too much.
+	MaxPendingVersions = 5000
+)
 
 var (
 	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found
