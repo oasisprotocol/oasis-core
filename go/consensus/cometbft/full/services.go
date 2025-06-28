@@ -42,8 +42,10 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 		case <-ctx.Done():
 			return
 		case query := <-svd.Queries():
+			filter := NewEventFilter(svd.EventType(), query)
+			handler := newEventHandler(filter, evCh)
 			subscriber := newEventSubscriber(query, t.node.EventBus())
-			handler := newEventHandler(query, svd.EventType(), evCh)
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -73,16 +75,13 @@ type annotatedEvent struct {
 }
 
 type eventHandler struct {
-	query cmtpubsub.Query
-
-	evType string
+	filter *EventFilter
 	evCh   chan<- annotatedEvent
 }
 
-func newEventHandler(query cmtpubsub.Query, evType string, evCh chan<- annotatedEvent) *eventHandler {
+func newEventHandler(filter *EventFilter, evCh chan<- annotatedEvent) *eventHandler {
 	return &eventHandler{
-		query:  query,
-		evType: evType,
+		filter: filter,
 		evCh:   evCh,
 	}
 }
@@ -107,22 +106,9 @@ func (h *eventHandler) handleTxEvent(ctx context.Context, ev cmttypes.EventDataT
 }
 
 func (h *eventHandler) deliverEvents(ctx context.Context, height int64, tx cmttypes.Tx, events []cmtabcitypes.Event) {
-	for _, ev := range events {
-		// Skip all events not from the target service.
-		if ev.GetType() != h.evType {
-			continue
-		}
-		// Skip all events not matching the initial query. This is required as we get all
-		// events not only those matching the query so we need to do a separate pass.
-		tagMap := make(map[string][]string)
-		for _, attr := range ev.Attributes {
-			compositeTag := fmt.Sprintf("%s.%s", ev.Type, attr.Key)
-			tagMap[compositeTag] = append(tagMap[compositeTag], attr.Value)
-		}
-		if matches, _ := h.query.Matches(tagMap); !matches {
-			continue
-		}
-
+	// Skip all events not matching the initial query. This is required as we get all
+	// events not only those matching the query so we need to do a separate pass.
+	for _, ev := range h.filter.Apply(events) {
 		ev := annotatedEvent{
 			height: height,
 			tx:     tx,
@@ -134,6 +120,60 @@ func (h *eventHandler) deliverEvents(ctx context.Context, height int64, tx cmtty
 			return
 		}
 	}
+}
+
+// EventFilter filters events based on the event type and a list of queries.
+//
+// The filter is not safe for concurrent use.
+type EventFilter struct {
+	eventType string
+	queries   []cmtpubsub.Query
+}
+
+// NewEventFilter creates a new event filter.
+func NewEventFilter(eventType string, queries ...cmtpubsub.Query) *EventFilter {
+	return &EventFilter{
+		eventType: eventType,
+		queries:   queries,
+	}
+}
+
+// Apply filters and returns the subset of events that match the event type
+// and satisfy at least one of the provided queries.
+func (f *EventFilter) Apply(events []cmtabcitypes.Event) []cmtabcitypes.Event {
+	filtered := make([]cmtabcitypes.Event, 0, len(events))
+	for _, event := range events {
+		if f.Matches(event) {
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
+}
+
+// Matches checks if an event matches the specified type and any of the queries.
+func (f *EventFilter) Matches(event cmtabcitypes.Event) bool {
+	if event.GetType() != f.eventType {
+		return false
+	}
+
+	tagMap := make(map[string][]string)
+	for _, attr := range event.Attributes {
+		tag := fmt.Sprintf("%s.%s", event.Type, attr.Key)
+		tagMap[tag] = append(tagMap[tag], attr.Value)
+	}
+
+	for _, query := range f.queries {
+		if matched, _ := query.Matches(tagMap); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Add appends a new query to the list of queries.
+func (f *EventFilter) Add(query cmtpubsub.Query) {
+	f.queries = append(f.queries, query)
 }
 
 type eventSubscriber struct {

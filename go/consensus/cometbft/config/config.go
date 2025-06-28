@@ -51,6 +51,10 @@ type Config struct {
 	// LightClient contains light client configuration.
 	LightClient LightClientConfig `yaml:"light_client,omitempty"`
 
+	// Providers contains the CometBFT node addresses the stateless client
+	// connects to in order to fetch consensus-related data.
+	Providers []string `yaml:"providers,omitempty"`
+
 	// Supplementary sanity checks configuration.
 	SupplementarySanity SupplementarySanityConfig `yaml:"supplementary_sanity,omitempty"`
 
