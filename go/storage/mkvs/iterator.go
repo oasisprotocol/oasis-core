@@ -246,7 +246,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error { // nolint: gocyclo
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error {
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
@@ -260,73 +260,63 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 
 	switch n := nd.(type) {
 	case nil:
-		// Reached a nil node, there is nothing here.
 		return nil
 	case *node.InternalNode:
-		// Internal node.
-		bitLength := bitDepth + n.LabelBitLength
+		newBitDepth := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		tryNext := func(next *node.Pointer, nextKey node.Key, parentState visitState) (bool, error) {
+			if err := it.doNext(next, newBitDepth, newPath, nextKey, visitBefore); err != nil {
+				return false, err
+			}
+			if it.key != nil { // Key has been found.
+				it.pos = append(it.pos, pathAtom{state: parentState, ptr: ptr, bitDepth: bitDepth, path: path})
+				return true, nil
+			}
+			return false, nil
+		}
+
+		advanceKeyToRight := func(k node.Key) node.Key {
+			k, _ = k.Split(newBitDepth, k.BitLength())
+			return k.AppendBit(newBitDepth, true)
+		}
 
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
-		var takeFirst bool
-		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0 {
-			takeFirst = true
-		}
+		takeFirst := newBitDepth > 0 && key.BitLength() >= newBitDepth && key.Compare(newPath) < 0
+		keyNotLonger := key.BitLength() <= newBitDepth
 
-		// Does lookup key end here? Look into LeafNode.
-		if (state == visitBefore && (key.BitLength() <= bitLength || takeFirst)) || state == visitAt {
-			if state == visitBefore {
-				err := it.doNext(n.LeafNode, bitLength, path, key, visitBefore)
-				if err != nil {
+		switch state {
+		case visitBefore:
+			if keyNotLonger || takeFirst {
+				// Try leaf first, since it is lexicographically smallest.
+				if ok, err := tryNext(n.LeafNode, key, visitAt); ok || err != nil {
 					return err
 				}
-				if it.key != nil {
-					// Key has been found.
-					it.pos = append(it.pos, pathAtom{state: visitAt, ptr: ptr, bitDepth: bitDepth, path: path})
-					return nil
-				}
 			}
-			// Key has not been found, continue with search for next key.
-			if key.BitLength() <= bitLength {
-				key = key.AppendBit(bitLength, false)
+			fallthrough
+		case visitAt:
+			if keyNotLonger {
+				key = key.AppendBit(newBitDepth, false)
 			}
-		}
 
-		if state == visitBefore {
-			state = visitAt
-		}
-
-		// Continue recursively based on a bit value.
-		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
-			if state == visitAt {
-				err := it.doNext(n.Left, bitLength, newPath.AppendBit(bitLength, false), key, visitBefore)
-				if err != nil {
+			if !key.GetBit(newBitDepth) || takeFirst {
+				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
 					return err
 				}
-				if it.key != nil {
-					// Key has been found.
-					it.pos = append(it.pos, pathAtom{state: visitAtLeft, ptr: ptr, bitDepth: bitDepth, path: path})
-					return nil
-				}
+				key = advanceKeyToRight(key)
 			}
-			// Key has not been found, continue with search for next key.
-			key, _ = key.Split(bitLength, key.BitLength())
-			key = key.AppendBit(bitLength, true)
-		}
 
-		if state == visitAt || state == visitAtLeft {
-			err := it.doNext(n.Right, bitLength, newPath.AppendBit(bitLength, true), key, visitBefore)
-			if err != nil {
+			if ok, err := tryNext(n.Right, key, visitAfter); ok || err != nil {
 				return err
 			}
-			if it.key != nil {
-				// Key has been found.
-				it.pos = append(it.pos, pathAtom{state: visitAfter, ptr: ptr, bitDepth: bitDepth, path: path})
+		case visitAtLeft:
+			key = advanceKeyToRight(key)
+			if ok, err := tryNext(n.Right, key, visitAfter); ok || err != nil {
+				return err
 			}
 		}
 	case *node.LeafNode:
-		// Reached a leaf node.
 		if n.Key.Compare(key) >= 0 {
 			it.key = n.Key
 			it.value = n.Value
