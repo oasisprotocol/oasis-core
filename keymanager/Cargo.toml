@@ -10,6 +10,7 @@ secret-sharing = { path = "../secret-sharing" }
 cbor = { version = "0.5.1", package = "oasis-cbor" }
 
 # Third party.
+slog = "2.7.0"
 anyhow = "1.0"
 base64 = "0.22.1"
 futures = "0.3.31"

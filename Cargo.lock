@@ -2044,6 +2044,7 @@ dependencies = [
  "rustc-hex",
  "secret-sharing",
  "sgx-isa",
+ "slog",
  "sp800-185",
  "thiserror",
  "tiny-keccak 2.0.2",
