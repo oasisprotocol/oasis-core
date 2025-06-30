@@ -74,6 +74,6 @@ type LightClientStatus struct {
 	// OldestTime is the timestamp of the oldest block.
 	OldestTime time.Time `json:"oldest_time"`
 
-	// PeersIDs are the light client provider peer identifiers.
+	// PeerIDs are the light client provider peer identifiers.
 	PeerIDs []string `json:"peer_ids"`
 }

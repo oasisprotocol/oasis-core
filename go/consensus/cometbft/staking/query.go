@@ -27,7 +27,7 @@ type Query interface {
 	LastBlockFees(context.Context) (*quantity.Quantity, error)
 	// GovernanceDeposits returns the governance deposits balance.
 	GovernanceDeposits(context.Context) (*quantity.Quantity, error)
-	// Thresholds returns the currently configured threshold.
+	// Threshold returns the currently configured threshold.
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
 	// DebondingInterval returns the debonding interval.
 	DebondingInterval(context.Context) (beacon.EpochTime, error)

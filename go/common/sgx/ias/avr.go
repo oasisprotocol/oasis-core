@@ -85,7 +85,7 @@ type QuotePolicy struct {
 	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
 	AllowedQuoteStatuses []ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty" yaml:"allowed_quote_statuses,omitempty"`
 
-	// GIDBlackList is a list of blocked platform EPID group IDs.
+	// GIDBlacklist is a list of blocked platform EPID group IDs.
 	GIDBlacklist []uint32 `json:"gid_blacklist,omitempty" yaml:"gid_blacklist,omitempty"`
 
 	// MinTCBEvaluationDataNumber is the minimum acceptable TCB Evaluation Data number,
