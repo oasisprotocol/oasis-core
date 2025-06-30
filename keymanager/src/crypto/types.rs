@@ -90,7 +90,8 @@ pub struct KeyPair {
     /// State encryption key
     pub state_key: StateKey,
     /// Checksum of the key manager state.
-    pub checksum: Vec<u8>,
+    #[cbor(rename = "checksum", optional)]
+    pub _deprecated_checksum: Option<Vec<u8>>,
 }
 
 impl KeyPair {
@@ -103,31 +104,14 @@ impl KeyPair {
         let mut state_key = StateKey::default();
         rng.fill(&mut state_key.0);
 
-        KeyPair::new(pk, sk, state_key, vec![])
+        KeyPair::new(pk, sk, state_key)
     }
 
     /// Create a `KeyPair`.
-    pub fn new(
-        pk: x25519::PublicKey,
-        sk: x25519::PrivateKey,
-        state_key: StateKey,
-        checksum: Vec<u8>,
-    ) -> Self {
+    pub fn new(pk: x25519::PublicKey, sk: x25519::PrivateKey, state_key: StateKey) -> Self {
         Self {
             input_keypair: InputKeyPair { pk, sk },
             state_key,
-            checksum,
-        }
-    }
-
-    /// Create a `KeyPair` with only the public key.
-    pub fn from_public_key(pk: x25519::PublicKey, checksum: Vec<u8>) -> Self {
-        Self {
-            input_keypair: InputKeyPair {
-                pk,
-                ..Default::default()
-            },
-            checksum,
             ..Default::default()
         }
     }

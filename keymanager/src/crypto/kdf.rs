@@ -177,9 +177,7 @@ impl Inner {
     }
 
     // Derive ephemeral or long-term keys from the given secret.
-    fn derive_keys(&self, secret: Secret, xof_custom: &[u8]) -> Result<KeyPair> {
-        let checksum = self.get_checksum()?;
-
+    fn derive_keys(&self, secret: Secret, xof_custom: &[u8]) -> KeyPair {
         // Note: The `name` parameter for cSHAKE is reserved for use by NIST.
         let mut xof = CShake::new_cshake256(&[], xof_custom);
         xof.update(secret.as_ref());
@@ -196,7 +194,7 @@ impl Inner {
         k.zeroize();
         let pk = x25519::PublicKey::from(&sk);
 
-        Ok(KeyPair::new(pk, sk, state_key, checksum))
+        KeyPair::new(pk, sk, state_key)
     }
 
     /// Derive ephemeral secret from the key manager's ephemeral secret.
@@ -577,7 +575,7 @@ impl Kdf {
         // Generate keys.
         let secret = inner.derive_longterm_secret(&RUNTIME_KDF_CUSTOM, &id.0, id.1)?;
         // FIXME: Replace KDF custom with XOF custom when possible.
-        let keys = inner.derive_keys(secret, &RUNTIME_KDF_CUSTOM)?;
+        let keys = inner.derive_keys(secret, &RUNTIME_KDF_CUSTOM);
 
         // Insert into the cache.
         inner.longterm_keys.put(id, keys.clone());
@@ -608,7 +606,7 @@ impl Kdf {
 
         // Generate keys.
         let secret = inner.derive_ephemeral_secret(&EPHEMERAL_KDF_CUSTOM, &id.0, id.1)?;
-        let keys = inner.derive_keys(secret, &EPHEMERAL_XOF_CUSTOM)?;
+        let keys = inner.derive_keys(secret, &EPHEMERAL_XOF_CUSTOM);
 
         // Insert into the cache.
         inner.ephemeral_keys.put(id, keys.clone());
