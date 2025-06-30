@@ -30,8 +30,10 @@ use oasis_core_runtime::{
             beacon::ImmutableState as BeaconState,
             keymanager::{ImmutableState as KeyManagerState, Status},
             registry::ImmutableState as RegistryState,
+            ConsensusState,
         },
         verifier::Verifier,
+        HEIGHT_LATEST,
     },
     enclave_rpc::{
         dispatcher::{Handler, Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
@@ -517,7 +519,7 @@ impl Secrets {
 
     /// Fetch current epoch from the consensus layer.
     fn consensus_epoch(&self) -> Result<EpochTime> {
-        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
+        let consensus_state = self.latest_consensus_state()?;
         let beacon_state = BeaconState::new(&consensus_state);
         let consensus_epoch = beacon_state.epoch()?;
 
@@ -560,7 +562,7 @@ impl Secrets {
         &self,
         signed_secret: &SignedEncryptedMasterSecret,
     ) -> Result<EncryptedMasterSecret> {
-        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
+        let consensus_state = self.latest_consensus_state()?;
         let km_state = KeyManagerState::new(&consensus_state);
         let published_signed_secret = km_state
             .master_secret(signed_secret.secret.runtime_id)?
@@ -575,7 +577,7 @@ impl Secrets {
         &self,
         signed_secret: &SignedEncryptedEphemeralSecret,
     ) -> Result<EncryptedEphemeralSecret> {
-        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
+        let consensus_state = self.latest_consensus_state()?;
         let km_state = KeyManagerState::new(&consensus_state);
         let published_signed_secret = km_state
             .ephemeral_secret(signed_secret.secret.runtime_id)?
@@ -587,7 +589,7 @@ impl Secrets {
 
     /// Fetch the identities of the key manager nodes.
     fn key_manager_nodes(&self, id: Namespace) -> Result<Vec<signature::PublicKey>> {
-        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
+        let consensus_state = self.latest_consensus_state()?;
         let km_state = KeyManagerState::new(&consensus_state);
         let status = km_state
             .status(id)?
@@ -602,8 +604,7 @@ impl Secrets {
         id: Namespace,
     ) -> Result<HashMap<signature::PublicKey, x25519::PublicKey>> {
         let nodes = self.key_manager_nodes(id)?;
-
-        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
+        let consensus_state = self.latest_consensus_state()?;
         let registry_state = RegistryState::new(&consensus_state);
 
         let mut rek_map = HashMap::new();
@@ -649,6 +650,18 @@ impl Secrets {
             .collect();
 
         Ok(nodes)
+    }
+
+    fn latest_consensus_state(&self) -> Result<ConsensusState> {
+        let state = block_on(async {
+            // Always sync to the latest height to ensure we're up to date.
+            // This guarantees access to the most recent state root from
+            // the metadata transaction in the last block, which is needed
+            // for verification of ephemeral and master secrets.
+            self.consensus_verifier.sync(HEIGHT_LATEST).await?;
+            self.consensus_verifier.latest_state().await
+        })?;
+        Ok(state)
     }
 }
 
