@@ -394,7 +394,7 @@ impl KeyManagerClient for RemoteClient {
             .secure_call(
                 METHOD_GET_OR_CREATE_KEYS,
                 LongTermKeyRequest {
-                    height: Some(height),
+                    height,
                     runtime_id: self.runtime_id,
                     key_pair_id,
                     generation,
@@ -445,7 +445,7 @@ impl KeyManagerClient for RemoteClient {
             .insecure_call(
                 METHOD_GET_PUBLIC_KEY,
                 LongTermKeyRequest {
-                    height: Some(height),
+                    height,
                     runtime_id: self.runtime_id,
                     key_pair_id,
                     generation,
@@ -494,7 +494,7 @@ impl KeyManagerClient for RemoteClient {
             .secure_call(
                 METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
                 EphemeralKeyRequest {
-                    height: Some(height),
+                    height,
                     runtime_id: self.runtime_id,
                     key_pair_id,
                     epoch,
@@ -552,7 +552,7 @@ impl KeyManagerClient for RemoteClient {
             .insecure_call(
                 METHOD_GET_PUBLIC_EPHEMERAL_KEY,
                 EphemeralKeyRequest {
-                    height: Some(height),
+                    height,
                     runtime_id: self.runtime_id,
                     key_pair_id,
                     epoch,
@@ -588,10 +588,7 @@ impl KeyManagerClient for RemoteClient {
         self.rpc_client
             .secure_call(
                 METHOD_REPLICATE_MASTER_SECRET,
-                ReplicateMasterSecretRequest {
-                    height: Some(height),
-                    generation,
-                },
+                ReplicateMasterSecretRequest { height, generation },
                 nodes,
             )
             .await
@@ -618,10 +615,7 @@ impl KeyManagerClient for RemoteClient {
         self.rpc_client
             .secure_call(
                 METHOD_REPLICATE_EPHEMERAL_SECRET,
-                ReplicateEphemeralSecretRequest {
-                    height: Some(height),
-                    epoch,
-                },
+                ReplicateEphemeralSecretRequest { height, epoch },
                 nodes,
             )
             .await

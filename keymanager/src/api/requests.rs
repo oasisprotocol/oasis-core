@@ -75,7 +75,7 @@ impl SignedInitResponse {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateMasterSecretRequest {
     /// Latest trust root height.
-    pub height: Option<u64>,
+    pub height: u64,
     /// Generation.
     #[cbor(optional)]
     pub generation: u64,
@@ -95,7 +95,7 @@ pub struct ReplicateMasterSecretResponse {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateEphemeralSecretRequest {
     /// Latest trust root height.
-    pub height: Option<u64>,
+    pub height: u64,
     /// Epoch time.
     pub epoch: EpochTime,
 }
@@ -158,7 +158,7 @@ pub struct LoadEphemeralSecretRequest {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct LongTermKeyRequest {
     /// Latest trust root height.
-    pub height: Option<u64>,
+    pub height: u64,
     /// Runtime ID.
     pub runtime_id: Namespace,
     /// Key pair ID.
@@ -176,7 +176,7 @@ pub struct LongTermKeyRequest {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct EphemeralKeyRequest {
     /// Latest trust root height.
-    pub height: Option<u64>,
+    pub height: u64,
     /// Runtime ID.
     pub runtime_id: Namespace,
     /// Key pair ID.

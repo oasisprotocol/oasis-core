@@ -547,16 +547,10 @@ impl Secrets {
     ///
     /// Key manager should use this validation to detect whether the runtimes
     /// querying it have a fresh enough state.
-    fn validate_height_freshness(&self, height: Option<u64>) -> Result<()> {
-        // Outdated key manager clients will not send height in their requests.
-        // To ensure backwards compatibility we skip check in those cases.
-        // This should be removed in the future by making height mandatory.
-        if let Some(height) = height {
-            let latest_height = block_on(self.consensus_verifier.latest_height())?;
-            if latest_height > MAX_FRESH_HEIGHT_AGE && height < latest_height - MAX_FRESH_HEIGHT_AGE
-            {
-                return Err(KeyManagerError::HeightNotFresh.into());
-            }
+    fn validate_height_freshness(&self, height: u64) -> Result<()> {
+        let latest_height = block_on(self.consensus_verifier.latest_height())?;
+        if latest_height > MAX_FRESH_HEIGHT_AGE && height < latest_height - MAX_FRESH_HEIGHT_AGE {
+            return Err(KeyManagerError::HeightNotFresh.into());
         }
         Ok(())
     }
