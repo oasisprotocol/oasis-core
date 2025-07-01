@@ -135,32 +135,16 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 		return err
 	}
 
-	// Test that ephemeral key for the previous epoch is not available.
-	sc.Logger.Info("testing ephemeral keys - previous epoch",
-		"epoch", sigSecret.Secret.Epoch-1,
-	)
+	// Test which ephemeral keys are available.
+	sc.Logger.Info("testing availability of ephemeral keys")
 
-	key, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch-1, firstKmPeerID)
-	if err != nil {
-		return err
-	}
-	if key != nil {
-		return fmt.Errorf("ephemeral key for epoch %d should not be available", sigSecret.Secret.Epoch-1)
-	}
-
-	// Test that ephemeral key for the current epoch is available.
-	// When using CometBFT as a backend service we need to retry the query
-	// because the verifier is probably one block behind.
-	sc.Logger.Info("testing ephemeral keys - current epoch",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-
-	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
-	if err != nil {
-		return err
-	}
-	if key == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
+	for epoch, available := range map[beacon.EpochTime]bool{
+		sigSecret.Secret.Epoch - 1: false,
+		sigSecret.Secret.Epoch:     true,
+	} {
+		if _, err := sc.checkEphemeralKey(ctx, firstKmPeerID, epoch, available, rpcClient); err != nil {
+			return err
+		}
 	}
 
 	// Restart the first key manager.
@@ -169,15 +153,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 
 	// Test that ephemeral key for the last epoch is not available after restart.
-	sc.Logger.Info("testing ephemeral keys - restart",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
-	if err != nil {
+	if _, err := sc.checkEphemeralKey(ctx, firstKmPeerID, sigSecret.Secret.Epoch, false, rpcClient); err != nil {
 		return err
-	}
-	if key != nil {
-		return fmt.Errorf("ephemeral key for epoch %d should not be available", sigSecret.Secret.Epoch)
 	}
 
 	// Wait until the next ephemeral secret is published.
@@ -201,12 +178,9 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 
 	// Fetch public key which will be used to test replication.
-	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
+	key, err := sc.checkEphemeralKey(ctx, firstKmPeerID, sigSecret.Secret.Epoch, true, rpcClient)
 	if err != nil {
 		return err
-	}
-	if key == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
 	}
 
 	// Confirm that only one key manager is registered.
@@ -221,32 +195,16 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 
 	// Test if the last ephemeral secret was copied.
-	sc.Logger.Info("testing ephemeral keys - replication",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-	keyCopy, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, secondKmPeerID)
-	if err != nil {
-		return err
-	}
-	if keyCopy == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
-	}
-	if *key != *keyCopy {
-		return fmt.Errorf("ephemeral keys should be the same")
-	}
+	sc.Logger.Info("testing replication")
 
-	sc.Logger.Info("testing ephemeral keys - replication",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-	keyCopy, err = rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, thirdKmPeerID)
-	if err != nil {
-		return err
-	}
-	if keyCopy == nil {
-		return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
-	}
-	if *key != *keyCopy {
-		return fmt.Errorf("ephemeral keys should be the same")
+	for _, peerID := range []peer.ID{secondKmPeerID, thirdKmPeerID} {
+		keyCopy, err := sc.checkEphemeralKey(ctx, peerID, sigSecret.Secret.Epoch, true, rpcClient)
+		if err != nil {
+			return err
+		}
+		if *key != *keyCopy {
+			return fmt.Errorf("ephemeral keys should be the same")
+		}
 	}
 
 	// Test that all key managers derive the same keys.
@@ -258,8 +216,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 	defer epoSub.Close()
 
-	set := make(map[x25519.PublicKey]struct{})
-	for i := 1; i <= 3; i++ {
+	keys := make(map[x25519.PublicKey]struct{})
+	for i := range 3 {
 		epoch := <-epoCh
 
 		sc.Logger.Info("fetching ephemeral keys from all key managers",
@@ -267,18 +225,18 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 		)
 
 		for _, peerID := range []peer.ID{firstKmPeerID, secondKmPeerID, thirdKmPeerID} {
-			key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID)
+			key, err := sc.checkEphemeralKey(ctx, peerID, epoch, true, rpcClient)
 			if err != nil {
-				return fmt.Errorf("fetching ephemeral key should succeed, %w", err)
+				return err
 			}
-			if key == nil {
-				return fmt.Errorf("ephemeral key for epoch %d should be available", epoch)
-			}
-			set[*key] = struct{}{}
+			keys[*key] = struct{}{}
 		}
 
-		if len(set) != i {
+		if len(keys) > i+1 {
 			return fmt.Errorf("ephemeral keys should match")
+		}
+		if len(keys) < i+1 {
+			return fmt.Errorf("ephemeral keys should be unique for each epoch")
 		}
 	}
 
@@ -289,7 +247,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 	defer ephSub.Close()
 
-	for i := 1; i <= 3; i++ {
+	for range 3 {
 		sigSecret := <-ephCh
 
 		sc.Logger.Info("checking if published ephemeral secret contains enough ciphertexts",
@@ -509,4 +467,28 @@ func (sc *kmEphemeralSecretsImpl) checkNumberOfKeyManagers(ctx context.Context, 
 	}
 
 	return nil
+}
+
+func (sc *kmEphemeralSecretsImpl) checkEphemeralKey(ctx context.Context, peerID peer.ID, epoch beacon.EpochTime, available bool, rpcClient *keyManagerRPCClient) (*x25519.PublicKey, error) {
+	sc.Logger.Info("checking ephemeral key",
+		"peer", peerID,
+		"epoch", epoch,
+		"available", available,
+	)
+
+	// A retry is needed because the key manager may not be initialized yet,
+	// and the checksum used to sign the public key might not be available.
+	key, err := rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case available && key == nil:
+		return nil, fmt.Errorf("ephemeral key for epoch %d should be available", epoch)
+	case !available && key != nil:
+		return nil, fmt.Errorf("ephemeral key for epoch %d should not be available", epoch)
+	}
+
+	return key, nil
 }
