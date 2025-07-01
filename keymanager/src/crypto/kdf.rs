@@ -382,29 +382,10 @@ impl Kdf {
             (next_generation, curr_checksum)
         };
 
-        // On startup replicate ephemeral secrets.
-        if next_generation == 0 {
-            let to = epoch + 1;
-            let from = to.saturating_sub(EPHEMERAL_SECRET_CACHE_SIZE as u64);
-
-            for epoch in (from..=to).rev() {
-                let secret = match provider.ephemeral_secret_iter(epoch).next() {
-                    Some(secret) => secret,
-                    _ => {
-                        if epoch == to {
-                            continue;
-                        }
-                        break;
-                    }
-                };
-                let mut inner = self.inner.write().unwrap();
-                inner.verify_runtime_id(&runtime_id)?;
-                inner.add_ephemeral_secret(secret, epoch);
-            }
-        }
-
         // On startup load all master secrets.
-        if next_generation == 0 {
+        let startup = next_generation == 0;
+
+        if startup {
             loop {
                 let secret = match Self::load_master_secret(storage, &runtime_id, next_generation) {
                     Some(secret) => secret,
@@ -495,6 +476,27 @@ impl Kdf {
             let mut inner = self.inner.write().unwrap();
             inner.reset();
             return Err(KeyManagerError::StateCorrupted.into());
+        }
+
+        // On startup replicate ephemeral secrets.
+        if startup {
+            let to = epoch + 1;
+            let from = to.saturating_sub(EPHEMERAL_SECRET_CACHE_SIZE as u64);
+
+            for epoch in (from..=to).rev() {
+                let secret = match provider.ephemeral_secret_iter(epoch).next() {
+                    Some(secret) => secret,
+                    _ => {
+                        if epoch == to {
+                            continue;
+                        }
+                        break;
+                    }
+                };
+                let mut inner = self.inner.write().unwrap();
+                inner.verify_runtime_id(&runtime_id)?;
+                inner.add_ephemeral_secret(secret, epoch);
+            }
         }
 
         // Update internal state.
