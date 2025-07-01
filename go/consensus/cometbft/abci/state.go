@@ -775,6 +775,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 					NumKept:        params.StateCheckpointNumKept,
 					ChunkSize:      params.StateCheckpointChunkSize,
 					InitialVersion: cfg.InitialHeight,
+					ChunkerThreads: cfg.ChunkerThreads,
 				}, nil
 			},
 		}

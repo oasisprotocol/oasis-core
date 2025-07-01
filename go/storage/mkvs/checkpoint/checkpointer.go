@@ -65,6 +65,11 @@ type CreationParameters struct {
 
 	// InitialVersion is the initial version.
 	InitialVersion uint64
+
+	// ChunkerThreads specifies the target number of parallel subtree chunkers
+	// used during checkpoint creation. The actual number may vary at runtime.
+	// Setting it to 0, will use old sequential chunking algorithm.
+	ChunkerThreads uint16
 }
 
 // Checkpointer is a checkpointer.
@@ -162,7 +167,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 
 		// If there is an error, make sure to remove any created checkpoints.
 		for _, root := range roots {
-			_ = c.creator.DeleteCheckpoint(ctx, checkpointVersion, root)
+			_ = c.creator.DeleteCheckpoint(ctx, v1, root)
 		}
 	}()
 
@@ -177,7 +182,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 			"chunk_size", params.ChunkSize,
 		)
 
-		_, err = c.creator.CreateCheckpoint(ctx, root, params.ChunkSize)
+		_, err = c.creator.CreateCheckpoint(ctx, root, params.ChunkSize, params.ChunkerThreads)
 		if err != nil {
 			c.logger.Error("failed to create checkpoint",
 				"root", root,
@@ -192,7 +197,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, params *CreationParameters) error {
 	// Get a list of all current checkpoints.
 	cps, err := c.creator.GetCheckpoints(ctx, &GetCheckpointsRequest{
-		Version:   checkpointVersion,
+		Version:   v1,
 		Namespace: c.cfg.Namespace,
 	})
 	if err != nil {
@@ -266,7 +271,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 
 		for _, version := range cpVersions[:len(cpVersions)-int(params.NumKept)] {
 			for _, root := range cpsByVersion[version] {
-				if err = c.creator.DeleteCheckpoint(ctx, checkpointVersion, root); err != nil {
+				if err = c.creator.DeleteCheckpoint(ctx, v1, root); err != nil {
 					c.logger.Warn("failed to garbage collect checkpoint",
 						"root", root,
 						"err", err,

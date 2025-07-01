@@ -401,8 +401,9 @@ type ComputeWorkerFixture struct {
 
 	Sentries []int `json:"sentries,omitempty"`
 
-	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
-	CheckpointSyncEnabled   bool          `json:"checkpoint_sync_enabled,omitempty"`
+	CheckpointCheckInterval   time.Duration `json:"checkpoint_check_interval,omitempty"`
+	CheckpointSyncEnabled     bool          `json:"checkpoint_sync_enabled,omitempty"`
+	CheckpointParallelChunker bool          `json:"checkpoint_parallel_chunker,omitempty"`
 
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
@@ -434,10 +435,11 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		RuntimeProvisioner:      f.RuntimeProvisioner,
-		StorageBackend:          f.StorageBackend,
-		SentryIndices:           f.Sentries,
-		CheckpointCheckInterval: f.CheckpointCheckInterval,
+		RuntimeProvisioner:        f.RuntimeProvisioner,
+		StorageBackend:            f.StorageBackend,
+		SentryIndices:             f.Sentries,
+		CheckpointCheckInterval:   f.CheckpointCheckInterval,
+		CheckpointParallelChunker: f.CheckpointParallelChunker,
 		// The checkpoint syncing flag is intentionally flipped here.
 		// Syncing should normally be enabled, but normally disabled in tests.
 		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
