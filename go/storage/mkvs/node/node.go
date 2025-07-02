@@ -161,7 +161,7 @@ func (r *Root) EncodedHash() hash.Hash {
 
 // DBPointer contains NodeDB-specific internals to aid pointer resolution.
 type DBPointer interface {
-	// SetDitry marks the pointer as dirty.
+	// SetDirty marks the pointer as dirty.
 	SetDirty()
 
 	// Clone makes a copy of the pointer.

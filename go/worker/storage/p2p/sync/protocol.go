@@ -66,7 +66,7 @@ type GetCheckpointChunkRequest struct {
 	Digest  hash.Hash    `json:"digest"`
 }
 
-// GetCheckpointChunkResponse is a respose to a GetCheckpointChunk request.
+// GetCheckpointChunkResponse is a response to a GetCheckpointChunk request.
 type GetCheckpointChunkResponse struct {
 	Chunk []byte `json:"chunk,omitempty"`
 }

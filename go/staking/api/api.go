@@ -1205,7 +1205,7 @@ type Genesis struct {
 	// 1 token = 10**TokenValueExponent base units.
 	TokenValueExponent uint8 `json:"token_value_exponent"`
 
-	// TokenSupply is the network's total amount of stake in base units.
+	// TotalSupply is the network's total amount of stake in base units.
 	TotalSupply quantity.Quantity `json:"total_supply"`
 	// CommonPool is the network's common stake pool.
 	CommonPool quantity.Quantity `json:"common_pool"`

@@ -110,7 +110,7 @@ func (m *MethodDesc) FullName() string {
 	return m.full
 }
 
-// IsAccessControlled retruns if method is access controlled.
+// IsAccessControlled returns if method is access controlled.
 func (m *MethodDesc) IsAccessControlled(req any) (bool, error) {
 	if m.accessControl == nil {
 		return false, nil

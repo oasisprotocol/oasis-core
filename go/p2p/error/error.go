@@ -38,7 +38,7 @@ func IsRelayable(err error) bool {
 
 // ShouldRelay returns if true the message should be relayed despite the error.
 //
-// In adition to all non-permanent errors, errors that are explicitly marked as
+// In addition to all non-permanent errors, errors that are explicitly marked as
 // relayable should be relayed.
 func ShouldRelay(err error) bool {
 	return !IsPermanent(err) || IsRelayable(err)
