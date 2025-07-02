@@ -13,7 +13,7 @@ import (
 var TokenValueAllowedSigns = []string{"+", "-"}
 
 // ConvertToTokenAmount returns the given amount in base units to the
-// corresponding token amount accourding to the given token's value base-10
+// corresponding token amount according to the given token's value base-10
 // exponent.
 func ConvertToTokenAmount(amount quantity.Quantity, tokenValueExponent uint8) (string, error) {
 	if tokenValueExponent > TokenValueExponentMaxValue {

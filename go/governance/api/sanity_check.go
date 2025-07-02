@@ -52,7 +52,7 @@ func SanityCheckProposals(proposals []*Proposal, epoch beacon.EpochTime, governa
 	activeProposalDeposits := quantity.NewFromUint64(0)
 	for _, p := range proposals {
 		if p.CreatedAt > epoch {
-			return fmt.Errorf("proposal %v: with crated epoch in the future", p.ID)
+			return fmt.Errorf("proposal %v: with created epoch in the future", p.ID)
 		}
 		if !p.Submitter.IsValid() {
 			return fmt.Errorf("proposal %v: invalid proposal submitter", p.ID)

@@ -119,7 +119,7 @@ func RegisterService(server *grpc.Server, service PingServer) {
 	server.RegisterService(&ServiceDesc, service)
 }
 
-// NewPingServer retruns a new Ping server.
+// NewPingServer returns a new Ping server.
 func NewPingServer(authFunc func(ctx context.Context, req any) error) PingServer {
 	ps := &pingServer{authFunc}
 	return ps

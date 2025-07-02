@@ -32,7 +32,7 @@ type VRFParameters struct {
 	// Interval is the epoch interval (in blocks).
 	Interval int64 `json:"interval,omitempty"`
 
-	// ProofSubmissionDelay is the wait peroid in blocks after an epoch
+	// ProofSubmissionDelay is the wait period in blocks after an epoch
 	// transition that nodes MUST wait before attempting to submit a
 	// VRF proof for the next epoch's elections.
 	ProofSubmissionDelay int64 `json:"proof_delay,omitempty"`
