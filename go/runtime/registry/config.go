@@ -72,7 +72,7 @@ func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 		if len(runtimes) > 0 && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("no runtimes should be configured when in validator or seed modes")
 		}
-	case config.ModeCompute, config.ModeKeyManager, config.ModeStatelessClient:
+	case config.ModeCompute, config.ModeKeyManager:
 		// At least one runtime should be configured.
 		if len(runtimes) == 0 && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, or client-stateless modes")
