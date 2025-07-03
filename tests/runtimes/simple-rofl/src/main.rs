@@ -144,6 +144,16 @@ impl App {
 
 #[async_trait]
 impl app::App for App {
+    fn get_config(&self) -> app::Config {
+        // Register for block and event notifications.
+        app::Config {
+            notifications: app::Notifications {
+                blocks: true,
+                events: vec![b"kv_insertion.rofl_http".to_vec()],
+            },
+        }
+    }
+
     fn on_init(&mut self, host: Arc<dyn host::Host>) -> Result<()> {
         let version = self.version;
         let notify = self.notify.clone();
