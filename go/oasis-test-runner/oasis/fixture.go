@@ -30,6 +30,7 @@ type NetworkFixture struct {
 	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
 	Sentries           []SentryFixture           `json:"sentries,omitempty"`
 	Clients            []ClientFixture           `json:"clients,omitempty"`
+	StatelessClients   []StatelessClientFixture  `json:"stateless_clients,omitempty"`
 	Seeds              []SeedFixture             `json:"seeds,omitempty"`
 	ByzantineNodes     []ByzantineFixture        `json:"byzantine_nodes,omitempty"`
 }
@@ -108,6 +109,13 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision the client nodes.
 	for _, fx := range f.Clients {
+		if _, err = fx.Create(net); err != nil {
+			return nil, err
+		}
+	}
+
+	// Provision the stateless client nodes.
+	for _, fx := range f.StatelessClients {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -435,7 +443,6 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		RuntimeProvisioner:        f.RuntimeProvisioner,
 		StorageBackend:            f.StorageBackend,
 		SentryIndices:             f.Sentries,
 		CheckpointCheckInterval:   f.CheckpointCheckInterval,
@@ -446,6 +453,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		DisablePublicRPC:       f.DisablePublicRPC,
 		Runtimes:               f.Runtimes,
 		RuntimeConfig:          f.RuntimeConfig,
+		RuntimeProvisioner:     f.RuntimeProvisioner,
 		RuntimeStatePaths:      f.RuntimeStatePaths,
 	})
 }
@@ -542,6 +550,43 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		RuntimeConfig:      f.RuntimeConfig,
 		BatchSize:          f.BatchSize,
+	})
+}
+
+// StatelessClientFixture is a stateless client node fixture.
+type StatelessClientFixture struct {
+	NodeFixture
+
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
+
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+	AllowErrorTermination bool `json:"allow_error_termination"`
+
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
+
+	// Runtimes contains the indexes of the runtimes to enable.
+	Runtimes []int `json:"runtimes,omitempty"`
+
+	// RuntimeConfig contains the per-runtime node-local configuration.
+	RuntimeConfig map[int]map[string]any `json:"runtime_config,omitempty"`
+}
+
+// Create instantiates the compute worker described by the fixture.
+func (f *StatelessClientFixture) Create(net *Network) (*StatelessClient, error) {
+	return net.NewStatelessClient(&StatelessClientCfg{
+		NodeCfg: NodeCfg{
+			Name:                        f.Name,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			NoAutoStart:                 f.NoAutoStart,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			Consensus:                   f.Consensus,
+			ExtraArgs:                   f.ExtraArgs,
+		},
+		Runtimes:           f.Runtimes,
+		RuntimeProvisioner: f.RuntimeProvisioner,
+		RuntimeConfig:      f.RuntimeConfig,
 	})
 }
 

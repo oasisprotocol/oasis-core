@@ -193,7 +193,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	var err error
 
 	// Initialize runtime provisioner.
-	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus)
+	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc)
 	if err != nil {
 		return err
 	}

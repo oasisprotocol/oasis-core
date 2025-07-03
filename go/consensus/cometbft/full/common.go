@@ -2,13 +2,12 @@ package full
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
 	dbm "github.com/cometbft/cometbft-db"
-	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtcore "github.com/cometbft/cometbft/rpc/core"
 	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
@@ -17,7 +16,6 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -45,6 +43,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	tmconsensus "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/consensus"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto/merkle"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/governance"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager"
@@ -588,7 +587,7 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 		return nil, consensusAPI.ErrNoCommittedBlocks
 	}
 
-	return api.NewBlock(blk), nil
+	return api.NewBlock(blk)
 }
 
 // Implements consensusAPI.Backend.
@@ -700,55 +699,9 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		return nil, err
 	}
 
-	txResults := make([]*results.Result, 0, len(txs))
-	for idx, rs := range blockResults.TxsResults {
-		// Transaction result.
-		result := &results.Result{
-			Error: results.Error{
-				Module:  rs.GetCodespace(),
-				Code:    rs.GetCode(),
-				Message: rs.GetLog(),
-			},
-			GasUsed: uint64(rs.GetGasUsed()),
-		}
-
-		// Transaction staking events.
-		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range stakingEvents {
-			result.Events = append(result.Events, &results.Event{Staking: e})
-		}
-
-		// Transaction registry events.
-		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range registryEvents {
-			result.Events = append(result.Events, &results.Event{Registry: e})
-		}
-
-		// Transaction roothash events.
-		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range roothashEvents {
-			result.Events = append(result.Events, &results.Event{RootHash: e})
-		}
-
-		// Transaction governance events.
-		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], tmHeight, rs.Events)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range governanceEvents {
-			result.Events = append(result.Events, &results.Event{Governance: e})
-		}
-
-		txResults = append(txResults, result)
+	txResults, err := TransactionResultsFromCometBFT(height, txs, blockResults.TxsResults)
+	if err != nil {
+		return nil, err
 	}
 
 	return &consensusAPI.TransactionsWithResults{
@@ -764,22 +717,11 @@ func (n *commonNode) GetTransactionsWithProofs(ctx context.Context, height int64
 		return nil, err
 	}
 
-	// CometBFT Merkle tree is computed over hashes and not over transactions.
-	hashes := make([][]byte, 0, len(txs))
-	for _, tx := range txs {
-		hash := sha256.Sum256(tx)
-		hashes = append(hashes, hash[:])
-	}
-
-	_, proofs := cmtmerkle.ProofsFromByteSlices(hashes)
-	rawProofs := make([][]byte, 0, len(proofs))
-	for _, p := range proofs {
-		rawProofs = append(rawProofs, cbor.Marshal(p))
-	}
+	_, proofs := merkle.ProofsForTransactions(txs)
 
 	return &consensusAPI.TransactionsWithProofs{
 		Transactions: txs,
-		Proofs:       rawProofs,
+		Proofs:       proofs,
 	}, nil
 }
 
@@ -968,4 +910,62 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 		dbCloser:              db.NewCloser(),
 		startedCh:             make(chan struct{}),
 	}
+}
+
+// TransactionResultsFromCometBFT converts CometBFT transactions and responses
+// into transaction results.
+func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmtabcitypes.ResponseDeliverTx) ([]*results.Result, error) {
+	txResults := make([]*results.Result, 0, len(txs))
+
+	for idx, rs := range responses {
+		// Transaction result.
+		result := &results.Result{
+			Error: results.Error{
+				Module:  rs.GetCodespace(),
+				Code:    rs.GetCode(),
+				Message: rs.GetLog(),
+			},
+			GasUsed: uint64(rs.GetGasUsed()),
+		}
+
+		// Transaction staking events.
+		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range stakingEvents {
+			result.Events = append(result.Events, &results.Event{Staking: e})
+		}
+
+		// Transaction registry events.
+		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range registryEvents {
+			result.Events = append(result.Events, &results.Event{Registry: e})
+		}
+
+		// Transaction roothash events.
+		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range roothashEvents {
+			result.Events = append(result.Events, &results.Event{RootHash: e})
+		}
+
+		// Transaction governance events.
+		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], height, rs.Events)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range governanceEvents {
+			result.Events = append(result.Events, &results.Event{Governance: e})
+		}
+
+		txResults = append(txResults, result)
+	}
+
+	return txResults, nil
 }
