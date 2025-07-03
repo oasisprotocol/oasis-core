@@ -308,13 +308,6 @@ pub enum Body {
         batch_order: u32,
         proof: Option<sync::Proof>,
     },
-    HostRegisterNotifyRequest {
-        #[cbor(optional)]
-        runtime_block: bool,
-        #[cbor(optional)]
-        runtime_event: Option<RegisterNotifyRuntimeEvent>,
-    },
-    HostRegisterNotifyResponse {},
 }
 
 impl Default for Body {

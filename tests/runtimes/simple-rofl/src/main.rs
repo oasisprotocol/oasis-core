@@ -162,14 +162,6 @@ impl app::App for App {
             // Update the version of the ROFL component.
             let _ = Self::update_version(version, &host).await;
 
-            // Register for block notifications.
-            let _ = host
-                .register_notify(host::RegisterNotifyOpts {
-                    runtime_block: true,
-                    runtime_event: vec![b"kv_insertion.rofl_http".to_vec()],
-                })
-                .await;
-
             // Avoid a queue if we are slow to process things. Just make sure to publish stuff on a
             // best effort basis.
             loop {

@@ -52,15 +52,6 @@ pub struct TxResult {
     pub proof: Option<sync::Proof>,
 }
 
-/// Notification registration options.
-#[derive(Clone, Default, Debug)]
-pub struct RegisterNotifyOpts {
-    /// Subscribe to runtime block notifications.
-    pub runtime_block: bool,
-    /// Subscribe to runtime event notifications.
-    pub runtime_event: Vec<Vec<u8>>,
-}
-
 /// Interface to the (untrusted) host node.
 #[async_trait]
 pub trait Host: Send + Sync {
@@ -70,9 +61,6 @@ pub trait Host: Send + Sync {
     /// Submit a transaction.
     async fn submit_tx(&self, data: Vec<u8>, opts: SubmitTxOpts)
         -> Result<Option<TxResult>, Error>;
-
-    /// Register for receiving notifications.
-    async fn register_notify(&self, opts: RegisterNotifyOpts) -> Result<(), Error>;
 
     /// Bundle manager interface.
     fn bundle_manager(&self) -> &dyn bundle_manager::BundleManager;
@@ -128,22 +116,6 @@ impl Host for Protocol {
                     Ok(None)
                 }
             }
-            _ => Err(Error::BadResponse),
-        }
-    }
-
-    async fn register_notify(&self, opts: RegisterNotifyOpts) -> Result<(), Error> {
-        match self
-            .call_host_async(Body::HostRegisterNotifyRequest {
-                runtime_block: opts.runtime_block,
-                runtime_event: match opts.runtime_event {
-                    tags if tags.is_empty() => None,
-                    tags => Some(types::RegisterNotifyRuntimeEvent { tags }),
-                },
-            })
-            .await?
-        {
-            Body::Empty {} => Ok(()),
             _ => Err(Error::BadResponse),
         }
     }
