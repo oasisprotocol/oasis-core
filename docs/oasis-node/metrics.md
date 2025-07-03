@@ -13,12 +13,16 @@ reporting:
 
 ## Configuring `oasis-node` in Pull Mode
 
-To run `oasis-node` in *pull mode* set flag `--metrics.mode pull` and provide
-the listen address with `--metrics.address`. For example
+To run `oasis-node` in *pull mode* with Prometheus metrics enabled, add the
+following to your `config.yml`.
 
 ```
-oasis-node --metrics.mode pull --metrics.address localhost:3000
+metrics:
+  mode: pull
+  address: 0.0.0.0:3000
 ```
+
+After restarting the node, Prometheus metrics will be exposed on port 3000.
 
 Then, add the following segment to your `prometheus.yml` and restart
 Prometheus:
