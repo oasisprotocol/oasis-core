@@ -45,7 +45,7 @@ func New(
 		}
 		return node, nil
 	case config.ModeStatelessClient:
-		node, err := createStatelessNode(ctx, genesis, doc, genesisDoc, p2p)
+		node, err := createStatelessNode(ctx, identity, genesis, doc, genesisDoc, p2p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stateless node: %w", err)
 		}
@@ -97,12 +97,13 @@ func createFullNode(
 
 func createStatelessNode(
 	ctx context.Context,
+	identity *identity.Identity,
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
 	genesisDoc *cmttypes.GenesisDoc,
 	p2p p2pAPI.Service,
 ) (consensusAPI.Service, error) {
-	provider, err := createProvider()
+	provider, err := createProvider(identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create provider: %w", err)
 	}
@@ -145,13 +146,13 @@ func createStatelessServices(
 	return stateless.NewServices(provider, lightClient, cfg)
 }
 
-func createProvider() (*consensusAPI.Client, error) {
+func createProvider(identity *identity.Identity) (*consensusAPI.Client, error) {
 	addresses := config.GlobalConfig.Consensus.Providers
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("no providers configured")
 	}
 
-	return stateless.NewProvider(addresses[0])
+	return stateless.NewProvider(addresses[0], identity.TLSCertificate)
 }
 
 func createLightClient(
