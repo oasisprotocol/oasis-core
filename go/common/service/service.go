@@ -7,6 +7,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
+// Service is a blocking service.
+type Service interface {
+	// Serve runs the service and blocks until it completes, an error occurs,
+	// or the context is canceled.
+	Serve(ctx context.Context) error
+}
+
+// NamedService is a blocking service with an associated name.
+type NamedService interface {
+	Service
+
+	// Name returns the name of the service.
+	Name() string
+}
+
 // CleanupAble provides a Cleanup method.
 type CleanupAble interface {
 	// Cleanup performs the service specific post-termination cleanup.
