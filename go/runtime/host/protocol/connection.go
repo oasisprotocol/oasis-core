@@ -46,18 +46,6 @@ type Notifier interface {
 	Stop()
 }
 
-// NoOpNotifier is the default no-op runtime notifier implementation.
-type NoOpNotifier struct{}
-
-// Start the no-op notifier.
-func (n *NoOpNotifier) Start() error {
-	return nil
-}
-
-// Stop the no-op notifier.
-func (n *NoOpNotifier) Stop() {
-}
-
 // Connection is a Runtime Host Protocol connection interface.
 type Connection interface {
 	// Close closes the connection.
