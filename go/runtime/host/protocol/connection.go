@@ -37,15 +37,6 @@ type Handler interface {
 	Handle(ctx context.Context, body *Body) (*Body, error)
 }
 
-// Notifier is a protocol runtime notifier interface.
-type Notifier interface {
-	// Start the notifier.
-	Start()
-
-	// Stop the notifier.
-	Stop()
-}
-
 // Connection is a Runtime Host Protocol connection interface.
 type Connection interface {
 	// Close closes the connection.

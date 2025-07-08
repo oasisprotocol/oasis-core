@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -87,7 +88,12 @@ func New(
 	}
 
 	// Prepare the runtime host notifier.
-	w.notifier = runtimeRegistry.NewRuntimeHostNotifier(w.runtime, w.RuntimeHostNode.GetHostedRuntime(), commonWorker.Consensus)
+	host := w.GetHostedRuntime()
+	notifier := runtimeRegistry.NewRuntimeHostNotifier(host)
+	lbNotifier := runtimeRegistry.NewLightBlockNotifier(w.runtime, host, commonWorker.Consensus, notifier)
+
+	// Prepare services to run.
+	w.services = service.NewGroup(notifier, lbNotifier)
 
 	// Prepare watchers.
 	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
