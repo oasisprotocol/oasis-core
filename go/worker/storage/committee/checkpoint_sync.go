@@ -13,7 +13,7 @@ import (
 
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
 )
 
 const (
@@ -55,7 +55,7 @@ type chunk struct {
 	*checkpoint.ChunkMetadata
 
 	// checkpoint points to the checkpoint this chunk originated from.
-	checkpoint *storageSync.Checkpoint
+	checkpoint *checkpointsync.Checkpoint
 }
 
 type chunkHeap struct {
@@ -101,7 +101,7 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &storageSync.GetCheckpointChunkRequest{
+		rsp, pf, err := n.checkpointSync.GetCheckpointChunk(chunkCtx, &checkpointsync.GetCheckpointChunkRequest{
 			Version: chunk.Version,
 			Root:    chunk.Root,
 			Index:   chunk.Index,
@@ -157,7 +157,7 @@ func (n *Node) checkpointChunkFetcher(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
 	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
@@ -276,11 +276,11 @@ func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelReques
 	}
 }
 
-func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
+func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	list, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
+	list, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
 		Version: 1,
 	})
 	if err != nil {
@@ -297,8 +297,8 @@ func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 }
 
 // sortCheckpoints sorts the slice in-place (descending by version, peers, hash).
-func sortCheckpoints(s []*storageSync.Checkpoint) {
-	slices.SortFunc(s, func(a, b *storageSync.Checkpoint) int {
+func sortCheckpoints(s []*checkpointsync.Checkpoint) {
+	slices.SortFunc(s, func(a, b *checkpointsync.Checkpoint) int {
 		return cmp.Or(
 			cmp.Compare(b.Root.Version, a.Root.Version),
 			cmp.Compare(len(b.Peers), len(a.Peers)),
@@ -307,7 +307,7 @@ func sortCheckpoints(s []*storageSync.Checkpoint) {
 	})
 }
 
-func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
+func (n *Node) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
 	namespace := n.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
@@ -357,7 +357,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 
 	// If we only want the genesis checkpoint, filter it out.
 	if wantOnlyGenesis && len(cps) > 0 {
-		var filteredCps []*storageSync.Checkpoint
+		var filteredCps []*checkpointsync.Checkpoint
 		for _, cp := range cps {
 			if cp.Root.Version == genesisRound {
 				filteredCps = append(filteredCps, cp)
