@@ -269,8 +269,8 @@ type Client interface {
 }
 
 type client struct {
-	host       core.Host
-	protocolID protocol.ID
+	host        core.Host
+	protocolIDs []protocol.ID
 
 	listeners struct {
 		sync.RWMutex
@@ -486,7 +486,7 @@ func (c *client) call(
 	stream, err := c.host.NewStream(
 		ctx,
 		peerID,
-		c.protocolID,
+		c.protocolIDs...,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to open stream: %w", err)
@@ -612,15 +612,15 @@ func retryFn(ctx context.Context, fn func() error, maxRetries uint64, retryInter
 }
 
 // NewClient creates a new RPC client for the given protocol.
-func NewClient(h host.Host, p protocol.ID) Client {
+func NewClient(h host.Host, p protocol.ID, fallback ...protocol.ID) Client {
 	if h == nil {
 		// No P2P service, use the no-op client.
 		return &nopClient{}
 	}
 
 	return &client{
-		host:       h,
-		protocolID: p,
+		host:        h,
+		protocolIDs: append([]protocol.ID{p}, fallback...),
 		listeners: struct {
 			sync.RWMutex
 			m map[ClientListener]struct{}
