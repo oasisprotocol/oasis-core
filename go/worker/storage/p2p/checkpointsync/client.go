@@ -1,4 +1,4 @@
-package sync
+package checkpointsync
 
 import (
 	"context"
@@ -10,23 +10,20 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 const (
 	// minProtocolPeers is the minimum number of peers from the registry we want to have connected
-	// for StorageSync protocol.
+	// for checkpoint sync protocol.
 	minProtocolPeers = 5
 
-	// totalProtocolPeers is the number of peers we want to have connected for StorageSync protocol.
+	// totalProtocolPeers is the number of peers we want to have connected for checkpoint sync protocol.
 	totalProtocolPeers = 10
 )
 
-// Client is a storage sync protocol client.
+// Client is a checkpoint sync protocol client.
 type Client interface {
-	// GetDiff requests a write log of entries that must be applied to get from the first given root
-	// to the second one.
-	GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error)
-
 	// GetCheckpoints returns a list of checkpoint metadata for all known checkpoints.
 	GetCheckpoints(ctx context.Context, request *GetCheckpointsRequest) ([]*Checkpoint, error)
 
@@ -47,26 +44,14 @@ type Checkpoint struct {
 }
 
 type client struct {
-	rcC  rpc.Client
-	rcD  rpc.Client
-	mgrC rpc.PeerManager
-	mgrD rpc.PeerManager
-}
-
-func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error) {
-	var rsp GetDiffResponse
-	pf, err := c.rcD.CallOne(ctx, c.mgrD.GetBestPeers(), MethodGetDiff, request, &rsp,
-		rpc.WithMaxPeerResponseTime(MaxGetDiffResponseTime),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	return &rsp, pf, nil
+	rc          rpc.Client
+	mgr         rpc.PeerManager
+	fallbackMgr rpc.PeerManager
 }
 
 func (c *client) GetCheckpoints(ctx context.Context, request *GetCheckpointsRequest) ([]*Checkpoint, error) {
 	var rsp GetCheckpointsResponse
-	rsps, pfs, err := c.rcC.CallMulti(ctx, c.mgrC.GetBestPeers(), MethodGetCheckpoints, request, rsp)
+	rsps, pfs, err := c.rc.CallMulti(ctx, c.getBestPeers(), MethodGetCheckpoints, request, rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +100,8 @@ func (c *client) GetCheckpointChunk(
 	}
 
 	var rsp GetCheckpointChunkResponse
-	pf, err := c.rcC.CallOne(ctx, c.mgrC.GetBestPeers(opts...), MethodGetCheckpointChunk, request, &rsp,
+	peers := c.getBestPeers(opts...)
+	pf, err := c.rc.CallOne(ctx, peers, MethodGetCheckpointChunk, request, &rsp,
 		rpc.WithMaxPeerResponseTime(MaxGetCheckpointChunkResponseTime),
 	)
 	if err != nil {
@@ -124,32 +110,35 @@ func (c *client) GetCheckpointChunk(
 	return &rsp, pf, nil
 }
 
-// GetStorageSyncProtocolID returns unique storage sync protocol id for the specified chain context and runtime id.
-func GetStorageSyncProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
-	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+func (c *client) getBestPeers(opts ...rpc.BestPeersOption) []core.PeerID {
+	return append(c.mgr.GetBestPeers(opts...), c.fallbackMgr.GetBestPeers(opts...)...)
 }
 
-// NewClient creates a new storage sync protocol client.
+// NewClient creates a new checkpoint sync protocol client.
+//
+// Previously, it was part of the storage sync protocol. To enable seamless rolling
+// upgrades of the network, this client has a fallback to the old legacy protocol.
+// The new protocol is prioritized.
+//
+// Warning: This client only registers the checkpoint sync protocol with the P2P
+// service. To enable advertisement of the legacy protocol, it must be registered
+// separately.
 func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
-	// Use two separate clients and managers for the same protocol. This is to make sure that peers
-	// are scored differently between the two use cases (syncing diffs vs. syncing checkpoints). We
-	// could consider separating this into two protocols in the future.
-	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
+	fallbackPid := sync.GetStorageSyncProtocolID(chainContext, runtimeID)
+	rc := rpc.NewClient(p2p.Host(), pid, fallbackPid)
+	mgr := rpc.NewPeerManager(p2p, pid)
+	rc.RegisterListener(mgr)
 
-	rcC := rpc.NewClient(p2p.Host(), pid)
-	mgrC := rpc.NewPeerManager(p2p, pid)
-	rcC.RegisterListener(mgrC)
-
-	rcD := rpc.NewClient(p2p.Host(), pid)
-	mgrD := rpc.NewPeerManager(p2p, pid)
-	rcD.RegisterListener(mgrD)
+	// Fallback protocol requires a separate manager to manage peers that also support legacy protocol.
+	fallbackMgr := rpc.NewPeerManager(p2p, fallbackPid)
+	rc.RegisterListener(fallbackMgr)
 
 	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
-		rcC:  rcC,
-		rcD:  rcD,
-		mgrC: mgrC,
-		mgrD: mgrD,
+		rc:          rc,
+		mgr:         mgr,
+		fallbackMgr: fallbackMgr,
 	}
 }
