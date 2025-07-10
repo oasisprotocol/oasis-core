@@ -83,6 +83,8 @@ type p2p struct {
 	registerAddresses []multiaddr.Multiaddr
 	topics            map[string]*topicHandler
 
+	protocolRegistry *protocol.Registry
+
 	logger *logging.Logger
 }
 
@@ -281,7 +283,7 @@ func (p *p2p) Publish(_ context.Context, topic string, msg any) {
 
 // Implements api.Service.
 func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
-	protocol.ValidateTopicID(topic)
+	p.protocolRegistry.ValidateTopicID(topic)
 
 	p.Lock()
 	defer p.Unlock()
@@ -337,7 +339,7 @@ func (p *p2p) PeerManager() api.PeerManager {
 
 // Implements api.Service.
 func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
-	protocol.ValidateProtocolID(srv.Protocol())
+	p.protocolRegistry.ValidateProtocolID(srv.Protocol())
 
 	p.host.SetStreamHandler(srv.Protocol(), srv.HandleStream)
 
@@ -439,6 +441,7 @@ func New(identity *identity.Identity, chainContext string, store *persistent.Com
 		pubsub:            pubsub,
 		registerAddresses: cfg.Addresses,
 		topics:            make(map[string]*topicHandler),
+		protocolRegistry:  protocol.NewRegistry(),
 		logger:            logger,
 	}, nil
 }

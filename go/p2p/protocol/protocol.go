@@ -12,33 +12,32 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 )
 
-type protocolRegistry struct {
+// Registry is responsible for ensuring unique protocol ids.
+type Registry struct {
 	mu        sync.Mutex
 	protocols map[core.ProtocolID]struct{}
 }
 
-func newProtocolRegistry() *protocolRegistry {
-	return &protocolRegistry{
+func NewRegistry() *Registry {
+	return &Registry{
 		protocols: make(map[core.ProtocolID]struct{}),
 	}
 }
 
-var registry = newProtocolRegistry()
-
 // ValidateProtocolID panics if the protocol id is not unique.
-func ValidateProtocolID(p core.ProtocolID) {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
+func (r *Registry) ValidateProtocolID(p core.ProtocolID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if _, ok := registry.protocols[p]; ok {
+	if _, ok := r.protocols[p]; ok {
 		panic(fmt.Sprintf("p2p/protocol: protocol or topic with name '%s' already exists", p))
 	}
-	registry.protocols[p] = struct{}{}
+	r.protocols[p] = struct{}{}
 }
 
 // ValidateTopicID panics if the topic id is not unique.
-func ValidateTopicID(topic string) {
-	ValidateProtocolID(core.ProtocolID(topic))
+func (r *Registry) ValidateTopicID(topic string) {
+	r.ValidateProtocolID(core.ProtocolID(topic))
 }
 
 // NewProtocolID generates a protocol identifier for a consensus P2P protocol.
