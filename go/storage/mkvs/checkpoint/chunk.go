@@ -31,7 +31,7 @@ type chunker interface {
 	chunk(ctx context.Context, wf writerFactory) ([]hash.Hash, error)
 }
 
-// writerFactor is a factory that provides writers a chunker can write to.
+// writerFactory is a factory that provides writers a chunker can write to.
 type writerFactory interface {
 	// next returns the next writer together with its index.
 	next() (int, io.WriteCloser, error)
