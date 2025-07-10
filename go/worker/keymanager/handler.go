@@ -38,3 +38,8 @@ func (env *workerEnvironment) GetLightProvider() (consensusAPI.LightProvider, er
 func (env *workerEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 	return env.w.commonWorker.RuntimeRegistry
 }
+
+// GetROFLNotifier implements RuntimeHostHandlerEnvironment.
+func (env *workerEnvironment) GetROFLNotifier() (*runtimeRegistry.ROFLNotifier, error) {
+	return nil, fmt.Errorf("method not supported")
+}

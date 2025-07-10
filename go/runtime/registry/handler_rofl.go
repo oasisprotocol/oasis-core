@@ -36,13 +36,13 @@ type roflHostHandler struct {
 	comp  *bundle.ExplodedComponent
 	comps map[component.ID]host.Runtime
 
-	client        runtimeClient.RuntimeClient
-	eventNotifier *roflEventNotifier
+	client       runtimeClient.RuntimeClient
+	roflNotifier *ROFLNotifier
 
 	logger *logging.Logger
 }
 
-func newSubHandlerROFL(comp *bundle.ExplodedComponent, parent *runtimeHostHandler) (*roflHostHandler, error) {
+func newSubHandlerROFL(comp *bundle.ExplodedComponent, parent *runtimeHostHandler, roflNotifier *ROFLNotifier) (*roflHostHandler, error) {
 	client, err := parent.env.GetRuntimeRegistry().Client()
 	if err != nil {
 		return nil, err
@@ -53,13 +53,13 @@ func newSubHandlerROFL(comp *bundle.ExplodedComponent, parent *runtimeHostHandle
 		With("component_id", comp.ID())
 
 	return &roflHostHandler{
-		parent:        parent,
-		id:            comp.ID(),
-		comp:          comp,
-		comps:         make(map[component.ID]host.Runtime),
-		client:        client,
-		eventNotifier: newROFLEventNotifier(parent.runtime, client, logger),
-		logger:        logger,
+		parent:       parent,
+		id:           comp.ID(),
+		comp:         comp,
+		comps:        make(map[component.ID]host.Runtime),
+		client:       client,
+		roflNotifier: roflNotifier,
+		logger:       logger,
 	}, nil
 }
 
@@ -74,7 +74,7 @@ func (rh *roflHostHandler) AttachRuntime(id component.ID, rt host.Runtime) error
 	if id != rh.id {
 		return nil
 	}
-	return rh.eventNotifier.AttachRuntime(rt)
+	return nil
 }
 
 // getLocalStorageKey returns a properly namespaced version of the local storage key.
@@ -254,13 +254,15 @@ func (rh *roflHostHandler) handleHostSubmitTx(
 }
 
 func (rh *roflHostHandler) handleHostRegisterNotify(
-	ctx context.Context,
+	_ context.Context,
 	rq *protocol.HostRegisterNotifyRequest,
 ) (*protocol.Empty, error) {
 	// Subscribe to event notifications.
-	if err := rh.eventNotifier.RegisterNotify(ctx, rq); err != nil {
-		return nil, err
+	nfs := &rofl.Notifications{
+		Blocks: rq.RuntimeBlock,
+		Events: rq.RuntimeEvent.Tags,
 	}
+	rh.roflNotifier.register(rh.id, nfs)
 
 	return &protocol.Empty{}, nil
 }

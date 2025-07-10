@@ -3,181 +3,161 @@ package registry
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	cmnSync "github.com/oasisprotocol/oasis-core/go/common/sync"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	rofl "github.com/oasisprotocol/oasis-core/go/runtime/rofl/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 const (
-	// roflAttachRuntimeTimeout is the maximum amount of time runtime attachment can take.
-	roflAttachRuntimeTimeout = 2 * time.Second
 	// roflNotifyTimeout is the maximum amount of time runtime notification handling can take.
 	roflNotifyTimeout = 2 * time.Second
 )
 
-type roflAttachRuntimeCmd struct {
-	rt host.Runtime
-	ch chan<- error
-}
+// ROFLNotifier notifies ROFL components about new runtime blocks and events.
+type ROFLNotifier struct {
+	host     *composite.Host
+	notifier *RuntimeHostNotifier
 
-type roflEventNotifierCmd struct {
-	// registerNotify is the command to register for notifications.
-	registerNotify *protocol.HostRegisterNotifyRequest
-	// attachRuntime is the command to attach a runtime host.
-	attachRuntime *roflAttachRuntimeCmd
-}
+	runtime   Runtime
+	consensus consensus.Service
 
-type roflEventNotifier struct {
-	startOne cmnSync.One
-
-	runtime Runtime
-	client  runtimeClient.RuntimeClient
-	cmdCh   chan *roflEventNotifierCmd
+	mu            sync.Mutex
+	notifications map[component.ID]*rofl.Notifications
 
 	logger *logging.Logger
 }
 
-func newROFLEventNotifier(runtime Runtime, client runtimeClient.RuntimeClient, logger *logging.Logger) *roflEventNotifier {
-	return &roflEventNotifier{
-		startOne: cmnSync.NewOne(),
-		runtime:  runtime,
-		client:   client,
-		cmdCh:    make(chan *roflEventNotifierCmd),
-		logger:   logger,
+// NewROFLNotifier creates a new ROFL notifier.
+func NewROFLNotifier(runtime Runtime, host *composite.Host, consensus consensus.Service, notifier *RuntimeHostNotifier) *ROFLNotifier {
+	logger := logging.GetLogger("runtime/notifier/rofl").
+		With("runtime_id", runtime.ID())
+
+	return &ROFLNotifier{
+		host:          host,
+		notifier:      notifier,
+		runtime:       runtime,
+		consensus:     consensus,
+		notifications: make(map[component.ID]*rofl.Notifications),
+		logger:        logger,
 	}
 }
 
-func (en *roflEventNotifier) start() {
-	en.startOne.TryStart(en.run)
+// Name returns the name of the notifier.
+func (n *ROFLNotifier) Name() string {
+	return "ROFL notifier"
 }
 
-func (en *roflEventNotifier) RegisterNotify(ctx context.Context, rq *protocol.HostRegisterNotifyRequest) error {
-	en.start() // Ensure event notifier is running.
+// Serve starts the notifier.
+func (n *ROFLNotifier) Serve(ctx context.Context) error {
+	n.logger.Info("starting")
+	defer n.logger.Info("stopping")
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case en.cmdCh <- &roflEventNotifierCmd{registerNotify: rq}:
+	blkCh, blkSub, err := n.consensus.RootHash().WatchBlocks(ctx, n.runtime.ID())
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to runtime blocks: %w", err)
 	}
-	return nil
-}
-
-func (en *roflEventNotifier) AttachRuntime(rt host.Runtime) error {
-	en.start() // Ensure event notifier is running.
-
-	ch := make(chan error, 1)
-	en.cmdCh <- &roflEventNotifierCmd{attachRuntime: &roflAttachRuntimeCmd{rt, ch}}
-
-	select {
-	case <-time.After(roflAttachRuntimeTimeout):
-		return fmt.Errorf("timeout while attaching runtime")
-	case err := <-ch:
-		return err
-	}
-}
-
-func (en *roflEventNotifier) run(ctx context.Context) {
-	var (
-		rt    host.Runtime
-		blkCh <-chan *roothash.AnnotatedBlock
-
-		notifyBlocks bool
-		notifyTags   [][]byte
-	)
+	defer blkSub.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case cmd := <-en.cmdCh:
-			// Process a command.
-			switch {
-			case cmd.registerNotify != nil:
-				// Update configuration.
-				notifyBlocks = cmd.registerNotify.RuntimeBlock
-
-				if re := cmd.registerNotify.RuntimeEvent; re != nil {
-					notifyTags = re.Tags
-				} else {
-					notifyTags = nil
-				}
-			case cmd.attachRuntime != nil:
-				// Attach runtime.
-				var err error
-				switch {
-				case rt != nil:
-					// Already attached.
-					err = fmt.Errorf("runtime already attached")
-				default:
-					// Attach runtime and subscribe to blocks.
-					rt = cmd.attachRuntime.rt
-
-					// Subscribe to runtime blocks.
-					var blkSub pubsub.ClosableSubscription
-					blkCh, blkSub, err = en.client.WatchBlocks(ctx, en.runtime.ID())
-					if err != nil {
-						err = fmt.Errorf("failed to subscribe to runtime blocks: %w", err)
-						break
-					}
-					defer blkSub.Close()
-				}
-
-				cmd.attachRuntime.ch <- err
-				close(cmd.attachRuntime.ch)
-			default:
-				panic("runtime/rofl: unsupported command for event notifier")
-			}
+			return ctx.Err()
 		case blk := <-blkCh:
-			// New runtime block has been produced.
-			if notifyBlocks {
-				en.notifyBlock(ctx, rt, blk)
-			}
-
-			en.notifyTags(ctx, rt, blk, notifyTags)
+			n.cleanNotifications()
+			n.fetchNotifications()
+			n.notifyBlock(blk)
+			n.notifyTags(ctx, blk)
 		}
 	}
 }
 
-func (en *roflEventNotifier) notifyBlock(ctx context.Context, rt host.Runtime, blk *roothash.AnnotatedBlock) {
-	ctx, cancel := context.WithTimeout(ctx, roflNotifyTimeout)
-	defer cancel()
+func (n *ROFLNotifier) notifyBlock(blk *roothash.AnnotatedBlock) {
+	for compID := range n.host.Components() {
+		n.notifyBlockForComponent(compID, blk)
+	}
+}
 
-	_, err := rt.Call(ctx, &protocol.Body{
-		RuntimeNotifyRequest: &protocol.RuntimeNotifyRequest{
-			RuntimeBlock: blk,
-		},
-	})
-	if err != nil {
-		en.logger.Warn("failed to deliver block notification to runtime",
+func (n *ROFLNotifier) notifyBlockForComponent(compID component.ID, blk *roothash.AnnotatedBlock) {
+	if !n.shouldNotifyBlock(compID) {
+		return
+	}
+
+	notify := func(ctx context.Context, rr host.RichRuntime) {
+		ctx, cancel := context.WithTimeout(ctx, roflNotifyTimeout)
+		defer cancel()
+
+		_, err := rr.Call(ctx, &protocol.Body{
+			RuntimeNotifyRequest: &protocol.RuntimeNotifyRequest{
+				RuntimeBlock: blk,
+			},
+		})
+		if err != nil {
+			n.logger.Warn("failed to notify runtime of a new runtime block",
+				"err", err,
+				"round", blk.Block.Header.Round,
+			)
+		}
+	}
+
+	nf := &Notification{
+		comp:   compID,
+		queue:  queueROFLBlock,
+		notify: notify,
+	}
+
+	if err := n.notifier.Queue(nf); err != nil {
+		n.logger.Error("failed to queue notification",
 			"err", err,
-			"round", blk.Block.Header.Round,
+			"component_id", compID,
 		)
 	}
 }
 
-func (en *roflEventNotifier) notifyTags(
-	ctx context.Context,
-	rt host.Runtime,
-	blk *roothash.AnnotatedBlock,
-	notifyTags [][]byte,
-) {
-	if len(notifyTags) == 0 {
+func (n *ROFLNotifier) shouldNotifyBlock(compID component.ID) bool {
+	if compID.Kind != component.ROFL {
+		return false
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	nfs, ok := n.notifications[compID]
+	if !ok {
+		return false
+	}
+
+	return nfs.Blocks
+}
+
+func (n *ROFLNotifier) notifyTags(ctx context.Context, blk *roothash.AnnotatedBlock) {
+	for compID := range n.host.Components() {
+		n.notifyTagsForComponent(ctx, compID, blk)
+	}
+}
+
+func (n *ROFLNotifier) notifyTagsForComponent(ctx context.Context, compID component.ID, blk *roothash.AnnotatedBlock) {
+	events, ok := n.shouldNotifyTags(compID)
+	if !ok {
 		return
 	}
 
-	tree := transaction.NewTree(en.runtime.Storage(), blk.Block.Header.StorageRootIO())
+	// Consider optimizing by fetching tags for all components at once.
+	tree := transaction.NewTree(n.runtime.Storage(), blk.Block.Header.StorageRootIO())
 	defer tree.Close()
 
-	tags, err := tree.GetTagMultiple(ctx, notifyTags)
+	tags, err := tree.GetTagMultiple(ctx, events)
 	if err != nil {
-		en.logger.Warn("failed to fetch tags for block",
+		n.logger.Warn("failed to fetch tags for block",
 			"err", err,
 			"round", blk.Block.Header.Round,
 		)
@@ -193,21 +173,148 @@ func (en *roflEventNotifier) notifyTags(
 		tagKeys = append(tagKeys, tag.Key)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, roflNotifyTimeout)
-	defer cancel()
+	notify := func(ctx context.Context, rr host.RichRuntime) {
+		ctx, cancel := context.WithTimeout(ctx, roflNotifyTimeout)
+		defer cancel()
 
-	_, err = rt.Call(ctx, &protocol.Body{
-		RuntimeNotifyRequest: &protocol.RuntimeNotifyRequest{
-			RuntimeEvent: &protocol.RuntimeNotifyEvent{
-				Block: blk,
-				Tags:  tagKeys,
+		_, err := rr.Call(ctx, &protocol.Body{
+			RuntimeNotifyRequest: &protocol.RuntimeNotifyRequest{
+				RuntimeEvent: &protocol.RuntimeNotifyEvent{
+					Block: blk,
+					Tags:  tagKeys,
+				},
 			},
-		},
-	})
-	if err != nil {
-		en.logger.Warn("failed to deliver event notification to runtime",
+		})
+		if err != nil {
+			n.logger.Warn("failed to notify runtime of a new event",
+				"err", err,
+				"round", blk.Block.Header.Round,
+			)
+		}
+	}
+
+	nf := &Notification{
+		comp:   compID,
+		queue:  queueROFLTags,
+		notify: notify,
+	}
+
+	if err := n.notifier.Queue(nf); err != nil {
+		n.logger.Error("failed to queue notification",
 			"err", err,
-			"round", blk.Block.Header.Round,
+			"component_id", compID,
 		)
 	}
+}
+
+func (n *ROFLNotifier) shouldNotifyTags(compID component.ID) ([][]byte, bool) {
+	if compID.Kind != component.ROFL {
+		return nil, false
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	nfs, ok := n.notifications[compID]
+	if !ok {
+		return nil, false
+	}
+
+	if len(nfs.Events) == 0 {
+		return nil, false
+	}
+
+	return nfs.Events, true
+}
+
+func (n *ROFLNotifier) cleanNotifications() {
+	comps := n.host.Components()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	for compID := range n.notifications {
+		if _, ok := comps[compID]; !ok {
+			delete(n.notifications, compID)
+		}
+	}
+}
+
+func (n *ROFLNotifier) fetchNotifications() {
+	for compID := range n.host.Components() {
+		n.fetchTagsForComponent(compID)
+	}
+}
+
+func (n *ROFLNotifier) fetchTagsForComponent(compID component.ID) {
+	if !n.shouldFetchTags(compID) {
+		return
+	}
+
+	notify := func(ctx context.Context, rr host.RichRuntime) {
+		ctx, cancel := context.WithTimeout(ctx, roflNotifyTimeout)
+		defer cancel()
+
+		rsp, err := rr.Call(ctx, &protocol.Body{
+			RuntimeQueryRequest: &protocol.RuntimeQueryRequest{
+				Method: rofl.MethodGetConfig,
+			},
+		})
+		if err != nil {
+			n.logger.Warn("failed to query config",
+				"err", err,
+			)
+			return
+		}
+
+		if rsp.RuntimeQueryResponse == nil {
+			n.logger.Warn("failed to query config: malformed response")
+			return
+		}
+
+		var cfg rofl.Config
+		if err := cbor.Unmarshal(rsp.RuntimeQueryResponse.Data, &cfg); err != nil {
+			n.logger.Error("failed to unmarshal config",
+				"err", err,
+			)
+			return
+		}
+
+		n.register(compID, &cfg.Notifications)
+	}
+
+	nf := &Notification{
+		comp:   compID,
+		queue:  queueROFLConfig,
+		notify: notify,
+	}
+
+	if err := n.notifier.Queue(nf); err != nil {
+		n.logger.Error("failed to queue notification",
+			"err", err,
+			"component_id", compID,
+		)
+	}
+}
+
+func (n *ROFLNotifier) shouldFetchTags(compID component.ID) bool {
+	if compID.Kind != component.ROFL {
+		return false
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if _, ok := n.notifications[compID]; ok {
+		return false
+	}
+
+	return true
+}
+
+func (n *ROFLNotifier) register(compID component.ID, nfs *rofl.Notifications) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.notifications[compID] = nfs
 }

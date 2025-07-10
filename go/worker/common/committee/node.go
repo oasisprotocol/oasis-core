@@ -160,7 +160,8 @@ type Node struct {
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
 
-	services *service.Group
+	services     *service.Group
+	roflNotifier *runtimeRegistry.ROFLNotifier
 
 	txTopic string
 
@@ -942,9 +943,10 @@ func NewNode(
 	notifier := runtimeRegistry.NewRuntimeHostNotifier(host)
 	lbNotifier := runtimeRegistry.NewLightBlockNotifier(runtime, host, consensus, notifier)
 	kmNotifier := runtimeRegistry.NewKeyManagerNotifier(runtime, host, consensus, notifier)
+	n.roflNotifier = runtimeRegistry.NewROFLNotifier(runtime, host, consensus, notifier)
 
 	// Prepare services to run.
-	n.services = service.NewGroup(notifier, lbNotifier, kmNotifier)
+	n.services = service.NewGroup(notifier, lbNotifier, kmNotifier, n.roflNotifier)
 
 	// Prepare transaction pool.
 	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)

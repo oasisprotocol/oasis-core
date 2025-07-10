@@ -40,6 +40,9 @@ type RuntimeHostHandlerEnvironment interface {
 
 	// GetRuntimeRegistry returns the runtime registry.
 	GetRuntimeRegistry() Registry
+
+	// GetROFLNotifier returns the ROFL notifier.
+	GetROFLNotifier() (*ROFLNotifier, error)
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
@@ -124,7 +127,11 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 func (h *runtimeHostHandler) NewSubHandler(comp *bundle.ExplodedComponent) (host.RuntimeHandler, error) {
 	switch comp.Kind {
 	case component.ROFL:
-		return newSubHandlerROFL(comp, h)
+		roflNotifier, err := h.env.GetROFLNotifier()
+		if err != nil {
+			return nil, err
+		}
+		return newSubHandlerROFL(comp, h, roflNotifier)
 	default:
 		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", comp.Kind)
 	}

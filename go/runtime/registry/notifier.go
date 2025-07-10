@@ -30,6 +30,9 @@ const (
 	queueKeyManagerStatus      = "key-manager/status"
 	queueKeyManagerQuotePolicy = "key-manager/quote-policy"
 	queueConsensusSync         = "consensus-sync"
+	queueROFLBlock             = "rofl/block"
+	queueROFLTags              = "rofl/tags"
+	queueROFLConfig            = "rofl/config"
 )
 
 const (
