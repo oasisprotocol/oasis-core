@@ -1,5 +1,5 @@
 // Package checkpointsync defines wire protocol together with client/server
-// implementations for the checkpoints sync protocol, used for runtime state sync.
+// implementations for the checkpoint sync protocol, used for runtime state sync.
 package checkpointsync
 
 import (

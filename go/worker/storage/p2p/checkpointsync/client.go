@@ -10,7 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 const (
@@ -125,7 +125,7 @@ func (c *client) getBestPeers(opts ...rpc.BestPeersOption) []core.PeerID {
 // separately.
 func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
 	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
-	fallbackPid := sync.GetStorageSyncProtocolID(chainContext, runtimeID)
+	fallbackPid := synclegacy.GetStorageSyncProtocolID(chainContext, runtimeID)
 	rc := rpc.NewClient(p2p.Host(), pid, fallbackPid)
 	mgr := rpc.NewPeerManager(p2p, pid)
 	rc.RegisterListener(mgr)

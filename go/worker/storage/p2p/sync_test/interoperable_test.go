@@ -30,7 +30,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/diffsync"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 var (
@@ -116,18 +116,18 @@ func test(t *testing.T, dataDir string, legacyHost bool, peerKind peerKind) {
 func testLegacyHostClient(ctx context.Context, t *testing.T, host p2pApi.Service, backend storageApi.Backend) {
 	require := require.New(t)
 
-	client := sync.NewClient(host, chainContext, runtimeID)
+	client := synclegacy.NewClient(host, chainContext, runtimeID)
 	time.Sleep(2 * time.Second)
 
 	// Test diff part of the storagesync protocol.
-	rsp, _, err := client.GetDiff(ctx, &sync.GetDiffRequest{})
+	rsp, _, err := client.GetDiff(ctx, &synclegacy.GetDiffRequest{})
 	require.NoError(err, "Fetch storage diff from p2p")
 
 	err = assertEqualGetDiffResponse(ctx, backend, rsp.WriteLog)
 	require.NoError(err, "Assert expected storage diff response")
 
 	// Test checkpoints part of the storagesync protocol.
-	cps, err := client.GetCheckpoints(ctx, &sync.GetCheckpointsRequest{
+	cps, err := client.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
 		Version: 1,
 	})
 	require.NoError(err, "Fetch checkpoints from p2p")
@@ -136,7 +136,7 @@ func testLegacyHostClient(ctx context.Context, t *testing.T, host p2pApi.Service
 		Namespace: runtimeID,
 	})
 	require.NoError(err, "Fetch expected storage diff from backend")
-	getMeta := func(cp *sync.Checkpoint) *checkpoint.Metadata { return cp.Metadata }
+	getMeta := func(cp *synclegacy.Checkpoint) *checkpoint.Metadata { return cp.Metadata }
 	err = assertEqualCheckpoints(cps, want, getMeta)
 	require.NoError(err, "Assert expected checkpoints response")
 }
@@ -278,10 +278,10 @@ func mustStartNewPeer(t *testing.T, dataDir string, id int, backend storageApi.B
 
 	switch kind {
 	case legacy:
-		serverLegacy := sync.NewServer(chainContext, runtimeID, backend)
+		serverLegacy := synclegacy.NewServer(chainContext, runtimeID, backend)
 		p2p.RegisterProtocolServer(serverLegacy)
 	case all:
-		serverLegacy := sync.NewServer(chainContext, runtimeID, backend)
+		serverLegacy := synclegacy.NewServer(chainContext, runtimeID, backend)
 		p2p.RegisterProtocolServer(serverLegacy)
 		diff := diffsync.NewServer(chainContext, runtimeID, backend)
 		p2p.RegisterProtocolServer(diff)

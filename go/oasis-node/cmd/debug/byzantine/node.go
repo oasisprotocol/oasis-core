@@ -22,7 +22,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/client"
-	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 type byzantine struct {

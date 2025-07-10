@@ -1,4 +1,10 @@
-package sync
+// Package synclegacy defines wire protocol together with client/server
+// implementations for the legacy storage sync protocol, used for runtime block sync.
+//
+// The protocol was split into storage diff and checkpoints protocol.
+//
+// TODO: Remove it: https://github.com/oasisprotocol/oasis-core/issues/6261
+package synclegacy
 
 import (
 	"time"
