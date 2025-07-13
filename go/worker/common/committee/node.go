@@ -13,6 +13,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -26,7 +27,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
@@ -159,7 +159,9 @@ type Node struct {
 	Group            *Group
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
-	notifier         protocol.Notifier
+
+	services     *service.Group
+	roflNotifier *runtimeRegistry.ROFLNotifier
 
 	txTopic string
 
@@ -735,9 +737,20 @@ func (n *Node) worker() {
 	hrt.Start()
 	defer hrt.Stop()
 
-	// Start the runtime's notifier.
-	n.notifier.Start()
-	defer n.notifier.Stop()
+	// Start the runtime host notifier and other services.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := n.services.Serve(ctx); err != nil {
+			n.logger.Error("service group stopped", "err", err)
+		}
+	}()
 
 	// Enter the main processing loop.
 	for {
@@ -926,7 +939,14 @@ func NewNode(
 	n.RuntimeHostNode = rhn
 
 	// Prepare the runtime host notifier.
-	n.notifier = runtimeRegistry.NewRuntimeHostNotifier(runtime, rhn.GetHostedRuntime(), consensus)
+	host := rhn.GetHostedRuntime()
+	notifier := runtimeRegistry.NewRuntimeHostNotifier(host)
+	lbNotifier := runtimeRegistry.NewLightBlockNotifier(runtime, host, consensus, notifier)
+	kmNotifier := runtimeRegistry.NewKeyManagerNotifier(runtime, host, consensus, notifier)
+	n.roflNotifier = runtimeRegistry.NewROFLNotifier(runtime, host, consensus, notifier)
+
+	// Prepare services to run.
+	n.services = service.NewGroup(notifier, lbNotifier, kmNotifier, n.roflNotifier)
 
 	// Prepare transaction pool.
 	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)

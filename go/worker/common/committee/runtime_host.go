@@ -36,3 +36,8 @@ func (env *nodeEnvironment) GetLightProvider() (consensusAPI.LightProvider, erro
 func (env *nodeEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 	return env.n.RuntimeRegistry
 }
+
+// GetROFLNotifier implements RuntimeHostHandlerEnvironment.
+func (env *nodeEnvironment) GetROFLNotifier() (*runtimeRegistry.ROFLNotifier, error) {
+	return env.n.roflNotifier, nil
+}

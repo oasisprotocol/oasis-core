@@ -144,6 +144,16 @@ impl App {
 
 #[async_trait]
 impl app::App for App {
+    fn get_config(&self) -> app::Config {
+        // Register for block and event notifications.
+        app::Config {
+            notifications: app::Notifications {
+                blocks: true,
+                events: vec![b"kv_insertion.rofl_http".to_vec()],
+            },
+        }
+    }
+
     fn on_init(&mut self, host: Arc<dyn host::Host>) -> Result<()> {
         let version = self.version;
         let notify = self.notify.clone();
@@ -151,14 +161,6 @@ impl app::App for App {
         tokio::spawn(async move {
             // Update the version of the ROFL component.
             let _ = Self::update_version(version, &host).await;
-
-            // Register for block notifications.
-            let _ = host
-                .register_notify(host::RegisterNotifyOpts {
-                    runtime_block: true,
-                    runtime_event: vec![b"kv_insertion.rofl_http".to_vec()],
-                })
-                .await;
 
             // Avoid a queue if we are slow to process things. Just make sure to publish stuff on a
             // best effort basis.

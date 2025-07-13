@@ -11,13 +11,20 @@ use crate::{
     host::Host,
 };
 
-/// An Oasis runtime app.
+use super::Config;
+
+/// A runtime application.
 #[allow(unused_variables)]
 #[async_trait]
 pub trait App: Send + Sync {
-    /// Whether this is a ROFL app.
+    /// Whether this is a ROFL application.
     fn is_rofl(&self) -> bool {
         true
+    }
+
+    /// Returns the application's configuration settings.
+    fn get_config(&self) -> Config {
+        Config::default()
     }
 
     /// Called on application initialization.

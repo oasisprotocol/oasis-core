@@ -11,7 +11,8 @@ use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
 
 use crate::{
-    app, attestation, cache,
+    app::{self, METHOD_ROFL_GET_CONFIG},
+    attestation, cache,
     common::{
         crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
@@ -429,12 +430,14 @@ impl Dispatcher {
             }
 
             // ROFL.
-            Body::RuntimeQueryRequest { method, args, .. } if state.app.is_rofl() => state
-                .app
-                .query(&method, args)
-                .await
+            Body::RuntimeQueryRequest { method, args, .. } if state.app.is_rofl() => {
+                match method.as_str() {
+                    METHOD_ROFL_GET_CONFIG => Ok(cbor::to_vec(state.app.get_config())),
+                    _ => state.app.query(&method, args).await,
+                }
                 .map(|data| Body::RuntimeQueryResponse { data })
-                .map_err(Into::into),
+                .map_err(Into::into)
+            }
             Body::RuntimeNotifyRequest {
                 runtime_block,
                 runtime_event,

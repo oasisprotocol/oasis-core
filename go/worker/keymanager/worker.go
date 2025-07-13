@@ -77,8 +77,9 @@ type Worker struct { // nolint: maligned
 	commonWorker     *workerCommon.Worker
 	roleProvider     registration.RoleProvider
 	keymanager       api.Backend
-	notifier         protocol.Notifier
 	keyManagerClient *commonCommittee.KeyManagerClientWrapper
+
+	services *service.Group
 
 	enabled bool
 }
@@ -472,10 +473,6 @@ func (w *Worker) worker() {
 	hrt.Start()
 	defer hrt.Stop()
 
-	// Start the runtime host notifier.
-	w.notifier.Start()
-	defer w.notifier.Stop()
-
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
 		w.logger.Error("failed to activate runtime component",
@@ -490,7 +487,15 @@ func (w *Worker) worker() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(5)
+	wg.Add(6)
+
+	// Start the runtime host notifier and other services.
+	go func() {
+		defer wg.Done()
+		if err := w.services.Serve(w.ctx); err != nil {
+			w.logger.Error("service group stopped", "err", err)
+		}
+	}()
 
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
