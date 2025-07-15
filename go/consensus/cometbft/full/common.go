@@ -3,6 +3,7 @@ package full
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -840,9 +841,36 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			// Failed to load validator set.
 			status.IsValidator = false
 		}
+
+		if n.Checkpointer() != nil {
+			status.Checkpoint = n.fetchCheckpointStatus(ctx)
+		}
 	}
 
 	return status, nil
+}
+
+// fetchCheckpointStatus fetches checkpoint status.
+//
+// In case of zero checkpoints or error a nil status is returned.
+func (n *commonNode) fetchCheckpointStatus(ctx context.Context) *consensusAPI.CheckpointStatus {
+	cps, err := n.mux.State().Storage().GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err != nil {
+		n.Logger.Error("failed to fetch checkpoints status", "err", err)
+		return nil
+	}
+	var heights []uint64
+	for _, cp := range cps {
+		heights = append(heights, cp.Root.Version)
+	}
+	if len(heights) <= 0 {
+		return nil
+	}
+	slices.Sort(heights)
+	slices.Reverse(heights)
+	return &consensusAPI.CheckpointStatus{Heights: heights}
 }
 
 // Unimplemented methods.
