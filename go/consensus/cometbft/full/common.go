@@ -840,6 +840,21 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			// Failed to load validator set.
 			status.IsValidator = false
 		}
+
+		cps, err := n.mux.State().Storage().GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{
+			Version: 1,
+		})
+		switch err {
+		case nil:
+			for _, cp := range cps {
+				status.Checkpoints = append(status.Checkpoints, &consensusAPI.Checkpoint{
+					Height:    cp.Root.Version,
+					BlockHash: cp.Root.Hash,
+				})
+			}
+		default:
+			return nil, fmt.Errorf("failed to fetch checkpoints: %w", err)
+		}
 	}
 
 	return status, nil
