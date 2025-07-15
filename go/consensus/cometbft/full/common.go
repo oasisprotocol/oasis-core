@@ -831,13 +831,29 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			valSetHeight = status.GenesisHeight
 		}
 		vals, err := n.stateStore.LoadValidators(valSetHeight)
-		if err != nil {
-			// Failed to load validator set.
-			status.IsValidator = false
-		} else {
+		switch err {
+		case nil:
 			consensusPk := n.identity.ConsensusSigner.Public()
 			consensusAddr := []byte(crypto.PublicKeyToCometBFT(&consensusPk).Address())
 			status.IsValidator = vals.HasAddress(consensusAddr)
+		default:
+			// Failed to load validator set.
+			status.IsValidator = false
+		}
+
+		cps, err := n.mux.State().Storage().GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{
+			Version: 1,
+		})
+		switch err {
+		case nil:
+			for _, cp := range cps {
+				status.Checkpoints = append(status.Checkpoints, &consensusAPI.Checkpoint{
+					Height:    cp.Root.Version,
+					BlockHash: cp.Root.Hash,
+				})
+			}
+		default:
+			return nil, fmt.Errorf("failed to fetch checkpoints: %w", err)
 		}
 	}
 
