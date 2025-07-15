@@ -260,7 +260,9 @@ func (rh *roflHostHandler) handleHostRegisterNotify(
 	// Subscribe to event notifications.
 	nfs := &rofl.Notifications{
 		Blocks: rq.RuntimeBlock,
-		Events: rq.RuntimeEvent.Tags,
+	}
+	if rq.RuntimeEvent != nil {
+		nfs.Events = rq.RuntimeEvent.Tags
 	}
 	rh.roflNotifier.register(rh.id, nfs)
 
