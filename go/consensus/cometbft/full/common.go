@@ -831,13 +831,14 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			valSetHeight = status.GenesisHeight
 		}
 		vals, err := n.stateStore.LoadValidators(valSetHeight)
-		if err != nil {
-			// Failed to load validator set.
-			status.IsValidator = false
-		} else {
+		switch err {
+		case nil:
 			consensusPk := n.identity.ConsensusSigner.Public()
 			consensusAddr := []byte(crypto.PublicKeyToCometBFT(&consensusPk).Address())
 			status.IsValidator = vals.HasAddress(consensusAddr)
+		default:
+			// Failed to load validator set.
+			status.IsValidator = false
 		}
 	}
 
