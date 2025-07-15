@@ -25,7 +25,7 @@ type AttestLabelsRequest struct {
 // AttestLabelsResponse is the response from the AttestLabels method.
 type AttestLabelsResponse struct {
 	// Attestation is the CBOR-serialized label attestation.
-	Attestation []byte `json:"attstation"`
+	Attestation []byte `json:"attestation"`
 	// NodeID is the public key of the node attesting to the labels.
 	NodeID signature.PublicKey `json:"node_id"`
 	// Signature is the signature of the attested labels.
