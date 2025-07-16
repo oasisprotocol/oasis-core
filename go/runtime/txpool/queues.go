@@ -43,7 +43,7 @@ func (t *TxQueueMeta) FirstSeen() time.Time {
 type UsableTransactionSource interface {
 	// GetSchedulingSuggestion returns some number of txs to give to the scheduler as part of the initial
 	// batch.
-	GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta
+	GetSchedulingSuggestion(limit int) []*TxQueueMeta
 	// GetTxByHash returns the specific tx, if it is in this queue. The bool is like `value, ok := txMap[key]`. Used
 	// for resolving a batch from hashes and serving txSync.
 	GetTxByHash(h hash.Hash) *TxQueueMeta

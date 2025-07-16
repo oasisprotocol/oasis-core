@@ -26,10 +26,8 @@ func newLocalQueue() *localQueue {
 	}
 }
 
-func (q *localQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
-	q.l.Lock()
-	defer q.l.Unlock()
-	return append([]*TxQueueMeta(nil), q.txs...)
+func (q *localQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
+	return q.PeekAll()
 }
 
 func (q *localQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
