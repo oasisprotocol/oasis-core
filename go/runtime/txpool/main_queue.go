@@ -115,7 +115,7 @@ func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQu
 }
 
 func (mq *mainQueue) PeekAll() []*TxQueueMeta {
-	allTxs := mq.inner.getAll()
+	allTxs := mq.inner.all()
 	txs := make([]*TxQueueMeta, 0, len(allTxs))
 	for _, tx := range allTxs {
 		txs = append(txs, &tx.TxQueueMeta)
@@ -124,7 +124,7 @@ func (mq *mainQueue) PeekAll() []*TxQueueMeta {
 }
 
 func (mq *mainQueue) TakeAll() []*TxQueueMeta {
-	txMetas := mq.inner.getAll()
+	txMetas := mq.inner.all()
 	mq.inner.clear()
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
