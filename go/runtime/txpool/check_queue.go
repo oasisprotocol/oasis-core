@@ -8,7 +8,7 @@ import (
 )
 
 type checkTxQueue struct {
-	l sync.Mutex
+	mu sync.Mutex
 
 	txs *deque.Deque[*PendingCheckTransaction]
 
@@ -25,8 +25,8 @@ func newCheckTxQueue(maxSize, maxBatchSize int) *checkTxQueue {
 }
 
 func (q *checkTxQueue) add(pct *PendingCheckTransaction) error {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	// Check if there is room in the queue.
 	if q.txs.Len() >= q.maxSize {
@@ -39,8 +39,8 @@ func (q *checkTxQueue) add(pct *PendingCheckTransaction) error {
 }
 
 func (q *checkTxQueue) retryBatch(pcts []*PendingCheckTransaction) {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	// NOTE: This is meant for retries so it ignores the size limit on purpose.
 	for _, pct := range pcts {
@@ -49,8 +49,8 @@ func (q *checkTxQueue) retryBatch(pcts []*PendingCheckTransaction) {
 }
 
 func (q *checkTxQueue) pop() []*PendingCheckTransaction {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	batchSize := min(q.txs.Len(), q.maxBatchSize)
 	if batchSize == 0 {
@@ -67,15 +67,15 @@ func (q *checkTxQueue) pop() []*PendingCheckTransaction {
 }
 
 func (q *checkTxQueue) size() int {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	return q.txs.Len()
 }
 
 func (q *checkTxQueue) clear() {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	q.txs.Clear()
 }

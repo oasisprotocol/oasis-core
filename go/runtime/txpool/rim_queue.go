@@ -13,7 +13,7 @@ var _ UsableTransactionSource = (*rimQueue)(nil)
 
 // rimQueue exposes transactions from roothash incoming messages.
 type rimQueue struct {
-	l   sync.RWMutex
+	mu  sync.RWMutex
 	txs map[hash.Hash]*TxQueueMeta
 }
 
@@ -29,8 +29,8 @@ func (q *rimQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 }
 
 func (q *rimQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
-	q.l.RLock()
-	defer q.l.RUnlock()
+	q.mu.RLock()
+	defer q.mu.RUnlock()
 	return q.txs[h]
 }
 
@@ -39,8 +39,8 @@ func (q *rimQueue) HandleTxsUsed([]hash.Hash) {
 }
 
 func (q *rimQueue) PeekAll() []*TxQueueMeta {
-	q.l.RLock()
-	defer q.l.RUnlock()
+	q.mu.RLock()
+	defer q.mu.RUnlock()
 
 	return slices.Collect(maps.Values(q.txs))
 }
@@ -55,13 +55,13 @@ func (q *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 			hash: h,
 		}
 	}
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.txs = newTxs
 }
 
 func (q *rimQueue) size() int {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	return len(q.txs)
 }
