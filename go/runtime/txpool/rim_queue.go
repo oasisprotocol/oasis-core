@@ -28,10 +28,11 @@ func (q *rimQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 	return nil
 }
 
-func (q *rimQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
+func (q *rimQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	return q.txs[h]
+	tx, ok := q.txs[h]
+	return tx, ok
 }
 
 func (q *rimQueue) HandleTxsUsed([]hash.Hash) {
