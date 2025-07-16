@@ -36,7 +36,7 @@ func priorityLessFunc(tx, tx2 *MainQueueTransaction) bool {
 }
 
 type scheduleQueue struct {
-	l sync.Mutex
+	mu sync.Mutex
 
 	txs           map[hash.Hash]*MainQueueTransaction
 	txsBySender   map[string]*MainQueueTransaction
@@ -55,8 +55,8 @@ func newScheduleQueue(capacity int) *scheduleQueue {
 }
 
 func (q *scheduleQueue) add(tx *MainQueueTransaction) error {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	// If a transaction from the same sender already exists, we accept a new transaction only if it
 	// has a higher priority or if the old transaction is no longer valid based on sequence numbers.
@@ -93,8 +93,8 @@ func (q *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
 }
 
 func (q *scheduleQueue) remove(txHashes []hash.Hash) {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	for _, txHash := range txHashes {
 		tx, exists := q.txs[txHash]
@@ -107,8 +107,8 @@ func (q *scheduleQueue) remove(txHashes []hash.Hash) {
 }
 
 func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit int) []*MainQueueTransaction {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	var (
 		batch      []*MainQueueTransaction
@@ -139,8 +139,8 @@ func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit int) []*Mai
 }
 
 func (q *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransaction, map[hash.Hash]int) {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	result := make([]*MainQueueTransaction, 0, len(batch))
 	missing := make(map[hash.Hash]int)
@@ -156,8 +156,8 @@ func (q *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransactio
 }
 
 func (q *scheduleQueue) all() []*MainQueueTransaction {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	result := make([]*MainQueueTransaction, 0, len(q.txs))
 	for _, tx := range q.txs {
@@ -167,15 +167,15 @@ func (q *scheduleQueue) all() []*MainQueueTransaction {
 }
 
 func (q *scheduleQueue) size() int {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	return len(q.txs)
 }
 
 func (q *scheduleQueue) clear() {
-	q.l.Lock()
-	defer q.l.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	q.txs = make(map[hash.Hash]*MainQueueTransaction)
 	q.txsBySender = make(map[string]*MainQueueTransaction)
