@@ -1,6 +1,8 @@
 package txpool
 
 import (
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -9,7 +11,7 @@ import (
 
 var _ UsableTransactionSource = (*rimQueue)(nil)
 
-// rimQueue exposes transactions form roothash incoming messages.
+// rimQueue exposes transactions from roothash incoming messages.
 type rimQueue struct {
 	l   sync.RWMutex
 	txs map[hash.Hash]*TxQueueMeta
@@ -17,38 +19,34 @@ type rimQueue struct {
 
 func newRimQueue() *rimQueue {
 	return &rimQueue{
-		txs: map[hash.Hash]*TxQueueMeta{},
+		txs: make(map[hash.Hash]*TxQueueMeta),
 	}
 }
 
-func (rq *rimQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
+func (q *rimQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
 	// Runtimes instead get transactions from the incoming messages.
 	return nil
 }
 
-func (rq *rimQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
-	rq.l.RLock()
-	defer rq.l.RUnlock()
-	return rq.txs[h]
+func (q *rimQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
+	q.l.RLock()
+	defer q.l.RUnlock()
+	return q.txs[h]
 }
 
-func (rq *rimQueue) HandleTxsUsed([]hash.Hash) {
+func (q *rimQueue) HandleTxsUsed([]hash.Hash) {
 	// The roothash module manages the incoming message queue on its own, so we don't do anything here.
 }
 
-func (rq *rimQueue) PeekAll() []*TxQueueMeta {
-	rq.l.RLock()
-	defer rq.l.RUnlock()
+func (q *rimQueue) PeekAll() []*TxQueueMeta {
+	q.l.RLock()
+	defer q.l.RUnlock()
 
-	txs := make([]*TxQueueMeta, 0, len(rq.txs))
-	for _, tx := range rq.txs {
-		txs = append(txs, tx)
-	}
-	return txs
+	return slices.Collect(maps.Values(q.txs))
 }
 
 // Load loads transactions from roothash incoming messages.
-func (rq *rimQueue) Load(inMsgs []*message.IncomingMessage) {
+func (q *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 	newTxs := map[hash.Hash]*TxQueueMeta{}
 	for _, msg := range inMsgs {
 		h := hash.NewFromBytes(msg.Data)
@@ -57,13 +55,13 @@ func (rq *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 			hash: h,
 		}
 	}
-	rq.l.Lock()
-	defer rq.l.Unlock()
-	rq.txs = newTxs
+	q.l.Lock()
+	defer q.l.Unlock()
+	q.txs = newTxs
 }
 
-func (rq *rimQueue) size() int {
-	rq.l.Lock()
-	defer rq.l.Unlock()
-	return len(rq.txs)
+func (q *rimQueue) size() int {
+	q.l.Lock()
+	defer q.l.Unlock()
+	return len(q.txs)
 }
