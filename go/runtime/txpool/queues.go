@@ -46,7 +46,7 @@ type UsableTransactionSource interface {
 	GetSchedulingSuggestion(limit int) []*TxQueueMeta
 	// GetTxByHash returns the specific tx, if it is in this queue. The bool is like `value, ok := txMap[key]`. Used
 	// for resolving a batch from hashes and serving txSync.
-	GetTxByHash(h hash.Hash) *TxQueueMeta
+	GetTxByHash(h hash.Hash) (*TxQueueMeta, bool)
 	// HandleTxsUsed is a callback to indicate that the scheduler is done with a set of txs, by hash. For most
 	// implementations, remove it from internal storage.
 	HandleTxsUsed(hashes []hash.Hash)

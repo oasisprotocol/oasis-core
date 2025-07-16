@@ -28,10 +28,12 @@ func TestLocalQueueBasic(t *testing.T) {
 	// Schedule in original order.
 	require.EqualValues(t, []*TxQueueMeta{txA, txB}, lq.GetSchedulingSuggestion(50), "get scheduling suggestion")
 
-	tx := lq.GetTxByHash(txA.Hash())
+	tx, ok := lq.GetTxByHash(txA.Hash())
+	require.True(t, ok, "get tx by hash a")
 	require.EqualValues(t, txA, tx, "get tx by hash a")
 	hashC := hash.NewFromBytes([]byte("c"))
-	tx = lq.GetTxByHash(hashC)
+	tx, ok = lq.GetTxByHash(hashC)
+	require.False(t, ok, "get tx by hash c")
 	require.Nil(t, tx, "get tx by hash c")
 
 	lq.HandleTxsUsed([]hash.Hash{hashC})
