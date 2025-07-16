@@ -93,12 +93,12 @@ func (mq *mainQueue) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
 	return txs
 }
 
-func (mq *mainQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
-	txMetas, _ := mq.inner.getKnownBatch([]hash.Hash{h})
-	if txMetas[0] == nil {
-		return nil
+func (mq *mainQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
+	tx, ok := mq.inner.get(h)
+	if !ok {
+		return nil, false
 	}
-	return &txMetas[0].TxQueueMeta
+	return &tx.TxQueueMeta, true
 }
 
 func (mq *mainQueue) HandleTxsUsed(hashes []hash.Hash) {

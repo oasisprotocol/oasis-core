@@ -363,10 +363,12 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash
 HASH_LOOP:
 	for i, h := range batch {
 		for _, q := range t.usableSources {
-			if tx := q.GetTxByHash(h); tx != nil {
-				txs = append(txs, tx)
-				continue HASH_LOOP
+			tx, ok := q.GetTxByHash(h)
+			if !ok {
+				continue
 			}
+			txs = append(txs, tx)
+			continue HASH_LOOP
 		}
 		txs = append(txs, nil)
 		missingTxs[h] = i

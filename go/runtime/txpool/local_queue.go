@@ -30,14 +30,14 @@ func (q *localQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 	return q.PeekAll()
 }
 
-func (q *localQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
+func (q *localQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	i, ok := q.indexesByHash[h]
 	if !ok {
-		return nil
+		return nil, false
 	}
-	return q.txs[i]
+	return q.txs[i], true
 }
 
 func (q *localQueue) HandleTxsUsed(hashes []hash.Hash) {

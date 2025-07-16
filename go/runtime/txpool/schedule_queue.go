@@ -138,21 +138,12 @@ func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit int) []*Mai
 	return batch
 }
 
-func (q *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransaction, map[hash.Hash]int) {
+func (q *scheduleQueue) get(txHash hash.Hash) (*MainQueueTransaction, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	result := make([]*MainQueueTransaction, 0, len(batch))
-	missing := make(map[hash.Hash]int)
-	for index, txHash := range batch {
-		if tx, ok := q.txs[txHash]; ok {
-			result = append(result, tx)
-		} else {
-			result = append(result, nil)
-			missing[txHash] = index
-		}
-	}
-	return result, missing
+	tx, ok := q.txs[txHash]
+	return tx, ok
 }
 
 func (q *scheduleQueue) all() []*MainQueueTransaction {
