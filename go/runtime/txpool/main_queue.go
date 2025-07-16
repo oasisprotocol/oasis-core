@@ -84,8 +84,8 @@ func newMainQueue(capacity int) *mainQueue {
 	}
 }
 
-func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
-	txMetas := mq.inner.getPrioritizedBatch(nil, countHint)
+func (mq *mainQueue) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
+	txMetas := mq.inner.getPrioritizedBatch(nil, limit)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
 		txs = append(txs, &txMeta.TxQueueMeta)
@@ -105,7 +105,7 @@ func (mq *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
 	mq.inner.remove(hashes)
 }
 
-func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
+func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(offset, limit)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {

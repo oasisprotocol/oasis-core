@@ -23,7 +23,7 @@ func newRimQueue() *rimQueue {
 	}
 }
 
-func (q *rimQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
+func (q *rimQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 	// Runtimes instead get transactions from the incoming messages.
 	return nil
 }

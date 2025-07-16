@@ -98,14 +98,14 @@ type TransactionPool interface {
 	// GetSchedulingSuggestion returns a list of transactions to schedule. This begins a
 	// scheduling session, which suppresses transaction rechecking and republishing. Subsequently
 	// call GetSchedulingExtra for more transactions, followed by FinishScheduling.
-	GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta
+	GetSchedulingSuggestion(limit int) []*TxQueueMeta
 
 	// GetSchedulingExtra returns transactions to schedule.
 	//
 	// Offset specifies the transaction hash that should serve as an offset when returning
 	// transactions from the pool. Transactions will be skipped until the given hash is encountered
 	// and only the following transactions will be returned.
-	GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta
+	GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta
 
 	// FinishScheduling finishes a scheduling session, which resumes transaction rechecking and
 	// republishing.
@@ -321,16 +321,16 @@ func (t *txPool) ClearProposedBatch() {
 	t.proposedTxs = make(map[hash.Hash]*TxQueueMeta)
 }
 
-func (t *txPool) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+func (t *txPool) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
 	t.drainLock.Lock()
 	var txs []*TxQueueMeta
 	for _, q := range t.usableSources {
-		txs = append(txs, q.GetSchedulingSuggestion(countHint)...)
+		txs = append(txs, q.GetSchedulingSuggestion(limit)...)
 	}
 	return txs
 }
 
-func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
+func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
 	return t.mainQueue.GetSchedulingExtra(offset, limit)
 }
 

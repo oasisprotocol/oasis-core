@@ -106,7 +106,7 @@ func (q *scheduleQueue) remove(txHashes []hash.Hash) {
 	}
 }
 
-func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*MainQueueTransaction {
+func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit int) []*MainQueueTransaction {
 	q.l.Lock()
 	defer q.l.Unlock()
 
@@ -132,10 +132,7 @@ func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*
 
 		// Add the transaction to the batch.
 		batch = append(batch, tx)
-		if uint32(len(batch)) >= limit { // nolint: gosimple
-			return false
-		}
-		return true
+		return len(batch) < limit
 	})
 
 	return batch
