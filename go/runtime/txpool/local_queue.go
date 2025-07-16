@@ -27,7 +27,7 @@ func newLocalQueue() *localQueue {
 	}
 }
 
-func (q *localQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
+func (q *localQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 	return q.PeekAll()
 }
 
