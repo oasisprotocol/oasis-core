@@ -1,6 +1,8 @@
 package txpool
 
 import (
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -13,82 +15,54 @@ var (
 	_ RepublishableTransactionSource = (*localQueue)(nil)
 )
 
-// localQueue is a "front of the line" area for txs from our own node. We also keep these txs in order.
+// localQueue is a "front of the line" area for txs from our own node.
 type localQueue struct {
-	l             sync.Mutex
-	txs           []*TxQueueMeta
-	indexesByHash map[hash.Hash]int
+	l   sync.Mutex
+	txs map[hash.Hash]*TxQueueMeta
 }
 
 func newLocalQueue() *localQueue {
 	return &localQueue{
-		indexesByHash: map[hash.Hash]int{},
+		txs: make(map[hash.Hash]*TxQueueMeta),
 	}
 }
 
 func (q *localQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
-	q.l.Lock()
-	defer q.l.Unlock()
-	return append([]*TxQueueMeta(nil), q.txs...)
+	return q.PeekAll()
 }
 
 func (q *localQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
 	q.l.Lock()
 	defer q.l.Unlock()
-	i, ok := q.indexesByHash[h]
-	if !ok {
-		return nil
-	}
-	return q.txs[i]
+	return q.txs[h]
 }
 
 func (q *localQueue) HandleTxsUsed(hashes []hash.Hash) {
 	q.l.Lock()
 	defer q.l.Unlock()
-	origCount := len(q.txs)
-	keptCount := origCount
 	for _, h := range hashes {
-		if i, ok := q.indexesByHash[h]; ok {
-			delete(q.indexesByHash, h)
-			q.txs[i] = nil
-			keptCount--
-		}
+		delete(q.txs, h)
 	}
-	if keptCount == origCount {
-		return
-	}
-	keptTxs := make([]*TxQueueMeta, 0, keptCount)
-	for _, tx := range q.txs {
-		if tx == nil {
-			continue
-		}
-		i := len(keptTxs)
-		keptTxs = append(keptTxs, tx)
-		q.indexesByHash[tx.Hash()] = i
-	}
-	q.txs = keptTxs
 }
 
 func (q *localQueue) PeekAll() []*TxQueueMeta {
 	q.l.Lock()
 	defer q.l.Unlock()
-	return append(make([]*TxQueueMeta, 0, len(q.txs)), q.txs...)
+	return slices.Collect(maps.Values(q.txs))
 }
 
 func (q *localQueue) TakeAll() []*TxQueueMeta {
 	q.l.Lock()
 	defer q.l.Unlock()
-	txs := q.txs
-	q.txs = nil
-	q.indexesByHash = make(map[hash.Hash]int)
+	txs := slices.Collect(maps.Values(q.txs))
+	clear(q.txs)
 	return txs
 }
 
 func (q *localQueue) OfferChecked(tx *TxQueueMeta, _ *protocol.CheckTxMetadata) error {
 	q.l.Lock()
 	defer q.l.Unlock()
-	q.indexesByHash[tx.Hash()] = len(q.txs)
-	q.txs = append(q.txs, tx)
+	q.txs[tx.Hash()] = tx
 	return nil
 }
 
