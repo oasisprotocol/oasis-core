@@ -38,75 +38,84 @@ func priorityLessFunc(tx, tx2 *MainQueueTransaction) bool {
 type scheduleQueue struct {
 	l sync.Mutex
 
-	all        map[hash.Hash]*MainQueueTransaction
-	bySender   map[string]*MainQueueTransaction
-	byPriority *btree.BTreeG[*MainQueueTransaction]
+	txs           map[hash.Hash]*MainQueueTransaction
+	txsBySender   map[string]*MainQueueTransaction
+	txsByPriority *btree.BTreeG[*MainQueueTransaction]
 
 	capacity int
 }
 
-func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func newScheduleQueue(capacity int) *scheduleQueue {
+	return &scheduleQueue{
+		txs:           make(map[hash.Hash]*MainQueueTransaction),
+		txsBySender:   make(map[string]*MainQueueTransaction),
+		txsByPriority: btree.NewG(2, priorityLessFunc),
+		capacity:      capacity,
+	}
+}
+
+func (q *scheduleQueue) add(tx *MainQueueTransaction) error {
+	q.l.Lock()
+	defer q.l.Unlock()
 
 	// If a transaction from the same sender already exists, we accept a new transaction only if it
 	// has a higher priority or if the old transaction is no longer valid based on sequence numbers.
-	if etx, exists := sq.bySender[tx.sender]; exists {
+	if etx, exists := q.txsBySender[tx.sender]; exists {
 		if etx.senderSeq >= tx.senderStateSeq && tx.priority <= etx.priority {
 			return ErrReplacementTxPriorityTooLow
 		}
 
 		// Remove any existing transaction.
-		sq.removeLocked(etx)
+		q.removeLocked(etx)
 	}
 
 	// If the queue is full, we accept a new transaction only if it has a higher priority.
-	if len(sq.all) >= sq.capacity {
+	if len(q.txs) >= q.capacity {
 		// Attempt eviction.
-		etx, _ := sq.byPriority.Min()
+		etx, _ := q.txsByPriority.Min()
 		if tx.priority <= etx.priority {
 			return ErrQueueFull
 		}
-		sq.removeLocked(etx)
+		q.removeLocked(etx)
 	}
 
-	sq.all[tx.Hash()] = tx
-	sq.bySender[tx.sender] = tx
-	sq.byPriority.ReplaceOrInsert(tx)
+	q.txs[tx.Hash()] = tx
+	q.txsBySender[tx.sender] = tx
+	q.txsByPriority.ReplaceOrInsert(tx)
 
 	return nil
 }
 
-func (sq *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
-	delete(sq.all, tx.Hash())
-	delete(sq.bySender, tx.sender)
-	sq.byPriority.Delete(tx)
+func (q *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
+	delete(q.txs, tx.Hash())
+	delete(q.txsBySender, tx.sender)
+	q.txsByPriority.Delete(tx)
 }
 
-func (sq *scheduleQueue) remove(txHashes []hash.Hash) {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) remove(txHashes []hash.Hash) {
+	q.l.Lock()
+	defer q.l.Unlock()
 
 	for _, txHash := range txHashes {
-		tx, exists := sq.all[txHash]
+		tx, exists := q.txs[txHash]
 		if !exists {
 			continue
 		}
 
-		sq.removeLocked(tx)
+		q.removeLocked(tx)
 	}
 }
 
-func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*MainQueueTransaction {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*MainQueueTransaction {
+	q.l.Lock()
+	defer q.l.Unlock()
 
 	var (
 		batch      []*MainQueueTransaction
 		offsetItem *MainQueueTransaction
 	)
 	if offset != nil {
-		offsetTx, exists := sq.all[*offset]
+		offsetTx, exists := q.txs[*offset]
 		if !exists {
 			// Offset does not exist so no items will be matched anyway.
 			return nil
@@ -114,7 +123,7 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 		offsetItem = offsetTx
 	}
 
-	sq.byPriority.DescendLessOrEqual(offsetItem, func(tx *MainQueueTransaction) bool {
+	q.txsByPriority.DescendLessOrEqual(offsetItem, func(tx *MainQueueTransaction) bool {
 		// Skip the offset item itself (if specified).
 		h := tx.Hash()
 		if h.Equal(offset) {
@@ -132,14 +141,14 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 	return batch
 }
 
-func (sq *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransaction, map[hash.Hash]int) {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransaction, map[hash.Hash]int) {
+	q.l.Lock()
+	defer q.l.Unlock()
 
 	result := make([]*MainQueueTransaction, 0, len(batch))
 	missing := make(map[hash.Hash]int)
 	for index, txHash := range batch {
-		if tx, ok := sq.all[txHash]; ok {
+		if tx, ok := q.txs[txHash]; ok {
 			result = append(result, tx)
 		} else {
 			result = append(result, nil)
@@ -149,38 +158,29 @@ func (sq *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransacti
 	return result, missing
 }
 
-func (sq *scheduleQueue) getAll() []*MainQueueTransaction {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) all() []*MainQueueTransaction {
+	q.l.Lock()
+	defer q.l.Unlock()
 
-	result := make([]*MainQueueTransaction, 0, len(sq.all))
-	for _, tx := range sq.all {
+	result := make([]*MainQueueTransaction, 0, len(q.txs))
+	for _, tx := range q.txs {
 		result = append(result, tx)
 	}
 	return result
 }
 
-func (sq *scheduleQueue) size() int {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) size() int {
+	q.l.Lock()
+	defer q.l.Unlock()
 
-	return len(sq.all)
+	return len(q.txs)
 }
 
-func (sq *scheduleQueue) clear() {
-	sq.l.Lock()
-	defer sq.l.Unlock()
+func (q *scheduleQueue) clear() {
+	q.l.Lock()
+	defer q.l.Unlock()
 
-	sq.all = make(map[hash.Hash]*MainQueueTransaction)
-	sq.bySender = make(map[string]*MainQueueTransaction)
-	sq.byPriority.Clear(true)
-}
-
-func newScheduleQueue(capacity int) *scheduleQueue {
-	return &scheduleQueue{
-		all:        make(map[hash.Hash]*MainQueueTransaction),
-		bySender:   make(map[string]*MainQueueTransaction),
-		byPriority: btree.NewG[*MainQueueTransaction](2, priorityLessFunc),
-		capacity:   capacity,
-	}
+	q.txs = make(map[hash.Hash]*MainQueueTransaction)
+	q.txsBySender = make(map[string]*MainQueueTransaction)
+	q.txsByPriority.Clear(true)
 }
