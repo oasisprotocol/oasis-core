@@ -8,11 +8,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
 )
 
 func TestSortCheckpoints(t *testing.T) {
-	cp1 := &sync.Checkpoint{
+	cp1 := &checkpointsync.Checkpoint{
 		Metadata: &checkpoint.Metadata{
 			Root: node.Root{
 				Version: 2,
@@ -20,7 +20,7 @@ func TestSortCheckpoints(t *testing.T) {
 		},
 		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
 	}
-	cp2 := &sync.Checkpoint{
+	cp2 := &checkpointsync.Checkpoint{
 		Metadata: &checkpoint.Metadata{
 			Root: node.Root{
 				Version: 2,
@@ -28,7 +28,7 @@ func TestSortCheckpoints(t *testing.T) {
 		},
 		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
 	}
-	cp3 := &sync.Checkpoint{
+	cp3 := &checkpointsync.Checkpoint{
 		Metadata: &checkpoint.Metadata{
 			Root: node.Root{
 				Version: 1,
@@ -36,7 +36,7 @@ func TestSortCheckpoints(t *testing.T) {
 		},
 		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
 	}
-	cp4 := &sync.Checkpoint{
+	cp4 := &checkpointsync.Checkpoint{
 		Metadata: &checkpoint.Metadata{
 			Root: node.Root{
 				Version: 1,
@@ -45,9 +45,9 @@ func TestSortCheckpoints(t *testing.T) {
 		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
 	}
 
-	s := []*sync.Checkpoint{cp2, cp3, cp4, cp1}
+	s := []*checkpointsync.Checkpoint{cp2, cp3, cp4, cp1}
 
 	sortCheckpoints(s)
 
-	assert.Equal(t, s, []*sync.Checkpoint{cp1, cp2, cp3, cp4})
+	assert.Equal(t, s, []*checkpointsync.Checkpoint{cp1, cp2, cp3, cp4})
 }
