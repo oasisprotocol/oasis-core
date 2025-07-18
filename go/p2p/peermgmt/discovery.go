@@ -100,6 +100,10 @@ func (d *peerDiscovery) startAdvertising(ns string) {
 	case d.advCh <- struct{}{}:
 	default:
 	}
+
+	d.logger.Debug("triggered protocol advertisement",
+		"protocol", ns,
+	)
 }
 
 // stopAdvertising stops advertising the given namespace.

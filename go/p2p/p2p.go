@@ -305,7 +305,8 @@ func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
 		"topic", topic,
 	)
 
-	p.peerMgr.RegisterTopic(topic, minTopicPeers, totalTopicPeers)
+	p.peerMgr.TrackTopicPeers(topic, minTopicPeers, totalTopicPeers)
+	p.peerMgr.AdvertiseTopic(topic)
 }
 
 // Implements api.Service.
@@ -321,7 +322,7 @@ func (p *p2p) BlockPeer(peerID core.PeerID) {
 
 // Implements api.Service.
 func (p *p2p) RegisterProtocol(pid core.ProtocolID, minPeers int, totalPeers int) {
-	p.peerMgr.RegisterProtocol(pid, minPeers, totalPeers)
+	p.peerMgr.TrackProtocolPeers(pid, minPeers, totalPeers)
 }
 
 // Implements api.Service.
@@ -339,6 +340,8 @@ func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
 	protocol.ValidateProtocolID(srv.Protocol())
 
 	p.host.SetStreamHandler(srv.Protocol(), srv.HandleStream)
+
+	p.peerMgr.AdvertiseProtocol(srv.Protocol())
 
 	p.logger.Info("registered protocol server",
 		"protocol_id", srv.Protocol(),

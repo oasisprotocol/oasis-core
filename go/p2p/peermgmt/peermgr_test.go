@@ -126,7 +126,7 @@ func (s *PeerManagerTestSuite) TestRegisterProtocol() {
 
 	for i := 0; i < 3; i++ {
 		p := core.ProtocolID(fmt.Sprintf("/protocol/test/%d.0.0", i))
-		s.manager.RegisterProtocol(p, 1, 10)
+		s.manager.TrackProtocolPeers(p, 1, 10)
 		require.Equal(i+1, len(s.manager.Protocols()))
 	}
 }
@@ -136,7 +136,7 @@ func (s *PeerManagerTestSuite) TestRegisterTopic() {
 
 	for i := 0; i < 3; i++ {
 		t := fmt.Sprintf("topic %d", i)
-		s.manager.RegisterTopic(t, 1, 10)
+		s.manager.TrackTopicPeers(t, 1, 10)
 		require.Equal(i+1, len(s.manager.Topics()))
 	}
 }
@@ -146,20 +146,20 @@ func (s *PeerManagerTestSuite) TestUnregisterProtocol() {
 
 	for i := 0; i < 3; i++ {
 		p := core.ProtocolID(fmt.Sprintf("/protocol/test/%d.0.0", i))
-		s.manager.RegisterProtocol(p, 1, 10)
+		s.manager.TrackProtocolPeers(p, 1, 10)
 		require.Equal(i+1, len(s.manager.Protocols()))
 	}
 
-	s.manager.UnregisterProtocol("404")
+	s.manager.StopTrackingProtocolPeers("404")
 	require.Equal(3, len(s.manager.Protocols()))
 
 	for i := 0; i < 3; i++ {
 		p := core.ProtocolID(fmt.Sprintf("/protocol/test/%d.0.0", i))
-		s.manager.UnregisterProtocol(p)
+		s.manager.StopTrackingProtocolPeers(p)
 		require.Equal(2-i, len(s.manager.Protocols()))
 	}
 
-	s.manager.UnregisterProtocol("404")
+	s.manager.StopTrackingProtocolPeers("404")
 	require.Equal(0, len(s.manager.Protocols()))
 }
 
@@ -168,19 +168,19 @@ func (s *PeerManagerTestSuite) TestUnregisterTopic() {
 
 	for i := 0; i < 3; i++ {
 		t := fmt.Sprintf("topic %d", i)
-		s.manager.RegisterTopic(t, 1, 10)
+		s.manager.TrackTopicPeers(t, 1, 10)
 		require.Equal(i+1, len(s.manager.Topics()))
 	}
 
-	s.manager.UnregisterTopic("404")
+	s.manager.StopTrackingTopicPeers("404")
 	require.Equal(3, len(s.manager.Topics()))
 
 	for i := 0; i < 3; i++ {
-		s.manager.UnregisterTopic(fmt.Sprintf("topic %d", i))
+		s.manager.StopTrackingTopicPeers(fmt.Sprintf("topic %d", i))
 		require.Equal(2-i, len(s.manager.Topics()))
 	}
 
-	s.manager.UnregisterTopic("404")
+	s.manager.StopTrackingTopicPeers("404")
 	require.Equal(0, len(s.manager.Topics()))
 }
 
