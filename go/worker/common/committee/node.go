@@ -956,6 +956,7 @@ func NewNode(
 
 	// Register transaction sync service.
 	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), n.TxPool))
+	p2pHost.AdvertiseProtocol(txsync.ProtocolID(chainContext, runtime.ID()))
 
 	return n, nil
 }

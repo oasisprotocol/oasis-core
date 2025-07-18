@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 
+	"github.com/libp2p/go-libp2p/core"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -48,9 +49,13 @@ func (s *service) handleCallEnclave(ctx context.Context, request *CallEnclaveReq
 	}, nil
 }
 
+// RuntimeProtocolID returns the runtime protocol ID for the specified chain context and runtime ID.
+func RuntimeProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion)
+}
+
 // NewServer creates a new keymanager protocol server.
 func NewServer(chainContext string, runtimeID common.Namespace, km KeyManager) rpc.Server {
 	initMetrics()
-
-	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion), &service{km})
+	return rpc.NewServer(RuntimeProtocolID(chainContext, runtimeID), &service{km})
 }

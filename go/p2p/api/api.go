@@ -83,7 +83,15 @@ type Service interface {
 	RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int)
 
 	// RegisterProtocolServer registers a protocol server for the given protocol.
+	//
+	// Normally, registered protocol server should be also advertised (AdvertiseProtocol),
+	// so that remote peers find the host node.
 	RegisterProtocolServer(srv rpc.Server)
+
+	// AdvertiseProtocol starts advertising the host as available for serving the specified protocol.
+	//
+	// It should be called only after the protocol server is running and ready to serve.
+	AdvertiseProtocol(p core.ProtocolID)
 
 	// GetMinRepublishInterval returns the minimum republish interval that needs to be respected by
 	// the caller when publishing the same message. If Publish is called for the same message more

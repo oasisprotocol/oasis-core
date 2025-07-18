@@ -3,6 +3,7 @@ package txsync
 import (
 	"github.com/libp2p/go-libp2p/core"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -15,6 +16,11 @@ const TxSyncProtocolID = "txsync"
 
 // TxSyncProtocolVersion is the supported version of the transaction sync protocol.
 var TxSyncProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
+
+// ProtocolID returns the runtime transaction sync protocol ID.
+func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)
+}
 
 // Constants related to the GetTxs method.
 const (

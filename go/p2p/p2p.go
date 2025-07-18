@@ -346,6 +346,11 @@ func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
 }
 
 // Implements api.Service.
+func (p *p2p) AdvertiseProtocol(protocol core.ProtocolID) {
+	p.peerMgr.AdvertiseProtocol(protocol)
+}
+
+// Implements api.Service.
 func (p *p2p) GetMinRepublishInterval() time.Duration {
 	return seenMessagesTTL + 5*time.Second
 }

@@ -155,6 +155,8 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("initializing storage node failed: %w", err)
 	}
 	b.p2p.service.RegisterProtocolServer(storageP2P.NewServer(b.chainContext, b.runtimeID, storage))
+	b.p2p.service.AdvertiseProtocol(storageP2P.ProtocolID(b.chainContext, b.runtimeID))
+
 	b.storage = storage
 
 	// Wait for activation epoch.

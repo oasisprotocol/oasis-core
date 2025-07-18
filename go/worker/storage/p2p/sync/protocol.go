@@ -5,6 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -19,6 +20,11 @@ const StorageSyncProtocolID = "storagesync"
 
 // StorageSyncProtocolVersion is the supported version of the storage sync protocol.
 var StorageSyncProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
+
+// ProtocolID returns the runtime storage sync protocol ID.
+func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+}
 
 // Constants related to the GetDiff method.
 const (
