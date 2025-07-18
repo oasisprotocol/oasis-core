@@ -86,6 +86,10 @@ func (p *nopP2P) RegisterProtocolServer(rpc.Server) {
 }
 
 // Implements api.Service.
+func (p *nopP2P) AdvertiseProtocol(core.ProtocolID) {
+}
+
+// Implements api.Service.
 func (p *nopP2P) GetMinRepublishInterval() time.Duration {
 	return time.Hour
 }

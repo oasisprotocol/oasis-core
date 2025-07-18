@@ -188,12 +188,18 @@ func (m *PeerManager) RegisterProtocol(p core.ProtocolID, minPeers int, totalPee
 	}
 
 	m.protocols[p] = &watermark{minPeers, totalPeers}
-	m.discovery.startAdvertising(string(p))
-
 	m.logger.Debug("protocol registered",
 		"protocol", p,
 		"min_peers", minPeers,
 		"total_peers", totalPeers,
+	)
+}
+
+// AdvertiseProtocol starts advertising readiness to serve the specified protocol.
+func (m *PeerManager) AdvertiseProtocol(p core.ProtocolID) {
+	m.discovery.startAdvertising(string(p))
+	m.logger.Debug("triggered protocol advertisement",
+		"protocol", p,
 	)
 }
 

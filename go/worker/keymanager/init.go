@@ -126,6 +126,7 @@ func New(
 
 	// Register keymanager service.
 	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, w.runtimeID, w))
+	commonWorker.P2P.AdvertiseProtocol(p2p.RuntimeProtocolID(commonWorker.ChainContext, w.runtimeID))
 
 	return w, nil
 }

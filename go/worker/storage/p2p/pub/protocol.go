@@ -3,6 +3,7 @@ package pub
 import (
 	"github.com/libp2p/go-libp2p/core"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
@@ -15,6 +16,11 @@ const StoragePubProtocolID = "storagepub"
 
 // StoragePubProtocolVersion is the supported version of the storage pub protocol.
 var StoragePubProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
+
+// ProtocolID returns the runtime storage pub protocol ID.
+func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)
+}
 
 // Constants related to the Get method.
 const (

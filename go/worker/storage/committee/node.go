@@ -274,11 +274,13 @@ func NewNode(
 
 	// Register storage sync service.
 	commonNode.P2P.RegisterProtocolServer(storageSync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	commonNode.P2P.AdvertiseProtocol(storageSync.ProtocolID(commonNode.ChainContext, commonNode.Runtime.ID()))
 	n.storageSync = storageSync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 
 	// Register storage pub service if configured.
 	if rpcRoleProvider != nil {
 		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+		commonNode.P2P.AdvertiseProtocol(storagePub.ProtocolID(commonNode.ChainContext, commonNode.Runtime.ID()))
 	}
 
 	return n, nil

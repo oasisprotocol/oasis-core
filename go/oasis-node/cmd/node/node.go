@@ -549,6 +549,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 
 	// Register consensus light client P2P protocol server.
 	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus.Core()))
+	node.P2P.AdvertiseProtocol(consensusLightP2P.ProtocolID(node.chainContext))
 
 	// Register the consensus service with the peer registry.
 	if mgr := node.P2P.PeerManager(); mgr != nil {
