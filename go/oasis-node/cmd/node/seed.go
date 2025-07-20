@@ -1,7 +1,6 @@
 package node
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -9,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmtSeed "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/seed"
 	controlApi "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -55,7 +55,7 @@ func (n *SeedNode) Cleanup() {
 }
 
 // NewSeedNode initializes the seed node.
-func NewSeedNode() (node *SeedNode, err error) {
+func NewSeedNode(cfg *config.Config) (node *SeedNode, err error) {
 	logger := cmdCommon.Logger()
 
 	node = &SeedNode{
@@ -150,14 +150,17 @@ func NewSeedNode() (node *SeedNode, err error) {
 	}
 
 	// Initialize and start the libp2p seed.
-	var seedCfg p2p.SeedConfig
-	if err = seedCfg.Load(); err != nil {
-		return nil, fmt.Errorf("failed to load libp2p seed config: %w", err)
+	p2pCfg, err := cfg.ToSeedConfig()
+	if err != nil {
+		node.logger.Error("failed to create p2p seed node config",
+			"err", err,
+		)
+		return nil, err
 	}
-	seedCfg.Signer = node.identity.P2PSigner
-	seedCfg.CommonStore = node.commonStore
+	p2pCfg.Signer = node.identity.P2PSigner
+	p2pCfg.CommonStore = node.commonStore
 
-	node.libp2pSeed, err = p2p.NewSeedNode(&seedCfg)
+	node.libp2pSeed, err = p2p.NewSeedNode(p2pCfg)
 	if err != nil {
 		return nil, err
 	}

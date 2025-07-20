@@ -384,7 +384,7 @@ func (n *Node) startRuntimeWorkers() error {
 //
 // Note: the reason for having the named err return value here is for the
 // deferred func below to propagate the error.
-func NewNode() (node *Node, err error) { // nolint: gocyclo
+func NewNode(cfg *config.Config) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node = &Node{
@@ -490,7 +490,14 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	if isArchive {
 		node.P2P = p2p.NewNop()
 	} else {
-		node.P2P, err = p2p.New(node.Identity, node.chainContext, node.commonStore)
+		p2pCfg, err := cfg.ToP2PConfig()
+		if err != nil {
+			logger.Error("failed to create P2P config",
+				"err", err,
+			)
+			return nil, err
+		}
+		node.P2P, err = p2p.New(p2pCfg, node.Identity, node.chainContext, node.commonStore)
 		if err != nil {
 			return nil, err
 		}

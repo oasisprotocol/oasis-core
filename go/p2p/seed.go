@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -159,22 +158,4 @@ type SeedConfig struct {
 // NewSeed creates a new P2P seed node service.
 func (cfg *SeedConfig) NewSeed() (api.SeedService, error) {
 	return NewSeedNode(cfg)
-}
-
-// Load loads seed configuration.
-func (cfg *SeedConfig) Load() error {
-	var hostCfg HostConfig
-	if err := hostCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load host config: %w", err)
-	}
-
-	var bootstrapCfg BootstrapDiscoveryConfig
-	if err := bootstrapCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load bootstrap config: %w", err)
-	}
-
-	cfg.HostConfig = hostCfg
-	cfg.BootstrapDiscoveryConfig = bootstrapCfg
-
-	return nil
 }

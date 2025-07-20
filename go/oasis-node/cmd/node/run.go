@@ -26,11 +26,13 @@ func Run(_ *cobra.Command, _ []string) {
 		err  error
 	)
 
+	cfg := &config.GlobalConfig
+
 	switch config.GlobalConfig.Mode {
 	case config.ModeSeed:
-		node, err = NewSeedNode()
+		node, err = NewSeedNode(cfg)
 	default:
-		node, err = NewNode()
+		node, err = NewNode(cfg)
 	}
 
 	switch {
