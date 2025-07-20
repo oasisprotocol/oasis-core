@@ -170,7 +170,7 @@ func NewNode(
 
 	// Create the fetcher pool.
 	fetchPool := workerpool.New("storage_fetch/" + commonNode.Runtime.ID().String())
-	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
+	fetchPool.Resize(config.GlobalConfigDeprecated.Storage.FetcherCount)
 
 	n := &Node{
 		commonNode: commonNode,
@@ -211,8 +211,8 @@ func NewNode(
 	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
 	// in configuration so we can ensure that the genesis checkpoint is available.
 	checkInterval := checkpoint.CheckIntervalDisabled
-	if config.GlobalConfig.Storage.Checkpointer.Enabled {
-		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
+	if config.GlobalConfigDeprecated.Storage.Checkpointer.Enabled {
+		checkInterval = config.GlobalConfigDeprecated.Storage.Checkpointer.CheckInterval
 	}
 	checkpointerCfg := checkpoint.CheckpointerConfig{
 		Name:            "runtime",
@@ -234,7 +234,7 @@ func NewNode(
 			}
 
 			var threads uint16
-			if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+			if config.GlobalConfigDeprecated.Storage.Checkpointer.ParallelChunker {
 				threads = chunkerThreads
 			}
 
@@ -294,7 +294,7 @@ func (n *Node) Name() string {
 // Start causes the worker to start responding to CometBFT new block events.
 func (n *Node) Start() error {
 	go n.worker()
-	if config.GlobalConfig.Storage.Checkpointer.Enabled {
+	if config.GlobalConfigDeprecated.Storage.Checkpointer.Enabled {
 		go n.consensusCheckpointSyncer()
 	}
 	return nil
@@ -1309,7 +1309,7 @@ mainLoop:
 			n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 			// Notify the checkpointer that there is a new finalized round.
-			if config.GlobalConfig.Storage.Checkpointer.Enabled {
+			if config.GlobalConfigDeprecated.Storage.Checkpointer.Enabled {
 				n.checkpointer.NotifyNewVersion(finalized.summary.Round)
 			}
 

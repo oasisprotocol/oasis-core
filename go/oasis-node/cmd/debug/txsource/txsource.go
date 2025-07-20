@@ -48,9 +48,9 @@ var (
 func doRun(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
 
-	config.GlobalConfig.Common.Log.Level = make(map[string]string)
-	config.GlobalConfig.Common.Log.Level["default"] = "debug"
-	config.GlobalConfig.Common.Log.Format = "json"
+	config.GlobalConfigDeprecated.Common.Log.Level = make(map[string]string)
+	config.GlobalConfigDeprecated.Common.Log.Level["default"] = "debug"
+	config.GlobalConfigDeprecated.Common.Log.Format = "json"
 
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)

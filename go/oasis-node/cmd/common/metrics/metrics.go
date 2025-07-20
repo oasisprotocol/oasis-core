@@ -108,7 +108,7 @@ func (s *pullService) Cleanup() {
 }
 
 func newPullService() (service.BackgroundService, error) {
-	addr := config.GlobalConfig.Metrics.Address
+	addr := config.GlobalConfigDeprecated.Metrics.Address
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
@@ -127,7 +127,7 @@ func newPullService() (service.BackgroundService, error) {
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler(), ReadTimeout: 5 * time.Second},
 		errCh:                 make(chan error),
-		rsvc:                  newResourceService(config.GlobalConfig.Metrics.Interval),
+		rsvc:                  newResourceService(config.GlobalConfigDeprecated.Metrics.Interval),
 	}, nil
 }
 
@@ -225,11 +225,11 @@ func (s *pushService) initPusher(isReinit bool) {
 func newPushService() (service.BackgroundService, error) {
 	svc := &pushService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("metrics"),
-		addr:                  config.GlobalConfig.Metrics.Address,
-		jobName:               config.GlobalConfig.Metrics.JobName,
-		labels:                config.GlobalConfig.Metrics.Labels,
-		interval:              config.GlobalConfig.Metrics.Interval,
-		rsvc:                  newResourceService(config.GlobalConfig.Metrics.Interval),
+		addr:                  config.GlobalConfigDeprecated.Metrics.Address,
+		jobName:               config.GlobalConfigDeprecated.Metrics.JobName,
+		labels:                config.GlobalConfigDeprecated.Metrics.Labels,
+		interval:              config.GlobalConfigDeprecated.Metrics.Interval,
+		rsvc:                  newResourceService(config.GlobalConfigDeprecated.Metrics.Interval),
 		stopCh:                make(chan struct{}),
 		quitCh:                make(chan struct{}),
 	}
@@ -248,7 +248,7 @@ func newPushService() (service.BackgroundService, error) {
 
 // New constructs a new metrics service.
 func New() (service.BackgroundService, error) {
-	mode := strings.ToLower(config.GlobalConfig.Metrics.Mode)
+	mode := strings.ToLower(config.GlobalConfigDeprecated.Metrics.Mode)
 	switch mode {
 	case MetricsModeNone:
 		return newStubService()
@@ -264,7 +264,7 @@ func New() (service.BackgroundService, error) {
 
 // Enabled returns if metrics are enabled.
 func Enabled() bool {
-	return config.GlobalConfig.Metrics.Mode != MetricsModeNone
+	return config.GlobalConfigDeprecated.Metrics.Mode != MetricsModeNone
 }
 
 // EscapeLabelCharacters replaces invalid prometheus label name characters with "_".
@@ -289,7 +289,7 @@ func GetDefaultPushLabels(ti *env.ScenarioInstanceInfo) map[string]string {
 			labels[EscapeLabelCharacters(f.Name)] = f.Value.String()
 		})
 		// Override any labels passed to oasis-test-runner via CLI.
-		for k, v := range config.GlobalConfig.Metrics.Labels {
+		for k, v := range config.GlobalConfigDeprecated.Metrics.Labels {
 			labels[k] = v
 		}
 

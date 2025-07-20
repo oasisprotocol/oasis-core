@@ -159,7 +159,7 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 		return nil, fmt.Errorf("cometbft/seed: failed to initialize data dir: %w", err)
 	}
 
-	tmSeeds, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfig.P2P.Seeds)
+	tmSeeds, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfigDeprecated.P2P.Seeds)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/seed: failed to convert seed addresses: %w", err)
 	}
@@ -167,13 +167,13 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 	p2pCfg := cmtconfig.DefaultP2PConfig()
 	p2pCfg.SeedMode = true
 	p2pCfg.Seeds = strings.Join(tmSeeds, ",")
-	p2pCfg.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
-	p2pCfg.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
-	p2pCfg.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
-	p2pCfg.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
-	p2pCfg.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
-	p2pCfg.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
-	p2pCfg.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
+	p2pCfg.ExternalAddress = config.GlobalConfigDeprecated.Consensus.ExternalAddress
+	p2pCfg.MaxNumInboundPeers = config.GlobalConfigDeprecated.Consensus.P2P.MaxNumInboundPeers
+	p2pCfg.MaxNumOutboundPeers = config.GlobalConfigDeprecated.Consensus.P2P.MaxNumOutboundPeers
+	p2pCfg.SendRate = config.GlobalConfigDeprecated.Consensus.P2P.SendRate
+	p2pCfg.RecvRate = config.GlobalConfigDeprecated.Consensus.P2P.RecvRate
+	p2pCfg.AddrBookStrict = !(config.GlobalConfigDeprecated.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
+	p2pCfg.AllowDuplicateIP = config.GlobalConfigDeprecated.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
 
 	nodeKey := &cmtp2p.NodeKey{PrivKey: crypto.SignerToCometBFT(identity.P2PSigner)}
 
@@ -184,7 +184,7 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 			version.CometBFTAppVersion,
 		),
 		DefaultNodeID: nodeKey.ID(),
-		ListenAddr:    config.GlobalConfig.Consensus.ListenAddress,
+		ListenAddr:    config.GlobalConfigDeprecated.Consensus.ListenAddress,
 		Network:       api.CometBFTChainID(srv.chainContext),
 		Version:       cmtversion.TMCoreSemVer,
 		Channels:      []byte{pex.PexChannel},
@@ -192,7 +192,7 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 	}
 
 	// Carve out all of the services.
-	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
+	logger := tmcommon.NewLogAdapter(!config.GlobalConfigDeprecated.Consensus.LogDebug)
 	if srv.addr, err = cmtp2p.NewNetAddressString(cmtp2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, fmt.Errorf("cometbft/seed: failed to create seed address: %w", err)
 	}
@@ -205,7 +205,7 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 		return nil, fmt.Errorf("cometbft/seed: failed to start address book: %w", err)
 	}
 
-	if !(config.GlobalConfig.Consensus.Debug.DisableAddrBookFromGenesis && cmflags.DebugDontBlameOasis()) {
+	if !(config.GlobalConfigDeprecated.Consensus.Debug.DisableAddrBookFromGenesis && cmflags.DebugDontBlameOasis()) {
 		if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
 			return nil, fmt.Errorf("cometbft/seed: failed to populate address book from genesis: %w", err)
 		}

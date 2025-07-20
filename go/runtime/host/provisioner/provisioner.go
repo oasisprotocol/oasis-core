@@ -92,23 +92,23 @@ func createProvisioner(
 	var err error
 	var insecureNoSandbox bool
 
-	attestInterval := config.GlobalConfig.Runtime.AttestInterval
-	sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
-	sgxLoader := config.GlobalConfig.Runtime.SGX.Loader
+	attestInterval := config.GlobalConfigDeprecated.Runtime.AttestInterval
+	sandboxBinary := config.GlobalConfigDeprecated.Runtime.SandboxBinary
+	sgxLoader := config.GlobalConfigDeprecated.Runtime.SGX.Loader
 	if sgxLoader == "" {
-		sgxLoader = config.GlobalConfig.Runtime.SGXLoader
+		sgxLoader = config.GlobalConfigDeprecated.Runtime.SGXLoader
 	}
-	insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
+	insecureMock := config.GlobalConfigDeprecated.Runtime.DebugMockTEE
 
 	// Support legacy configuration where the runtime environment determines
 	// whether the TEE should be mocked.
-	if config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentSGXMock {
+	if config.GlobalConfigDeprecated.Runtime.Environment == rtConfig.RuntimeEnvironmentSGXMock {
 		insecureMock = true
 	}
 
 	// Register provisioners based on the configured provisioner.
 	provisioners := make(map[component.TEEKind]runtimeHost.Provisioner)
-	switch p := config.GlobalConfig.Runtime.Provisioner; p {
+	switch p := config.GlobalConfigDeprecated.Runtime.Provisioner; p {
 	case rtConfig.RuntimeProvisionerMock:
 		// Mock provisioner, only supported when the runtime requires no TEE hardware.
 		if !cmdFlags.DebugDontBlameOasis() {
@@ -171,8 +171,8 @@ func createProvisioner(
 	// Configure TDX provisioner.
 	// TODO: Allow provisioner selection in the future, currently we only have QEMU.
 	cidPool, err := hostTdx.NewCidPool(
-		config.GlobalConfig.Runtime.TDX.CidStart,
-		config.GlobalConfig.Runtime.TDX.CidCount,
+		config.GlobalConfigDeprecated.Runtime.TDX.CidStart,
+		config.GlobalConfigDeprecated.Runtime.TDX.CidCount,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CID pool: %w", err)
@@ -194,7 +194,7 @@ func createProvisioner(
 
 	// Configure optional load balancing.
 	for tee, rp := range provisioners {
-		numInstances := int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances)
+		numInstances := int(config.GlobalConfigDeprecated.Runtime.LoadBalancer.NumInstances)
 		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, numInstances)
 	}
 

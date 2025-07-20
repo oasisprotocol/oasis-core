@@ -67,8 +67,12 @@ func (m NodeMode) HasLocalStorage() bool {
 	return false
 }
 
-// GlobalConfig holds the global configuration options.
-var GlobalConfig Config
+// GlobalConfigDeprecated holds the global configuration options.
+//
+// TODO: https://github.com/oasisprotocol/oasis-core/issues/6271
+//
+//	Avoid using global config. Instead you should pass it explicitly.
+var GlobalConfigDeprecated Config
 
 // Config is the top-level configuration structure.
 type Config struct {
@@ -175,18 +179,18 @@ func InitConfig(cfgFile string) error {
 
 	// Reset the global config and apply changes from the config file.
 	// Report error if any of the fields from the input file are unknown.
-	GlobalConfig = DefaultConfig()
+	GlobalConfigDeprecated = DefaultConfig()
 	dec := yaml.NewDecoder(bytes.NewReader(cfg))
 	dec.KnownFields(true)
-	err = dec.Decode(&GlobalConfig)
+	err = dec.Decode(&GlobalConfigDeprecated)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to load config file '%s': %w", cfgFile, err)
 	}
 
 	// Validate config file.
-	return GlobalConfig.Validate()
+	return GlobalConfigDeprecated.Validate()
 }
 
 func init() {
-	GlobalConfig = DefaultConfig()
+	GlobalConfigDeprecated = DefaultConfig()
 }

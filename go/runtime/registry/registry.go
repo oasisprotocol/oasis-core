@@ -561,7 +561,7 @@ func (r *runtimeRegistry) createRuntime(runtimeID common.Namespace, managed bool
 		r.consensus.Pruner().RegisterHandler(rt.history)
 
 		// Start indexing blocks.
-		indexer := history.NewBlockIndexer(r.consensus, rt.history, config.GlobalConfig.Runtime.Indexer.BatchSize)
+		indexer := history.NewBlockIndexer(r.consensus, rt.history, config.GlobalConfigDeprecated.Runtime.Indexer.BatchSize)
 		r.indexers[runtimeID] = indexer
 	}
 
@@ -687,7 +687,7 @@ func (r *runtimeRegistry) Cleanup() {
 // Init initializes the runtime registry by adding runtimes from the global
 // runtime configuration to the registry.
 func (r *runtimeRegistry) Init(runtimeIDs []common.Namespace) error {
-	managed := config.GlobalConfig.Mode != config.ModeKeyManager
+	managed := config.GlobalConfigDeprecated.Mode != config.ModeKeyManager
 
 	for _, runtimeID := range runtimeIDs {
 		if _, err := r.createRuntime(runtimeID, managed); err != nil {

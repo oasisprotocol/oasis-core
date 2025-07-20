@@ -173,7 +173,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 			defer history.Close()
 
 			nodeCfg := &db.Config{
-				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfig.Storage.Backend),
+				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfigDeprecated.Storage.Backend),
 				Namespace: rt,
 			}
 
@@ -216,7 +216,7 @@ func doCheck(_ *cobra.Command, args []string) error {
 			runtimeDir := runtimeConfig.GetRuntimeStateDir(dataDir, rt)
 
 			nodeCfg := &db.Config{
-				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfig.Storage.Backend),
+				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfigDeprecated.Storage.Backend),
 				Namespace: rt,
 			}
 
@@ -262,7 +262,7 @@ func doRenameNs(_ *cobra.Command, args []string) error {
 	dstDir := runtimeConfig.GetRuntimeStateDir(dataDir, dstID)
 
 	nodeCfg := &db.Config{
-		DB:        workerStorage.GetLocalBackendDBDir(srcDir, config.GlobalConfig.Storage.Backend),
+		DB:        workerStorage.GetLocalBackendDBDir(srcDir, config.GlobalConfigDeprecated.Storage.Backend),
 		Namespace: srcID,
 	}
 

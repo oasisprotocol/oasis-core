@@ -26,9 +26,9 @@ func Run(_ *cobra.Command, _ []string) {
 		err  error
 	)
 
-	cfg := &config.GlobalConfig
+	cfg := &config.GlobalConfigDeprecated
 
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeSeed:
 		node, err = NewSeedNode(cfg)
 	default:

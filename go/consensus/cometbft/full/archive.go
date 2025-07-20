@@ -171,7 +171,7 @@ func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Service, e
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:        filepath.Join(srv.dataDir, tmcommon.StateDir),
-		StorageBackend: config.GlobalConfig.Storage.Backend,
+		StorageBackend: config.GlobalConfigDeprecated.Storage.Backend,
 		Pruning: abci.PruneConfig{
 			Strategy:      abci.PruneNone,
 			PruneInterval: time.Hour * 100, // Irrelevant as pruning is disabled.
@@ -191,7 +191,7 @@ func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Service, e
 	}
 
 	// Setup needed CometBFT services.
-	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
+	logger := tmcommon.NewLogAdapter(!config.GlobalConfigDeprecated.Consensus.LogDebug)
 	srv.abciClient = abcicli.NewLocalClient(new(cmtsync.Mutex), srv.mux.Mux())
 
 	dbProvider, err := db.GetProvider()

@@ -44,5 +44,5 @@ func (p *Provider) GetGenesisDocument() (*api.Document, error) {
 // DefaultProvider creates a new local file genesis provider for the genesis file path
 // specified in the genesis config.
 func DefaultProvider() *Provider {
-	return NewProvider(config.GlobalConfig.Genesis.File)
+	return NewProvider(config.GlobalConfigDeprecated.Genesis.File)
 }

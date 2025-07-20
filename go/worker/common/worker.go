@@ -193,7 +193,7 @@ func New(
 	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeValidator, config.ModeSeed:
 		enabled = false
 	case config.ModeArchive:

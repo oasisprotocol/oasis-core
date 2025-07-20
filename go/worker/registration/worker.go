@@ -1024,8 +1024,8 @@ func GetRegistrationSigner(identity *identity.Identity) (signature.PublicKey, si
 	}
 
 	// Determine the owning entity ID.
-	cfgEntityFn := config.GlobalConfig.Registration.Entity
-	cfgEntityID := config.GlobalConfig.Registration.EntityID
+	cfgEntityFn := config.GlobalConfigDeprecated.Registration.Entity
+	cfgEntityID := config.GlobalConfigDeprecated.Registration.EntityID
 
 	switch {
 	case cfgEntityFn != "":
@@ -1104,7 +1104,7 @@ func New(
 
 	w.storedDeregister = storedDeregister
 
-	if config.GlobalConfig.Consensus.Validator || config.GlobalConfig.Mode == config.ModeValidator {
+	if config.GlobalConfigDeprecated.Consensus.Validator || config.GlobalConfigDeprecated.Mode == config.ModeValidator {
 		rp, err := w.NewRoleProvider(node.RoleValidator)
 		if err != nil {
 			return nil, err

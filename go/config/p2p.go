@@ -97,7 +97,7 @@ func (c *Config) hostConfig() (*p2p.HostConfig, error) {
 
 func (c *Config) gossipSubConfig() (*p2p.GossipSubConfig, error) {
 	var cfg p2p.GossipSubConfig
-	persistentPeers, err := api.AddrInfosFromConsensusAddrs(GlobalConfig.P2P.ConnectionManager.PersistentPeers)
+	persistentPeers, err := api.AddrInfosFromConsensusAddrs(GlobalConfigDeprecated.P2P.ConnectionManager.PersistentPeers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert persistent peers' addresses: %w", err)
 	}

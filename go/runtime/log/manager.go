@@ -51,7 +51,7 @@ func (m *Manager) Get(runtimeID common.Namespace, componentID component.ID) (*Lo
 	}
 	fn := filepath.Join(logDir, logFn)
 
-	log, err := NewLog(fn, config.GlobalConfig.Runtime.Log.MaxLogSize)
+	log, err := NewLog(fn, config.GlobalConfigDeprecated.Runtime.Log.MaxLogSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log handle: %w", err)
 	}

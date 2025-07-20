@@ -98,18 +98,18 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 
 	for compID, comp := range components {
 		teeKind := comp.TEEKind()
-		if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(manifest.ID, compID); ok {
+		if compCfg, ok := config.GlobalConfigDeprecated.Runtime.GetComponent(manifest.ID, compID); ok {
 			if kind, ok := compCfg.TEEKind(); ok {
 				teeKind = kind
 			}
 		} else {
 			// Support legacy configuration where the runtime environment determines
 			// whether the client node should run the runtime in an SGX environment.
-			isEnvAuto := config.GlobalConfig.Runtime.Environment == rtConfig.RuntimeEnvironmentAuto
-			hasSGXLoader := config.GlobalConfig.Runtime.SGX.Loader != ""
-			hasSGXLoader = hasSGXLoader || config.GlobalConfig.Runtime.SGXLoader != ""
-			insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
-			if comp.ID().IsRONL() && config.GlobalConfig.Mode.IsClientOnly() && isEnvAuto && !hasSGXLoader && !insecureMock {
+			isEnvAuto := config.GlobalConfigDeprecated.Runtime.Environment == rtConfig.RuntimeEnvironmentAuto
+			hasSGXLoader := config.GlobalConfigDeprecated.Runtime.SGX.Loader != ""
+			hasSGXLoader = hasSGXLoader || config.GlobalConfigDeprecated.Runtime.SGXLoader != ""
+			insecureMock := config.GlobalConfigDeprecated.Runtime.DebugMockTEE
+			if comp.ID().IsRONL() && config.GlobalConfigDeprecated.Mode.IsClientOnly() && isEnvAuto && !hasSGXLoader && !insecureMock {
 				teeKind = component.TEEKindNone
 			}
 		}

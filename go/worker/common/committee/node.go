@@ -437,9 +437,9 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 
 	// For compute nodes, determine if there is a next version and activate it early.
 	var nextVersion *version.Version
-	if config.GlobalConfig.Mode == config.ModeCompute {
+	if config.GlobalConfigDeprecated.Mode == config.ModeCompute {
 		nextDeploy := n.CurrentDescriptor.NextDeployment(epoch)
-		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
+		preWarmEpochs := beacon.EpochTime(config.GlobalConfigDeprecated.Runtime.PreWarmEpochs)
 
 		if nextDeploy != nil && nextDeploy.ValidFrom-epoch <= preWarmEpochs {
 			nextVersion = new(version.Version)

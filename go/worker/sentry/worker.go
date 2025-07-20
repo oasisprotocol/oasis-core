@@ -14,7 +14,7 @@ import (
 
 // Enabled returns true if Sentry worker is enabled.
 func Enabled() bool {
-	return config.GlobalConfig.Sentry.Enabled
+	return config.GlobalConfigDeprecated.Sentry.Enabled
 }
 
 // Worker is a sentry node worker providing its address(es) to other nodes and
@@ -103,7 +103,7 @@ func New(sentry api.Backend, identity *identity.Identity) (*Worker, error) {
 
 	if w.enabled {
 		peerPubkeyAuth := auth.NewPeerPubkeyAuthenticator()
-		for _, pubkey := range config.GlobalConfig.Sentry.Control.AuthorizedPubkeys {
+		for _, pubkey := range config.GlobalConfigDeprecated.Sentry.Control.AuthorizedPubkeys {
 			var pk signature.PublicKey
 			if err := pk.UnmarshalText([]byte(pubkey)); err != nil {
 				return nil, fmt.Errorf("worker/sentry: failed unmarshalling upstream public key: %s: %w", pubkey, err)
@@ -112,7 +112,7 @@ func New(sentry api.Backend, identity *identity.Identity) (*Worker, error) {
 		}
 		grpcServer, err := grpc.NewServer(&grpc.ServerConfig{
 			Name:     "sentry",
-			Port:     config.GlobalConfig.Sentry.Control.Port,
+			Port:     config.GlobalConfigDeprecated.Sentry.Control.Port,
 			Identity: identity,
 			AuthFunc: peerPubkeyAuth.AuthFunc,
 		})

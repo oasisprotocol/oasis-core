@@ -316,7 +316,7 @@ func (rh *roflHostHandler) handleLogGet(ctx context.Context, rq *rofl.LogGetRequ
 
 // ensureComponentPermissions ensures that the component has all of the specified permissions.
 func (rh *roflHostHandler) ensureComponentPermissions(perms ...runtimeConfig.ComponentPermission) error {
-	compCfg, ok := config.GlobalConfig.Runtime.GetComponent(rh.parent.runtime.ID(), rh.id)
+	compCfg, ok := config.GlobalConfigDeprecated.Runtime.GetComponent(rh.parent.runtime.ID(), rh.id)
 	if !ok {
 		return fmt.Errorf("forbidden")
 	}

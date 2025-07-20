@@ -116,7 +116,7 @@ func newSecretsWorker(
 	}
 
 	privatePeers := make(map[core.PeerID]struct{})
-	for _, b64pk := range config.GlobalConfig.Keymanager.PrivatePeerPubKeys {
+	for _, b64pk := range config.GlobalConfigDeprecated.Keymanager.PrivatePeerPubKeys {
 		pkBytes, err := base64.StdEncoding.DecodeString(b64pk)
 		if err != nil {
 			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a base64-encoded public key (%w)", b64pk, err)

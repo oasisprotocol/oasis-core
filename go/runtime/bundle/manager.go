@@ -168,19 +168,19 @@ func NewManager(dataDir string, runtimeIDs []common.Namespace, store ManifestSto
 
 	// Define a limit on the maximum allowed bundle size.
 	bundleSize := int64(maxDefaultBundleSizeBytes)
-	if size := config.GlobalConfig.Runtime.MaxBundleSize; size != "" {
+	if size := config.GlobalConfigDeprecated.Runtime.MaxBundleSize; size != "" {
 		bundleSize = int64(config.ParseSizeInBytes(size))
 	}
 
 	// Validate global repository URLs.
-	globalBaseURLs, err := validateAndNormalizeURLs(config.GlobalConfig.Runtime.Registries)
+	globalBaseURLs, err := validateAndNormalizeURLs(config.GlobalConfigDeprecated.Runtime.Registries)
 	if err != nil {
 		return nil, err
 	}
 
 	// Validate each runtime's registry URLs.
 	runtimeBaseURLs := make(map[common.Namespace][]string)
-	for _, runtime := range config.GlobalConfig.Runtime.Runtimes {
+	for _, runtime := range config.GlobalConfigDeprecated.Runtime.Runtimes {
 		urls, err := validateAndNormalizeURLs(runtime.Registries)
 		if err != nil {
 			return nil, err
@@ -253,7 +253,7 @@ func (m *Manager) run(ctx context.Context) {
 	}
 
 	// Extract bundles from the configuration.
-	exploded, err := m.explodeBundles(config.GlobalConfig.Runtime.Paths)
+	exploded, err := m.explodeBundles(config.GlobalConfigDeprecated.Runtime.Paths)
 	if err != nil {
 		m.logger.Error("failed to explode bundles",
 			"err", err,

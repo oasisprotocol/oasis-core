@@ -285,7 +285,7 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 
 // createNetworkingConfig generates QEMU networking configuration for a component.
 func (p *qemuProvisioner) createNetworkingConfig(cfg host.Config) ([]string, error) {
-	compCfg, _ := config.GlobalConfig.Runtime.GetComponent(cfg.ID, cfg.Component.ID())
+	compCfg, _ := config.GlobalConfigDeprecated.Runtime.GetComponent(cfg.ID, cfg.Component.ID())
 	netdevOpts := []string{"user", "id=net0"}
 
 	// Inbound forwarding.

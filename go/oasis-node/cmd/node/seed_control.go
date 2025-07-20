@@ -76,7 +76,7 @@ func (n *SeedNode) GetStatus(context.Context) (*control.Status, error) {
 
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
-		Mode:            config.GlobalConfig.Mode,
+		Mode:            config.GlobalConfigDeprecated.Mode,
 		Identity:        identity,
 		Seed:            &seedStatus,
 	}, nil

@@ -548,28 +548,28 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 	// Create CometBFT application mux.
 	var pruneCfg abci.PruneConfig
-	pruneStrat := config.GlobalConfig.Consensus.Prune.Strategy
+	pruneStrat := config.GlobalConfigDeprecated.Consensus.Prune.Strategy
 	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
 		return err
 	}
-	pruneCfg.NumKept = config.GlobalConfig.Consensus.Prune.NumKept
-	pruneCfg.PruneInterval = max(config.GlobalConfig.Consensus.Prune.Interval, time.Second)
+	pruneCfg.NumKept = config.GlobalConfigDeprecated.Consensus.Prune.NumKept
+	pruneCfg.PruneInterval = max(config.GlobalConfigDeprecated.Consensus.Prune.Interval, time.Second)
 
 	var threads uint16
-	if config.GlobalConfig.Storage.Checkpointer.ParallelChunker {
+	if config.GlobalConfigDeprecated.Storage.Checkpointer.ParallelChunker {
 		threads = chunkerThreads
 	}
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
-		StorageBackend:            config.GlobalConfig.Storage.Backend,
+		StorageBackend:            config.GlobalConfigDeprecated.Storage.Backend,
 		Pruning:                   pruneCfg,
-		HaltEpoch:                 beaconAPI.EpochTime(config.GlobalConfig.Consensus.HaltEpoch),
-		HaltHeight:                config.GlobalConfig.Consensus.HaltHeight,
-		MinGasPrice:               config.GlobalConfig.Consensus.MinGasPrice,
+		HaltEpoch:                 beaconAPI.EpochTime(config.GlobalConfigDeprecated.Consensus.HaltEpoch),
+		HaltHeight:                config.GlobalConfigDeprecated.Consensus.HaltHeight,
+		MinGasPrice:               config.GlobalConfigDeprecated.Consensus.MinGasPrice,
 		Identity:                  t.identity,
-		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
-		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
+		DisableCheckpointer:       config.GlobalConfigDeprecated.Consensus.Checkpointer.Disabled,
+		CheckpointerCheckInterval: config.GlobalConfigDeprecated.Consensus.Checkpointer.CheckInterval,
 		ChunkerThreads:            threads,
 		InitialHeight:             uint64(t.genesisHeight),
 		ChainContext:              t.chainContext,
@@ -588,19 +588,19 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	// Convert addresses and public keys to CometBFT form.
-	persistentPeers, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfig.Consensus.P2P.PersistentPeer)
+	persistentPeers, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfigDeprecated.Consensus.P2P.PersistentPeer)
 	if err != nil {
 		return fmt.Errorf("cometbft: failed to convert persistent peer addresses: %w", err)
 	}
-	seeds, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfig.P2P.Seeds)
+	seeds, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfigDeprecated.P2P.Seeds)
 	if err != nil {
 		return fmt.Errorf("cometbft: failed to convert seed addresses: %w", err)
 	}
-	sentryUpstreamAddrs, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfig.Consensus.SentryUpstreamAddresses)
+	sentryUpstreamAddrs, err := tmcommon.ConsensusAddressesToCometBFT(config.GlobalConfigDeprecated.Consensus.SentryUpstreamAddresses)
 	if err != nil {
 		return fmt.Errorf("cometbft: failed to convert sentry upstream addresses: %w", err)
 	}
-	unconditionalPeers, err := tmcommon.PublicKeysToCometBFT(config.GlobalConfig.Consensus.P2P.UnconditionalPeer)
+	unconditionalPeers, err := tmcommon.PublicKeysToCometBFT(config.GlobalConfigDeprecated.Consensus.P2P.UnconditionalPeer)
 	if err != nil {
 		return fmt.Errorf("cometbft: failed to convert unconditional peer public keys: %w", err)
 	}
@@ -613,24 +613,24 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	cometConfig.Consensus.SkipTimeoutCommit = t.skipTimeoutCommit
 	cometConfig.Consensus.CreateEmptyBlocks = true
 	cometConfig.Consensus.CreateEmptyBlocksInterval = t.emptyBlockInterval
-	cometConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
+	cometConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfigDeprecated.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
 	cometConfig.Mempool.Version = cmtconfig.MempoolV1
 	cometConfig.Instrumentation.Prometheus = true
 	cometConfig.Instrumentation.PrometheusListenAddr = ""
 	cometConfig.TxIndex.Indexer = "null"
-	cometConfig.P2P.ListenAddress = config.GlobalConfig.Consensus.ListenAddress
-	cometConfig.P2P.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
-	cometConfig.P2P.PexReactor = !config.GlobalConfig.Consensus.P2P.DisablePeerExchange
-	cometConfig.P2P.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
-	cometConfig.P2P.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
-	cometConfig.P2P.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
-	cometConfig.P2P.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
+	cometConfig.P2P.ListenAddress = config.GlobalConfigDeprecated.Consensus.ListenAddress
+	cometConfig.P2P.ExternalAddress = config.GlobalConfigDeprecated.Consensus.ExternalAddress
+	cometConfig.P2P.PexReactor = !config.GlobalConfigDeprecated.Consensus.P2P.DisablePeerExchange
+	cometConfig.P2P.MaxNumInboundPeers = config.GlobalConfigDeprecated.Consensus.P2P.MaxNumInboundPeers
+	cometConfig.P2P.MaxNumOutboundPeers = config.GlobalConfigDeprecated.Consensus.P2P.MaxNumOutboundPeers
+	cometConfig.P2P.SendRate = config.GlobalConfigDeprecated.Consensus.P2P.SendRate
+	cometConfig.P2P.RecvRate = config.GlobalConfigDeprecated.Consensus.P2P.RecvRate
 	cometConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
-	cometConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistenPeersMaxDialPeriod
+	cometConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfigDeprecated.Consensus.P2P.PersistenPeersMaxDialPeriod
 	cometConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
 	cometConfig.P2P.Seeds = strings.Join(seeds, ",")
-	cometConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
-	cometConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
+	cometConfig.P2P.AddrBookStrict = !(config.GlobalConfigDeprecated.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
+	cometConfig.P2P.AllowDuplicateIP = config.GlobalConfigDeprecated.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
 	cometConfig.RPC.ListenAddress = ""
 
 	if len(sentryUpstreamAddrs) > 0 {
@@ -722,19 +722,19 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 		// Configure state sync if enabled.
 		var stateProvider cmtstatesync.StateProvider
-		if config.GlobalConfig.Consensus.StateSync.Enabled {
+		if config.GlobalConfigDeprecated.Consensus.StateSync.Enabled {
 			t.Logger.Info("state sync enabled")
 
 			// Enable state sync in the configuration.
 			cometConfig.StateSync.Enable = true
-			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.LightClient.Trust.Hash
+			cometConfig.StateSync.TrustHash = config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Hash
 
 			// Create light client.
 			cfg := light.Config{
 				GenesisDocument: t.genesisDoc,
 				TrustOptions: cmtlight.TrustOptions{
-					Period: config.GlobalConfig.Consensus.LightClient.Trust.Period,
-					Height: int64(config.GlobalConfig.Consensus.LightClient.Trust.Height),
+					Period: config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Period,
+					Height: int64(config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Height),
 					Hash:   cometConfig.StateSync.TrustHashBytes(),
 				},
 			}
@@ -757,7 +757,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			cometbftGenesisProvider,
 			wrapDbProvider,
 			cmtnode.DefaultMetricsProvider(cometConfig.Instrumentation),
-			tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug),
+			tmcommon.NewLogAdapter(!config.GlobalConfigDeprecated.Consensus.LogDebug),
 			cmtnode.StateProvider(stateProvider),
 		)
 		if err != nil {
@@ -918,7 +918,7 @@ func (t *fullService) upgradeHaltHook() api.HaltHook {
 			// when all the other services start shutting down.
 			//
 			// Randomize the period so that not all nodes shut down at the same time.
-			delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), config.GlobalConfig.Consensus.UpgradeStopDelay)
+			delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), config.GlobalConfigDeprecated.Consensus.UpgradeStopDelay)
 			time.Sleep(delay)
 
 			t.Logger.Info("stopping the node for upgrade")
@@ -993,12 +993,12 @@ func New(ctx context.Context, p2p p2pAPI.Service, cfg Config) (consensusAPI.Serv
 	t.Logger.Info("starting a full consensus node")
 
 	// Create price discovery mechanism and the submission manager.
-	pd, err := pricediscovery.New(ctx, t, config.GlobalConfig.Consensus.Submission.GasPrice)
+	pd, err := pricediscovery.New(ctx, t, config.GlobalConfigDeprecated.Consensus.Submission.GasPrice)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create price discovery: %w", err)
 	}
 	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd,
-		config.GlobalConfig.Consensus.Submission.MaxFee,
+		config.GlobalConfigDeprecated.Consensus.Submission.MaxFee,
 	)
 
 	if err := t.lazyInit(); err != nil {

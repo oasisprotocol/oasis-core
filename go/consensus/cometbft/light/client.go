@@ -64,7 +64,7 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 		witnesses,
 		cmtlightdb.New(dbm.NewMemDB(), ""),
 		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts), // TODO: Make this configurable.
-		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
+		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfigDeprecated.Consensus.LogDebug)),
 		cmtlight.DisableProviderRemoval(),
 	)
 	if err != nil {

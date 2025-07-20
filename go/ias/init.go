@@ -16,7 +16,7 @@ var logger = logging.GetLogger("ias")
 // New creates a new IAS endpoint.
 func New(identity *identity.Identity) ([]api.Endpoint, error) {
 	if cmdFlags.DebugDontBlameOasis() {
-		if config.GlobalConfig.IAS.DebugSkipVerify {
+		if config.GlobalConfigDeprecated.IAS.DebugSkipVerify {
 			logger.Warn("`ias.debug_skip_verify` set, AVR signature validation bypassed")
 			ias.SetSkipVerify()
 		}
@@ -24,6 +24,6 @@ func New(identity *identity.Identity) ([]api.Endpoint, error) {
 
 	return client.New(
 		identity,
-		config.GlobalConfig.IAS.ProxyAddresses,
+		config.GlobalConfigDeprecated.IAS.ProxyAddresses,
 	)
 }

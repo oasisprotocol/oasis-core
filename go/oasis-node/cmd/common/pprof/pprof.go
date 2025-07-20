@@ -109,7 +109,7 @@ func (p *pprofService) Cleanup() {
 
 // New constructs a new pprof service.
 func New() (service.BackgroundService, error) {
-	address := config.GlobalConfig.Pprof.BindAddress
+	address := config.GlobalConfigDeprecated.Pprof.BindAddress
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),

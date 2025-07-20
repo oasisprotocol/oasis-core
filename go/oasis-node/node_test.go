@@ -134,19 +134,19 @@ func newTestNode(t *testing.T) *testNode {
 	initConfigOnce.Do(func() {
 		cmdCommon.InitConfig()
 
-		config.GlobalConfig.Common.Log.Level = make(map[string]string)
-		config.GlobalConfig.Common.Log.Level["default"] = "debug"
-		config.GlobalConfig.Common.Log.Format = "json"
+		config.GlobalConfigDeprecated.Common.Log.Level = make(map[string]string)
+		config.GlobalConfigDeprecated.Common.Log.Level["default"] = "debug"
+		config.GlobalConfigDeprecated.Common.Log.Format = "json"
 
-		config.GlobalConfig.Consensus.Validator = true
-		config.GlobalConfig.Common.Debug.AllowRoot = true
-		config.GlobalConfig.Mode = config.ModeCompute
-		config.GlobalConfig.Runtime.Provisioner = runtimeConfig.RuntimeProvisionerMock
-		config.GlobalConfig.Storage.Backend = "badger"
-		config.GlobalConfig.Storage.PublicRPCEnabled = true
-		config.GlobalConfig.Consensus.ListenAddress = "tcp://0.0.0.0:27565"
-		config.GlobalConfig.Consensus.SupplementarySanity.Enabled = true
-		config.GlobalConfig.Consensus.SupplementarySanity.Interval = 1
+		config.GlobalConfigDeprecated.Consensus.Validator = true
+		config.GlobalConfigDeprecated.Common.Debug.AllowRoot = true
+		config.GlobalConfigDeprecated.Mode = config.ModeCompute
+		config.GlobalConfigDeprecated.Runtime.Provisioner = runtimeConfig.RuntimeProvisionerMock
+		config.GlobalConfigDeprecated.Storage.Backend = "badger"
+		config.GlobalConfigDeprecated.Storage.PublicRPCEnabled = true
+		config.GlobalConfigDeprecated.Consensus.ListenAddress = "tcp://0.0.0.0:27565"
+		config.GlobalConfigDeprecated.Consensus.SupplementarySanity.Enabled = true
+		config.GlobalConfigDeprecated.Consensus.SupplementarySanity.Interval = 1
 	})
 
 	require := require.New(t)
@@ -159,10 +159,10 @@ func newTestNode(t *testing.T) *testNode {
 	entity, entitySigner, err := entity.Generate(dataDir, signerFactory, nil)
 	require.NoError(err, "create test entity")
 
-	config.GlobalConfig.Registration.Entity = filepath.Join(dataDir, "entity.json")
+	config.GlobalConfigDeprecated.Registration.Entity = filepath.Join(dataDir, "entity.json")
 
-	config.GlobalConfig.Common.DataDir = dataDir
-	config.GlobalConfig.Common.Log.File = filepath.Join(dataDir, "test-node.log")
+	config.GlobalConfigDeprecated.Common.DataDir = dataDir
+	config.GlobalConfigDeprecated.Common.Log.File = filepath.Join(dataDir, "test-node.log")
 	viper.Set(bundle.CfgDebugMockIDs, []string{
 		testRuntimeID.String(),
 	})
@@ -183,7 +183,7 @@ func newTestNode(t *testing.T) *testNode {
 	doc, err := tmTestGenesis.CreateTestNodeGenesisDocument(identity, entity, entitySigner)
 	require.NoError(err, "test entity genesis document")
 	require.NoError(doc.WriteFileJSON(genesisPath))
-	config.GlobalConfig.Genesis.File = genesisPath
+	config.GlobalConfigDeprecated.Genesis.File = genesisPath
 
 	n := &testNode{
 		runtimeID:    testRuntime.ID,

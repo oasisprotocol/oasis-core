@@ -21,9 +21,9 @@ const (
 
 // GetExternalAddress returns the configured CometBFT external address.
 func GetExternalAddress() (*url.URL, error) {
-	addrURI := config.GlobalConfig.Consensus.ExternalAddress
+	addrURI := config.GlobalConfigDeprecated.Consensus.ExternalAddress
 	if addrURI == "" {
-		addrURI = config.GlobalConfig.Consensus.ListenAddress
+		addrURI = config.GlobalConfigDeprecated.Consensus.ListenAddress
 	}
 	if addrURI == "" {
 		return nil, fmt.Errorf("cometbft: no external address configured")
