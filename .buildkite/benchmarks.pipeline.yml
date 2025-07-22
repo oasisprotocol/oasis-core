@@ -117,8 +117,13 @@ steps:
   # E2E test jobs with enabled benchmarking
   #########################################
   - label: E2E tests
-    parallelism: 7
-    timeout_in_minutes: 30
+  # Testing only:
+  # Since this pipeline was introduced the amount of registered tests has increased
+  # so much that existing parallelization/timeout is not sufficient.
+  # Currently, this is run every day so I am not worried increasing parallelism 4x
+  # and timeout 30% would cause the bill to skyrocket (at least after one run).
+    parallelism: 30
+    timeout_in_minutes: 40
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - rm -rf /var/tmp/benchmarks/*
