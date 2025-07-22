@@ -13,6 +13,10 @@ var (
 	_ RepublishableTransactionSource = (*mainQueue)(nil)
 )
 
+// maxTransactionsPerSender is the maximum number of transactions a single
+// sender can have queued at any given time.
+const maxTransactionsPerSender = 10
+
 // MainQueueTransaction is a transaction and its metadata in the main queue.
 type MainQueueTransaction struct {
 	TxQueueMeta
@@ -80,7 +84,7 @@ type mainQueue struct {
 
 func newMainQueue(capacity int) *mainQueue {
 	return &mainQueue{
-		inner: newScheduleQueue(capacity),
+		inner: newScheduleQueue(capacity, maxTransactionsPerSender),
 	}
 }
 
