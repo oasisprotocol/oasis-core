@@ -116,7 +116,7 @@ type testNode struct {
 }
 
 func (n *testNode) Stop() {
-	const waitTime = 1 * time.Second
+	const waitTime = time.Second
 
 	// HACK: The gRPC server will cause a segfault if it is torn down
 	// while it is still in the process of being initialized.  There is
