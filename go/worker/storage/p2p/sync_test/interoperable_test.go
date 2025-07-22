@@ -213,7 +213,7 @@ func assertEqualCheckpointMeta(this, other *checkpoint.Metadata) error {
 	if this.Version != other.Version {
 		return fmt.Errorf("version not equal")
 	}
-	if this.Root != other.Root {
+	if this.Root.Equal(&other.Root) {
 		return fmt.Errorf("root not equal")
 	}
 	if len(this.Chunks) != len(other.Chunks) {
@@ -337,12 +337,10 @@ var (
 func (bm *backendMock) GetCheckpoints(_ context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
 	cpVersion = request.Version
 	root = node.Root{
-		// Existing bug: storagesync p2p server does not set namespace, nor does checkpoint.ChunkProvider validates it.
-		//               As a result empty namespace is always passed around, thus commenting Namespace field below.
-		// Namespace: request.Namespace
-		Version: 1,
-		Type:    api.RootTypeState,
-		Hash:    hashFromBytes([]byte("root has")),
+		Namespace: request.Namespace,
+		Version:   1,
+		Type:      api.RootTypeState,
+		Hash:      hashFromBytes([]byte("root has")),
 	}
 	cp := &checkpoint.Metadata{
 		Version: cpVersion,

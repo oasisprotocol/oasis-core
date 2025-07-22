@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -70,5 +69,5 @@ func (s *service) handleGetCheckpointChunk(ctx context.Context, request *GetChec
 
 // NewServer creates a new checkpoints protocol server.
 func NewServer(chainContext string, runtimeID common.Namespace, backend api.Backend) rpc.Server {
-	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion), &service{backend})
+	return rpc.NewServer(ProtocolID(chainContext, runtimeID), &service{backend})
 }

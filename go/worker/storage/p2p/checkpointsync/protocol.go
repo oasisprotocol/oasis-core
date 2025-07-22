@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -21,6 +22,11 @@ const CheckpointSyncProtocolID = "checkpointsync"
 
 // CheckpointSyncProtocolVersion is the supported version of the checkpoint sync protocol.
 var CheckpointSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+
+// ProtocolID returns the runtime checkpoint sync protocol ID.
+func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
+}
 
 // Constants related to the GetCheckpoints method.
 const (
@@ -40,7 +46,7 @@ type GetCheckpointsResponse struct {
 // Constants related to the GetCheckpointChunk method.
 const (
 	MethodGetCheckpointChunk          = "GetCheckpointChunk"
-	MaxGetCheckpointChunkResponseTime = 60 * time.Second
+	MaxGetCheckpointChunkResponseTime = 1 * time.Minute
 )
 
 // GetCheckpointChunkRequest is a GetCheckpointChunk request.

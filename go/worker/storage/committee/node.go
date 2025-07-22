@@ -276,9 +276,7 @@ func NewNode(
 	})
 
 	// Advertise and serve legacy storage sync protocol.
-	// TODO #6270 will move advertisement part out of the protocol registration.
 	commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	commonNode.P2P.RegisterProtocol(synclegacy.GetStorageSyncProtocolID(commonNode.ChainContext, commonNode.Runtime.ID()), 5, 10)
 
 	// Register diff sync protocol server.
 	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
@@ -288,8 +286,6 @@ func NewNode(
 	}
 
 	// Create diff and checkpoint sync p2p protocol clients that have a fallback to the old legacy storage sync protocol.
-	// TODO: This automatically starts advertising the given protocol even if the server is not registered.
-	//       #6270 wil fix that by moving advertisement out of the client creation.
 	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 

@@ -5,7 +5,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -58,5 +57,5 @@ func (s *service) handleGetDiff(ctx context.Context, request *GetDiffRequest) (*
 
 // NewServer creates a new storage diff protocol server.
 func NewServer(chainContext string, runtimeID common.Namespace, backend api.Backend) rpc.Server {
-	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, DiffSyncProtocolID, DiffSyncProtocolVersion), &service{backend})
+	return rpc.NewServer(ProtocolID(chainContext, runtimeID), &service{backend})
 }

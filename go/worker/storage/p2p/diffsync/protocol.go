@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
@@ -19,6 +20,11 @@ const DiffSyncProtocolID = "diffsync"
 
 // DiffSyncProtocolVersion is the supported version of the diff sync protocol.
 var DiffSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+
+// ProtocolID returns the runtime diff sync protocol ID.
+func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, DiffSyncProtocolID, DiffSyncProtocolVersion)
+}
 
 // Constants related to the GetDiff method.
 const (

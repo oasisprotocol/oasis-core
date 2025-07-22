@@ -120,9 +120,8 @@ func (c *client) getBestPeers(opts ...rpc.BestPeersOption) []core.PeerID {
 // upgrades of the network, this client has a fallback to the old legacy protocol.
 // The new protocol is prioritized.
 //
-// Warning: This client only registers the checkpoint sync protocol with the P2P
-// service. To enable advertisement of the legacy protocol, it must be registered
-// separately.
+// Finally, it ensures underlying p2p service starts tracking protocol peers
+// for both new and legacy protocol.
 func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
 	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
 	fallbackPid := synclegacy.GetStorageSyncProtocolID(chainContext, runtimeID)
@@ -135,6 +134,7 @@ func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Cli
 	rc.RegisterListener(fallbackMgr)
 
 	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
+	p2p.RegisterProtocol(fallbackPid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
 		rc:          rc,
