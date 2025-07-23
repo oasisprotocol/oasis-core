@@ -7,7 +7,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -111,7 +110,7 @@ func (c *client) GetCheckpointChunk(
 //
 // Moreover, it ensures underlying p2p service starts tracking protocol peers.
 func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
-	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
+	pid := ProtocolID(chainContext, runtimeID)
 	rc := rpc.NewClient(p2p.Host(), pid)
 	mgr := rpc.NewPeerManager(p2p, pid)
 	rc.RegisterListener(mgr)

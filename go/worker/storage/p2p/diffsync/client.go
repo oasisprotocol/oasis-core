@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -44,7 +43,7 @@ func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiff
 //
 // Moreover, it ensures underlying p2p service starts tracking protocol peers.
 func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
-	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, DiffSyncProtocolID, DiffSyncProtocolVersion)
+	pid := ProtocolID(chainContext, runtimeID)
 	rc := rpc.NewClient(p2p.Host(), pid)
 	mgr := rpc.NewPeerManager(p2p, pid)
 	rc.RegisterListener(mgr)
