@@ -117,8 +117,8 @@ func testLegacyHostClient(ctx context.Context, t *testing.T, host p2pApi.Service
 	require := require.New(t)
 
 	client := synclegacy.NewClient(host, chainContext, runtimeID)
-	time.Sleep(2 * time.Second)
-
+	err := waitReady(ctx, client.IsReady)
+	require.NoError(err, "Wait for p2p client readiness")
 	// Test diff part of the storagesync protocol.
 	rsp, _, err := client.GetDiff(ctx, &synclegacy.GetDiffRequest{})
 	require.NoError(err, "Fetch storage diff from p2p")
@@ -146,7 +146,9 @@ func testNewClients(ctx context.Context, t *testing.T, host p2pApi.Service, back
 
 	// Test diff sync protocol.
 	diffClient := diffsync.NewClient(host, chainContext, runtimeID)
-	time.Sleep(2 * time.Second)
+	err := waitReady(ctx, diffClient.IsReady)
+	require.NoError(err, "Wait for p2p client readiness")
+
 	rsp2, _, err := diffClient.GetDiff(ctx, &diffsync.GetDiffRequest{})
 	require.NoError(err, "Fetch storage diff from p2p")
 	err = assertEqualGetDiffResponse(ctx, backend, rsp2.WriteLog)
@@ -154,7 +156,9 @@ func testNewClients(ctx context.Context, t *testing.T, host p2pApi.Service, back
 
 	// Test checkpoint sync protocol.
 	cpsClient := checkpointsync.NewClient(host, chainContext, runtimeID)
-	time.Sleep(2 * time.Second)
+	err = waitReady(ctx, cpsClient.IsReady)
+	require.NoError(err, "Wait for p2p client readiness")
+
 	cps, err := cpsClient.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
 		Version: 1,
 	})
@@ -305,6 +309,27 @@ func getAvailablePort() (int, error) {
 	defer l.Close()
 	addr := l.Addr().(*net.TCPAddr)
 	return addr.Port, nil
+}
+
+func waitReady(ctx context.Context, isReady func() bool) error {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
+	backoff := 20 * time.Millisecond
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		if isReady() {
+			return nil
+		}
+
+		time.Sleep(backoff)
+		backoff *= 2
+	}
 }
 
 type backendMock struct{}

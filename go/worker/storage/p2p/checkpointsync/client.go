@@ -33,6 +33,9 @@ type Client interface {
 		request *GetCheckpointChunkRequest,
 		cp *Checkpoint,
 	) (*GetCheckpointChunkResponse, rpc.PeerFeedback, error)
+
+	// IsReady is true when protocol client is aware of at least one remote peer.
+	IsReady() bool
 }
 
 // Checkpoint contains checkpoint metadata together with peer information.
@@ -112,6 +115,10 @@ func (c *client) GetCheckpointChunk(
 
 func (c *client) getBestPeers(opts ...rpc.BestPeersOption) []core.PeerID {
 	return append(c.mgr.GetBestPeers(opts...), c.fallbackMgr.GetBestPeers(opts...)...)
+}
+
+func (c *client) IsReady() bool {
+	return len(c.getBestPeers()) > 0
 }
 
 // NewClient creates a new checkpoint sync protocol client.

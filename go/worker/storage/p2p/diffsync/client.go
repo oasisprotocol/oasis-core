@@ -3,6 +3,8 @@ package diffsync
 import (
 	"context"
 
+	"github.com/libp2p/go-libp2p/core"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -23,6 +25,9 @@ type Client interface {
 	// GetDiff requests a write log of entries that must be applied to get from the first given root
 	// to the second one.
 	GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error)
+
+	// IsReady is true when protocol client is aware of at least one remote peer.
+	IsReady() bool
 }
 
 type client struct {
@@ -33,14 +38,21 @@ type client struct {
 
 func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error) {
 	var rsp GetDiffResponse
-	peers := append(c.mgr.GetBestPeers(), c.fallbackMgr.GetBestPeers()...)
-	pf, err := c.rc.CallOne(ctx, peers, MethodGetDiff, request, &rsp,
+	pf, err := c.rc.CallOne(ctx, c.getBestPeers(), MethodGetDiff, request, &rsp,
 		rpc.WithMaxPeerResponseTime(MaxGetDiffResponseTime),
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 	return &rsp, pf, nil
+}
+
+func (c *client) getBestPeers(opts ...rpc.BestPeersOption) []core.PeerID {
+	return append(c.mgr.GetBestPeers(opts...), c.fallbackMgr.GetBestPeers(opts...)...)
+}
+
+func (c *client) IsReady() bool {
+	return len(c.getBestPeers()) > 0
 }
 
 // NewClient creates a new diff sync protocol client.
