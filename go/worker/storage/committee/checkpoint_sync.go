@@ -14,7 +14,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	mkvsCp "github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 const (
@@ -107,12 +108,7 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &storageSync.GetCheckpointChunkRequest{
-			Version: chunk.Version,
-			Root:    chunk.Root,
-			Index:   chunk.Index,
-			Digest:  chunk.Digest,
-		}, &storageSync.Checkpoint{Metadata: chunk.checkpoint.Metadata, Peers: chunk.checkpoint.peers})
+		rsp, pf, err := n.fetchChunk(chunkCtx, chunk)
 		if err != nil {
 			n.logger.Error("failed to fetch chunk from peers",
 				"err", err,
@@ -123,7 +119,7 @@ func (n *Node) checkpointChunkFetcher(
 		}
 
 		// Restore fetched chunk.
-		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp.Chunk))
+		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp))
 		cancel()
 
 		switch {
@@ -161,6 +157,46 @@ func (n *Node) checkpointChunkFetcher(
 			pf.RecordSuccess()
 		}
 	}
+}
+
+// fetchChunk fetches chunk using checkpoint sync p2p protocol client.
+//
+// In case of no peers, it fallbacks to the legacy storage sync protocol.
+func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFeedback, error) {
+	rsp1, pf, err := n.checkpointSync.GetCheckpointChunk(
+		ctx,
+		&checkpointsync.GetCheckpointChunkRequest{
+			Version: chunk.Version,
+			Root:    chunk.Root,
+			Index:   chunk.Index,
+			Digest:  chunk.Digest,
+		},
+		&checkpointsync.Checkpoint{
+			Metadata: chunk.checkpoint.Metadata,
+			Peers:    chunk.checkpoint.peers,
+		},
+	)
+	if err == nil { // if NO error
+		return rsp1.Chunk, pf, nil
+	}
+
+	rsp2, pf, err := n.legacySync.GetCheckpointChunk(
+		ctx,
+		&synclegacy.GetCheckpointChunkRequest{
+			Version: chunk.Version,
+			Root:    chunk.Root,
+			Index:   chunk.Index,
+			Digest:  chunk.Digest,
+		},
+		&synclegacy.Checkpoint{
+			Metadata: chunk.checkpoint.Metadata,
+			Peers:    chunk.checkpoint.peers,
+		},
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.Chunk, pf, nil
 }
 
 func (n *Node) handleCheckpoint(check *checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
@@ -286,9 +322,7 @@ func (n *Node) getCheckpointList() ([]*checkpoint, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	list, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
-		Version: 1,
-	})
+	cps, err := n.fetchCheckpoints(ctx)
 	if err != nil {
 		n.logger.Error("failed to retrieve any checkpoints",
 			"err", err,
@@ -296,17 +330,43 @@ func (n *Node) getCheckpointList() ([]*checkpoint, error) {
 		return nil, err
 	}
 
+	// Sort checkpoints by version, then by number of peers, descending.
+	sortCheckpoints(cps)
+
+	return cps, nil
+}
+
+// fetchCheckpoints fetches checkpoints using checkpoint sync p2p protocol client.
+//
+// In case of no peers, it fallbacks to the legacy storage sync protocol.
+func (n *Node) fetchCheckpoints(ctx context.Context) ([]*checkpoint, error) {
 	var cps []*checkpoint
-	for _, cp := range list {
+
+	list1, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err == nil && len(list1) > 0 { // if NO error and at least one checkpoint
+		for _, cp := range list1 {
+			cps = append(cps, &checkpoint{
+				Metadata: cp.Metadata,
+				peers:    cp.Peers,
+			})
+		}
+		return cps, nil
+	}
+
+	list2, err := n.legacySync.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, cp := range list2 {
 		cps = append(cps, &checkpoint{
 			Metadata: cp.Metadata,
 			peers:    cp.Peers,
 		})
 	}
-
-	// Sort checkpoints by version, then by number of peers, descending.
-	sortCheckpoints(cps)
-
 	return cps, nil
 }
 
