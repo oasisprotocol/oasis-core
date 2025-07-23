@@ -58,7 +58,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, StoragePubProtocolID, StoragePubProtocolVersion)
+				protocols[i] = ProtocolID(chainContext, rt.ID)
 			}
 
 			return protocols
