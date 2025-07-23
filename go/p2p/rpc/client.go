@@ -364,6 +364,10 @@ func (c *client) CallMulti(
 ) ([]any, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
 
+	if len(peers) == 0 {
+		return nil, nil, fmt.Errorf("no peers given to service the request")
+	}
+
 	co := NewCallMultiOptions(opts...)
 
 	// Prepare the request.
