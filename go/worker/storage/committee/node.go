@@ -25,7 +25,7 @@ import (
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	mkvsCp "github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -136,7 +136,7 @@ type Node struct { // nolint: maligned
 
 	workerCommonCfg workerCommon.Config
 
-	checkpointer         checkpoint.Checkpointer
+	checkpointer         mkvsCp.Checkpointer
 	checkpointSyncCfg    *CheckpointSyncConfig
 	checkpointSyncForced bool
 
@@ -210,16 +210,16 @@ func NewNode(
 
 	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
 	// in configuration so we can ensure that the genesis checkpoint is available.
-	checkInterval := checkpoint.CheckIntervalDisabled
+	checkInterval := mkvsCp.CheckIntervalDisabled
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
 	}
-	checkpointerCfg := checkpoint.CheckpointerConfig{
+	checkpointerCfg := mkvsCp.CheckpointerConfig{
 		Name:            "runtime",
 		Namespace:       commonNode.Runtime.ID(),
 		CheckInterval:   checkInterval,
 		RootsPerVersion: 2, // State root and I/O root.
-		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+		GetParameters: func(ctx context.Context) (*mkvsCp.CreationParameters, error) {
 			rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
 			if rerr != nil {
 				return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
@@ -238,7 +238,7 @@ func NewNode(
 				threads = chunkerThreads
 			}
 
-			return &checkpoint.CreationParameters{
+			return &mkvsCp.CreationParameters{
 				Interval:       rt.Storage.CheckpointInterval,
 				NumKept:        rt.Storage.CheckpointNumKept,
 				ChunkSize:      rt.Storage.CheckpointChunkSize,
@@ -256,7 +256,7 @@ func NewNode(
 		},
 	}
 	var err error
-	n.checkpointer, err = checkpoint.NewCheckpointer(
+	n.checkpointer, err = mkvsCp.NewCheckpointer(
 		n.ctx,
 		localStorage.NodeDB(),
 		localStorage.Checkpointer(),
