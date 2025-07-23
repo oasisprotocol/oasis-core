@@ -168,9 +168,9 @@ func (m *PeerManager) NumTopicPeers(topic string) int {
 	return len(m.pubsub.ListPeers(topic))
 }
 
-// RegisterProtocol starts tracking and managing peers that support the given protocol.
+// TrackProtocolPeers starts tracking and managing peers that support the given protocol.
 // If the protocol is already registered, its values are updated.
-func (m *PeerManager) RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int) {
+func (m *PeerManager) TrackProtocolPeers(p core.ProtocolID, minPeers int, totalPeers int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -188,8 +188,6 @@ func (m *PeerManager) RegisterProtocol(p core.ProtocolID, minPeers int, totalPee
 	}
 
 	m.protocols[p] = &watermark{minPeers, totalPeers}
-	m.discovery.startAdvertising(string(p))
-
 	m.logger.Debug("protocol registered",
 		"protocol", p,
 		"min_peers", minPeers,
@@ -197,9 +195,9 @@ func (m *PeerManager) RegisterProtocol(p core.ProtocolID, minPeers int, totalPee
 	)
 }
 
-// RegisterTopic starts tracking and managing peers that support the given topic.
+// TrackTopicPeers starts tracking and managing peers that support the given topic.
 // If the topic is already registered, its values are updated.
-func (m *PeerManager) RegisterTopic(topic string, minPeers int, totalPeers int) {
+func (m *PeerManager) TrackTopicPeers(topic string, minPeers int, totalPeers int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -217,7 +215,6 @@ func (m *PeerManager) RegisterTopic(topic string, minPeers int, totalPeers int) 
 	}
 
 	m.topics[topic] = &watermark{minPeers, totalPeers}
-	m.discovery.startAdvertising(topic)
 
 	m.logger.Debug("topic registered",
 		"topic", topic,
@@ -226,9 +223,23 @@ func (m *PeerManager) RegisterTopic(topic string, minPeers int, totalPeers int) 
 	)
 }
 
-// UnregisterProtocol stops managing peers that support the given protocol.
+// AdvertiseProtocol starts advertising readiness to serve the specified protocol.
+//
+// This enables remote peers without existing connection to find the host node.
+func (m *PeerManager) AdvertiseProtocol(p core.ProtocolID) {
+	m.discovery.startAdvertising(string(p))
+}
+
+// AdvertiseTopic starts advertising readiness to serve the specified topic.
+//
+// This enables remote peers without existing connection to find the host node.
+func (m *PeerManager) AdvertiseTopic(topic string) {
+	m.discovery.startAdvertising(topic)
+}
+
+// StopTrackingProtocolPeers stops managing peers that support the given protocol.
 // If the protocol is not registered, this is a noop operation.
-func (m *PeerManager) UnregisterProtocol(p core.ProtocolID) {
+func (m *PeerManager) StopTrackingProtocolPeers(p core.ProtocolID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -237,16 +248,15 @@ func (m *PeerManager) UnregisterProtocol(p core.ProtocolID) {
 	}
 
 	delete(m.protocols, p)
-	m.discovery.stopAdvertising(string(p))
 
 	m.logger.Debug("protocol unregistered",
 		"protocol", p,
 	)
 }
 
-// UnregisterTopic stops managing peers that support the given topic.
+// StopTrackingTopicPeers stops managing peers that support the given topic.
 // If the topic is not registered, this is a noop operation.
-func (m *PeerManager) UnregisterTopic(topic string) {
+func (m *PeerManager) StopTrackingTopicPeers(topic string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -255,11 +265,20 @@ func (m *PeerManager) UnregisterTopic(topic string) {
 	}
 
 	delete(m.topics, topic)
-	m.discovery.stopAdvertising(topic)
 
 	m.logger.Debug("topic unregistered",
 		"topic", topic,
 	)
+}
+
+// StopAdvertisingProtocol stops advertising readiness to serve the specified protocol.
+func (m *PeerManager) StopAdvertisingProtocol(p core.ProtocolID) {
+	m.discovery.stopAdvertising(string(p))
+}
+
+// StopAdvertisingTopic stops advertising readiness to serve the specified protocol.
+func (m *PeerManager) StopAdvertisingTopic(topic string) {
+	m.discovery.stopAdvertising(topic)
 }
 
 func (m *PeerManager) run(ctx context.Context) {

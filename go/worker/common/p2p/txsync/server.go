@@ -5,7 +5,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
@@ -52,5 +51,5 @@ func (s *service) handleGetTxs(request *GetTxsRequest) (*GetTxsResponse, error) 
 
 // NewServer creates a new transaction sync protocol server.
 func NewServer(chainContext string, runtimeID common.Namespace, txPool txpool.TransactionPool) rpc.Server {
-	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, TxSyncProtocolID, TxSyncProtocolVersion), &service{txPool})
+	return rpc.NewServer(ProtocolID(chainContext, runtimeID), &service{txPool})
 }

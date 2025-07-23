@@ -68,6 +68,11 @@ type Service interface {
 	Publish(ctx context.Context, topic string, msg any)
 
 	// RegisterHandler registers a message handler for the specified runtime and topic kind.
+	//
+	// In addition, it triggers advertisement of the host's readiness to serve the specified topic,
+	// allowing remote peers without existing connection to discover it.
+	//
+	// Ensure your server is indeed ready, to avoid advertising prematurely.
 	RegisterHandler(topic string, handler Handler)
 
 	// BlockPeer blocks a specific peer from being used by the local node.
@@ -83,6 +88,11 @@ type Service interface {
 	RegisterProtocol(p core.ProtocolID, minPeers int, totalPeers int)
 
 	// RegisterProtocolServer registers a protocol server for the given protocol.
+	//
+	// In addition, it triggers advertisement of the host's readiness to serve the specified protocol,
+	// allowing remote peers without existing connection to discover it.
+	//
+	// Ensure your server is indeed ready, to avoid advertising prematurely.
 	RegisterProtocolServer(srv rpc.Server)
 
 	// GetMinRepublishInterval returns the minimum republish interval that needs to be respected by
