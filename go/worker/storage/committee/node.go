@@ -25,15 +25,17 @@ import (
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	mkvsCp "github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/diffsync"
 	storagePub "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
-	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 var (
@@ -128,7 +130,9 @@ type Node struct { // nolint: maligned
 
 	localStorage storageApi.LocalBackend
 
-	storageSync storageSync.Client
+	diffSync       diffsync.Client
+	checkpointSync checkpointsync.Client
+	legacySync     synclegacy.Client
 
 	undefinedRound uint64
 
@@ -136,7 +140,7 @@ type Node struct { // nolint: maligned
 
 	workerCommonCfg workerCommon.Config
 
-	checkpointer         checkpoint.Checkpointer
+	checkpointer         mkvsCp.Checkpointer
 	checkpointSyncCfg    *CheckpointSyncConfig
 	checkpointSyncForced bool
 
@@ -210,16 +214,16 @@ func NewNode(
 
 	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
 	// in configuration so we can ensure that the genesis checkpoint is available.
-	checkInterval := checkpoint.CheckIntervalDisabled
+	checkInterval := mkvsCp.CheckIntervalDisabled
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
 	}
-	checkpointerCfg := checkpoint.CheckpointerConfig{
+	checkpointerCfg := mkvsCp.CheckpointerConfig{
 		Name:            "runtime",
 		Namespace:       commonNode.Runtime.ID(),
 		CheckInterval:   checkInterval,
 		RootsPerVersion: 2, // State root and I/O root.
-		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+		GetParameters: func(ctx context.Context) (*mkvsCp.CreationParameters, error) {
 			rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
 			if rerr != nil {
 				return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
@@ -238,7 +242,7 @@ func NewNode(
 				threads = chunkerThreads
 			}
 
-			return &checkpoint.CreationParameters{
+			return &mkvsCp.CreationParameters{
 				Interval:       rt.Storage.CheckpointInterval,
 				NumKept:        rt.Storage.CheckpointNumKept,
 				ChunkSize:      rt.Storage.CheckpointChunkSize,
@@ -256,7 +260,7 @@ func NewNode(
 		},
 	}
 	var err error
-	n.checkpointer, err = checkpoint.NewCheckpointer(
+	n.checkpointer, err = mkvsCp.NewCheckpointer(
 		n.ctx,
 		localStorage.NodeDB(),
 		localStorage.Checkpointer(),
@@ -272,9 +276,22 @@ func NewNode(
 		node:   n,
 	})
 
-	// Register storage sync service.
-	commonNode.P2P.RegisterProtocolServer(storageSync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	n.storageSync = storageSync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	if !config.GlobalConfig.Storage.LegacySyncServerDisabled {
+		// Advertise and serve legacy storage sync protocol.
+		commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
+	// Advertise and serve diff sync protocol server.
+	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	// Advertise and serve checkpoint sync protocol server if checkpoints are enabled.
+	if checkInterval < mkvsCp.CheckIntervalDisabled {
+		commonNode.P2P.RegisterProtocolServer(checkpointsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
+
+	// Create legacy storage sync p2p protocol client to fallback on.
+	n.legacySync = synclegacy.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	// Create diff and checkpoint sync p2p protocol clients
+	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 
 	// Register storage pub service if configured.
 	if rpcRoleProvider != nil {
@@ -430,13 +447,29 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	ctx, cancel := context.WithCancel(n.ctx)
 	defer cancel()
 
-	rsp, pf, err := n.storageSync.GetDiff(ctx, &storageSync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	wl, pf, err := n.getDiff(ctx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
 	}
 	result.pf = pf
-	result.writeLog = rsp.WriteLog
+	result.writeLog = wl
+}
+
+// getDiff fetches writelog using diff sync p2p protocol client.
+//
+// In case of no peers, it fallbacks to the legacy storage sync protocol.
+func (n *Node) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	rsp1, pf, err := n.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err == nil { // if NO error
+		return rsp1.WriteLog, pf, nil
+	}
+
+	rsp2, pf, err := n.legacySync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.WriteLog, pf, nil
 }
 
 func (n *Node) finalize(summary *blockSummary) {

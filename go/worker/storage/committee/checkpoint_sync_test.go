@@ -6,48 +6,47 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	mkvsCp "github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 func TestSortCheckpoints(t *testing.T) {
-	cp1 := &sync.Checkpoint{
-		Metadata: &checkpoint.Metadata{
+	cp1 := &checkpoint{
+		Metadata: &mkvsCp.Metadata{
 			Root: node.Root{
 				Version: 2,
 			},
 		},
-		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
+		peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
 	}
-	cp2 := &sync.Checkpoint{
-		Metadata: &checkpoint.Metadata{
+	cp2 := &checkpoint{
+		Metadata: &mkvsCp.Metadata{
 			Root: node.Root{
 				Version: 2,
 			},
 		},
-		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
+		peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
 	}
-	cp3 := &sync.Checkpoint{
-		Metadata: &checkpoint.Metadata{
+	cp3 := &checkpoint{
+		Metadata: &mkvsCp.Metadata{
 			Root: node.Root{
 				Version: 1,
 			},
 		},
-		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
+		peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback(), rpc.NewNopPeerFeedback()},
 	}
-	cp4 := &sync.Checkpoint{
-		Metadata: &checkpoint.Metadata{
+	cp4 := &checkpoint{
+		Metadata: &mkvsCp.Metadata{
 			Root: node.Root{
 				Version: 1,
 			},
 		},
-		Peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
+		peers: []rpc.PeerFeedback{rpc.NewNopPeerFeedback()},
 	}
 
-	s := []*sync.Checkpoint{cp2, cp3, cp4, cp1}
+	s := []*checkpoint{cp2, cp3, cp4, cp1}
 
 	sortCheckpoints(s)
 
-	assert.Equal(t, s, []*sync.Checkpoint{cp1, cp2, cp3, cp4})
+	assert.Equal(t, s, []*checkpoint{cp1, cp2, cp3, cp4})
 }

@@ -342,6 +342,7 @@ func RegisterScenarios() error {
 		StorageSyncFromRegistered,
 		StorageSyncInconsistent,
 		StorageEarlyStateSync,
+		CheckpointSync,
 		// Sentry test.
 		Sentry,
 		// Keymanager tests.
