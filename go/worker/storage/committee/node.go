@@ -276,8 +276,10 @@ func NewNode(
 		node:   n,
 	})
 
-	// Advertise and serve legacy storage sync protocol.
-	commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	if !config.GlobalConfig.Storage.LegacySyncServerDisabled {
+		// Advertise and serve legacy storage sync protocol.
+		commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
 	// Advertise and serve diff sync protocol server.
 	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
 	// Advertise and serve checkpoint sync protocol server if checkpoints are enabled.

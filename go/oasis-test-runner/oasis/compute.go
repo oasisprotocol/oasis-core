@@ -46,6 +46,7 @@ type Compute struct { // nolint: maligned
 	storageBackend            string
 	disablePublicRPC          bool
 	checkpointSyncDisabled    bool
+	legacySyncServerDisabled  bool
 	checkpointCheckInterval   time.Duration
 	checkpointParallelChunker bool
 }
@@ -64,6 +65,7 @@ type ComputeCfg struct {
 	StorageBackend            string
 	DisablePublicRPC          bool
 	CheckpointSyncDisabled    bool
+	LegacySyncServerDisabled  bool
 	CheckpointCheckInterval   time.Duration
 	CheckpointParallelChunker bool
 }
@@ -170,6 +172,7 @@ func (worker *Compute) ModifyConfig() error {
 	worker.Config.Storage.Backend = worker.storageBackend
 	worker.Config.Storage.PublicRPCEnabled = !worker.disablePublicRPC
 	worker.Config.Storage.CheckpointSyncDisabled = worker.checkpointSyncDisabled
+	worker.Config.Storage.LegacySyncServerDisabled = worker.legacySyncServerDisabled
 	worker.Config.Storage.Checkpointer.Enabled = true
 	worker.Config.Storage.Checkpointer.CheckInterval = worker.checkpointCheckInterval
 	worker.Config.Storage.Checkpointer.ParallelChunker = worker.checkpointParallelChunker
@@ -236,6 +239,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		sentryIndices:             cfg.SentryIndices,
 		disablePublicRPC:          cfg.DisablePublicRPC,
 		checkpointSyncDisabled:    cfg.CheckpointSyncDisabled,
+		legacySyncServerDisabled:  cfg.LegacySyncServerDisabled,
 		checkpointCheckInterval:   cfg.CheckpointCheckInterval,
 		checkpointParallelChunker: cfg.CheckpointParallelChunker,
 		sentryPubKey:              sentryPubKey,
