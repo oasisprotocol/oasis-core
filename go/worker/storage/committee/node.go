@@ -146,9 +146,9 @@ type Node struct { // nolint: maligned
 	statusLock sync.RWMutex
 	status     api.StorageWorkerStatus
 
-	blockCh    *channels.InfiniteChannel
-	diffCh     chan *fetchedDiff
-	finalizeCh chan finalizeResult
+	blockCh       *channels.InfiniteChannel
+	diffCh        chan *fetchedDiff
+	finalizeResCh chan finalizeResult
 
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -190,9 +190,9 @@ func NewNode(
 
 		status: api.StatusInitializing,
 
-		blockCh:    channels.NewInfiniteChannel(),
-		diffCh:     make(chan *fetchedDiff),
-		finalizeCh: make(chan finalizeResult),
+		blockCh:       channels.NewInfiniteChannel(),
+		diffCh:        make(chan *fetchedDiff),
+		finalizeResCh: make(chan finalizeResult),
 
 		quitCh: make(chan struct{}),
 		initCh: make(chan struct{}),
@@ -466,7 +466,7 @@ func (n *Node) finalize(summary *blockSummary) {
 	}
 
 	select {
-	case n.finalizeCh <- result:
+	case n.finalizeResCh <- result:
 	case <-n.ctx.Done():
 	}
 }
@@ -1111,9 +1111,25 @@ func (n *Node) worker() { // nolint: gocyclo
 	n.status = api.StatusSyncingRounds
 	n.statusLock.Unlock()
 
+	applyCh := make(chan *fetchedDiff)
+	applyResCh := make(chan applyResult)
+	finalizeCh := make(chan *blockSummary)
+	ctx, cancel := context.WithCancel(n.ctx)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n.applyWritelogs(ctx, applyCh, applyResCh)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n.finalizeVersions(ctx, finalizeCh)
+	}()
+
 	pendingApply := &minRoundQueue{}
 	pendingFinalize := &minRoundQueue{}
-
 	// Main processing loop. When a new block arrives, its state and I/O roots are inspected.
 	// If missing locally, diffs are fetched from peers, possibly for many rounds in parallel,
 	// including all missing rounds since the last fully applied one. Fetched diffs are then applied
@@ -1121,82 +1137,6 @@ func (n *Node) worker() { // nolint: gocyclo
 	// for that round is triggered asynchronously, not blocking concurrent fetching and diff application.
 mainLoop:
 	for {
-		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
-
-		// Apply fetched writelogs, but only if they are for the round after the last fully applied one
-		// and current number of pending roots to be finalized is smaller than max allowed.
-		applyNext := pendingApply.Len() > 0 &&
-			lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() &&
-			pendingFinalize.Len() < dbApi.MaxPendingVersions-1 // -1 since one may be already finalizing.
-		if applyNext {
-			lastDiff := heap.Pop(pendingApply).(*fetchedDiff)
-			// Apply the write log if one exists.
-			err = nil
-			if lastDiff.fetched {
-				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
-					Namespace: lastDiff.thisRoot.Namespace,
-					RootType:  lastDiff.thisRoot.Type,
-					SrcRound:  lastDiff.prevRoot.Version,
-					SrcRoot:   lastDiff.prevRoot.Hash,
-					DstRound:  lastDiff.thisRoot.Version,
-					DstRoot:   lastDiff.thisRoot.Hash,
-					WriteLog:  lastDiff.writeLog,
-				})
-				switch {
-				case err == nil:
-					lastDiff.pf.RecordSuccess()
-				case errors.Is(err, storageApi.ErrExpectedRootMismatch):
-					lastDiff.pf.RecordBadPeer()
-				default:
-					n.logger.Error("can't apply write log",
-						"err", err,
-						"old_root", lastDiff.prevRoot,
-						"new_root", lastDiff.thisRoot,
-					)
-					lastDiff.pf.RecordSuccess()
-				}
-			}
-
-			syncing := syncingRounds[lastDiff.round]
-			if err != nil {
-				syncing.retry(lastDiff.thisRoot.Type)
-				continue
-			}
-			syncing.outstanding.remove(lastDiff.thisRoot.Type)
-			if !syncing.outstanding.isEmpty() || !syncing.awaitingRetry.isEmpty() {
-				continue
-			}
-
-			// We have fully synced the given round.
-			n.logger.Debug("finished syncing round", "round", lastDiff.round)
-			delete(syncingRounds, lastDiff.round)
-			summary := summaryCache[lastDiff.round]
-			delete(summaryCache, lastDiff.round-1)
-			lastFullyAppliedRound = lastDiff.round
-
-			storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
-			storageWorkerRoundSyncLatency.With(n.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
-
-			// Finalize storage for this round. This happens asynchronously
-			// with respect to Apply operations for subsequent rounds.
-			heap.Push(pendingFinalize, summary)
-
-			continue
-		}
-
-		// Check if any new rounds were fully applied and need to be finalized.
-		// Only finalize if it's the round after the one that was finalized last.
-		// As a consequence at most one finalization can be happening at the time.
-		if len(*pendingFinalize) > 0 && cachedLastRound+1 == (*pendingFinalize)[0].GetRound() {
-			lastSummary := heap.Pop(pendingFinalize).(*blockSummary)
-			wg.Add(1)
-			go func() { // Don't block fetching and applying remaining rounds.
-				defer wg.Done()
-				n.finalize(lastSummary)
-			}()
-			continue
-		}
-
 		select {
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
@@ -1280,12 +1220,54 @@ mainLoop:
 			}
 
 			heap.Push(pendingApply, item)
+
 			// Item was successfully processed, trigger more round fetches.
 			// This ensures that new rounds are processed as fast as possible
 			// when we're syncing and are far behind.
 			triggerRoundFetches()
 
-		case finalized := <-n.finalizeCh:
+			// Trigger next round diff application (if fetched already), provided
+			// current number of pending roots to be finalized is be smaller than max allowed.
+			applyNext := pendingApply.Len() > 0 &&
+				lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() &&
+				pendingFinalize.Len() < dbApi.MaxPendingVersions-1 // -1 since one may be already finalizing.
+			if !applyNext {
+				break
+			}
+			applyCh <- heap.Pop(pendingApply).(*fetchedDiff)
+
+		case applyRes := <-applyResCh:
+			applied := applyRes.diff
+			syncing := syncingRounds[applied.round]
+			if applyRes.err != nil {
+				syncing.retry(applied.thisRoot.Type)
+				continue
+			}
+			syncing.outstanding.remove(applied.thisRoot.Type)
+			if !syncing.outstanding.isEmpty() || !syncing.awaitingRetry.isEmpty() {
+				continue
+			}
+
+			// We have fully synced the given round.
+			n.logger.Debug("finished syncing round", "round", applied.round)
+			delete(syncingRounds, applied.round)
+			summary := summaryCache[applied.round]
+			delete(summaryCache, applied.round-1)
+			lastFullyAppliedRound = applied.round
+
+			storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(applied.round))
+			storageWorkerRoundSyncLatency.With(n.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
+
+			heap.Push(pendingFinalize, summary)
+
+			// Finalize storage for this round. This happens asynchronously
+			// with respect to Apply operations for subsequent rounds.
+			if len(*pendingFinalize) <= 0 || cachedLastRound+1 != (*pendingFinalize)[0].GetRound() {
+				break
+			}
+			finalizeCh <- heap.Pop(pendingFinalize).(*blockSummary)
+
+		case finalized := <-n.finalizeResCh:
 			// If finalization failed, things start falling apart.
 			// There's no point redoing it, since it's probably not a transient
 			// error, and cachedLastRound also can't be updated legitimately.
@@ -1318,10 +1300,72 @@ mainLoop:
 		}
 	}
 
+	cancel()
 	wg.Wait()
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
+}
+
+type applyResult struct {
+	diff *fetchedDiff
+	err  error
+}
+
+func (n *Node) applyWritelogs(ctx context.Context, applyCh <-chan *fetchedDiff, applyResCh chan<- applyResult) {
+	for {
+		select {
+		case <-ctx.Done():
+		case diff := <-applyCh:
+			if !diff.fetched {
+				applyResCh <- applyResult{
+					diff: diff,
+					err:  nil,
+				}
+				continue
+			}
+
+			// Apply the write log if one exists.
+			var err error
+			err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				Namespace: diff.thisRoot.Namespace,
+				RootType:  diff.thisRoot.Type,
+				SrcRound:  diff.prevRoot.Version,
+				SrcRoot:   diff.prevRoot.Hash,
+				DstRound:  diff.thisRoot.Version,
+				DstRoot:   diff.thisRoot.Hash,
+				WriteLog:  diff.writeLog,
+			})
+			switch {
+			case err == nil:
+				diff.pf.RecordSuccess()
+			case errors.Is(err, storageApi.ErrExpectedRootMismatch):
+				diff.pf.RecordBadPeer()
+			default:
+				n.logger.Error("can't apply write log",
+					"err", err,
+					"old_root", diff.prevRoot,
+					"new_root", diff.thisRoot,
+				)
+				diff.pf.RecordSuccess()
+			}
+			applyResCh <- applyResult{
+				diff: diff,
+				err:  err,
+			}
+		}
+	}
+}
+
+func (n *Node) finalizeVersions(ctx context.Context, finalizeCh <-chan *blockSummary) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case summary := <-finalizeCh:
+			n.finalize(summary)
+		}
+	}
 }
 
 type pruneHandler struct {
