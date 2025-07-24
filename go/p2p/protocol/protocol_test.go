@@ -56,11 +56,10 @@ func TestProtocolID(t *testing.T) {
 		require.Equal(expected, NewTopicIDForRuntime(chainContext, runtimeID, kind, version))
 	})
 
-	registry = newProtocolRegistry()
-
 	t.Run("ValidateProtocolID", func(_ *testing.T) {
-		ValidateProtocolID("protocol-1")
-		ValidateProtocolID("protocol-2")
+		r := NewRegistry()
+		r.ValidateProtocolID("protocol-1")
+		r.ValidateProtocolID("protocol-2")
 	})
 
 	t.Run("ValidateProtocolID panics", func(t *testing.T) {
@@ -69,9 +68,8 @@ func TestProtocolID(t *testing.T) {
 				t.Errorf("validate protocol id should fail")
 			}
 		}()
-		ValidateProtocolID("protocol")
-		ValidateProtocolID("protocol")
+		r := NewRegistry()
+		r.ValidateProtocolID("protocol")
+		r.ValidateProtocolID("protocol")
 	})
-
-	registry = newProtocolRegistry()
 }

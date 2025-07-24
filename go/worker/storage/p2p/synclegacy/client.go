@@ -1,4 +1,4 @@
-package sync
+package synclegacy
 
 import (
 	"context"
@@ -36,6 +36,9 @@ type Client interface {
 		request *GetCheckpointChunkRequest,
 		cp *Checkpoint,
 	) (*GetCheckpointChunkResponse, rpc.PeerFeedback, error)
+
+	// IsReady is true when protocol client is aware of at least one remote peer.
+	IsReady() bool
 }
 
 // Checkpoint contains checkpoint metadata together with peer information.
@@ -122,6 +125,15 @@ func (c *client) GetCheckpointChunk(
 		return nil, nil, err
 	}
 	return &rsp, pf, nil
+}
+
+// GetStorageSyncProtocolID returns unique storage sync protocol id for the specified chain context and runtime id.
+func GetStorageSyncProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+}
+
+func (c *client) IsReady() bool {
+	return len(c.mgrC.GetBestPeers()) > 0
 }
 
 // NewClient creates a new storage sync protocol client.

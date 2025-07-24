@@ -32,8 +32,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/diffsync"
 	storagePub "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
-	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 var (
@@ -128,7 +130,8 @@ type Node struct { // nolint: maligned
 
 	localStorage storageApi.LocalBackend
 
-	storageSync storageSync.Client
+	diffSync       diffsync.Client
+	checkpointSync checkpointsync.Client
 
 	undefinedRound uint64
 
@@ -272,9 +275,19 @@ func NewNode(
 		node:   n,
 	})
 
-	// Register storage sync service.
-	commonNode.P2P.RegisterProtocolServer(storageSync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	n.storageSync = storageSync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	// Advertise and serve legacy storage sync protocol.
+	commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+
+	// Register diff sync protocol server.
+	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	// Register checkpoint sync protocol server if checkpoints are enabled.
+	if checkInterval < checkpoint.CheckIntervalDisabled {
+		commonNode.P2P.RegisterProtocolServer(checkpointsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
+
+	// Create diff and checkpoint sync p2p protocol clients that have a fallback to the old legacy storage sync protocol.
+	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 
 	// Register storage pub service if configured.
 	if rpcRoleProvider != nil {
@@ -430,7 +443,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	ctx, cancel := context.WithCancel(n.ctx)
 	defer cancel()
 
-	rsp, pf, err := n.storageSync.GetDiff(ctx, &storageSync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	rsp, pf, err := n.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 	if err != nil {
 		result.err = err
 		return

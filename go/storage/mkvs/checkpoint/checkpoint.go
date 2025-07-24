@@ -48,7 +48,12 @@ type ChunkProvider interface {
 
 // GetCheckpointsRequest is a GetCheckpoints request.
 type GetCheckpointsRequest struct {
-	Version   uint16           `json:"version"`
+	// Version is version of the checkpoint request.
+	Version uint16 `json:"version"`
+	// Namespace is the namespace the checkpoints are for.
+	//
+	// Existing server implementation may ignore validation of this field.
+	// Best practice is to still pass it, but not rely on the actual validation.
 	Namespace common.Namespace `json:"namespace"`
 
 	// RootVersion specifies an optional root version to limit the request to. If specified, only
