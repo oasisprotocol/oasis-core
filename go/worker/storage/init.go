@@ -32,10 +32,10 @@ func NewLocalBackend(
 	namespace common.Namespace,
 ) (api.LocalBackend, error) {
 	cfg := &api.Config{
-		Backend:      strings.ToLower(config.GlobalConfig.Storage.Backend),
+		Backend:      strings.ToLower(config.GlobalConfigDeprecated.Storage.Backend),
 		DB:           dataDir,
 		Namespace:    namespace,
-		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
+		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfigDeprecated.Storage.MaxCacheSize)),
 		NoFsync:      true, // Should be safe, storage will be re-applied on crashes.
 	}
 

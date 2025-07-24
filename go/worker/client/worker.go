@@ -134,7 +134,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		rp  registration.RoleProvider
 	)
 
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeClient, config.ModeStatelessClient:
 		// When a node is a client node and it has an entity configured,
 		// we register it with the observer role as this may be needed
@@ -159,7 +159,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// If we are running in stateless client mode, register remote storage.
-	if config.GlobalConfig.Mode == config.ModeStatelessClient {
+	if config.GlobalConfigDeprecated.Mode == config.ModeStatelessClient {
 		commonNode.Runtime.RegisterStorage(NewStatelessStorage(commonNode.P2P, w.commonWorker.ChainContext, id))
 	}
 
@@ -180,7 +180,7 @@ func New(
 	registration *registration.Worker,
 ) (*Worker, error) {
 	var enabled bool
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeValidator, config.ModeSeed, config.ModeKeyManager:
 		enabled = false
 	case config.ModeArchive:

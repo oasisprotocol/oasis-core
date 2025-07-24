@@ -69,7 +69,7 @@ func DebugTestEntity() bool {
 
 // DebugAllowRoot returns true iff the root account enable flag is set.
 func DebugAllowRoot() bool {
-	return DebugDontBlameOasis() && config.GlobalConfig.Common.Debug.AllowRoot
+	return DebugDontBlameOasis() && config.GlobalConfigDeprecated.Common.Debug.AllowRoot
 }
 
 // GenesisFile returns the set genesis file.

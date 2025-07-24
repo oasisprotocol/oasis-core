@@ -286,8 +286,8 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Enable supplementary sanity checks when enabled.
-	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
-		app := supplementarysanityApp.New(state, int64(config.GlobalConfig.Consensus.SupplementarySanity.Interval))
+	if config.GlobalConfigDeprecated.Consensus.SupplementarySanity.Enabled {
+		app := supplementarysanityApp.New(state, int64(config.GlobalConfigDeprecated.Consensus.SupplementarySanity.Interval))
 		if err := n.mux.Register(app); err != nil {
 			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
 		}

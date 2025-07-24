@@ -82,7 +82,7 @@ func newChurpWorker(kmWorker *Worker) (*churpWorker, error) {
 	// Read the configuration to determine in which schemes the worker
 	// should participate.
 	churps := make(map[uint8]*churp.Status)
-	for _, cfg := range config.GlobalConfig.Keymanager.Churp.Schemes {
+	for _, cfg := range config.GlobalConfigDeprecated.Keymanager.Churp.Schemes {
 		churps[cfg.ID] = nil
 	}
 

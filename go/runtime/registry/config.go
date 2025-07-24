@@ -18,10 +18,10 @@ import (
 )
 
 func getLocalConfig(runtimeID common.Namespace, compID component.ID) map[string]any {
-	compCfg, ok := config.GlobalConfig.Runtime.GetComponent(runtimeID, compID)
+	compCfg, ok := config.GlobalConfigDeprecated.Runtime.GetComponent(runtimeID, compID)
 	// Support legacy RONL configuration defined at the top level.
 	if !ok && compID == component.ID_RONL {
-		return config.GlobalConfig.Runtime.GetLocalConfig(runtimeID)
+		return config.GlobalConfigDeprecated.Runtime.GetLocalConfig(runtimeID)
 	}
 	return compCfg.Config
 }
@@ -29,13 +29,13 @@ func getLocalConfig(runtimeID common.Namespace, compID component.ID) map[string]
 func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 	// Check if any runtimes are configured to be hosted.
 	runtimes := make(map[common.Namespace]struct{})
-	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {
+	for _, cfg := range config.GlobalConfigDeprecated.Runtime.Runtimes {
 		runtimes[cfg.ID] = struct{}{}
 	}
 
 	// Support legacy configurations where runtimes are specified within
 	// configured bundles.
-	for _, path := range config.GlobalConfig.Runtime.Paths {
+	for _, path := range config.GlobalConfigDeprecated.Runtime.Paths {
 		if err := func() error {
 			bnd, err := bundle.Open(path)
 			if err != nil {
@@ -66,7 +66,7 @@ func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 	}
 
 	// Validate configured runtimes based on the runtime mode.
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeValidator, config.ModeSeed:
 		// No runtimes should be configured.
 		if len(runtimes) > 0 && !cmdFlags.DebugDontBlameOasis() {
@@ -86,13 +86,13 @@ func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
 
 func createHistoryFactory() (history.Factory, error) {
 	var pruneFactory history.PrunerFactory
-	strategy := config.GlobalConfig.Runtime.Prune.Strategy
+	strategy := config.GlobalConfigDeprecated.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
 		pruneFactory = history.NewNonePrunerFactory()
 	case history.PrunerStrategyKeepLast:
-		numKept := config.GlobalConfig.Runtime.Prune.NumKept
-		pruneInterval := max(config.GlobalConfig.Runtime.Prune.Interval, time.Second)
+		numKept := config.GlobalConfigDeprecated.Runtime.Prune.NumKept
+		pruneInterval := max(config.GlobalConfigDeprecated.Runtime.Prune.Interval, time.Second)
 		pruneFactory = history.NewKeepLastPrunerFactory(numKept, pruneInterval)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
@@ -100,7 +100,7 @@ func createHistoryFactory() (history.Factory, error) {
 
 	// Archive node won't commit any new blocks, so disable waiting for storage
 	// sync commits.
-	mode := config.GlobalConfig.Mode
+	mode := config.GlobalConfigDeprecated.Mode
 	hasLocalStorage := mode.HasLocalStorage() && !mode.IsArchive()
 
 	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)

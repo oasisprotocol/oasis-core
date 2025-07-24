@@ -104,7 +104,7 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 	ldb, _, stateRoot, err := abci.InitStateStorage(
 		&abci.ApplicationConfig{
 			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
-			StorageBackend:      config.GlobalConfig.Storage.Backend,
+			StorageBackend:      config.GlobalConfigDeprecated.Storage.Backend,
 			MemoryOnlyStorage:   false,
 			ReadOnlyStorage:     viper.GetBool(cfgDumpReadOnlyDB),
 			DisableCheckpointer: true,

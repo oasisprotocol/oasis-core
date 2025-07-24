@@ -158,9 +158,9 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 	// The right thing to do will be to use storage.New, but the backend config
 	// assumes that identity is valid, and we don't have one.
 	cfg := &storageAPI.Config{
-		Backend:      config.GlobalConfig.Storage.Backend,
+		Backend:      config.GlobalConfigDeprecated.Storage.Backend,
 		Namespace:    namespace,
-		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
+		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfigDeprecated.Storage.MaxCacheSize)),
 	}
 	cfg.DB = filepath.Join(dataDir, storageDatabase.DefaultFileName(cfg.Backend))
 	return storageDatabase.New(cfg)

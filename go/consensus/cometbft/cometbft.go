@@ -37,7 +37,7 @@ func New(
 		return nil, err
 	}
 
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeArchive:
 		node, err := createArchiveNode(ctx, dataDir, identity, genesis, doc, genesisDoc)
 		if err != nil {
@@ -147,7 +147,7 @@ func createStatelessServices(
 }
 
 func createProvider(identity *identity.Identity) (*consensusAPI.Client, error) {
-	addresses := config.GlobalConfig.Consensus.Providers
+	addresses := config.GlobalConfigDeprecated.Consensus.Providers
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("no providers configured")
 	}
@@ -161,7 +161,7 @@ func createLightClient(
 	doc *genesisAPI.Document,
 	p2p p2pAPI.Service,
 ) (*light.Client, error) {
-	hash, err := hex.DecodeString(config.GlobalConfig.Consensus.LightClient.Trust.Hash)
+	hash, err := hex.DecodeString(config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode trust hash: %w", err)
 	}
@@ -169,8 +169,8 @@ func createLightClient(
 	cfg := light.Config{
 		GenesisDocument: genesisDoc,
 		TrustOptions: cmtlight.TrustOptions{
-			Period: config.GlobalConfig.Consensus.LightClient.Trust.Period,
-			Height: int64(config.GlobalConfig.Consensus.LightClient.Trust.Height),
+			Period: config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Period,
+			Height: int64(config.GlobalConfigDeprecated.Consensus.LightClient.Trust.Height),
 			Hash:   hash,
 		},
 	}
@@ -179,12 +179,12 @@ func createLightClient(
 }
 
 func createSubmissionManager(ctx context.Context, services consensusAPI.Services) (consensusAPI.SubmissionManager, error) {
-	pd, err := pricediscovery.New(ctx, services.Core(), config.GlobalConfig.Consensus.Submission.GasPrice)
+	pd, err := pricediscovery.New(ctx, services.Core(), config.GlobalConfigDeprecated.Consensus.Submission.GasPrice)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create price discovery: %w", err)
 	}
 
-	return consensusAPI.NewSubmissionManager(services, pd, config.GlobalConfig.Consensus.Submission.MaxFee), nil
+	return consensusAPI.NewSubmissionManager(services, pd, config.GlobalConfigDeprecated.Consensus.Submission.MaxFee), nil
 }
 
 func createCommonConfig(

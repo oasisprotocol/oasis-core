@@ -37,7 +37,7 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey,
 
 	tx := msg.([]byte) // Ensured by DecodeMessage.
 
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeStatelessClient:
 		// Ignore transactions on stateless clients.
 	default:

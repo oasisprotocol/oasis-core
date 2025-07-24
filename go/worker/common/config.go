@@ -22,7 +22,7 @@ type Config struct { // nolint: maligned
 func NewConfig() (*Config, error) {
 	// Parse sentry configuration.
 	var sentryAddresses []node.TLSAddress
-	for _, v := range config.GlobalConfig.Runtime.SentryAddresses {
+	for _, v := range config.GlobalConfigDeprecated.Runtime.SentryAddresses {
 		var tlsAddr node.TLSAddress
 		if err := tlsAddr.UnmarshalText([]byte(v)); err != nil {
 			return nil, fmt.Errorf("worker: bad sentry address (%s): %w", v, err)
@@ -32,7 +32,7 @@ func NewConfig() (*Config, error) {
 
 	cfg := Config{
 		SentryAddresses: sentryAddresses,
-		TxPool:          config.GlobalConfig.Runtime.TxPool,
+		TxPool:          config.GlobalConfigDeprecated.Runtime.TxPool,
 		logger:          logging.GetLogger("worker/config"),
 	}
 

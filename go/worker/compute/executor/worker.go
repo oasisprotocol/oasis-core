@@ -173,7 +173,7 @@ func New(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	var enabled bool
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeCompute:
 		// When configured in compute mode, enable the executor worker.
 		enabled = true

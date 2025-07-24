@@ -159,7 +159,7 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
-		Mode:            config.GlobalConfig.Mode,
+		Mode:            config.GlobalConfigDeprecated.Mode,
 		Debug:           ds,
 		Identity:        ident,
 		Consensus:       cs,
@@ -270,7 +270,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Take storage into account for last retained round.
-		if config.GlobalConfig.Mode.HasLocalStorage() {
+		if config.GlobalConfigDeprecated.Mode.HasLocalStorage() {
 			lsb, ok := rt.Storage().(storage.LocalBackend)
 			switch ok {
 			case false:

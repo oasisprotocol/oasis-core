@@ -216,7 +216,7 @@ func (n *RuntimeHostNode) isComponentWanted(comp *bundle.ExplodedComponent) bool
 	}
 
 	// Node configuration overrides all other settings.
-	if compCfg, ok := config.GlobalConfig.Runtime.GetComponent(n.runtime.ID(), comp.ID()); ok {
+	if compCfg, ok := config.GlobalConfigDeprecated.Runtime.GetComponent(n.runtime.ID(), comp.ID()); ok {
 		return !compCfg.Disabled
 	}
 
@@ -226,7 +226,7 @@ func (n *RuntimeHostNode) isComponentWanted(comp *bundle.ExplodedComponent) bool
 	}
 
 	// On non-compute nodes, assume all components are disabled by default.
-	if config.GlobalConfig.Mode != config.ModeCompute {
+	if config.GlobalConfigDeprecated.Mode != config.ModeCompute {
 		return false
 	}
 

@@ -126,7 +126,7 @@ func (h *runtimeHistory) Commit(blks []*roothash.AnnotatedBlock) error {
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
-	if config.GlobalConfig.Mode == config.ModeArchive {
+	if config.GlobalConfigDeprecated.Mode == config.ModeArchive {
 		// If we are in archive mode, ignore storage sync checkpoints.
 		return nil
 	}

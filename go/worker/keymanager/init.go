@@ -27,7 +27,7 @@ func New(
 	provisioner host.Provisioner,
 ) (*Worker, error) {
 	var enabled bool
-	switch config.GlobalConfig.Mode {
+	switch config.GlobalConfigDeprecated.Mode {
 	case config.ModeKeyManager:
 		// When configured in keymanager mode, enable the keymanager worker.
 		enabled = true
@@ -58,7 +58,7 @@ func New(
 	initMetrics()
 
 	// Parse runtime ID.
-	if err := w.runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
+	if err := w.runtimeID.UnmarshalHex(config.GlobalConfigDeprecated.Keymanager.RuntimeID); err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
 	w.runtimeLabel = w.runtimeID.String()

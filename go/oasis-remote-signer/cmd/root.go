@@ -70,8 +70,8 @@ func Execute() {
 }
 
 func ensureDataDir() (string, error) {
-	if config.GlobalConfig.Common.DataDir != "" {
-		return config.GlobalConfig.Common.DataDir, nil
+	if config.GlobalConfigDeprecated.Common.DataDir != "" {
+		return config.GlobalConfigDeprecated.Common.DataDir, nil
 	}
 
 	dataDir := viper.GetString(CfgDataDir)

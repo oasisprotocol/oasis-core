@@ -35,7 +35,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
-	enabled := config.GlobalConfig.Mode.HasLocalStorage() && len(commonWorker.GetRuntimes()) > 0
+	enabled := config.GlobalConfigDeprecated.Mode.HasLocalStorage() && len(commonWorker.GetRuntimes()) > 0
 
 	s := &Worker{
 		enabled:      enabled,
@@ -78,7 +78,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 	var rpRPC registration.RoleProvider
-	if config.GlobalConfig.Storage.PublicRPCEnabled {
+	if config.GlobalConfigDeprecated.Storage.PublicRPCEnabled {
 		rpRPC, err = w.registration.NewRuntimeRoleProvider(node.RoleStorageRPC, id)
 		if err != nil {
 			return fmt.Errorf("failed to create rpc role provider: %w", err)
@@ -97,8 +97,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		w.commonWorker.GetConfig(),
 		localStorage,
 		&committee.CheckpointSyncConfig{
-			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
-			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
+			Disabled:          config.GlobalConfigDeprecated.Storage.CheckpointSyncDisabled,
+			ChunkFetcherCount: config.GlobalConfigDeprecated.Storage.FetcherCount,
 		},
 	)
 	if err != nil {
