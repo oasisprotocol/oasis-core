@@ -411,6 +411,7 @@ type ComputeWorkerFixture struct {
 
 	CheckpointCheckInterval   time.Duration `json:"checkpoint_check_interval,omitempty"`
 	CheckpointSyncEnabled     bool          `json:"checkpoint_sync_enabled,omitempty"`
+	LegacySyncServerDisabled  bool          `json:"legacy_sync_server_disabled,omitempty"`
 	CheckpointParallelChunker bool          `json:"checkpoint_parallel_chunker,omitempty"`
 
 	// Runtimes contains the indexes of the runtimes to enable.
@@ -449,12 +450,13 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		CheckpointParallelChunker: f.CheckpointParallelChunker,
 		// The checkpoint syncing flag is intentionally flipped here.
 		// Syncing should normally be enabled, but normally disabled in tests.
-		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
-		DisablePublicRPC:       f.DisablePublicRPC,
-		Runtimes:               f.Runtimes,
-		RuntimeConfig:          f.RuntimeConfig,
-		RuntimeProvisioner:     f.RuntimeProvisioner,
-		RuntimeStatePaths:      f.RuntimeStatePaths,
+		CheckpointSyncDisabled:   !f.CheckpointSyncEnabled,
+		LegacySyncServerDisabled: f.LegacySyncServerDisabled,
+		DisablePublicRPC:         f.DisablePublicRPC,
+		Runtimes:                 f.Runtimes,
+		RuntimeConfig:            f.RuntimeConfig,
+		RuntimeProvisioner:       f.RuntimeProvisioner,
+		RuntimeStatePaths:        f.RuntimeStatePaths,
 	})
 }
 
