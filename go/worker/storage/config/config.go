@@ -20,6 +20,8 @@ type Config struct {
 	PublicRPCEnabled bool `yaml:"public_rpc_enabled,omitempty"`
 	// Disable initial storage sync from checkpoints.
 	CheckpointSyncDisabled bool `yaml:"checkpoint_sync_disabled,omitempty"`
+	// Disable serving legacy storage sync p2p protocol.
+	LegacySyncServerDisabled bool `yaml:"legacy_sync_server_disabled,omitempty"`
 
 	// Storage checkpointer configuration.
 	Checkpointer CheckpointerConfig `yaml:"checkpointer,omitempty"`
@@ -47,11 +49,12 @@ func (c *Config) Validate() error {
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		Backend:                "auto",
-		MaxCacheSize:           "64mb",
-		FetcherCount:           4,
-		PublicRPCEnabled:       false,
-		CheckpointSyncDisabled: false,
+		Backend:                  "auto",
+		MaxCacheSize:             "64mb",
+		FetcherCount:             4,
+		PublicRPCEnabled:         false,
+		CheckpointSyncDisabled:   false,
+		LegacySyncServerDisabled: false,
 		Checkpointer: CheckpointerConfig{
 			Enabled:         false,
 			CheckInterval:   1 * time.Minute,

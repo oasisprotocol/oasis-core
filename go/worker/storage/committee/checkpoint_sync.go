@@ -11,11 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 const (
@@ -103,7 +101,19 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.fetchChunk(chunkCtx, chunk)
+		rsp, pf, err := n.checkpointSync.GetCheckpointChunk(
+			chunkCtx,
+			&checkpointsync.GetCheckpointChunkRequest{
+				Version: chunk.Version,
+				Root:    chunk.Root,
+				Index:   chunk.Index,
+				Digest:  chunk.Digest,
+			},
+			&checkpointsync.Checkpoint{
+				Metadata: chunk.checkpoint.Metadata,
+				Peers:    chunk.checkpoint.Peers,
+			},
+		)
 		if err != nil {
 			n.logger.Error("failed to fetch chunk from peers",
 				"err", err,
@@ -114,7 +124,7 @@ func (n *Node) checkpointChunkFetcher(
 		}
 
 		// Restore fetched chunk.
-		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp))
+		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp.Chunk))
 		cancel()
 
 		switch {
@@ -152,46 +162,6 @@ func (n *Node) checkpointChunkFetcher(
 			pf.RecordSuccess()
 		}
 	}
-}
-
-// fetchChunk fetches chunk using checkpoint sync p2p protocol client.
-//
-// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
-func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFeedback, error) {
-	rsp1, pf, err := n.checkpointSync.GetCheckpointChunk(
-		ctx,
-		&checkpointsync.GetCheckpointChunkRequest{
-			Version: chunk.Version,
-			Root:    chunk.Root,
-			Index:   chunk.Index,
-			Digest:  chunk.Digest,
-		},
-		&checkpointsync.Checkpoint{
-			Metadata: chunk.checkpoint.Metadata,
-			Peers:    chunk.checkpoint.Peers,
-		},
-	)
-	if err == nil { // if NO error
-		return rsp1.Chunk, pf, nil
-	}
-
-	rsp2, pf, err := n.legacyStorageSync.GetCheckpointChunk(
-		ctx,
-		&synclegacy.GetCheckpointChunkRequest{
-			Version: chunk.Version,
-			Root:    chunk.Root,
-			Index:   chunk.Index,
-			Digest:  chunk.Digest,
-		},
-		&synclegacy.Checkpoint{
-			Metadata: chunk.checkpoint.Metadata,
-			Peers:    chunk.checkpoint.Peers,
-		},
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	return rsp2.Chunk, pf, nil
 }
 
 func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
@@ -317,7 +287,9 @@ func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	list, err := n.fetchCheckpoints(ctx)
+	list, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
+		Version: 1,
+	})
 	if err != nil {
 		n.logger.Error("failed to retrieve any checkpoints",
 			"err", err,
@@ -329,33 +301,6 @@ func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
 	sortCheckpoints(list)
 
 	return list, nil
-}
-
-// fetchCheckpoints fetches checkpoints using checkpoint sync p2p protocol client.
-//
-// In case of no peers, error or no checkpoints, it fallbacks to the legacy storage sync protocol.
-func (n *Node) fetchCheckpoints(ctx context.Context) ([]*checkpointsync.Checkpoint, error) {
-	list1, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
-		Version: 1,
-	})
-	if err == nil && len(list1) > 0 { // if NO error and at least one checkpoint
-		return list1, nil
-	}
-
-	list2, err := n.legacyStorageSync.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
-		Version: 1,
-	})
-	if err != nil {
-		return nil, err
-	}
-	var cps []*checkpointsync.Checkpoint
-	for _, cp := range list2 {
-		cps = append(cps, &checkpointsync.Checkpoint{
-			Metadata: cp.Metadata,
-			Peers:    cp.Peers,
-		})
-	}
-	return cps, nil
 }
 
 // sortCheckpoints sorts the slice in-place (descending by version, peers, hash).
