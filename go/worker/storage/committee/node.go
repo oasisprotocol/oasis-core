@@ -212,8 +212,38 @@ func NewNode(
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
-	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
-	// in configuration so we can ensure that the genesis checkpoint is available.
+	// Create a checkpointer (even if checkpointing is disabled) to ensure the genesis checkpoint is available.
+	checkpointer, err := n.newCheckpointer(n.ctx, commonNode, localStorage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
+	}
+	n.checkpointer = checkpointer
+
+	// Register prune handler.
+	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
+		logger: n.logger,
+		node:   n,
+	})
+
+	// Advertise and serve p2p protocols.
+	commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
+		commonNode.P2P.RegisterProtocolServer(checkpointsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
+	if rpcRoleProvider != nil {
+		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
+	}
+
+	// Create p2p protocol clients.
+	n.legacyStorageSync = synclegacy.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+
+	return n, nil
+}
+
+func (n *Node) newCheckpointer(ctx context.Context, commonNode *committee.Node, localStorage storageApi.LocalBackend) (checkpoint.Checkpointer, error) {
 	checkInterval := checkpoint.CheckIntervalDisabled
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
@@ -259,39 +289,13 @@ func NewNode(
 			return blk.Header.StorageRoots(), nil
 		},
 	}
-	var err error
-	n.checkpointer, err = checkpoint.NewCheckpointer(
-		n.ctx,
+
+	return checkpoint.NewCheckpointer(
+		ctx,
 		localStorage.NodeDB(),
 		localStorage.Checkpointer(),
 		checkpointerCfg,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
-	}
-
-	// Register prune handler.
-	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
-		logger: n.logger,
-		node:   n,
-	})
-
-	// Advertise and serve p2p protocols.
-	commonNode.P2P.RegisterProtocolServer(synclegacy.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	if checkInterval != checkpoint.CheckIntervalDisabled {
-		commonNode.P2P.RegisterProtocolServer(checkpointsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	}
-	if rpcRoleProvider != nil {
-		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	}
-
-	// Create p2p protocol clients.
-	n.legacyStorageSync = synclegacy.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
-	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
-	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
-
-	return n, nil
 }
 
 // Service interface.
