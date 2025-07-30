@@ -22,7 +22,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/client"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
 )
 
 type byzantine struct {
@@ -154,7 +154,7 @@ func initializeAndRegisterByzantineNode(
 	if err != nil {
 		return nil, fmt.Errorf("initializing storage node failed: %w", err)
 	}
-	b.p2p.service.RegisterProtocolServer(synclegacy.NewServer(b.chainContext, b.runtimeID, storage))
+	b.p2p.service.RegisterProtocolServer(checkpointsync.NewServer(b.chainContext, b.runtimeID, storage))
 	b.storage = storage
 
 	// Wait for activation epoch.
