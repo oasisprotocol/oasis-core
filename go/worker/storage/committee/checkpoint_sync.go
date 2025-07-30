@@ -11,9 +11,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
 const (
@@ -55,7 +57,7 @@ type chunk struct {
 	*checkpoint.ChunkMetadata
 
 	// checkpoint points to the checkpoint this chunk originated from.
-	checkpoint *storageSync.Checkpoint
+	checkpoint *checkpointsync.Checkpoint
 }
 
 type chunkHeap struct {
@@ -101,12 +103,7 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &storageSync.GetCheckpointChunkRequest{
-			Version: chunk.Version,
-			Root:    chunk.Root,
-			Index:   chunk.Index,
-			Digest:  chunk.Digest,
-		}, chunk.checkpoint)
+		rsp, pf, err := n.fetchChunk(chunkCtx, chunk)
 		if err != nil {
 			n.logger.Error("failed to fetch chunk from peers",
 				"err", err,
@@ -117,7 +114,7 @@ func (n *Node) checkpointChunkFetcher(
 		}
 
 		// Restore fetched chunk.
-		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp.Chunk))
+		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp))
 		cancel()
 
 		switch {
@@ -157,7 +154,47 @@ func (n *Node) checkpointChunkFetcher(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+// fetchChunk fetches chunk using checkpoint sync p2p protocol client.
+//
+// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
+func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFeedback, error) {
+	rsp1, pf, err := n.checkpointSync.GetCheckpointChunk(
+		ctx,
+		&checkpointsync.GetCheckpointChunkRequest{
+			Version: chunk.Version,
+			Root:    chunk.Root,
+			Index:   chunk.Index,
+			Digest:  chunk.Digest,
+		},
+		&checkpointsync.Checkpoint{
+			Metadata: chunk.checkpoint.Metadata,
+			Peers:    chunk.checkpoint.Peers,
+		},
+	)
+	if err == nil { // if NO error
+		return rsp1.Chunk, pf, nil
+	}
+
+	rsp2, pf, err := n.legacyStorageSync.GetCheckpointChunk(
+		ctx,
+		&synclegacy.GetCheckpointChunkRequest{
+			Version: chunk.Version,
+			Root:    chunk.Root,
+			Index:   chunk.Index,
+			Digest:  chunk.Digest,
+		},
+		&synclegacy.Checkpoint{
+			Metadata: chunk.checkpoint.Metadata,
+			Peers:    chunk.checkpoint.Peers,
+		},
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.Chunk, pf, nil
+}
+
+func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
 	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
@@ -276,13 +313,11 @@ func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelReques
 	}
 }
 
-func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
+func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	list, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
-		Version: 1,
-	})
+	list, err := n.fetchCheckpoints(ctx)
 	if err != nil {
 		n.logger.Error("failed to retrieve any checkpoints",
 			"err", err,
@@ -296,9 +331,36 @@ func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 	return list, nil
 }
 
+// fetchCheckpoints fetches checkpoints using checkpoint sync p2p protocol client.
+//
+// In case of no peers, error or no checkpoints, it fallbacks to the legacy storage sync protocol.
+func (n *Node) fetchCheckpoints(ctx context.Context) ([]*checkpointsync.Checkpoint, error) {
+	list1, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err == nil && len(list1) > 0 { // if NO error and at least one checkpoint
+		return list1, nil
+	}
+
+	list2, err := n.legacyStorageSync.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var cps []*checkpointsync.Checkpoint
+	for _, cp := range list2 {
+		cps = append(cps, &checkpointsync.Checkpoint{
+			Metadata: cp.Metadata,
+			Peers:    cp.Peers,
+		})
+	}
+	return cps, nil
+}
+
 // sortCheckpoints sorts the slice in-place (descending by version, peers, hash).
-func sortCheckpoints(s []*storageSync.Checkpoint) {
-	slices.SortFunc(s, func(a, b *storageSync.Checkpoint) int {
+func sortCheckpoints(s []*checkpointsync.Checkpoint) {
+	slices.SortFunc(s, func(a, b *checkpointsync.Checkpoint) int {
 		return cmp.Or(
 			cmp.Compare(b.Root.Version, a.Root.Version),
 			cmp.Compare(len(b.Peers), len(a.Peers)),
@@ -307,7 +369,7 @@ func sortCheckpoints(s []*storageSync.Checkpoint) {
 	})
 }
 
-func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
+func (n *Node) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
 	namespace := n.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
@@ -357,7 +419,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 
 	// If we only want the genesis checkpoint, filter it out.
 	if wantOnlyGenesis && len(cps) > 0 {
-		var filteredCps []*storageSync.Checkpoint
+		var filteredCps []*checkpointsync.Checkpoint
 		for _, cp := range cps {
 			if cp.Root.Version == genesisRound {
 				filteredCps = append(filteredCps, cp)

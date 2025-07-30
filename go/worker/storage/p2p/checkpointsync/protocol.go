@@ -1,4 +1,6 @@
-package sync
+// Package checkpointsync defines wire protocol together with client/server
+// implementations for the checkpoint sync protocol, used for runtime state sync.
+package checkpointsync
 
 import (
 	"time"
@@ -11,36 +13,19 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
-// StorageSyncProtocolID is a unique protocol identifier for the storage sync protocol.
-const StorageSyncProtocolID = "storagesync"
+// CheckpointSyncProtocolID is a unique protocol identifier for the checkpoint sync protocol.
+const CheckpointSyncProtocolID = "checkpointsync"
 
-// StorageSyncProtocolVersion is the supported version of the storage sync protocol.
-var StorageSyncProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
+// CheckpointSyncProtocolVersion is the supported version of the checkpoint sync protocol.
+var CheckpointSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
 
-// ProtocolID returns the runtime storage sync protocol ID.
+// ProtocolID returns the runtime checkpoint sync protocol ID.
 func ProtocolID(chainContext string, runtimeID common.Namespace) core.ProtocolID {
-	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
-}
-
-// Constants related to the GetDiff method.
-const (
-	MethodGetDiff          = "GetDiff"
-	MaxGetDiffResponseTime = 15 * time.Second
-)
-
-// GetDiffRequest is a GetDiff request.
-type GetDiffRequest struct {
-	StartRoot storage.Root `json:"start_root"`
-	EndRoot   storage.Root `json:"end_root"`
-}
-
-// GetDiffResponse is a response to a GetDiff request.
-type GetDiffResponse struct {
-	WriteLog storage.WriteLog `json:"write_log,omitempty"`
+	return protocol.NewRuntimeProtocolID(chainContext, runtimeID, CheckpointSyncProtocolID, CheckpointSyncProtocolVersion)
 }
 
 // Constants related to the GetCheckpoints method.
@@ -61,15 +46,15 @@ type GetCheckpointsResponse struct {
 // Constants related to the GetCheckpointChunk method.
 const (
 	MethodGetCheckpointChunk          = "GetCheckpointChunk"
-	MaxGetCheckpointChunkResponseTime = 60 * time.Second
+	MaxGetCheckpointChunkResponseTime = time.Minute
 )
 
 // GetCheckpointChunkRequest is a GetCheckpointChunk request.
 type GetCheckpointChunkRequest struct {
-	Version uint16       `json:"version"`
-	Root    storage.Root `json:"root"`
-	Index   uint64       `json:"index"`
-	Digest  hash.Hash    `json:"digest"`
+	Version uint16    `json:"version"`
+	Root    api.Root  `json:"root"`
+	Index   uint64    `json:"index"`
+	Digest  hash.Hash `json:"digest"`
 }
 
 // GetCheckpointChunkResponse is a response to a GetCheckpointChunk request.
@@ -86,7 +71,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+				protocols[i] = ProtocolID(chainContext, rt.ID)
 			}
 
 			return protocols
