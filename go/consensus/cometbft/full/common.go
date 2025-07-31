@@ -3,6 +3,7 @@ package full
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -831,17 +832,44 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			valSetHeight = status.GenesisHeight
 		}
 		vals, err := n.stateStore.LoadValidators(valSetHeight)
-		if err != nil {
-			// Failed to load validator set.
-			status.IsValidator = false
-		} else {
+		switch err {
+		case nil:
 			consensusPk := n.identity.ConsensusSigner.Public()
 			consensusAddr := []byte(crypto.PublicKeyToCometBFT(&consensusPk).Address())
 			status.IsValidator = vals.HasAddress(consensusAddr)
+		default:
+			// Failed to load validator set.
+			status.IsValidator = false
+		}
+
+		if status.Checkpoint, err = n.fetchCheckpointStatus(ctx); err != nil {
+			return nil, fmt.Errorf("failed to fetch checkpoints: %w", err)
 		}
 	}
 
 	return status, nil
+}
+
+// fetchCheckpointStatus fetches checkpoint status.
+//
+// In case of zero checkpoints nil status is returned.
+func (n *commonNode) fetchCheckpointStatus(ctx context.Context) (*consensusAPI.CheckpointStatus, error) {
+	cps, err := n.mux.State().Storage().GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var heights []uint64
+	for _, cp := range cps {
+		heights = append(heights, cp.Root.Version)
+	}
+	if len(heights) <= 0 {
+		return nil, nil
+	}
+	slices.Sort(heights)
+	slices.Reverse(heights)
+	return &consensusAPI.CheckpointStatus{Heights: heights}, nil
 }
 
 // Unimplemented methods.
