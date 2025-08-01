@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/p2p"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
@@ -91,13 +92,17 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, peerID signature.
 	return <-responseCh
 }
 
-func (ph *p2pHandle) start(ht *honestCometBFT, id *identity.Identity, chainContext string, runtimeID common.Namespace) error {
+func (ph *p2pHandle) start(yamlCfg *config.Config, ht *honestCometBFT, id *identity.Identity, chainContext string, runtimeID common.Namespace) error {
 	if ph.service != nil {
 		return fmt.Errorf("P2P service already started")
 	}
 
+	var cfg p2p.Config
+	if err := cfg.Load(&yamlCfg.P2P); err != nil {
+		return fmt.Errorf("failed to parse p2p config %w", err)
+	}
 	var err error
-	ph.service, err = p2p.New(id, chainContext, nil)
+	ph.service, err = p2p.New(&cfg, id, chainContext, nil)
 	if err != nil {
 		return fmt.Errorf("P2P service New: %w", err)
 	}

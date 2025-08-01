@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -85,8 +84,7 @@ func doVRFBeaconScenario(*cobra.Command, []string) {
 	round := uint64(3)
 	// For every command where applicable you will have to parse yaml config??
 	cfg := &config.GlobalConfig
-	metricsEnabled := metrics.Enabled(cfg.Metrics.Mode)
-	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleValidator, scheduler.RoleInvalid, false, true, round, metricsEnabled)
+	b, err := initializeAndRegisterByzantineNode(cfg, runtimeID, node.RoleValidator, scheduler.RoleInvalid, false, true, round)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}

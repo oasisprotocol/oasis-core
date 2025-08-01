@@ -494,7 +494,11 @@ func NewNode(cfg *config.Config) (node *Node, err error) { // nolint: gocyclo
 	if isArchive {
 		node.P2P = p2p.NewNop()
 	} else {
-		node.P2P, err = p2p.New(node.Identity, node.chainContext, node.commonStore)
+		var p2pCfg p2p.Config
+		if err := p2pCfg.Load(&cfg.P2P); err != nil {
+			return nil, fmt.Errorf("failed to parse p2p config %w", err)
+		}
+		node.P2P, err = p2p.New(&p2pCfg, node.Identity, node.chainContext, node.commonStore)
 		if err != nil {
 			return nil, err
 		}

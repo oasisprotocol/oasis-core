@@ -56,7 +56,7 @@ func (n *SeedNode) Cleanup() {
 }
 
 // NewSeedNode initializes the seed node.
-func NewSeedNode(_ *config.Config) (node *SeedNode, err error) {
+func NewSeedNode(cfg *config.Config) (node *SeedNode, err error) {
 	logger := cmdCommon.Logger()
 
 	node = &SeedNode{
@@ -152,7 +152,7 @@ func NewSeedNode(_ *config.Config) (node *SeedNode, err error) {
 
 	// Initialize and start the libp2p seed.
 	var seedCfg p2p.SeedConfig
-	if err = seedCfg.Load(); err != nil {
+	if err = seedCfg.Load(&cfg.P2P); err != nil {
 		return nil, fmt.Errorf("failed to load libp2p seed config: %w", err)
 	}
 	seedCfg.Signer = node.identity.P2PSigner

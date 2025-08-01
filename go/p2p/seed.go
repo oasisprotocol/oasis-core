@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/backup"
 	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
@@ -148,33 +146,7 @@ func (s *seedNode) registerProtocolServer(srv rpc.Server) {
 	)
 }
 
-// SeedConfig describes a set of settings for a seed.
-type SeedConfig struct {
-	CommonStore *persistent.CommonStore
-
-	HostConfig
-	BootstrapDiscoveryConfig
-}
-
 // NewSeed creates a new P2P seed node service.
 func (cfg *SeedConfig) NewSeed() (api.SeedService, error) {
 	return NewSeedNode(cfg)
-}
-
-// Load loads seed configuration.
-func (cfg *SeedConfig) Load() error {
-	var hostCfg HostConfig
-	if err := hostCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load host config: %w", err)
-	}
-
-	var bootstrapCfg BootstrapDiscoveryConfig
-	if err := bootstrapCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load bootstrap config: %w", err)
-	}
-
-	cfg.HostConfig = hostCfg
-	cfg.BootstrapDiscoveryConfig = bootstrapCfg
-
-	return nil
 }
