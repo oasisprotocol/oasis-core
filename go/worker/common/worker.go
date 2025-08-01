@@ -166,6 +166,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.LightProvider,
 		w.P2P,
 		w.cfg.TxPool,
+		w.cfg.MetricsEnabled,
 	)
 	if err != nil {
 		return err
@@ -191,6 +192,7 @@ func New(
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
 	provisioner host.Provisioner,
+	metricsEnabled bool,
 ) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
@@ -203,7 +205,7 @@ func New(
 		enabled = true
 	}
 
-	cfg, err := NewConfig()
+	cfg, err := NewConfig(metricsEnabled)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}

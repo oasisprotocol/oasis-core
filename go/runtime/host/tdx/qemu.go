@@ -67,6 +67,9 @@ type QemuConfig struct {
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
 	RuntimeAttestInterval time.Duration
+
+	// MetricsEnabled is true if prometheus metris are enabled.
+	MetricsEnabled bool
 }
 
 // QemuExtraConfig is the per-runtime QEMU-specific extra configuration.
@@ -94,7 +97,9 @@ func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
 		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
 	}
 
-	sgxCommon.InitMetrics()
+	if cfg.MetricsEnabled {
+		sgxCommon.InitMetrics()
+	}
 
 	p := &qemuProvisioner{
 		cfg:       cfg,
@@ -112,6 +117,7 @@ func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
 		HostInitializer:   p.hostInitializer,
 		InsecureNoSandbox: true, // No sandbox is needed for TDX.
 		Logger:            p.logger,
+		MetricsEnabled:    cfg.MetricsEnabled,
 	})
 	if err != nil {
 		return nil, err
@@ -415,7 +421,9 @@ func (p *qemuProvisioner) createPersistentOverlayImage(image string, format stri
 
 func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.HostInitializerParams) (capTEE *node.CapabilityTEE, aerr error) {
 	defer func() {
-		sgxCommon.UpdateAttestationMetrics(hp.Runtime.ID(), component.TEEKindTDX, aerr)
+		if p.cfg.MetricsEnabled {
+			sgxCommon.UpdateAttestationMetrics(hp.Runtime.ID(), component.TEEKindTDX, aerr)
+		}
 	}()
 
 	// Issue the RAK report request which will return the full quote in TDX since the attestation

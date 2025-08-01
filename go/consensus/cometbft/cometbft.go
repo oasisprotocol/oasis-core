@@ -31,6 +31,7 @@ func New(
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
 	p2p p2pAPI.Service,
+	metricsEnabled bool,
 ) (consensusAPI.Service, error) {
 	genesisDoc, err := api.GetCometBFTGenesisDocument(doc)
 	if err != nil {
@@ -39,7 +40,7 @@ func New(
 
 	switch config.GlobalConfig.Mode {
 	case config.ModeArchive:
-		node, err := createArchiveNode(ctx, dataDir, identity, genesis, doc, genesisDoc)
+		node, err := createArchiveNode(ctx, dataDir, identity, genesis, doc, genesisDoc, metricsEnabled)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create archive node: %w", err)
 		}
@@ -51,7 +52,7 @@ func New(
 		}
 		return node, nil
 	default:
-		node, err := createFullNode(ctx, dataDir, identity, genesis, doc, genesisDoc, upgrader, p2p)
+		node, err := createFullNode(ctx, dataDir, identity, genesis, doc, genesisDoc, upgrader, p2p, metricsEnabled)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create full node: %w", err)
 		}
@@ -66,9 +67,10 @@ func createArchiveNode(
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
 	genesisDoc *cmttypes.GenesisDoc,
+	metricsEnabled bool,
 ) (consensusAPI.Service, error) {
 	cfg := full.ArchiveConfig{
-		CommonConfig: createCommonConfig(dataDir, identity, genesis, doc, genesisDoc),
+		CommonConfig: createCommonConfig(dataDir, identity, genesis, doc, genesisDoc, metricsEnabled),
 	}
 
 	return full.NewArchive(ctx, cfg)
@@ -83,9 +85,10 @@ func createFullNode(
 	genesisDoc *cmttypes.GenesisDoc,
 	upgrader upgradeAPI.Backend,
 	p2p p2pAPI.Service,
+	metricsEnabled bool,
 ) (consensusAPI.Service, error) {
 	cfg := full.Config{
-		CommonConfig:       createCommonConfig(dataDir, identity, genesis, doc, genesisDoc),
+		CommonConfig:       createCommonConfig(dataDir, identity, genesis, doc, genesisDoc, metricsEnabled),
 		TimeoutCommit:      doc.Consensus.Parameters.TimeoutCommit,
 		EmptyBlockInterval: doc.Consensus.Parameters.EmptyBlockInterval,
 		SkipTimeoutCommit:  doc.Consensus.Parameters.SkipTimeoutCommit,
@@ -193,6 +196,7 @@ func createCommonConfig(
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
 	genesisDoc *cmttypes.GenesisDoc,
+	metricsEnabled bool,
 ) full.CommonConfig {
 	return full.CommonConfig{
 		DataDir:            dataDir,
@@ -205,6 +209,7 @@ func createCommonConfig(
 		BaseEpoch:          doc.Beacon.Base,
 		BaseHeight:         doc.Height,
 		PublicKeyBlacklist: doc.Consensus.Parameters.PublicKeyBlacklist,
+		MetricsEnabled:     metricsEnabled,
 	}
 }
 

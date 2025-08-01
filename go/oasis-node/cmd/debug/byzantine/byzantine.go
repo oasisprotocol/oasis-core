@@ -16,8 +16,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -147,6 +149,9 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 
 	round := uint64(3)
 	isTxScheduler := viper.GetBool(CfgPrimarySchedulerExpected)
+	// For every command where applicable you will have to parse yaml config??
+	cfg := &config.GlobalConfig
+	metricsEnabled := metrics.Enabled(cfg.Metrics.Mode)
 	b, err := initializeAndRegisterByzantineNode(
 		runtimeID,
 		node.RoleComputeWorker,
@@ -154,6 +159,7 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 		isTxScheduler,
 		false,
 		round,
+		metricsEnabled,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))

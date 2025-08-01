@@ -40,7 +40,7 @@ func TestClose(t *testing.T) {
 
 	logger := logging.GetLogger("test")
 	handlerA := &testHandler{}
-	protoA, err := NewConnection(logger, runtimeID, handlerA)
+	protoA, err := NewConnection(logger, runtimeID, handlerA, false)
 	require.NoError(err, "NewConnection")
 	require.NotPanics(func() { protoA.Close() })
 }
@@ -52,10 +52,10 @@ func TestEchoRequestResponse(t *testing.T) {
 	logger := logging.GetLogger("test")
 	connA, connB := net.Pipe()
 	handlerA := &testHandler{}
-	protoA, err := NewConnection(logger, runtimeID, handlerA)
+	protoA, err := NewConnection(logger, runtimeID, handlerA, false)
 	require.NoError(err, "A.New()")
 	handlerB := &testHandler{}
-	protoB, err := NewConnection(logger, runtimeID, handlerB)
+	protoB, err := NewConnection(logger, runtimeID, handlerB, false)
 	require.NoError(err, "B.New()")
 
 	err = protoA.InitGuest(connA)
@@ -109,10 +109,10 @@ func TestBigMessage(t *testing.T) {
 
 	connA, connB := net.Pipe()
 	handlerA := &testHandler{}
-	protoA, err := NewConnection(logger, runtimeID, handlerA)
+	protoA, err := NewConnection(logger, runtimeID, handlerA, false)
 	require.NoError(err, "A.New()")
 	handlerB := &testHandler{}
-	protoB, err := NewConnection(logger, runtimeID, handlerB)
+	protoB, err := NewConnection(logger, runtimeID, handlerB, false)
 	require.NoError(err, "B.New()")
 
 	err = protoA.InitGuest(connA)

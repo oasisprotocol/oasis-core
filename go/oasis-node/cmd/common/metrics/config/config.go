@@ -1,4 +1,4 @@
-// Package config implements global metrics configuration options.
+// Package config implements metrics configuration options.
 package config
 
 import (

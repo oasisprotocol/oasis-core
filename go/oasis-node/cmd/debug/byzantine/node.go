@@ -102,6 +102,7 @@ func initializeAndRegisterByzantineNode(
 	shouldBePrimaryScheduler bool,
 	noCommittees bool,
 	round uint64,
+	metricsEnabled bool,
 ) (*byzantine, error) {
 	var err error
 	b := &byzantine{
@@ -139,7 +140,7 @@ func initializeAndRegisterByzantineNode(
 
 	// Setup CometBFT.
 	b.cometbft = newHonestCometBFT(genesis, genesisDoc)
-	if err = b.cometbft.start(b.identity, cmdCommon.DataDir()); err != nil {
+	if err = b.cometbft.start(b.identity, cmdCommon.DataDir(), metricsEnabled); err != nil {
 		return nil, fmt.Errorf("node cometbft start failed: %w", err)
 	}
 

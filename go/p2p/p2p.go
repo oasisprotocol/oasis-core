@@ -26,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/config"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
@@ -100,7 +101,10 @@ func (p *p2p) Start() error {
 	// Unfortunately, we cannot start the host as libp2p starts everything on construction.
 	// However, we can start everything else.
 	p.peerMgr.Start()
-	go p.metricsWorker()
+
+	if metrics.Enabled(config.GlobalConfig.Metrics.Mode) {
+		go p.metricsWorker()
+	}
 
 	return nil
 }

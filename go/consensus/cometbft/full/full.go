@@ -49,7 +49,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -173,7 +172,7 @@ func (t *fullService) Start() error {
 		// Start block notifier.
 		go t.blockNotifierWorker()
 		// Optionally start metrics updater.
-		if cmmetrics.Enabled() {
+		if t.commonNode.metricsEnabled {
 			go t.metrics()
 		}
 	case false:

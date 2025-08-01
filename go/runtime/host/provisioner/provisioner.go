@@ -36,6 +36,7 @@ func New(
 	identity *identity.Identity,
 	consensus consensus.Service,
 	genesisDoc *genesisAPI.Document,
+	metricsEnabled bool,
 ) (runtimeHost.Provisioner, error) {
 	// Initialize the IAS proxy client.
 	ias, err := ias.New(identity)
@@ -56,7 +57,7 @@ func New(
 	}
 
 	// Create runtime provisioner.
-	return createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs)
+	return createProvisioner(dataDir, commonStore, identity, consensus, hostInfo, ias, qs, metricsEnabled)
 }
 
 func createHostInfo(genesisDoc *genesisAPI.Document) (*hostProtocol.HostInfo, error) {
@@ -88,6 +89,7 @@ func createProvisioner(
 	hostInfo *hostProtocol.HostInfo,
 	ias []iasAPI.Endpoint,
 	qs pcs.QuoteService,
+	metricsEnabled bool,
 ) (runtimeHost.Provisioner, error) {
 	var err error
 	var insecureNoSandbox bool
@@ -133,6 +135,7 @@ func createProvisioner(
 			HostInfo:          hostInfo,
 			InsecureNoSandbox: insecureNoSandbox,
 			SandboxBinaryPath: sandboxBinary,
+			MetricsEnabled:    metricsEnabled,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
@@ -160,6 +163,7 @@ func createProvisioner(
 			InsecureNoSandbox:     insecureNoSandbox,
 			InsecureMock:          insecureMock,
 			RuntimeAttestInterval: attestInterval,
+			MetricsEnabled:        metricsEnabled,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
@@ -187,6 +191,7 @@ func createProvisioner(
 		Identity:              identity,
 		CidPool:               cidPool,
 		RuntimeAttestInterval: attestInterval,
+		MetricsEnabled:        metricsEnabled,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TDX runtime provisioner: %w", err)
@@ -195,7 +200,7 @@ func createProvisioner(
 	// Configure optional load balancing.
 	for tee, rp := range provisioners {
 		numInstances := int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances)
-		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, numInstances)
+		provisioners[tee] = hostLoadBalance.NewProvisioner(rp, numInstances, metricsEnabled)
 	}
 
 	// Create a composite provisioner to provision the individual components.

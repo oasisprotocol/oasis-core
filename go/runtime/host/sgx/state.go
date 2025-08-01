@@ -23,12 +23,15 @@ type teeState struct {
 	insecureMock bool
 
 	impl teeStateImpl
+
+	metricsEnabled bool
 }
 
-func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error) {
+func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner, metricsEnabled bool) ([]byte, error) {
 	if ts.impl != nil {
 		return nil, fmt.Errorf("already initialized")
 	}
+	ts.metricsEnabled = metricsEnabled // TODO are you sure?!
 
 	var (
 		targetInfo []byte
@@ -74,7 +77,9 @@ func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protoco
 
 	attestation, err := ts.impl.Update(ctx, sp, conn, report, nonce)
 
-	common.UpdateAttestationMetrics(ts.cfg.ID, component.TEEKindSGX, err)
+	if ts.metricsEnabled {
+		common.UpdateAttestationMetrics(ts.cfg.ID, component.TEEKindSGX, err)
+	}
 
 	return attestation, err
 }
