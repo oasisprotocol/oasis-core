@@ -1,5 +1,5 @@
 //! Test runtime types.
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
@@ -12,6 +12,8 @@ use oasis_core_runtime::{
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 #[cbor(no_default)]
 pub struct Call {
+    /// Sender.
+    pub sender: Vec<u8>,
     /// Nonce.
     pub nonce: u64,
     /// Method name.
@@ -133,6 +135,7 @@ impl KeyFormat for PendingMessagesKeyFormat {
 #[derive(Debug)]
 pub struct NonceKeyFormat {
     pub nonce: u64,
+    pub sender: Vec<u8>,
 }
 
 impl KeyFormat for NonceKeyFormat {
@@ -148,12 +151,14 @@ impl KeyFormat for NonceKeyFormat {
         let mut nonce: Vec<u8> = Vec::with_capacity(8);
         nonce.write_u64::<BigEndian>(self.nonce).unwrap();
         atoms.push(nonce);
+        atoms.push(self.sender);
     }
 
     fn decode_atoms(data: &[u8]) -> Self {
         let mut reader = Cursor::new(data);
-        Self {
-            nonce: reader.read_u64::<BigEndian>().unwrap(),
-        }
+        let nonce = reader.read_u64::<BigEndian>().unwrap();
+        let mut sender = Vec::with_capacity(data.len() - 8);
+        reader.read_to_end(&mut sender).unwrap();
+        Self { nonce, sender }
     }
 }
