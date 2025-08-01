@@ -972,7 +972,7 @@ func (q *queries) Run(
 		}
 
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(time.Second):
 		case <-gracefulExit.Done():
 			q.logger.Debug("time's up")
 			return nil

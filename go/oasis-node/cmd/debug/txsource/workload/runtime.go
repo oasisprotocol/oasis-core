@@ -76,6 +76,8 @@ var RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // TxnCall is a transaction call in the test runtime.
 type TxnCall struct {
+	// Sender is the sender.
+	Sender []byte `json:"sender"`
 	// Nonce is a nonce.
 	Nonce uint64 `json:"nonce"`
 	// Method is the called method name.
@@ -245,7 +247,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 
 	// Submit request.
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "insert",
 		Args: struct {
 			Key   string `json:"key"`
@@ -297,7 +299,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 
 	// Submit request.
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "get",
 		Args: struct {
 			Key string `json:"key"`
@@ -344,7 +346,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 
 	// Submit request.
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "remove",
 		Args: struct {
 			Key string `json:"key"`
@@ -397,7 +399,7 @@ func (r *runtime) doInMsgRequest(ctx context.Context, rng *rand.Rand, _ runtimeC
 		ID:  r.runtimeID,
 		Tag: 42,
 		Data: cbor.Marshal(&TxnCall{
-			Nonce:  rng.Uint64(),
+			Sender: randomSender(rng),
 			Method: "insert",
 			Args: struct {
 				Key   string `json:"key"`
@@ -577,7 +579,7 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "consensus_withdraw",
 		Args: struct {
 			Withdraw staking.Withdraw `json:"withdraw"`
@@ -621,7 +623,7 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "consensus_transfer",
 		Args: struct {
 			Transfer staking.Transfer `json:"transfer"`
@@ -665,7 +667,7 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "consensus_add_escrow",
 		Args: struct {
 			Escrow staking.Escrow `json:"escrow"`
@@ -711,7 +713,7 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 	// getting any rewards or is being slashed.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
-		Nonce:  rng.Uint64(),
+		Sender: randomSender(rng),
 		Method: "consensus_reclaim_escrow",
 		Args: struct {
 			ReclaimEscrow staking.ReclaimEscrow `json:"reclaim_escrow"`
@@ -883,12 +885,17 @@ func (r *runtime) Run(
 		}
 
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(time.Second):
 		case <-gracefulExit.Done():
 			r.Logger.Debug("time's up")
 			return nil
 		}
 	}
+}
+
+func randomSender(rng *rand.Rand) []byte {
+	sender := fmt.Sprintf("sender-%d", rng.Uint64())
+	return []byte(sender)
 }
 
 func init() {

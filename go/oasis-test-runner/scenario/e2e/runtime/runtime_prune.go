@@ -81,7 +81,7 @@ func (sc *runtimePruneImpl) Run(ctx context.Context, _ *env.Env) error {
 			"seq", i,
 		)
 
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, uint64(i), "hello", fmt.Sprintf("world %d", i), 0, 0, plaintextTxKind); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, "sender", uint64(i), "hello", fmt.Sprintf("world %d", i), 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}

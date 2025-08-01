@@ -214,7 +214,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", fmt.Sprintf("world %d", i), 0, 0, plaintextTxKind); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, "sender", rtNonce, "hello", fmt.Sprintf("world %d", i), 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 		rtNonce++
@@ -322,7 +322,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", "final world", 0, 0, plaintextTxKind); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, "sender", rtNonce, "hello", "final world", 0, 0, plaintextTxKind); err != nil {
 		return err
 	}
 	rtNonce++
@@ -504,7 +504,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", "final world for sure", 0, 0, plaintextTxKind); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, "sender", rtNonce, "hello", "final world for sure", 0, 0, plaintextTxKind); err != nil {
 		return err
 	}
 
