@@ -13,10 +13,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -96,6 +98,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 }
 
 func initializeAndRegisterByzantineNode(
+	cfg *config.Config,
 	runtimeID common.Namespace,
 	nodeRoles node.RolesMask,
 	expectedExecutorRole scheduler.Role,
@@ -139,13 +142,14 @@ func initializeAndRegisterByzantineNode(
 
 	// Setup CometBFT.
 	b.cometbft = newHonestCometBFT(genesis, genesisDoc)
-	if err = b.cometbft.start(b.identity, cmdCommon.DataDir()); err != nil {
+	metricsEnabled := metrics.Enabled(cfg.Metrics.Mode)
+	if err = b.cometbft.start(b.identity, cmdCommon.DataDir(), metricsEnabled); err != nil {
 		return nil, fmt.Errorf("node cometbft start failed: %w", err)
 	}
 
 	// Setup P2P.
 	b.p2p = newP2PHandle()
-	if err = b.p2p.start(b.cometbft, b.identity, b.chainContext, b.runtimeID); err != nil {
+	if err = b.p2p.start(cfg, b.cometbft, b.identity, b.chainContext, b.runtimeID); err != nil {
 		return nil, fmt.Errorf("P2P start failed: %w", err)
 	}
 

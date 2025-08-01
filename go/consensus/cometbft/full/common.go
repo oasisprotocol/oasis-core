@@ -59,7 +59,6 @@ import (
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
-	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/registry"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -101,6 +100,8 @@ type CommonConfig struct {
 	BaseHeight int64
 	// PublicKeyBlacklist is the network-wide public key blacklist.
 	PublicKeyBlacklist []signature.PublicKey
+	// MetricsEnabled is true if prometheus metrics are enabled.
+	MetricsEnabled bool
 }
 
 // commonNode implements the common CometBFT node functionality shared between
@@ -149,6 +150,8 @@ type commonNode struct {
 	startedCh chan struct{}
 
 	parentNode consensusAPI.Backend
+
+	metricsEnabled bool
 }
 
 func (n *commonNode) initialized() bool {
@@ -304,7 +307,7 @@ func (n *commonNode) initialize() error {
 	}
 
 	// Start metrics.
-	if cmmetrics.Enabled() {
+	if n.metricsEnabled {
 		rmu := registry.NewMetricsUpdater(n.ctx, n.registry)
 		n.svcMgr.RegisterCleanupOnly(rmu, "registry metrics updater")
 	}
@@ -909,6 +912,7 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("cometbft/servicemanager")),
 		dbCloser:              db.NewCloser(),
 		startedCh:             make(chan struct{}),
+		metricsEnabled:        cfg.MetricsEnabled,
 	}
 }
 
