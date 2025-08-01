@@ -277,7 +277,7 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 	newRT.Executor.MaxMessages = 64
 	newRT.Genesis.StateRoot.Empty()
 
-	meta, err := sc.submitRuntimeTxMeta(ctx, rt.ID, rtNonce, "update_runtime", struct {
+	meta, err := sc.submitRuntimeTxMeta(ctx, rt.ID, "sender", rtNonce, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
 	}{
 		UpdateRuntime: newRT,
@@ -327,7 +327,7 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 		"src_runtime", rt.ID,
 		"target_runtime", otherRT.ID,
 	)
-	meta, err = sc.submitRuntimeTxMeta(ctx, rt.ID, rtNonce, "update_runtime", struct {
+	meta, err = sc.submitRuntimeTxMeta(ctx, rt.ID, "sender", rtNonce, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
 	}{
 		UpdateRuntime: newRT,

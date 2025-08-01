@@ -565,7 +565,7 @@ func (sc *txSourceImpl) manager(ctx context.Context, env *env.Env, errCh chan er
 		sc.nodeLongRestartInterval = math.MaxInt64
 	}
 
-	// Setup restarable nodes.
+	// Setup restartable nodes.
 	var restartableLock sync.Mutex
 	var longRestartNode *oasis.Node
 	var restartableNodes []*oasis.Node

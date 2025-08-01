@@ -26,7 +26,9 @@ use oasis_core_runtime::{
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features},
+    types::{
+        CheckTxMetadata, CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features,
+    },
     TxnDispatcher,
 };
 use simple_keymanager::trusted_signers;
@@ -131,7 +133,7 @@ impl Dispatcher {
     }
 
     fn dispatch_tx(ctx: &mut TxContext, tx: Call) -> Result<cbor::Value, String> {
-        Methods::check_nonce(ctx, tx.nonce)?;
+        Methods::check_nonce(ctx, tx.sender, tx.nonce)?;
 
         match tx.method.as_str() {
             "get_runtime_id" => Self::dispatch_call(ctx, tx.args, Methods::get_runtime_id),
@@ -160,17 +162,12 @@ impl Dispatcher {
         }
     }
 
-    fn decode_and_dispatch_tx(ctx: &mut TxContext, tx: &[u8]) -> Result<cbor::Value, String> {
-        let tx = Self::decode_tx(tx)?;
-        Self::dispatch_tx(ctx, tx)
-    }
-
     fn execute_tx(ctx: &mut Context<'_, '_>, tx: &[u8]) -> Result<ExecuteTxResult, RuntimeError> {
         // During execution we reject malformed transactions as the proposer should do checks first.
         let tx = Self::decode_tx(tx).map_err(|_| RuntimeError {
             module: "test".to_string(),
             code: 1,
-            message: "malformed transaction batch".to_string(),
+            message: "malformed transaction".to_string(),
         })?;
 
         let mut tx_ctx = TxContext::new(ctx, false);
@@ -193,10 +190,26 @@ impl Dispatcher {
     }
 
     fn check_tx(ctx: &mut Context<'_, '_>, tx: &[u8]) -> Result<CheckTxResult, RuntimeError> {
-        let mut tx_ctx = TxContext::new(ctx, true);
+        let tx = Self::decode_tx(tx).map_err(|_| RuntimeError {
+            module: "test".to_string(),
+            code: 1,
+            message: "malformed transaction".to_string(),
+        })?;
 
-        match Self::decode_and_dispatch_tx(&mut tx_ctx, tx) {
-            Ok(_) => Ok(CheckTxResult::default()),
+        let mut tx_ctx = TxContext::new(ctx, true);
+        let nonce = Methods::get_nonce(&tx_ctx, tx.sender.clone());
+        let meta = CheckTxMetadata {
+            sender: tx.sender.clone(),
+            sender_seq: tx.nonce,
+            sender_state_seq: nonce,
+            ..Default::default()
+        };
+
+        match Self::dispatch_tx(&mut tx_ctx, tx) {
+            Ok(_) => Ok(CheckTxResult {
+                meta: Some(meta),
+                ..Default::default()
+            }),
             Err(err) => Ok(CheckTxResult {
                 error: RuntimeError {
                     module: "test".to_string(),
