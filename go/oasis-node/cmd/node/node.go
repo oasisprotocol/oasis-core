@@ -384,7 +384,7 @@ func (n *Node) startRuntimeWorkers() error {
 //
 // Note: the reason for having the named err return value here is for the
 // deferred func below to propagate the error.
-func NewNode() (node *Node, err error) { // nolint: gocyclo
+func NewNode(cfg *config.Config) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node = &Node{
@@ -414,7 +414,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// binary is from the logs.
 	logger.Info("Starting oasis-node",
 		"version", version.SoftwareVersion,
-		"mode", config.GlobalConfig.Mode,
+		"mode", cfg.Mode,
 	)
 
 	if err = verifyElevatedPrivileges(logger); err != nil {
@@ -486,7 +486,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		p2p.DebugForceAllowUnroutableAddresses()
 	}
 
-	isArchive := config.GlobalConfig.Mode == config.ModeArchive
+	isArchive := cfg.Mode == config.ModeArchive
 	if isArchive {
 		node.P2P = p2p.NewNop()
 	} else {

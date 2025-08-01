@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmtSeed "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/seed"
 	controlApi "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -55,7 +56,7 @@ func (n *SeedNode) Cleanup() {
 }
 
 // NewSeedNode initializes the seed node.
-func NewSeedNode() (node *SeedNode, err error) {
+func NewSeedNode(_ *config.Config) (node *SeedNode, err error) {
 	logger := cmdCommon.Logger()
 
 	node = &SeedNode{
