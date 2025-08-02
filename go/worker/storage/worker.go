@@ -1,7 +1,10 @@
 package storage
 
 import (
+	"context"
 	"fmt"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -27,6 +30,9 @@ type Worker struct {
 	quitCh chan struct{}
 
 	runtimes map[common.Namespace]*committee.Worker
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // New constructs a new storage worker.
@@ -35,6 +41,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	enabled := config.GlobalConfig.Mode.HasLocalStorage() && len(commonWorker.GetRuntimes()) > 0
 
 	s := &Worker{
@@ -45,6 +52,8 @@ func New(
 		initCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
 		runtimes:     make(map[common.Namespace]*committee.Worker),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	if !enabled {
@@ -133,6 +142,21 @@ func (w *Worker) Initialized() <-chan struct{} {
 
 // Start starts the storage service.
 func (w *Worker) Start() error {
+	go func() {
+		if err := w.Serve(w.ctx); err != nil {
+			w.logger.Error("worker stopped", "error", err)
+		}
+	}()
+	return nil
+}
+
+// Serve starts a state sync worker for each of the configured runtime, unless
+// disabled.
+//
+// If any state sync worker returns an error, it cancels the remaining ones and
+// waits for all of them to finish. The error from the first failing worker is
+// returned.
+func (w *Worker) Serve(ctx context.Context) error {
 	if !w.enabled {
 		w.logger.Info("not starting storage worker as it is disabled")
 
@@ -142,34 +166,34 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for all runtimes to terminate.
-	go func() {
-		defer close(w.quitCh)
-
-		for _, r := range w.runtimes {
-			<-r.Quit()
-		}
+	w.logger.Info("starting", "num_runtimes", len(w.runtimes))
+	defer func() {
+		close(w.quitCh)
+		w.logger.Info("stopped")
 	}()
 
-	// Start all runtimes and wait for initialization.
 	go func() {
-		w.logger.Info("starting storage sync services", "num_runtimes", len(w.runtimes))
-
-		for _, r := range w.runtimes {
-			_ = r.Start()
-		}
-
-		// Wait for runtimes to be initialized.
 		for _, r := range w.runtimes {
 			<-r.Initialized()
 		}
-
-		w.logger.Info("storage worker started")
-
+		w.logger.Info("initialized")
 		close(w.initCh)
 	}()
 
-	return nil
+	return w.serve(ctx)
+}
+
+func (w *Worker) serve(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+	for id, r := range w.runtimes {
+		g.Go(func() error {
+			if err := r.Serve(ctx); err != nil {
+				return fmt.Errorf("storage worker failed (runtimeID: %s): %w", id, err)
+			}
+			return nil
+		})
+	}
+	return g.Wait()
 }
 
 // Stop halts the service.
@@ -179,9 +203,9 @@ func (w *Worker) Stop() {
 		return
 	}
 
-	for _, r := range w.runtimes {
-		r.Stop()
-	}
+	w.logger.Info("stopping")
+	w.cancel()
+	<-w.quitCh
 }
 
 // Quit returns a channel that will be closed when the service terminates.
