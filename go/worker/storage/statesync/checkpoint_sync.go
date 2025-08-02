@@ -1,4 +1,4 @@
-package committee
+package statesync
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ import (
 const (
 	// cpListsTimeout is the timeout for fetching checkpoints from all nodes.
 	cpListsTimeout = 30 * time.Second
-	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from a node.
+	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from the remote peer.
 	cpRestoreTimeout = 60 * time.Second
 
 	checkpointStatusDone = 0
@@ -37,7 +37,7 @@ var ErrNoUsableCheckpoints = errors.New("storage: no checkpoint could be synced"
 
 // CheckpointSyncConfig is the checkpoint sync configuration.
 type CheckpointSyncConfig struct {
-	// Disabled specifies whether checkpoint sync should be disabled. In this case the node will
+	// Disabled specifies whether checkpoint sync should be disabled. In this case the state sync worker will
 	// only sync by applying all diffs from genesis.
 	Disabled bool
 
@@ -81,7 +81,7 @@ func (h *chunkHeap) Pop() any {
 	return ret
 }
 
-func (n *Node) checkpointChunkFetcher(
+func (w *Worker) checkpointChunkFetcher(
 	ctx context.Context,
 	chunkDispatchCh chan *chunk,
 	chunkReturnCh chan *chunk,
@@ -103,9 +103,9 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.fetchChunk(chunkCtx, chunk)
+		rsp, pf, err := w.fetchChunk(chunkCtx, chunk)
 		if err != nil {
-			n.logger.Error("failed to fetch chunk from peers",
+			w.logger.Error("failed to fetch chunk from peers",
 				"err", err,
 				"chunk", chunk.Index,
 			)
@@ -114,7 +114,7 @@ func (n *Node) checkpointChunkFetcher(
 		}
 
 		// Restore fetched chunk.
-		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp))
+		done, err := w.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp))
 		cancel()
 
 		switch {
@@ -124,7 +124,7 @@ func (n *Node) checkpointChunkFetcher(
 			chunkReturnCh <- nil
 			return
 		case err != nil:
-			n.logger.Error("chunk restoration failed",
+			w.logger.Error("chunk restoration failed",
 				"chunk", chunk.Index,
 				"root", chunk.Root,
 				"err", err,
@@ -157,8 +157,8 @@ func (n *Node) checkpointChunkFetcher(
 // fetchChunk fetches chunk using checkpoint sync p2p protocol client.
 //
 // In case of no peers or error, it fallbacks to the legacy storage sync protocol.
-func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFeedback, error) {
-	rsp1, pf, err := n.checkpointSync.GetCheckpointChunk(
+func (w *Worker) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFeedback, error) {
+	rsp1, pf, err := w.checkpointSync.GetCheckpointChunk(
 		ctx,
 		&checkpointsync.GetCheckpointChunkRequest{
 			Version: chunk.Version,
@@ -175,7 +175,7 @@ func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFe
 		return rsp1.Chunk, pf, nil
 	}
 
-	rsp2, pf, err := n.legacyStorageSync.GetCheckpointChunk(
+	rsp2, pf, err := w.legacyStorageSync.GetCheckpointChunk(
 		ctx,
 		&synclegacy.GetCheckpointChunkRequest{
 			Version: chunk.Version,
@@ -194,8 +194,8 @@ func (n *Node) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.PeerFe
 	return rsp2.Chunk, pf, nil
 }
 
-func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
-	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check.Metadata); err != nil {
+func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+	if err := w.localStorage.Checkpointer().StartRestore(w.ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
 		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
@@ -208,9 +208,9 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 		}
 		// Abort has to succeed even if we were interrupted by context cancellation.
 		ctx := context.Background()
-		if err := n.localStorage.Checkpointer().AbortRestore(ctx); err != nil {
+		if err := w.localStorage.Checkpointer().AbortRestore(ctx); err != nil {
 			cpStatus = checkpointStatusBail
-			n.logger.Error("error while aborting checkpoint restore on handler exit, aborting sync",
+			w.logger.Error("error while aborting checkpoint restore on handler exit, aborting sync",
 				"err", err,
 			)
 		}
@@ -222,7 +222,7 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 	chunkReturnCh := make(chan *chunk, maxParallelRequests)
 	errorCh := make(chan int, maxParallelRequests)
 
-	ctx, cancel := context.WithCancel(n.ctx)
+	ctx, cancel := context.WithCancel(w.ctx)
 
 	// Spawn the worker group to fetch and restore checkpoint chunks.
 	var workerGroup sync.WaitGroup
@@ -231,7 +231,7 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 		workerGroup.Add(1)
 		go func() {
 			defer workerGroup.Done()
-			n.checkpointChunkFetcher(ctx, chunkDispatchCh, chunkReturnCh, errorCh)
+			w.checkpointChunkFetcher(ctx, chunkDispatchCh, chunkReturnCh, errorCh)
 		}()
 	}
 	go func() {
@@ -264,7 +264,7 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 			checkpoint: check,
 		})
 	}
-	n.logger.Debug("checkpoint chunks prepared for dispatch",
+	w.logger.Debug("checkpoint chunks prepared for dispatch",
 		"chunks", len(check.Chunks),
 		"checkpoint_root", check.Root,
 	)
@@ -283,8 +283,8 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 		}
 
 		select {
-		case <-n.ctx.Done():
-			return checkpointStatusBail, n.ctx.Err()
+		case <-w.ctx.Done():
+			return checkpointStatusBail, w.ctx.Err()
 
 		case returned := <-chunkReturnCh:
 			if returned == nil {
@@ -313,13 +313,13 @@ func (n *Node) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelReq
 	}
 }
 
-func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
-	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
+func (w *Worker) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
+	ctx, cancel := context.WithTimeout(w.ctx, cpListsTimeout)
 	defer cancel()
 
-	list, err := n.fetchCheckpoints(ctx)
+	list, err := w.fetchCheckpoints(ctx)
 	if err != nil {
-		n.logger.Error("failed to retrieve any checkpoints",
+		w.logger.Error("failed to retrieve any checkpoints",
 			"err", err,
 		)
 		return nil, err
@@ -334,15 +334,15 @@ func (n *Node) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
 // fetchCheckpoints fetches checkpoints using checkpoint sync p2p protocol client.
 //
 // In case of no peers, error or no checkpoints, it fallbacks to the legacy storage sync protocol.
-func (n *Node) fetchCheckpoints(ctx context.Context) ([]*checkpointsync.Checkpoint, error) {
-	list1, err := n.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
+func (w *Worker) fetchCheckpoints(ctx context.Context) ([]*checkpointsync.Checkpoint, error) {
+	list1, err := w.checkpointSync.GetCheckpoints(ctx, &checkpointsync.GetCheckpointsRequest{
 		Version: 1,
 	})
 	if err == nil && len(list1) > 0 { // if NO error and at least one checkpoint
 		return list1, nil
 	}
 
-	list2, err := n.legacyStorageSync.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
+	list2, err := w.legacyStorageSync.GetCheckpoints(ctx, &synclegacy.GetCheckpointsRequest{
 		Version: 1,
 	})
 	if err != nil {
@@ -369,8 +369,8 @@ func sortCheckpoints(s []*checkpointsync.Checkpoint) {
 	})
 }
 
-func (n *Node) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
-	namespace := n.commonNode.Runtime.ID()
+func (w *Worker) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
+	namespace := w.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
 		return false
@@ -380,12 +380,12 @@ func (n *Node) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMas
 		return false
 	}
 
-	blk, err := n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, cp.Root.Version)
+	blk, err := w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, cp.Root.Version)
 	if err != nil {
-		n.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
+		w.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
 		return false
 	}
-	_, lastIORoot, lastStateRoot := n.GetLastSynced()
+	_, lastIORoot, lastStateRoot := w.GetLastSynced()
 	lastVersions := map[storageApi.RootType]uint64{
 		storageApi.RootTypeIO:    lastIORoot.Version,
 		storageApi.RootTypeState: lastStateRoot.Version,
@@ -401,18 +401,18 @@ func (n *Node) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMas
 			}
 		}
 	}
-	n.logger.Info("checkpoint for unknown root skipped", "root", cp.Root)
+	w.logger.Info("checkpoint for unknown root skipped", "root", cp.Root)
 	return false
 }
 
-func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*blockSummary, error) {
+func (w *Worker) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*blockSummary, error) {
 	// Store roots and round info for checkpoints that finished syncing.
 	// Round and namespace info will get overwritten as rounds are skipped
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
 	// Fetch checkpoints from peers.
-	cps, err := n.getCheckpointList()
+	cps, err := w.getCheckpointList()
 	if err != nil {
 		return nil, fmt.Errorf("can't get checkpoint list from peers: %w", err)
 	}
@@ -440,8 +440,8 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 		if !multipartRunning {
 			return
 		}
-		if err := n.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
-			n.logger.Error("error aborting multipart restore on exit from syncer",
+		if err := w.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
+			w.logger.Error("error aborting multipart restore on exit from syncer",
 				"err", err,
 			)
 		}
@@ -449,7 +449,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 
 	for _, check := range cps {
 
-		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots, genesisRound) {
+		if check.Root.Version < genesisRound || !w.checkCheckpointUsable(check, remainingRoots, genesisRound) {
 			continue
 		}
 
@@ -458,10 +458,10 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 			// previous retries. Aborting multipart works with no multipart in
 			// progress too.
 			multipartRunning = false
-			if err := n.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
+			if err := w.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
 				return nil, fmt.Errorf("error aborting previous multipart restore: %w", err)
 			}
-			if err := n.localStorage.NodeDB().StartMultipartInsert(check.Root.Version); err != nil {
+			if err := w.localStorage.NodeDB().StartMultipartInsert(check.Root.Version); err != nil {
 				return nil, fmt.Errorf("error starting multipart insert for round %d: %w", check.Root.Version, err)
 			}
 			multipartRunning = true
@@ -486,18 +486,18 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 			}
 		}
 
-		status, err := n.handleCheckpoint(check, n.checkpointSyncCfg.ChunkFetcherCount)
+		status, err := w.handleCheckpoint(check, w.checkpointSyncCfg.ChunkFetcherCount)
 		switch status {
 		case checkpointStatusDone:
-			n.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)
+			w.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)
 
 			syncState.Namespace = check.Root.Namespace
 			syncState.Round = check.Root.Version
 			syncState.Roots = append(syncState.Roots, check.Root)
 			remainingRoots.remove(check.Root.Type)
 			if remainingRoots.isEmpty() {
-				if err = n.localStorage.NodeDB().Finalize(syncState.Roots); err != nil {
-					n.logger.Error("can't finalize version after all checkpoints restored",
+				if err = w.localStorage.NodeDB().Finalize(syncState.Roots); err != nil {
+					w.logger.Error("can't finalize version after all checkpoints restored",
 						"err", err,
 						"version", prevVersion,
 						"roots", syncState.Roots,
@@ -510,10 +510,10 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 			}
 			continue
 		case checkpointStatusNext:
-			n.logger.Info("error trying to restore from checkpoint, trying next most recent", "root", check.Root, "err", err)
+			w.logger.Info("error trying to restore from checkpoint, trying next most recent", "root", check.Root, "err", err)
 			continue
 		case checkpointStatusBail:
-			n.logger.Error("error trying to restore from checkpoint, unrecoverable", "root", check.Root, "err", err)
+			w.logger.Error("error trying to restore from checkpoint, unrecoverable", "root", check.Root, "err", err)
 			return nil, fmt.Errorf("error restoring from checkpoints: %w", err)
 		}
 	}
