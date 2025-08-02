@@ -166,11 +166,6 @@ type Worker struct {
 	diffCh     chan *fetchedDiff
 	finalizeCh chan finalizeResult
 
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-
-	quitCh chan struct{}
-
 	initCh chan struct{}
 }
 
@@ -205,7 +200,6 @@ func New(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		quitCh: make(chan struct{}),
 		initCh: make(chan struct{}),
 	}
 
@@ -216,8 +210,6 @@ func New(
 
 	// Initialize sync state.
 	w.syncedState.Round = defaultUndefinedRound
-
-	w.ctx, w.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a checkpointer (even if checkpointing is disabled) to ensure the genesis checkpoint is available.
 	checkpointer, err := w.newCheckpointer(commonNode, localStorage)
@@ -303,29 +295,6 @@ func (w *Worker) newCheckpointer(commonNode *committee.Node, localStorage storag
 	), nil
 }
 
-// Service interface.
-
-// Start causes the worker to start responding to CometBFT new block events.
-func (w *Worker) Start() error {
-	go w.worker()
-	return nil
-}
-
-// Stop causes the worker to stop watching and shut down.
-func (w *Worker) Stop() {
-	w.ctxCancel()
-}
-
-// Quit returns a channel that will be closed when the worker stops.
-func (w *Worker) Quit() <-chan struct{} {
-	return w.quitCh
-}
-
-// Cleanup cleans up any leftover state after the worker is stopped.
-func (w *Worker) Cleanup() {
-	// Nothing to do here?
-}
-
 // Initialized returns a channel that will be closed once the worker finished starting up.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
@@ -396,7 +365,7 @@ func (w *Worker) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	return w.syncedState.Round, io, state
 }
 
-func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
+func (w *Worker) fetchDiff(ctx context.Context, round uint64, prevRoot, thisRoot storageApi.Root) {
 	result := &fetchedDiff{
 		fetched:  false,
 		pf:       rpc.NewNopPeerFeedback(),
@@ -407,7 +376,7 @@ func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	defer func() {
 		select {
 		case w.diffCh <- result:
-		case <-w.ctx.Done():
+		case <-ctx.Done():
 		}
 	}()
 
@@ -432,10 +401,10 @@ func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 		"new_root", thisRoot,
 	)
 
-	ctx, cancel := context.WithTimeout(w.ctx, diffResponseTimeout)
+	diffCtx, cancel := context.WithTimeout(ctx, diffResponseTimeout)
 	defer cancel()
 
-	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
+	wl, pf, err := w.getDiff(diffCtx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
@@ -460,7 +429,7 @@ func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root
 	return rsp2.WriteLog, pf, nil
 }
 
-func (w *Worker) finalize(summary *blockSummary) {
+func (w *Worker) finalize(ctx context.Context, summary *blockSummary) {
 	err := w.localStorage.NodeDB().Finalize(summary.Roots)
 	switch err {
 	case nil:
@@ -488,11 +457,11 @@ func (w *Worker) finalize(summary *blockSummary) {
 
 	select {
 	case w.finalizeCh <- result:
-	case <-w.ctx.Done():
+	case <-ctx.Done():
 	}
 }
 
-func (w *Worker) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) error {
+func (w *Worker) initGenesis(ctx context.Context, rt *registryApi.Runtime, genesisBlock *block.Block) error {
 	w.logger.Info("initializing storage at genesis")
 
 	// Check what the latest finalized version in the database is as we may be using a database
@@ -557,7 +526,7 @@ func (w *Worker) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block)
 				"latest_version", latestVersion,
 			)
 			for v := latestVersion; v < stateRoot.Version; v++ {
-				err := w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
+				err := w.localStorage.Apply(ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
 					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
@@ -622,7 +591,7 @@ func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
 	return w.syncedState.Round, nil
 }
 
-func (w *Worker) consensusCheckpointSyncer() {
+func (w *Worker) consensusCheckpointSyncer(ctx context.Context) {
 	// Make sure we always create a checkpoint when the consensus layer creates a checkpoint. The
 	// reason why we do this is to make it faster for storage nodes that use consensus state sync
 	// to catch up as exactly the right checkpoint will be available.
@@ -634,12 +603,12 @@ func (w *Worker) consensusCheckpointSyncer() {
 	// Wait for the common node to be initialized.
 	select {
 	case <-w.commonNode.Initialized():
-	case <-w.ctx.Done():
+	case <-ctx.Done():
 		return
 	}
 
 	// Determine the maximum number of consensus checkpoints to keep.
-	consensusParams, err := w.commonNode.Consensus.Core().GetParameters(w.ctx, consensus.HeightLatest)
+	consensusParams, err := w.commonNode.Consensus.Core().GetParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		w.logger.Error("failed to fetch consensus parameters",
 			"err", err,
@@ -670,9 +639,7 @@ func (w *Worker) consensusCheckpointSyncer() {
 	}()
 	for {
 		select {
-		case <-w.quitCh:
-			return
-		case <-w.ctx.Done():
+		case <-ctx.Done():
 			return
 		case version := <-ch:
 			// We need to wait for the next version as that is what will be in the consensus
@@ -689,7 +656,7 @@ func (w *Worker) consensusCheckpointSyncer() {
 			)
 
 			if blkCh == nil {
-				blkCh, blkSub, err = w.commonNode.Consensus.Core().WatchBlocks(w.ctx)
+				blkCh, blkSub, err = w.commonNode.Consensus.Core().WatchBlocks(ctx)
 				if err != nil {
 					w.logger.Error("failed to watch blocks",
 						"err", err,
@@ -718,7 +685,7 @@ func (w *Worker) consensusCheckpointSyncer() {
 
 				// Lookup what runtime round corresponds to the given consensus layer version and make
 				// sure we checkpoint it.
-				blk, err := w.commonNode.Consensus.RootHash().GetLatestBlock(w.ctx, &roothashApi.RuntimeRequest{
+				blk, err := w.commonNode.Consensus.RootHash().GetLatestBlock(ctx, &roothashApi.RuntimeRequest{
 					RuntimeID: w.commonNode.Runtime.ID(),
 					Height:    int64(version),
 				})
@@ -783,16 +750,16 @@ func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
 	}
 }
 
-func (w *Worker) worker() { // nolint: gocyclo
-	defer close(w.quitCh)
+// Serve runs the state sync worker.
+func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	defer close(w.diffCh)
 
 	// Wait for the common node to be initialized.
 	select {
 	case <-w.commonNode.Initialized():
-	case <-w.ctx.Done():
+	case <-ctx.Done():
 		close(w.initCh)
-		return
+		return ctx.Err()
 	}
 
 	w.logger.Info("starting")
@@ -800,7 +767,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 	w.status = api.StatusStarting
 	w.statusLock.Unlock()
 
-	ctx, cancel := context.WithCancel(w.ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	go func() {
@@ -814,34 +781,32 @@ func (w *Worker) worker() { // nolint: gocyclo
 	defer w.logger.Info("stopped")
 
 	go func() {
-		err := w.checkpointer.Serve(w.ctx)
+		err := w.checkpointer.Serve(ctx)
 		w.logger.Error("checkpointer failed", "err", err)
 	}()
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
-		go w.consensusCheckpointSyncer()
+		go w.consensusCheckpointSyncer(ctx)
 	}
 
 	// Determine genesis block.
-	genesisBlock, err := w.commonNode.Consensus.RootHash().GetGenesisBlock(w.ctx, &roothashApi.RuntimeRequest{
+	genesisBlock, err := w.commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
 		RuntimeID: w.commonNode.Runtime.ID(),
 		Height:    consensus.HeightLatest,
 	})
 	if err != nil {
-		w.logger.Error("can't retrieve genesis block", "err", err)
-		return
+		return fmt.Errorf("can't retrieve genesis block: %w", err)
 	}
 	w.undefinedRound = genesisBlock.Header.Round - 1
 
 	// Determine last finalized storage version.
 	if version, dbNonEmpty := w.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
 		var blk *block.Block
-		blk, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, version)
+		blk, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, version)
 		switch err {
 		case nil:
 			// Set last synced version to last finalized storage version.
 			if _, err = w.flushSyncedState(summaryFromBlock(blk)); err != nil {
-				w.logger.Error("failed to flush synced state", "err", err)
-				return
+				return fmt.Errorf("failed to flush synced state: %w", err)
 			}
 		default:
 			// Failed to fetch historic block. This is fine when the network just went through a
@@ -869,18 +834,12 @@ func (w *Worker) worker() { // nolint: gocyclo
 		w.statusLock.Unlock()
 
 		var rt *registryApi.Runtime
-		rt, err = w.commonNode.Runtime.ActiveDescriptor(w.ctx)
+		rt, err = w.commonNode.Runtime.ActiveDescriptor(ctx)
 		if err != nil {
-			w.logger.Error("failed to retrieve runtime registry descriptor",
-				"err", err,
-			)
-			return
+			return fmt.Errorf("failed to retrieve runtime registry descriptor: %w", err)
 		}
-		if err = w.initGenesis(rt, genesisBlock); err != nil {
-			w.logger.Error("failed to initialize storage at genesis",
-				"err", err,
-			)
-			return
+		if err = w.initGenesis(ctx, rt, genesisBlock); err != nil {
+			return fmt.Errorf("failed to initialize storage at genesis: %w", err)
 		}
 	}
 
@@ -900,7 +859,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 
 		// Check if we actually have information about that round. This assumes that any reindexing
 		// was already performed (the common node would not indicate being initialized otherwise).
-		_, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, iterativeSyncStart)
+		_, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, iterativeSyncStart)
 	SyncStartCheck:
 		switch {
 		case err == nil:
@@ -908,7 +867,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 			// No information is available about the initial round. Query the earliest historic
 			// block and check if that block has the genesis state root and empty I/O root.
 			var earlyBlk *block.Block
-			earlyBlk, err = w.commonNode.Runtime.History().GetEarliestBlock(w.ctx)
+			earlyBlk, err = w.commonNode.Runtime.History().GetEarliestBlock(ctx)
 			switch err {
 			case nil:
 				// Make sure the state root is still the same as at genesis time.
@@ -927,7 +886,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 					"earliest_round", earlyBlk.Header.Round,
 				)
 				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
-					err = w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
+					err = w.localStorage.Apply(ctx, &storageApi.ApplyRequest{
 						Namespace: w.commonNode.Runtime.ID(),
 						RootType:  storageApi.RootTypeState,
 						SrcRound:  v,
@@ -942,11 +901,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 						// Ignore already finalized versions.
 						continue
 					default:
-						w.logger.Error("failed to fill in version",
-							"version", v,
-							"err", err,
-						)
-						return
+						return fmt.Errorf("failed to fill in version %d: %w", v, err)
 					}
 
 					err = w.localStorage.NodeDB().Finalize([]storageApi.Root{{
@@ -957,19 +912,12 @@ func (w *Worker) worker() { // nolint: gocyclo
 						// We can ignore I/O roots.
 					}})
 					if err != nil {
-						w.logger.Error("failed to finalize filled in version",
-							"version", v,
-							"err", err,
-						)
-						return
+						return fmt.Errorf("failed to finalize filled in version %v: %w", v, err)
 					}
 				}
 				cachedLastRound, err = w.flushSyncedState(summaryFromBlock(earlyBlk))
 				if err != nil {
-					w.logger.Error("failed to flush synced state",
-						"err", err,
-					)
-					return
+					return fmt.Errorf("failed to flush synced state: %w", err)
 				}
 				// No need to force a checkpoint sync.
 				break SyncStartCheck
@@ -987,10 +935,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 			w.checkpointSyncForced = true
 		default:
 			// Unknown error while fetching block information, abort.
-			w.logger.Error("failed to query block",
-				"err", err,
-			)
-			return
+			return fmt.Errorf("failed to query block: %w", err)
 		}
 	}
 
@@ -1024,7 +969,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 		)
 	CheckpointSyncRetry:
 		for {
-			summary, err = w.syncCheckpoints(genesisBlock.Header.Round, w.checkpointSyncCfg.Disabled)
+			summary, err = w.syncCheckpoints(ctx, genesisBlock.Header.Round, w.checkpointSyncCfg.Disabled)
 			if err == nil {
 				break
 			}
@@ -1052,8 +997,8 @@ func (w *Worker) worker() { // nolint: gocyclo
 			// Delay before retrying.
 			select {
 			case <-time.After(checkpointSyncRetryDelay):
-			case <-w.ctx.Done():
-				return
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 		if err != nil {
@@ -1061,10 +1006,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 		} else {
 			cachedLastRound, err = w.flushSyncedState(summary)
 			if err != nil {
-				w.logger.Error("failed to flush synced state",
-					"err", err,
-				)
-				return
+				return fmt.Errorf("failed to flush synced state %w", err)
 			}
 			lastFullyAppliedRound = cachedLastRound
 			w.logger.Info("checkpoint sync succeeded",
@@ -1147,7 +1089,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 					wg.Add(1)
 					fetchPool.Submit(func() {
 						defer wg.Done()
-						w.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
+						w.fetchDiff(ctx, this.Round, prevRoots[i], this.Roots[i])
 					})
 				}
 			}
@@ -1180,7 +1122,7 @@ mainLoop:
 			// Apply the write log if one exists.
 			err = nil
 			if lastDiff.fetched {
-				err = w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
+				err = w.localStorage.Apply(ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
 					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,
@@ -1239,7 +1181,7 @@ mainLoop:
 			wg.Add(1)
 			go func() { // Don't block fetching and applying remaining rounds.
 				defer wg.Done()
-				w.finalize(lastSummary)
+				w.finalize(ctx, lastSummary)
 			}()
 			continue
 		}
@@ -1289,7 +1231,7 @@ mainLoop:
 					continue
 				}
 				var oldBlock *block.Block
-				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, i)
+				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, i)
 				if err != nil {
 					w.logger.Error("can't get block for round",
 						"err", err,
@@ -1338,7 +1280,7 @@ mainLoop:
 			// error, and cachedLastRound also can't be updated legitimately.
 			if finalized.err != nil {
 				// Request a node shutdown given that syncing is effectively blocked.
-				_ = w.commonNode.HostNode.RequestShutdown(w.ctx, false)
+				_ = w.commonNode.HostNode.RequestShutdown(ctx, false)
 				break mainLoop
 			}
 
@@ -1360,7 +1302,7 @@ mainLoop:
 				w.checkpointer.NotifyNewVersion(finalized.summary.Round)
 			}
 
-		case <-w.ctx.Done():
+		case <-ctx.Done():
 			break mainLoop
 		}
 	}
@@ -1370,4 +1312,5 @@ mainLoop:
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
+	return nil
 }
