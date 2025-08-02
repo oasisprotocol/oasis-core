@@ -1,3 +1,5 @@
+// Package committee defines the logic responsible for initializing, syncing,
+// and pruning of the runtime state using the relevant p2p protocol clients.
 package committee
 
 import (
@@ -39,7 +41,7 @@ import (
 )
 
 var (
-	_ committee.NodeHooks = (*Node)(nil)
+	_ committee.NodeHooks = (*Worker)(nil)
 
 	// ErrNonLocalBackend is the error returned when the storage backend doesn't implement the LocalBackend interface.
 	ErrNonLocalBackend = errors.New("storage: storage backend doesn't support local storage")
@@ -118,8 +120,18 @@ type finalizeResult struct {
 	err     error
 }
 
-// Node watches blocks for storage changes.
-type Node struct {
+// Worker is the runtime storage worker, responsible for syncing state
+// that corresponds to the incoming runtime block headers received from the
+// consensus service.
+//
+// In addition this worker is responsible for:
+//  1. Initializing the runtime state, possibly using checkpoints (if configured).
+//  2. Pruning the state as specified by the configuration.
+//  3. Optionally creating runtime state checkpoints (used by other nodes) for the state sync.
+//  4. Creating (and optionally advertising) statesync p2p protocol clients and servers.
+//  5. Registering node availability when it has synced sufficiently close to
+//     the latest known block header.
+type Worker struct {
 	commonNode *committee.Node
 
 	roleProvider    registration.RoleProvider
@@ -162,21 +174,22 @@ type Node struct {
 	initCh chan struct{}
 }
 
-func NewNode(
+// New creates a new storage worker.
+func New(
 	commonNode *committee.Node,
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointSyncCfg *CheckpointSyncConfig,
-) (*Node, error) {
+) (*Worker, error) {
 	initMetrics()
 
 	// Create the fetcher pool.
 	fetchPool := workerpool.New("storage_fetch/" + commonNode.Runtime.ID().String())
 	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
-	n := &Node{
+	w := &Worker{
 		commonNode: commonNode,
 
 		roleProvider:    roleProvider,
@@ -208,21 +221,21 @@ func NewNode(
 	}
 
 	// Initialize sync state.
-	n.syncedState.Round = defaultUndefinedRound
+	w.syncedState.Round = defaultUndefinedRound
 
-	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
+	w.ctx, w.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a checkpointer (even if checkpointing is disabled) to ensure the genesis checkpoint is available.
-	checkpointer, err := n.newCheckpointer(n.ctx, commonNode, localStorage)
+	checkpointer, err := w.newCheckpointer(w.ctx, commonNode, localStorage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 	}
-	n.checkpointer = checkpointer
+	w.checkpointer = checkpointer
 
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
-		logger: n.logger,
-		node:   n,
+		logger: w.logger,
+		worker: w,
 	})
 
 	// Advertise and serve p2p protocols.
@@ -236,14 +249,14 @@ func NewNode(
 	}
 
 	// Create p2p protocol clients.
-	n.legacyStorageSync = synclegacy.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
-	n.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
-	n.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	w.legacyStorageSync = synclegacy.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	w.diffSync = diffsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
+	w.checkpointSync = checkpointsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID())
 
-	return n, nil
+	return w, nil
 }
 
-func (n *Node) newCheckpointer(ctx context.Context, commonNode *committee.Node, localStorage storageApi.LocalBackend) (checkpoint.Checkpointer, error) {
+func (w *Worker) newCheckpointer(ctx context.Context, commonNode *committee.Node, localStorage storageApi.LocalBackend) (checkpoint.Checkpointer, error) {
 	checkInterval := checkpoint.CheckIntervalDisabled
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
@@ -300,100 +313,95 @@ func (n *Node) newCheckpointer(ctx context.Context, commonNode *committee.Node, 
 
 // Service interface.
 
-// Name returns the service name.
-func (n *Node) Name() string {
-	return "committee node"
-}
-
 // Start causes the worker to start responding to CometBFT new block events.
-func (n *Node) Start() error {
-	go n.worker()
+func (w *Worker) Start() error {
+	go w.worker()
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
-		go n.consensusCheckpointSyncer()
+		go w.consensusCheckpointSyncer()
 	}
 	return nil
 }
 
 // Stop causes the worker to stop watching and shut down.
-func (n *Node) Stop() {
-	n.statusLock.Lock()
-	n.status = api.StatusStopping
-	n.statusLock.Unlock()
+func (w *Worker) Stop() {
+	w.statusLock.Lock()
+	w.status = api.StatusStopping
+	w.statusLock.Unlock()
 
-	n.fetchPool.Stop()
+	w.fetchPool.Stop()
 
-	n.ctxCancel()
+	w.ctxCancel()
 }
 
 // Quit returns a channel that will be closed when the worker stops.
-func (n *Node) Quit() <-chan struct{} {
-	return n.quitCh
+func (w *Worker) Quit() <-chan struct{} {
+	return w.quitCh
 }
 
 // Cleanup cleans up any leftover state after the worker is stopped.
-func (n *Node) Cleanup() {
+func (w *Worker) Cleanup() {
 	// Nothing to do here?
 }
 
 // Initialized returns a channel that will be closed once the worker finished starting up.
-func (n *Node) Initialized() <-chan struct{} {
-	return n.initCh
+func (w *Worker) Initialized() <-chan struct{} {
+	return w.initCh
 }
 
-// GetStatus returns the storage committee node status.
-func (n *Node) GetStatus(context.Context) (*api.Status, error) {
-	n.syncedLock.RLock()
-	defer n.syncedLock.RUnlock()
+// GetStatus returns the state sync worker status.
+func (w *Worker) GetStatus(context.Context) (*api.Status, error) {
+	w.syncedLock.RLock()
+	defer w.syncedLock.RUnlock()
 
-	n.statusLock.RLock()
-	defer n.statusLock.RUnlock()
+	w.statusLock.RLock()
+	defer w.statusLock.RUnlock()
 
 	return &api.Status{
-		LastFinalizedRound: n.syncedState.Round,
-		Status:             n.status,
+		LastFinalizedRound: w.syncedState.Round,
+		Status:             w.status,
 	}, nil
 }
 
-func (n *Node) PauseCheckpointer(pause bool) error {
+func (w *Worker) PauseCheckpointer(pause bool) error {
 	if !commonFlags.DebugDontBlameOasis() {
 		return api.ErrCantPauseCheckpointer
 	}
-	n.checkpointer.Pause(pause)
+	w.checkpointer.Pause(pause)
 	return nil
 }
 
-// GetLocalStorage returns the local storage backend used by this storage node.
-func (n *Node) GetLocalStorage() storageApi.LocalBackend {
-	return n.localStorage
+// GetLocalStorage returns the local storage backend used by the worker.
+func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
+	return w.localStorage
 }
 
 // NodeHooks implementation.
 
 // HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
+func (w *Worker) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
 	// Nothing to do here.
 }
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
+func (w *Worker) HandleNewBlockLocked(bi *runtime.BlockInfo) {
 	// Notify the state syncer that there is a new block.
-	n.blockCh.In() <- bi.RuntimeBlock
+	w.blockCh.In() <- bi.RuntimeBlock
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
-func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
+func (w *Worker) HandleRuntimeHostEventLocked(*host.Event) {
 	// Nothing to do here.
 }
 
 // Watcher implementation.
 
 // GetLastSynced returns the height, IORoot hash and StateRoot hash of the last block that was fully synced to.
-func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
-	n.syncedLock.RLock()
-	defer n.syncedLock.RUnlock()
+func (w *Worker) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
+	w.syncedLock.RLock()
+	defer w.syncedLock.RUnlock()
 
 	var io, state storageApi.Root
-	for _, root := range n.syncedState.Roots {
+	for _, root := range w.syncedState.Roots {
 		switch root.Type {
 		case storageApi.RootTypeIO:
 			io = root
@@ -402,10 +410,10 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 		}
 	}
 
-	return n.syncedState.Round, io, state
+	return w.syncedState.Round, io, state
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
+func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	result := &fetchedDiff{
 		fetched:  false,
 		pf:       rpc.NewNopPeerFeedback(),
@@ -415,13 +423,13 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	}
 	defer func() {
 		select {
-		case n.diffCh <- result:
-		case <-n.ctx.Done():
+		case w.diffCh <- result:
+		case <-w.ctx.Done():
 		}
 	}()
 
 	// Check if the new root doesn't already exist.
-	if n.localStorage.NodeDB().HasRoot(thisRoot) {
+	if w.localStorage.NodeDB().HasRoot(thisRoot) {
 		return
 	}
 
@@ -436,15 +444,15 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	}
 
 	// New root does not yet exist in storage and we need to fetch it from a peer.
-	n.logger.Debug("calling GetDiff",
+	w.logger.Debug("calling GetDiff",
 		"old_root", prevRoot,
 		"new_root", thisRoot,
 	)
 
-	ctx, cancel := context.WithCancel(n.ctx)
+	ctx, cancel := context.WithCancel(w.ctx)
 	defer cancel()
 
-	wl, pf, err := n.getDiff(ctx, prevRoot, thisRoot)
+	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
@@ -456,35 +464,35 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 // getDiff fetches writelog using diff sync p2p protocol client.
 //
 // In case of no peers or error, it fallbacks to the legacy storage sync protocol.
-func (n *Node) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
-	rsp1, pf, err := n.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 	if err == nil { // if NO error
 		return rsp1.WriteLog, pf, nil
 	}
 
-	rsp2, pf, err := n.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 	if err != nil {
 		return nil, nil, err
 	}
 	return rsp2.WriteLog, pf, nil
 }
 
-func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.NodeDB().Finalize(summary.Roots)
+func (w *Worker) finalize(summary *blockSummary) {
+	err := w.localStorage.NodeDB().Finalize(summary.Roots)
 	switch err {
 	case nil:
-		n.logger.Debug("storage round finalized",
+		w.logger.Debug("storage round finalized",
 			"round", summary.Round,
 		)
 	case storageApi.ErrAlreadyFinalized:
 		// This can happen if we are restoring after a roothash migration or if
 		// we crashed before updating the sync state.
-		n.logger.Warn("storage round already finalized",
+		w.logger.Warn("storage round already finalized",
 			"round", summary.Round,
 		)
 		err = nil
 	default:
-		n.logger.Error("failed to finalize storage round",
+		w.logger.Error("failed to finalize storage round",
 			"err", err,
 			"round", summary.Round,
 		)
@@ -496,31 +504,31 @@ func (n *Node) finalize(summary *blockSummary) {
 	}
 
 	select {
-	case n.finalizeCh <- result:
-	case <-n.ctx.Done():
+	case w.finalizeCh <- result:
+	case <-w.ctx.Done():
 	}
 }
 
-func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) error {
-	n.logger.Info("initializing storage at genesis")
+func (w *Worker) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) error {
+	w.logger.Info("initializing storage at genesis")
 
 	// Check what the latest finalized version in the database is as we may be using a database
 	// from a previous version or network.
-	latestVersion, alreadyInitialized := n.localStorage.NodeDB().GetLatestVersion()
+	latestVersion, alreadyInitialized := w.localStorage.NodeDB().GetLatestVersion()
 
 	// Finalize any versions that were not yet finalized in the old database. This is only possible
 	// as long as there is only one non-finalized root per version. Note that we also cannot be sure
 	// that any of these roots are valid, but this is fine as long as the final version matches the
 	// genesis root.
 	if alreadyInitialized {
-		n.logger.Debug("already initialized, finalizing any non-finalized versions",
+		w.logger.Debug("already initialized, finalizing any non-finalized versions",
 			"genesis_state_root", genesisBlock.Header.StateRoot,
 			"genesis_round", genesisBlock.Header.Round,
 			"latest_version", latestVersion,
 		)
 
 		for v := latestVersion + 1; v < genesisBlock.Header.Round; v++ {
-			roots, err := n.localStorage.NodeDB().GetRootsForVersion(v)
+			roots, err := w.localStorage.NodeDB().GetRootsForVersion(v)
 			if err != nil {
 				return fmt.Errorf("failed to fetch roots for version %d: %w", v, err)
 			}
@@ -535,7 +543,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 				break // We must have exactly one non-finalized state root to continue.
 			}
 
-			err = n.localStorage.NodeDB().Finalize(stateRoots)
+			err = w.localStorage.NodeDB().Finalize(stateRoots)
 			if err != nil {
 				return fmt.Errorf("failed to finalize version %d: %w", v, err)
 			}
@@ -559,14 +567,14 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		maybeRoot := stateRoot
 		maybeRoot.Version = latestVersion
 
-		if n.localStorage.NodeDB().HasRoot(maybeRoot) {
-			n.logger.Debug("latest version earlier than genesis state root, filling in versions",
+		if w.localStorage.NodeDB().HasRoot(maybeRoot) {
+			w.logger.Debug("latest version earlier than genesis state root, filling in versions",
 				"genesis_state_root", genesisBlock.Header.StateRoot,
 				"genesis_round", genesisBlock.Header.Round,
 				"latest_version", latestVersion,
 			)
 			for v := latestVersion; v < stateRoot.Version; v++ {
-				err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err := w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
 					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
@@ -579,7 +587,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 					return fmt.Errorf("failed to fill in version %d: %w", v, err)
 				}
 
-				err = n.localStorage.NodeDB().Finalize([]storageApi.Root{{
+				err = w.localStorage.NodeDB().Finalize([]storageApi.Root{{
 					Namespace: rt.ID,
 					Version:   v + 1,
 					Type:      storageApi.RootTypeState,
@@ -594,14 +602,14 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		}
 	default:
 		// Latest finalized version is the same or ahead, root must exist.
-		compatible = n.localStorage.NodeDB().HasRoot(stateRoot)
+		compatible = w.localStorage.NodeDB().HasRoot(stateRoot)
 	}
 
 	// If we are incompatible and the local version is greater or the same as the genesis version,
 	// we cannot do anything. If the local version is lower we assume the node will sync from a
 	// different node.
 	if !compatible && latestVersion >= stateRoot.Version {
-		n.logger.Error("existing state is incompatible with runtime genesis state",
+		w.logger.Error("existing state is incompatible with runtime genesis state",
 			"genesis_state_root", genesisBlock.Header.StateRoot,
 			"genesis_round", genesisBlock.Header.Round,
 			"latest_version", latestVersion,
@@ -611,46 +619,46 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 
 	if !compatible {
 		// Database is empty, so assume the state will be replicated from another node.
-		n.logger.Warn("non-empty state root but no state available, assuming replication",
+		w.logger.Warn("non-empty state root but no state available, assuming replication",
 			"state_root", genesisBlock.Header.StateRoot,
 		)
-		n.checkpointSyncForced = true
+		w.checkpointSyncForced = true
 	}
 	return nil
 }
 
-func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
-	n.syncedLock.Lock()
-	defer n.syncedLock.Unlock()
+func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
+	w.syncedLock.Lock()
+	defer w.syncedLock.Unlock()
 
-	n.syncedState = *summary
-	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
+	w.syncedState = *summary
+	if err := w.commonNode.Runtime.History().StorageSyncCheckpoint(w.syncedState.Round); err != nil {
 		return 0, err
 	}
 
-	return n.syncedState.Round, nil
+	return w.syncedState.Round, nil
 }
 
-func (n *Node) consensusCheckpointSyncer() {
+func (w *Worker) consensusCheckpointSyncer() {
 	// Make sure we always create a checkpoint when the consensus layer creates a checkpoint. The
 	// reason why we do this is to make it faster for storage nodes that use consensus state sync
 	// to catch up as exactly the right checkpoint will be available.
-	consensusCp := n.commonNode.Consensus.Checkpointer()
+	consensusCp := w.commonNode.Consensus.Checkpointer()
 	if consensusCp == nil {
 		return
 	}
 
 	// Wait for the common node to be initialized.
 	select {
-	case <-n.commonNode.Initialized():
-	case <-n.ctx.Done():
+	case <-w.commonNode.Initialized():
+	case <-w.ctx.Done():
 		return
 	}
 
 	// Determine the maximum number of consensus checkpoints to keep.
-	consensusParams, err := n.commonNode.Consensus.Core().GetParameters(n.ctx, consensus.HeightLatest)
+	consensusParams, err := w.commonNode.Consensus.Core().GetParameters(w.ctx, consensus.HeightLatest)
 	if err != nil {
-		n.logger.Error("failed to fetch consensus parameters",
+		w.logger.Error("failed to fetch consensus parameters",
 			"err", err,
 		)
 		return
@@ -658,7 +666,7 @@ func (n *Node) consensusCheckpointSyncer() {
 
 	ch, sub, err := consensusCp.WatchCheckpoints()
 	if err != nil {
-		n.logger.Error("failed to watch checkpoints",
+		w.logger.Error("failed to watch checkpoints",
 			"err", err,
 		)
 		return
@@ -679,9 +687,9 @@ func (n *Node) consensusCheckpointSyncer() {
 	}()
 	for {
 		select {
-		case <-n.quitCh:
+		case <-w.quitCh:
 			return
-		case <-n.ctx.Done():
+		case <-w.ctx.Done():
 			return
 		case version := <-ch:
 			// We need to wait for the next version as that is what will be in the consensus
@@ -692,15 +700,15 @@ func (n *Node) consensusCheckpointSyncer() {
 				versions = versions[1:]
 			}
 
-			n.logger.Debug("consensus checkpoint detected, queuing runtime checkpoint",
+			w.logger.Debug("consensus checkpoint detected, queuing runtime checkpoint",
 				"version", version+1,
 				"num_versions", len(versions),
 			)
 
 			if blkCh == nil {
-				blkCh, blkSub, err = n.commonNode.Consensus.Core().WatchBlocks(n.ctx)
+				blkCh, blkSub, err = w.commonNode.Consensus.Core().WatchBlocks(w.ctx)
 				if err != nil {
-					n.logger.Error("failed to watch blocks",
+					w.logger.Error("failed to watch blocks",
 						"err", err,
 					)
 					continue
@@ -709,7 +717,7 @@ func (n *Node) consensusCheckpointSyncer() {
 		case blk := <-blkCh:
 			// If there's nothing remaining, unsubscribe.
 			if len(versions) == 0 {
-				n.logger.Debug("no more queued consensus checkpoint versions")
+				w.logger.Debug("no more queued consensus checkpoint versions")
 
 				blkSub.Close()
 				blkSub = nil
@@ -727,12 +735,12 @@ func (n *Node) consensusCheckpointSyncer() {
 
 				// Lookup what runtime round corresponds to the given consensus layer version and make
 				// sure we checkpoint it.
-				blk, err := n.commonNode.Consensus.RootHash().GetLatestBlock(n.ctx, &roothashApi.RuntimeRequest{
-					RuntimeID: n.commonNode.Runtime.ID(),
+				blk, err := w.commonNode.Consensus.RootHash().GetLatestBlock(w.ctx, &roothashApi.RuntimeRequest{
+					RuntimeID: w.commonNode.Runtime.ID(),
 					Height:    int64(version),
 				})
 				if err != nil {
-					n.logger.Error("failed to get runtime block corresponding to consensus checkpoint",
+					w.logger.Error("failed to get runtime block corresponding to consensus checkpoint",
 						"err", err,
 						"height", version,
 					)
@@ -741,11 +749,11 @@ func (n *Node) consensusCheckpointSyncer() {
 
 				// We may have not yet synced the corresponding runtime round locally. In this case
 				// we need to wait until this is the case.
-				n.syncedLock.RLock()
-				lastSyncedRound := n.syncedState.Round
-				n.syncedLock.RUnlock()
+				w.syncedLock.RLock()
+				lastSyncedRound := w.syncedState.Round
+				w.syncedLock.RUnlock()
 				if blk.Header.Round > lastSyncedRound {
-					n.logger.Debug("runtime round not available yet for checkpoint, waiting",
+					w.logger.Debug("runtime round not available yet for checkpoint, waiting",
 						"height", version,
 						"round", blk.Header.Round,
 						"last_synced_round", lastSyncedRound,
@@ -755,12 +763,12 @@ func (n *Node) consensusCheckpointSyncer() {
 				}
 
 				// Force runtime storage checkpointer to create a checkpoint at this round.
-				n.logger.Info("consensus checkpoint, force runtime checkpoint",
+				w.logger.Info("consensus checkpoint, force runtime checkpoint",
 					"height", version,
 					"round", blk.Header.Round,
 				)
 
-				n.checkpointer.ForceCheckpoint(blk.Header.Round)
+				w.checkpointer.ForceCheckpoint(blk.Header.Round)
 			}
 			versions = newVersions
 		}
@@ -768,105 +776,105 @@ func (n *Node) consensusCheckpointSyncer() {
 }
 
 // This is only called from the main worker goroutine, so no locking should be necessary.
-func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
-	if lastSynced == n.undefinedRound || latest == n.undefinedRound {
+func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
+	if lastSynced == w.undefinedRound || latest == w.undefinedRound {
 		return
 	}
-	if latest-lastSynced < maximumRoundDelayForAvailability && !n.roleAvailable {
-		n.roleProvider.SetAvailable(func(_ *node.Node) error {
+	if latest-lastSynced < maximumRoundDelayForAvailability && !w.roleAvailable {
+		w.roleProvider.SetAvailable(func(_ *node.Node) error {
 			return nil
 		})
-		if n.rpcRoleProvider != nil {
-			n.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
 				return nil
 			})
 		}
-		n.roleAvailable = true
+		w.roleAvailable = true
 	}
-	if latest-lastSynced > minimumRoundDelayForUnavailability && n.roleAvailable {
-		n.roleProvider.SetUnavailable()
-		if n.rpcRoleProvider != nil {
-			n.rpcRoleProvider.SetUnavailable()
+	if latest-lastSynced > minimumRoundDelayForUnavailability && w.roleAvailable {
+		w.roleProvider.SetUnavailable()
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetUnavailable()
 		}
-		n.roleAvailable = false
+		w.roleAvailable = false
 	}
 }
 
-func (n *Node) worker() { // nolint: gocyclo
-	defer close(n.quitCh)
-	defer close(n.diffCh)
+func (w *Worker) worker() { // nolint: gocyclo
+	defer close(w.quitCh)
+	defer close(w.diffCh)
 
 	// Wait for the common node to be initialized.
 	select {
-	case <-n.commonNode.Initialized():
-	case <-n.ctx.Done():
-		close(n.initCh)
+	case <-w.commonNode.Initialized():
+	case <-w.ctx.Done():
+		close(w.initCh)
 		return
 	}
 
-	n.logger.Info("starting committee node")
+	w.logger.Info("starting")
 
-	n.statusLock.Lock()
-	n.status = api.StatusStarting
-	n.statusLock.Unlock()
+	w.statusLock.Lock()
+	w.status = api.StatusStarting
+	w.statusLock.Unlock()
 
 	// Determine genesis block.
-	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, &roothashApi.RuntimeRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
+	genesisBlock, err := w.commonNode.Consensus.RootHash().GetGenesisBlock(w.ctx, &roothashApi.RuntimeRequest{
+		RuntimeID: w.commonNode.Runtime.ID(),
 		Height:    consensus.HeightLatest,
 	})
 	if err != nil {
-		n.logger.Error("can't retrieve genesis block", "err", err)
+		w.logger.Error("can't retrieve genesis block", "err", err)
 		return
 	}
-	n.undefinedRound = genesisBlock.Header.Round - 1
+	w.undefinedRound = genesisBlock.Header.Round - 1
 
 	// Determine last finalized storage version.
-	if version, dbNonEmpty := n.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
+	if version, dbNonEmpty := w.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
 		var blk *block.Block
-		blk, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, version)
+		blk, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, version)
 		switch err {
 		case nil:
 			// Set last synced version to last finalized storage version.
-			if _, err = n.flushSyncedState(summaryFromBlock(blk)); err != nil {
-				n.logger.Error("failed to flush synced state", "err", err)
+			if _, err = w.flushSyncedState(summaryFromBlock(blk)); err != nil {
+				w.logger.Error("failed to flush synced state", "err", err)
 				return
 			}
 		default:
 			// Failed to fetch historic block. This is fine when the network just went through a
 			// dump/restore upgrade and we don't have any information before genesis. We treat the
 			// database as unsynced and will proceed to either use checkpoints or sync iteratively.
-			n.logger.Warn("failed to fetch historic block",
+			w.logger.Warn("failed to fetch historic block",
 				"err", err,
 				"round", version,
 			)
 		}
 	}
 
-	n.syncedLock.RLock()
-	cachedLastRound := n.syncedState.Round
-	n.syncedLock.RUnlock()
+	w.syncedLock.RLock()
+	cachedLastRound := w.syncedState.Round
+	w.syncedLock.RUnlock()
 	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
-		cachedLastRound = n.undefinedRound
+		cachedLastRound = w.undefinedRound
 	}
 
 	// Initialize genesis from the runtime descriptor.
-	isInitialStartup := (cachedLastRound == n.undefinedRound)
+	isInitialStartup := (cachedLastRound == w.undefinedRound)
 	if isInitialStartup {
-		n.statusLock.Lock()
-		n.status = api.StatusInitializingGenesis
-		n.statusLock.Unlock()
+		w.statusLock.Lock()
+		w.status = api.StatusInitializingGenesis
+		w.statusLock.Unlock()
 
 		var rt *registryApi.Runtime
-		rt, err = n.commonNode.Runtime.ActiveDescriptor(n.ctx)
+		rt, err = w.commonNode.Runtime.ActiveDescriptor(w.ctx)
 		if err != nil {
-			n.logger.Error("failed to retrieve runtime registry descriptor",
+			w.logger.Error("failed to retrieve runtime registry descriptor",
 				"err", err,
 			)
 			return
 		}
-		if err = n.initGenesis(rt, genesisBlock); err != nil {
-			n.logger.Error("failed to initialize storage at genesis",
+		if err = w.initGenesis(rt, genesisBlock); err != nil {
+			w.logger.Error("failed to initialize storage at genesis",
 				"err", err,
 			)
 			return
@@ -874,28 +882,28 @@ func (n *Node) worker() { // nolint: gocyclo
 	}
 
 	// Notify the checkpointer of the genesis round so it can be checkpointed.
-	if n.checkpointer != nil {
-		n.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
-		n.checkpointer.Flush()
+	if w.checkpointer != nil {
+		w.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
+		w.checkpointer.Flush()
 	}
 
 	// Check if we are able to fetch the first block that we would be syncing if we used iterative
 	// syncing. In case we cannot (likely because we synced the consensus layer via state sync), we
 	// must wait for a later checkpoint to become available.
-	if !n.checkpointSyncForced {
-		n.statusLock.Lock()
-		n.status = api.StatusSyncStartCheck
-		n.statusLock.Unlock()
+	if !w.checkpointSyncForced {
+		w.statusLock.Lock()
+		w.status = api.StatusSyncStartCheck
+		w.statusLock.Unlock()
 
 		// Determine what is the first round that we would need to sync.
 		iterativeSyncStart := cachedLastRound
-		if iterativeSyncStart == n.undefinedRound {
+		if iterativeSyncStart == w.undefinedRound {
 			iterativeSyncStart++
 		}
 
 		// Check if we actually have information about that round. This assumes that any reindexing
 		// was already performed (the common node would not indicate being initialized otherwise).
-		_, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, iterativeSyncStart)
+		_, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, iterativeSyncStart)
 	SyncStartCheck:
 		switch {
 		case err == nil:
@@ -903,7 +911,7 @@ func (n *Node) worker() { // nolint: gocyclo
 			// No information is available about the initial round. Query the earliest historic
 			// block and check if that block has the genesis state root and empty I/O root.
 			var earlyBlk *block.Block
-			earlyBlk, err = n.commonNode.Runtime.History().GetEarliestBlock(n.ctx)
+			earlyBlk, err = w.commonNode.Runtime.History().GetEarliestBlock(w.ctx)
 			switch err {
 			case nil:
 				// Make sure the state root is still the same as at genesis time.
@@ -917,13 +925,13 @@ func (n *Node) worker() { // nolint: gocyclo
 
 				// If this is the case, we can start syncing from this round instead. Fill in the
 				// remaining versions to make sure they actually exist in the database.
-				n.logger.Debug("filling in versions to genesis",
+				w.logger.Debug("filling in versions to genesis",
 					"genesis_round", genesisBlock.Header.Round,
 					"earliest_round", earlyBlk.Header.Round,
 				)
 				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
-					err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
-						Namespace: n.commonNode.Runtime.ID(),
+					err = w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
+						Namespace: w.commonNode.Runtime.ID(),
 						RootType:  storageApi.RootTypeState,
 						SrcRound:  v,
 						SrcRoot:   genesisBlock.Header.StateRoot,
@@ -937,31 +945,31 @@ func (n *Node) worker() { // nolint: gocyclo
 						// Ignore already finalized versions.
 						continue
 					default:
-						n.logger.Error("failed to fill in version",
+						w.logger.Error("failed to fill in version",
 							"version", v,
 							"err", err,
 						)
 						return
 					}
 
-					err = n.localStorage.NodeDB().Finalize([]storageApi.Root{{
-						Namespace: n.commonNode.Runtime.ID(),
+					err = w.localStorage.NodeDB().Finalize([]storageApi.Root{{
+						Namespace: w.commonNode.Runtime.ID(),
 						Version:   v + 1,
 						Type:      storageApi.RootTypeState,
 						Hash:      genesisBlock.Header.StateRoot,
 						// We can ignore I/O roots.
 					}})
 					if err != nil {
-						n.logger.Error("failed to finalize filled in version",
+						w.logger.Error("failed to finalize filled in version",
 							"version", v,
 							"err", err,
 						)
 						return
 					}
 				}
-				cachedLastRound, err = n.flushSyncedState(summaryFromBlock(earlyBlk))
+				cachedLastRound, err = w.flushSyncedState(summaryFromBlock(earlyBlk))
 				if err != nil {
-					n.logger.Error("failed to flush synced state",
+					w.logger.Error("failed to flush synced state",
 						"err", err,
 					)
 					return
@@ -970,26 +978,26 @@ func (n *Node) worker() { // nolint: gocyclo
 				break SyncStartCheck
 			default:
 				// This should never happen as the block should exist.
-				n.logger.Warn("failed to query earliest block in local history",
+				w.logger.Warn("failed to query earliest block in local history",
 					"err", err,
 				)
 			}
 
 			// No information is available about this round, force checkpoint sync.
-			n.logger.Warn("forcing checkpoint sync as we don't have authoritative block info",
+			w.logger.Warn("forcing checkpoint sync as we don't have authoritative block info",
 				"round", iterativeSyncStart,
 			)
-			n.checkpointSyncForced = true
+			w.checkpointSyncForced = true
 		default:
 			// Unknown error while fetching block information, abort.
-			n.logger.Error("failed to query block",
+			w.logger.Error("failed to query block",
 				"err", err,
 			)
 			return
 		}
 	}
 
-	n.logger.Info("worker initialized",
+	w.logger.Info("worker initialized",
 		"genesis_round", genesisBlock.Header.Round,
 		"last_synced", cachedLastRound,
 	)
@@ -1008,10 +1016,10 @@ func (n *Node) worker() { // nolint: gocyclo
 	// to a later state which may not be desired given that checkpoint sync has been explicitly
 	// disabled via config.
 	//
-	if (isInitialStartup && !n.checkpointSyncCfg.Disabled) || n.checkpointSyncForced {
-		n.statusLock.Lock()
-		n.status = api.StatusSyncingCheckpoints
-		n.statusLock.Unlock()
+	if (isInitialStartup && !w.checkpointSyncCfg.Disabled) || w.checkpointSyncForced {
+		w.statusLock.Lock()
+		w.status = api.StatusSyncingCheckpoints
+		w.statusLock.Unlock()
 
 		var (
 			summary *blockSummary
@@ -1019,17 +1027,17 @@ func (n *Node) worker() { // nolint: gocyclo
 		)
 	CheckpointSyncRetry:
 		for {
-			summary, err = n.syncCheckpoints(genesisBlock.Header.Round, n.checkpointSyncCfg.Disabled)
+			summary, err = w.syncCheckpoints(genesisBlock.Header.Round, w.checkpointSyncCfg.Disabled)
 			if err == nil {
 				break
 			}
 
 			attempt++
-			switch n.checkpointSyncForced {
+			switch w.checkpointSyncForced {
 			case true:
 				// We have no other options but to perform a checkpoint sync as we are missing
 				// either state or authoritative blocks.
-				n.logger.Info("checkpoint sync required, retrying",
+				w.logger.Info("checkpoint sync required, retrying",
 					"err", err,
 					"attempt", attempt,
 				)
@@ -1041,36 +1049,36 @@ func (n *Node) worker() { // nolint: gocyclo
 				// Try syncing again. The main reason for this is the sync failing due to a
 				// checkpoint pruning race condition (where nodes list a checkpoint which is
 				// then deleted just before we request its chunks). One retry is enough.
-				n.logger.Info("first checkpoint sync failed, trying once more", "err", err)
+				w.logger.Info("first checkpoint sync failed, trying once more", "err", err)
 			}
 
 			// Delay before retrying.
 			select {
 			case <-time.After(checkpointSyncRetryDelay):
-			case <-n.ctx.Done():
+			case <-w.ctx.Done():
 				return
 			}
 		}
 		if err != nil {
-			n.logger.Info("checkpoint sync failed", "err", err)
+			w.logger.Info("checkpoint sync failed", "err", err)
 		} else {
-			cachedLastRound, err = n.flushSyncedState(summary)
+			cachedLastRound, err = w.flushSyncedState(summary)
 			if err != nil {
-				n.logger.Error("failed to flush synced state",
+				w.logger.Error("failed to flush synced state",
 					"err", err,
 				)
 				return
 			}
 			lastFullyAppliedRound = cachedLastRound
-			n.logger.Info("checkpoint sync succeeded",
+			w.logger.Info("checkpoint sync succeeded",
 				logging.LogEvent, LogEventCheckpointSyncSuccess,
 			)
 		}
 	}
-	close(n.initCh)
+	close(w.initCh)
 
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
-	latestBlockRound := n.undefinedRound
+	latestBlockRound := w.undefinedRound
 
 	heartbeat := heartbeat{}
 	heartbeat.reset()
@@ -1097,10 +1105,10 @@ func (n *Node) worker() { // nolint: gocyclo
 				syncingRounds[i] = syncing
 
 				if i == latestBlockRound {
-					storageWorkerLastPendingRound.With(n.getMetricLabels()).Set(float64(i))
+					storageWorkerLastPendingRound.With(w.getMetricLabels()).Set(float64(i))
 				}
 			}
-			n.logger.Debug("preparing round sync",
+			w.logger.Debug("preparing round sync",
 				"round", i,
 				"outstanding_mask", syncing.outstanding,
 				"awaiting_retry", syncing.awaitingRetry,
@@ -1128,18 +1136,18 @@ func (n *Node) worker() { // nolint: gocyclo
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
 					wg.Add(1)
-					n.fetchPool.Submit(func() {
+					w.fetchPool.Submit(func() {
 						defer wg.Done()
-						n.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
+						w.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
 					})
 				}
 			}
 		}
 	}
 
-	n.statusLock.Lock()
-	n.status = api.StatusSyncingRounds
-	n.statusLock.Unlock()
+	w.statusLock.Lock()
+	w.status = api.StatusSyncingRounds
+	w.statusLock.Unlock()
 
 	pendingApply := &minRoundQueue{}
 	pendingFinalize := &minRoundQueue{}
@@ -1163,7 +1171,7 @@ mainLoop:
 			// Apply the write log if one exists.
 			err = nil
 			if lastDiff.fetched {
-				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err = w.localStorage.Apply(w.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
 					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,
@@ -1178,7 +1186,7 @@ mainLoop:
 				case errors.Is(err, storageApi.ErrExpectedRootMismatch):
 					lastDiff.pf.RecordBadPeer()
 				default:
-					n.logger.Error("can't apply write log",
+					w.logger.Error("can't apply write log",
 						"err", err,
 						"old_root", lastDiff.prevRoot,
 						"new_root", lastDiff.thisRoot,
@@ -1198,14 +1206,14 @@ mainLoop:
 			}
 
 			// We have fully synced the given round.
-			n.logger.Debug("finished syncing round", "round", lastDiff.round)
+			w.logger.Debug("finished syncing round", "round", lastDiff.round)
 			delete(syncingRounds, lastDiff.round)
 			summary := summaryCache[lastDiff.round]
 			delete(summaryCache, lastDiff.round-1)
 			lastFullyAppliedRound = lastDiff.round
 
-			storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
-			storageWorkerRoundSyncLatency.With(n.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
+			storageWorkerLastSyncedRound.With(w.getMetricLabels()).Set(float64(lastDiff.round))
+			storageWorkerRoundSyncLatency.With(w.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
 
 			// Finalize storage for this round. This happens asynchronously
 			// with respect to Apply operations for subsequent rounds.
@@ -1222,15 +1230,15 @@ mainLoop:
 			wg.Add(1)
 			go func() { // Don't block fetching and applying remaining rounds.
 				defer wg.Done()
-				n.finalize(lastSummary)
+				w.finalize(lastSummary)
 			}()
 			continue
 		}
 
 		select {
-		case inBlk := <-n.blockCh.Out():
+		case inBlk := <-w.blockCh.Out():
 			blk := inBlk.(*block.Block)
-			n.logger.Debug("incoming block",
+			w.logger.Debug("incoming block",
 				"round", blk.Header.Round,
 				"last_synced", lastFullyAppliedRound,
 				"last_finalized", cachedLastRound,
@@ -1238,9 +1246,9 @@ mainLoop:
 
 			// Check if we're far enough to reasonably register as available.
 			latestBlockRound = blk.Header.Round
-			n.nudgeAvailability(cachedLastRound, latestBlockRound)
+			w.nudgeAvailability(cachedLastRound, latestBlockRound)
 
-			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
+			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound {
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
 					Round:     lastFullyAppliedRound + 1,
@@ -1264,7 +1272,7 @@ mainLoop:
 			// since the undefined round may be unsigned -1 and in this case the loop
 			// would not do any iterations.
 			startSummaryRound := lastFullyAppliedRound
-			if startSummaryRound == n.undefinedRound {
+			if startSummaryRound == w.undefinedRound {
 				startSummaryRound++
 			}
 			for i := startSummaryRound; i < blk.Header.Round; i++ {
@@ -1272,9 +1280,9 @@ mainLoop:
 					continue
 				}
 				var oldBlock *block.Block
-				oldBlock, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, i)
+				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, i)
 				if err != nil {
-					n.logger.Error("can't get block for round",
+					w.logger.Error("can't get block for round",
 						"err", err,
 						"round", i,
 						"current_round", blk.Header.Round,
@@ -1291,14 +1299,14 @@ mainLoop:
 			heartbeat.reset()
 
 		case <-heartbeat.C:
-			if latestBlockRound != n.undefinedRound {
-				n.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
+			if latestBlockRound != w.undefinedRound {
+				w.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
 				triggerRoundFetches()
 			}
 
-		case item := <-n.diffCh:
+		case item := <-w.diffCh:
 			if item.err != nil {
-				n.logger.Error("error calling getdiff",
+				w.logger.Error("error calling getdiff",
 					"err", item.err,
 					"round", item.round,
 					"old_root", item.prevRoot,
@@ -1315,35 +1323,35 @@ mainLoop:
 			// when we're syncing and are far behind.
 			triggerRoundFetches()
 
-		case finalized := <-n.finalizeCh:
+		case finalized := <-w.finalizeCh:
 			// If finalization failed, things start falling apart.
 			// There's no point redoing it, since it's probably not a transient
 			// error, and cachedLastRound also can't be updated legitimately.
 			if finalized.err != nil {
 				// Request a node shutdown given that syncing is effectively blocked.
-				_ = n.commonNode.HostNode.RequestShutdown(n.ctx, false)
+				_ = w.commonNode.HostNode.RequestShutdown(w.ctx, false)
 				break mainLoop
 			}
 
 			// No further sync or out of order handling needed here, since
 			// only one finalize at a time is triggered (for round cachedLastRound+1)
-			cachedLastRound, err = n.flushSyncedState(finalized.summary)
+			cachedLastRound, err = w.flushSyncedState(finalized.summary)
 			if err != nil {
-				n.logger.Error("failed to flush synced state",
+				w.logger.Error("failed to flush synced state",
 					"err", err,
 				)
 			}
-			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.summary.Round))
+			storageWorkerLastFullRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
 
 			// Check if we're far enough to reasonably register as available.
-			n.nudgeAvailability(cachedLastRound, latestBlockRound)
+			w.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 			// Notify the checkpointer that there is a new finalized round.
 			if config.GlobalConfig.Storage.Checkpointer.Enabled {
-				n.checkpointer.NotifyNewVersion(finalized.summary.Round)
+				w.checkpointer.NotifyNewVersion(finalized.summary.Round)
 			}
 
-		case <-n.ctx.Done():
+		case <-w.ctx.Done():
 			break mainLoop
 		}
 	}
@@ -1356,12 +1364,12 @@ mainLoop:
 
 type pruneHandler struct {
 	logger *logging.Logger
-	node   *Node
+	worker *Worker
 }
 
 func (p *pruneHandler) Prune(rounds []uint64) error {
 	// Make sure we never prune past what was synced.
-	lastSycnedRound, _, _ := p.node.GetLastSynced()
+	lastSycnedRound, _, _ := p.worker.GetLastSynced()
 
 	for _, round := range rounds {
 		if round >= lastSycnedRound {
@@ -1375,7 +1383,7 @@ func (p *pruneHandler) Prune(rounds []uint64) error {
 		p.logger.Debug("pruning storage for round", "round", round)
 
 		// Prune given block.
-		err := p.node.localStorage.NodeDB().Prune(round)
+		err := p.worker.localStorage.NodeDB().Prune(round)
 		switch err {
 		case nil:
 		case mkvsDB.ErrNotEarliest:
