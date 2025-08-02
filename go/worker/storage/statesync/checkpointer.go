@@ -126,8 +126,6 @@ func (w *Worker) createCheckpoints(ctx context.Context) {
 	}()
 	for {
 		select {
-		case <-w.quitCh:
-			return
 		case <-ctx.Done():
 			return
 		case version := <-ch:
