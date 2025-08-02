@@ -68,12 +68,12 @@ func (w *Worker) newCheckpointer(ctx context.Context, commonNode *committee.Node
 	)
 }
 
-// consensusCheckpointSyncer is a worker responsible for triggering creation of runtime
+// createCheckpoints is a worker responsible for triggering creation of runtime
 // checkpoint everytime a consensus checkpoint is created.
 //
 // The reason why we do this is to make it faster for storage nodes that use consensus state sync
 // to catch up as exactly the right checkpoint will be available.
-func (w *Worker) consensusCheckpointSyncer(ctx context.Context) {
+func (w *Worker) createCheckpoints(ctx context.Context) {
 	consensusCp := w.commonNode.Consensus.Checkpointer()
 	if consensusCp == nil {
 		return
@@ -118,8 +118,6 @@ func (w *Worker) consensusCheckpointSyncer(ctx context.Context) {
 	}()
 	for {
 		select {
-		case <-w.quitCh:
-			return
 		case <-ctx.Done():
 			return
 		case version := <-ch:
