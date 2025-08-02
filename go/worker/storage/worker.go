@@ -12,10 +12,10 @@ import (
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/statesync"
 )
 
-// Worker is a worker handling storage operations.
+// Worker is a worker handling storage operations for all common worker runtimes.
 type Worker struct {
 	enabled bool
 
@@ -26,7 +26,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes map[common.Namespace]*committee.Node
+	runtimes map[common.Namespace]*statesync.Worker
 }
 
 // New constructs a new storage worker.
@@ -44,14 +44,14 @@ func New(
 		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
-		runtimes:     make(map[common.Namespace]*committee.Node),
+		runtimes:     make(map[common.Namespace]*statesync.Worker),
 	}
 
 	if !enabled {
 		return s, nil
 	}
 
-	// Start storage node for every runtime.
+	// Register the state sync worker for every runtime.
 	for id, rt := range s.commonWorker.GetRuntimes() {
 		if err := s.registerRuntime(rt); err != nil {
 			return nil, fmt.Errorf("failed to create storage worker for runtime %s: %w", id, err)
@@ -90,13 +90,13 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
 
-	node, err := committee.NewNode(
+	worker, err := statesync.New(
 		commonNode,
 		rp,
 		rpRPC,
 		w.commonWorker.GetConfig(),
 		localStorage,
-		&committee.CheckpointSyncConfig{
+		&statesync.CheckpointSyncConfig{
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
 			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
 		},
@@ -105,8 +105,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return err
 	}
 	commonNode.Runtime.RegisterStorage(localStorage)
-	commonNode.AddHooks(node)
-	w.runtimes[id] = node
+	commonNode.AddHooks(worker)
+	w.runtimes[id] = worker
 
 	w.logger.Info("new runtime registered",
 		"runtime_id", id,
@@ -115,7 +115,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	return nil
 }
 
-// Name returns the service name.
+// Name returns the worker name.
 func (w *Worker) Name() string {
 	return "storage worker"
 }
@@ -196,6 +196,6 @@ func (w *Worker) Cleanup() {
 // GetRuntime returns a storage committee node for the given runtime (if available).
 //
 // In case the runtime with the specified id was not configured for this node it returns nil.
-func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
+func (w *Worker) GetRuntime(id common.Namespace) *statesync.Worker {
 	return w.runtimes[id]
 }
