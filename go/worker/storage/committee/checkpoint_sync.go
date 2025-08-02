@@ -194,8 +194,8 @@ func (w *Worker) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.Peer
 	return rsp2.Chunk, pf, nil
 }
 
-func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
-	if err := w.localStorage.Checkpointer().StartRestore(w.ctx, check.Metadata); err != nil {
+func (w *Worker) handleCheckpoint(ctx context.Context, check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+	if err := w.localStorage.Checkpointer().StartRestore(ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
 		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
@@ -222,7 +222,7 @@ func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelR
 	chunkReturnCh := make(chan *chunk, maxParallelRequests)
 	errorCh := make(chan int, maxParallelRequests)
 
-	ctx, cancel := context.WithCancel(w.ctx)
+	chunkCtx, cancel := context.WithCancel(ctx)
 
 	// Spawn the worker group to fetch and restore checkpoint chunks.
 	var workerGroup sync.WaitGroup
@@ -231,7 +231,7 @@ func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelR
 		workerGroup.Add(1)
 		go func() {
 			defer workerGroup.Done()
-			w.checkpointChunkFetcher(ctx, chunkDispatchCh, chunkReturnCh, errorCh)
+			w.checkpointChunkFetcher(chunkCtx, chunkDispatchCh, chunkReturnCh, errorCh)
 		}()
 	}
 	go func() {
@@ -283,8 +283,8 @@ func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelR
 		}
 
 		select {
-		case <-w.ctx.Done():
-			return checkpointStatusBail, w.ctx.Err()
+		case <-ctx.Done():
+			return checkpointStatusBail, ctx.Err()
 
 		case returned := <-chunkReturnCh:
 			if returned == nil {
@@ -313,8 +313,8 @@ func (w *Worker) handleCheckpoint(check *checkpointsync.Checkpoint, maxParallelR
 	}
 }
 
-func (w *Worker) getCheckpointList() ([]*checkpointsync.Checkpoint, error) {
-	ctx, cancel := context.WithTimeout(w.ctx, cpListsTimeout)
+func (w *Worker) getCheckpointList(ctx context.Context) ([]*checkpointsync.Checkpoint, error) {
+	ctx, cancel := context.WithTimeout(ctx, cpListsTimeout)
 	defer cancel()
 
 	list, err := w.fetchCheckpoints(ctx)
@@ -369,7 +369,7 @@ func sortCheckpoints(s []*checkpointsync.Checkpoint) {
 	})
 }
 
-func (w *Worker) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
+func (w *Worker) checkCheckpointUsable(ctx context.Context, cp *checkpointsync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
 	namespace := w.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
@@ -380,7 +380,7 @@ func (w *Worker) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingM
 		return false
 	}
 
-	blk, err := w.commonNode.Runtime.History().GetCommittedBlock(w.ctx, cp.Root.Version)
+	blk, err := w.commonNode.Runtime.History().GetCommittedBlock(ctx, cp.Root.Version)
 	if err != nil {
 		w.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
 		return false
@@ -405,14 +405,14 @@ func (w *Worker) checkCheckpointUsable(cp *checkpointsync.Checkpoint, remainingM
 	return false
 }
 
-func (w *Worker) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*blockSummary, error) {
+func (w *Worker) syncCheckpoints(ctx context.Context, genesisRound uint64, wantOnlyGenesis bool) (*blockSummary, error) {
 	// Store roots and round info for checkpoints that finished syncing.
 	// Round and namespace info will get overwritten as rounds are skipped
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
 	// Fetch checkpoints from peers.
-	cps, err := w.getCheckpointList()
+	cps, err := w.getCheckpointList(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can't get checkpoint list from peers: %w", err)
 	}
@@ -449,7 +449,7 @@ func (w *Worker) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bl
 
 	for _, check := range cps {
 
-		if check.Root.Version < genesisRound || !w.checkCheckpointUsable(check, remainingRoots, genesisRound) {
+		if check.Root.Version < genesisRound || !w.checkCheckpointUsable(ctx, check, remainingRoots, genesisRound) {
 			continue
 		}
 
@@ -486,7 +486,7 @@ func (w *Worker) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bl
 			}
 		}
 
-		status, err := w.handleCheckpoint(check, w.checkpointSyncCfg.ChunkFetcherCount)
+		status, err := w.handleCheckpoint(ctx, check, w.checkpointSyncCfg.ChunkFetcherCount)
 		switch status {
 		case checkpointStatusDone:
 			w.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)
