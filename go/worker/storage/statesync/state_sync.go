@@ -1022,12 +1022,7 @@ mainLoop:
 				var oldBlock *block.Block
 				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, i)
 				if err != nil {
-					w.logger.Error("can't get block for round",
-						"err", err,
-						"round", i,
-						"current_round", blk.Header.Round,
-					)
-					panic("can't get block in storage worker")
+					return fmt.Errorf("getting block for round %d (current round: %d): %w", i, blk.Header.Round, err)
 				}
 				summaryCache[i] = summaryFromBlock(oldBlock)
 			}
@@ -1068,9 +1063,8 @@ mainLoop:
 			// There's no point redoing it, since it's probably not a transient
 			// error, and cachedLastRound also can't be updated legitimately.
 			if finalized.err != nil {
-				// Request a node shutdown given that syncing is effectively blocked.
-				_ = w.commonNode.HostNode.RequestShutdown(ctx, false)
-				break mainLoop
+				w.logger.Error("failed to finalize", "err", err, "summary", finalized.summary)
+				return fmt.Errorf("failed to finalize (round: %d): %w", finalized.summary.Round, finalized.err)
 			}
 
 			// No further sync or out of order handling needed here, since
