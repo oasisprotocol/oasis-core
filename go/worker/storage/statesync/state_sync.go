@@ -1023,6 +1023,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		w.checkpointer.Flush()
 	}
 
+	// Main syncing loop:
+	err = nil
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
 	latestBlockRound := w.undefinedRound
 
@@ -1233,12 +1235,8 @@ mainLoop:
 				var oldBlock *block.Block
 				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, i)
 				if err != nil {
-					w.logger.Error("can't get block for round",
-						"err", err,
-						"round", i,
-						"current_round", blk.Header.Round,
-					)
-					panic("can't get block in storage worker")
+					err = fmt.Errorf("failed to get block for round %d (current round: %d): %w", i, blk.Header.Round, err)
+					break mainLoop
 				}
 				summaryCache[i] = summaryFromBlock(oldBlock)
 			}
@@ -1279,8 +1277,8 @@ mainLoop:
 			// There's no point redoing it, since it's probably not a transient
 			// error, and cachedLastRound also can't be updated legitimately.
 			if finalized.err != nil {
-				// Request a node shutdown given that syncing is effectively blocked.
-				_ = w.commonNode.HostNode.RequestShutdown(ctx, false)
+				w.logger.Error("failed to finalize", "err", err, "summary", finalized.summary)
+				err = fmt.Errorf("failed to finalize (round: %d): %w", finalized.summary.Round, finalized.err)
 				break mainLoop
 			}
 
@@ -1303,6 +1301,7 @@ mainLoop:
 			}
 
 		case <-ctx.Done():
+			err = ctx.Err()
 			break mainLoop
 		}
 	}
@@ -1312,5 +1311,5 @@ mainLoop:
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
-	return nil
+	return err
 }
