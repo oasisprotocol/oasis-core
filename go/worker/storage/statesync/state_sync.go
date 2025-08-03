@@ -113,7 +113,7 @@ func (d *fetchedDiff) GetRound() uint64 {
 	return d.round
 }
 
-type finalizeResult struct {
+type finalizedResult struct {
 	summary *blockSummary
 	err     error
 }
@@ -163,7 +163,7 @@ type Worker struct { // nolint: maligned
 
 	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
-	finalizeCh chan finalizeResult
+	finalizeCh chan finalizedResult
 
 	initCh chan struct{}
 }
@@ -198,7 +198,7 @@ func New(
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
-		finalizeCh: make(chan finalizeResult),
+		finalizeCh: make(chan finalizedResult),
 
 		initCh: make(chan struct{}),
 	}
@@ -310,101 +310,6 @@ func (w *Worker) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	}
 
 	return w.syncedState.Round, io, state
-}
-
-func (w *Worker) fetchDiff(ctx context.Context, round uint64, prevRoot, thisRoot storageApi.Root) {
-	result := &fetchedDiff{
-		fetched:  false,
-		pf:       rpc.NewNopPeerFeedback(),
-		round:    round,
-		prevRoot: prevRoot,
-		thisRoot: thisRoot,
-	}
-	defer func() {
-		select {
-		case w.diffCh <- result:
-		case <-ctx.Done():
-		}
-	}()
-
-	// Check if the new root doesn't already exist.
-	if w.localStorage.NodeDB().HasRoot(thisRoot) {
-		return
-	}
-
-	result.fetched = true
-
-	// Even if HasRoot returns false the root can still exist if it is equal
-	// to the previous root and the root was emitted by the consensus committee
-	// directly (e.g., during an epoch transition).
-	if thisRoot.Hash.Equal(&prevRoot.Hash) {
-		result.writeLog = storageApi.WriteLog{}
-		return
-	}
-
-	// New root does not yet exist in storage and we need to fetch it from a peer.
-	w.logger.Debug("calling GetDiff",
-		"old_root", prevRoot,
-		"new_root", thisRoot,
-	)
-
-	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
-	if err != nil {
-		result.err = err
-		return
-	}
-	result.pf = pf
-	result.writeLog = wl
-}
-
-// getDiff fetches writelog using diff sync p2p protocol client.
-//
-// The request relies on the default timeout of the underlying p2p protocol clients.
-//
-// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
-func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
-	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-	if err == nil { // if NO error
-		return rsp1.WriteLog, pf, nil
-	}
-
-	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-	if err != nil {
-		return nil, nil, err
-	}
-	return rsp2.WriteLog, pf, nil
-}
-
-func (w *Worker) finalize(ctx context.Context, summary *blockSummary) {
-	err := w.localStorage.NodeDB().Finalize(summary.Roots)
-	switch err {
-	case nil:
-		w.logger.Debug("storage round finalized",
-			"round", summary.Round,
-		)
-	case storageApi.ErrAlreadyFinalized:
-		// This can happen if we are restoring after a roothash migration or if
-		// we crashed before updating the sync state.
-		w.logger.Warn("storage round already finalized",
-			"round", summary.Round,
-		)
-		err = nil
-	default:
-		w.logger.Error("failed to finalize storage round",
-			"err", err,
-			"round", summary.Round,
-		)
-	}
-
-	result := finalizeResult{
-		summary: summary,
-		err:     err,
-	}
-
-	select {
-	case w.finalizeCh <- result:
-	case <-ctx.Done():
-	}
 }
 
 func (w *Worker) initGenesis(ctx context.Context, rt *registryApi.Runtime, genesisBlock *block.Block) error {
@@ -535,31 +440,6 @@ func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
 	}
 
 	return w.syncedState.Round, nil
-}
-
-// This is only called from the main worker goroutine, so no locking should be necessary.
-func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
-	if lastSynced == w.undefinedRound || latest == w.undefinedRound {
-		return
-	}
-	if latest-lastSynced < maximumRoundDelayForAvailability && !w.roleAvailable {
-		w.roleProvider.SetAvailable(func(_ *node.Node) error {
-			return nil
-		})
-		if w.rpcRoleProvider != nil {
-			w.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
-				return nil
-			})
-		}
-		w.roleAvailable = true
-	}
-	if latest-lastSynced > minimumRoundDelayForUnavailability && w.roleAvailable {
-		w.roleProvider.SetUnavailable()
-		if w.rpcRoleProvider != nil {
-			w.rpcRoleProvider.SetUnavailable()
-		}
-		w.roleAvailable = false
-	}
 }
 
 // Run runs state sync worker.
@@ -1101,4 +981,127 @@ mainLoop:
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
 	return nil
+}
+
+func (w *Worker) fetchDiff(ctx context.Context, round uint64, prevRoot, thisRoot storageApi.Root) {
+	result := &fetchedDiff{
+		fetched:  false,
+		pf:       rpc.NewNopPeerFeedback(),
+		round:    round,
+		prevRoot: prevRoot,
+		thisRoot: thisRoot,
+	}
+	defer func() {
+		select {
+		case w.diffCh <- result:
+		case <-ctx.Done():
+		}
+	}()
+
+	// Check if the new root doesn't already exist.
+	if w.localStorage.NodeDB().HasRoot(thisRoot) {
+		return
+	}
+
+	result.fetched = true
+
+	// Even if HasRoot returns false the root can still exist if it is equal
+	// to the previous root and the root was emitted by the consensus committee
+	// directly (e.g., during an epoch transition).
+	if thisRoot.Hash.Equal(&prevRoot.Hash) {
+		result.writeLog = storageApi.WriteLog{}
+		return
+	}
+
+	// New root does not yet exist in storage and we need to fetch it from a peer.
+	w.logger.Debug("calling GetDiff",
+		"old_root", prevRoot,
+		"new_root", thisRoot,
+	)
+
+	diffCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	wl, pf, err := w.getDiff(diffCtx, prevRoot, thisRoot)
+	if err != nil {
+		result.err = err
+		return
+	}
+	result.pf = pf
+	result.writeLog = wl
+}
+
+// getDiff fetches writelog using diff sync p2p protocol client.
+//
+// The request relies on the default timeout of the underlying p2p protocol clients.
+//
+// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
+func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err == nil { // if NO error
+		return rsp1.WriteLog, pf, nil
+	}
+
+	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.WriteLog, pf, nil
+}
+
+func (w *Worker) finalize(ctx context.Context, summary *blockSummary) {
+	err := w.localStorage.NodeDB().Finalize(summary.Roots)
+	switch err {
+	case nil:
+		w.logger.Debug("storage round finalized",
+			"round", summary.Round,
+		)
+	case storageApi.ErrAlreadyFinalized:
+		// This can happen if we are restoring after a roothash migration or if
+		// we crashed before updating the sync state.
+		w.logger.Warn("storage round already finalized",
+			"round", summary.Round,
+		)
+		err = nil
+	default:
+		w.logger.Error("failed to finalize storage round",
+			"err", err,
+			"round", summary.Round,
+		)
+	}
+
+	result := finalizedResult{
+		summary: summary,
+		err:     err,
+	}
+
+	select {
+	case w.finalizeCh <- result:
+	case <-ctx.Done():
+	}
+}
+
+// This is only called from the main worker goroutine, so no locking should be necessary.
+func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
+	if lastSynced == w.undefinedRound || latest == w.undefinedRound {
+		return
+	}
+	if latest-lastSynced < maximumRoundDelayForAvailability && !w.roleAvailable {
+		w.roleProvider.SetAvailable(func(_ *node.Node) error {
+			return nil
+		})
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
+				return nil
+			})
+		}
+		w.roleAvailable = true
+	}
+	if latest-lastSynced > minimumRoundDelayForUnavailability && w.roleAvailable {
+		w.roleProvider.SetUnavailable()
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetUnavailable()
+		}
+		w.roleAvailable = false
+	}
 }
