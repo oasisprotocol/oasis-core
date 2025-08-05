@@ -35,8 +35,8 @@ have induced the failure.
 ### Commit Phase
 
 Upon epoch transition or a prior failed round the commit phase is initiated and
-the consensus service will select `participants` nodes from the current validator
-set (in order of descending stake) to serve as entropy contributors.
+the consensus service will select `participants` nodes from the current
+validator set (in order of descending stake) to serve as entropy contributors.
 
 The beacon state is (re)-initialized, and an event is broadcast to signal to the
 participants that they should generate and submit their encrypted shares via a
