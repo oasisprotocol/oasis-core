@@ -87,7 +87,7 @@ func (h *Hash) UnmarshalHex(text string) error {
 	return h.UnmarshalBinary(b)
 }
 
-// From sets the hash to that of an arbitrary CBOR serializeable interface.
+// From sets the hash to that of an arbitrary CBOR serializable interface.
 func (h *Hash) From(v any) {
 	h.FromBytes(cbor.Marshal(v))
 }
