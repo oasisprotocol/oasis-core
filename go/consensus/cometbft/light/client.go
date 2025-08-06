@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
-	dbm "github.com/cometbft/cometbft-db"
+	cmtdb "github.com/cometbft/cometbft-db"
 	cmtlight "github.com/cometbft/cometbft/light"
 	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
 	cmtlightdb "github.com/cometbft/cometbft/light/store/db"
@@ -17,8 +18,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	cdb "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
+
+// dbName is the name of the database used to store trusted light blocks.
+const dbName = "consensus/light"
 
 // Config is the configuration for the light client.
 type Config struct {
@@ -27,6 +32,12 @@ type Config struct {
 
 	// TrustOptions are CometBFT light client trust options.
 	TrustOptions cmtlight.TrustOptions
+
+	// DataDir is the node's data directory.
+	//
+	// If set, a persistent store is used to store trusted light blocks.
+	// Otherwise, an in-memory store is used.
+	DataDir string
 }
 
 // Client is a CometBFT consensus light client that talks with remote oasis-nodes that are using
@@ -40,10 +51,7 @@ type Client struct {
 	lightClient *lazyClient
 }
 
-// NewClient creates an internal and non-persistent light client.
-//
-// This client is instantiated from the provided (obtained out of bound) trusted block
-// and is used internally for CometBFT's state sync protocol.
+// NewClient creates a new light client.
 func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config) (*Client, error) {
 	pool := NewProviderPool(ctx, chainContext, p2p)
 	providers := make([]*Provider, 0, numWitnesses+1)
@@ -57,12 +65,25 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 		witnesses = append(witnesses, provider)
 	}
 
+	var db cmtdb.DB
+	switch cfg.DataDir {
+	case "":
+		db = cmtdb.NewMemDB()
+	default:
+		fn := filepath.Join(cfg.DataDir, dbName)
+		cdb, err := cdb.New(fn, false)
+		if err != nil {
+			return nil, err
+		}
+		db = cmtdb.NewPrefixDB(cdb, []byte{})
+	}
+
 	lightClient, err := newLazyClient(
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
 		primary,
 		witnesses,
-		cmtlightdb.New(dbm.NewMemDB(), ""),
+		cmtlightdb.New(db, ""),
 		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts), // TODO: Make this configurable.
 		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		cmtlight.DisableProviderRemoval(),
