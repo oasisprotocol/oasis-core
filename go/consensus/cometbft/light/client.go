@@ -22,8 +22,18 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
-// dbName is the name of the database used to store trusted light blocks.
-const dbName = "consensus/light"
+const (
+	// dbName is the name of the database used to store trusted light blocks.
+	dbName = "consensus/light"
+
+	// storeHighWatermark is the maximum number of blocks the pruned store
+	// can hold before triggering pruning.
+	storeHighWatermark = 21_000
+
+	// storeLowWatermark is the number of blocks to retain in the pruned store
+	// after pruning is triggered.
+	storeLowWatermark = 20_000
+)
 
 // Config is the configuration for the light client.
 type Config struct {
@@ -77,13 +87,15 @@ func NewClient(ctx context.Context, chainContext string, p2p rpc.P2P, cfg Config
 		}
 		db = cmtdb.NewPrefixDB(cdb, []byte{})
 	}
+	store := cmtlightdb.New(db, "")
+	store = newPrunedStore(store, storeHighWatermark, storeLowWatermark)
 
 	lightClient, err := newLazyClient(
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
 		primary,
 		witnesses,
-		cmtlightdb.New(db, ""),
+		store,
 		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts), // TODO: Make this configurable.
 		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		cmtlight.DisableProviderRemoval(),
