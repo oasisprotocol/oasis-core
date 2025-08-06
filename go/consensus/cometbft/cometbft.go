@@ -45,7 +45,7 @@ func New(
 		}
 		return node, nil
 	case config.ModeStatelessClient:
-		node, err := createStatelessNode(ctx, identity, genesis, doc, genesisDoc, p2p)
+		node, err := createStatelessNode(ctx, dataDir, identity, genesis, doc, genesisDoc, p2p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stateless node: %w", err)
 		}
@@ -97,6 +97,7 @@ func createFullNode(
 
 func createStatelessNode(
 	ctx context.Context,
+	dataDir string,
 	identity *identity.Identity,
 	genesis genesisAPI.Provider,
 	doc *genesisAPI.Document,
@@ -108,7 +109,7 @@ func createStatelessNode(
 		return nil, fmt.Errorf("failed to create provider: %w", err)
 	}
 
-	lightClient, err := createLightClient(ctx, genesisDoc, doc, p2p)
+	lightClient, err := createLightClient(ctx, dataDir, genesisDoc, doc, p2p)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create light client: %w", err)
 	}
@@ -164,6 +165,7 @@ func createProvider(identity *identity.Identity) (consensusAPI.Backend, error) {
 
 func createLightClient(
 	ctx context.Context,
+	dataDir string,
 	genesisDoc *cmttypes.GenesisDoc,
 	doc *genesisAPI.Document,
 	p2p p2pAPI.Service,
@@ -180,6 +182,7 @@ func createLightClient(
 			Height: int64(config.GlobalConfig.Consensus.LightClient.Trust.Height),
 			Hash:   hash,
 		},
+		DataDir: dataDir,
 	}
 
 	return light.NewClient(ctx, doc.ChainContext(), p2p, cfg)
