@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	maxSubmissionRetryElapsedTime = 60 * time.Second
+	maxSubmissionRetryElapsedTime = time.Minute
 	maxSubmissionRetryInterval    = 10 * time.Second
 )
 

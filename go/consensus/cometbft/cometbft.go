@@ -130,7 +130,7 @@ func createStatelessServices(
 	doc *genesisAPI.Document,
 	genesis genesisAPI.Provider,
 	genesisDoc *cmttypes.GenesisDoc,
-	provider *consensusAPI.Client,
+	provider consensusAPI.Backend,
 	lightClient *light.Client,
 ) (*stateless.Services, error) {
 	cfg := stateless.Config{
@@ -146,13 +146,20 @@ func createStatelessServices(
 	return stateless.NewServices(provider, lightClient, cfg)
 }
 
-func createProvider(identity *identity.Identity) (*consensusAPI.Client, error) {
+func createProvider(identity *identity.Identity) (consensusAPI.Backend, error) {
 	addresses := config.GlobalConfig.Consensus.Providers
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("no providers configured")
 	}
-
-	return stateless.NewProvider(addresses[0], identity.TLSCertificate)
+	providers := make([]consensusAPI.Backend, 0, len(addresses))
+	for _, address := range addresses {
+		provider, err := stateless.NewProvider(address, identity.TLSCertificate)
+		if err != nil {
+			return nil, err
+		}
+		providers = append(providers, provider)
+	}
+	return stateless.NewCompositeProvider(providers), nil
 }
 
 func createLightClient(
