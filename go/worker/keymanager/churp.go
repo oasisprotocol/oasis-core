@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p/core"
 	"golang.org/x/exp/maps"
 
@@ -1051,11 +1050,9 @@ func (w *nodeWatcher) HasApplied(peerID core.PeerID) bool {
 // retry attempts to execute the given function until it succeeds,
 // reaches the maximum number of attempts, or the context expires.
 func retry(ctx context.Context, fn func(int) error) error {
-	bo := cmnBackoff.NewExponentialBackOff()
-	bo.InitialInterval = retryInitialInterval
-	bo.Reset()
-
-	ticker := backoff.NewTicker(bo)
+	backoff := cmnBackoff.NewExponentialBackOff()
+	backoff.InitialInterval = retryInitialInterval
+	backoff.Reset()
 
 	var err error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -1064,9 +1061,9 @@ func retry(ctx context.Context, fn func(int) error) error {
 		}
 
 		select {
-		case <-ticker.C:
 		case <-ctx.Done():
 			return fmt.Errorf("%w: %w", ctx.Err(), context.Cause(ctx))
+		case <-time.After(backoff.NextBackOff()):
 		}
 	}
 
