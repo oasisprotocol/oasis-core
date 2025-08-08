@@ -370,17 +370,6 @@ func (c *Context) HasEvent(app string, kind events.TypedAttribute) bool {
 	return c.hasEvent(app, kind.EventKind())
 }
 
-// DecodeEvent decodes the given raw event as a specific typed event.
-func (c *Context) DecodeEvent(index int, ev events.TypedAttribute) error {
-	raw := c.events[index]
-	for _, pair := range raw.Attributes {
-		if events.IsAttributeKind(pair.GetKey(), ev) {
-			return events.DecodeValue(pair.GetValue(), ev)
-		}
-	}
-	return fmt.Errorf("incompatible event")
-}
-
 // ProvableEvents returns the emitted provable events.
 func (c *Context) ProvableEvents() []events.Provable {
 	return c.eventsProvable
