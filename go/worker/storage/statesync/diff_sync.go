@@ -90,7 +90,11 @@ type finalizedResult struct {
 // hard to test.
 func (w *Worker) syncDiffs(
 	ctx context.Context,
+	// TODO undefined and last finalized round should not be passed explicitly instead we should
+	// get this data from local node db.
 	lastFinalizedRound uint64,
+	undefinedRound uint64,
+	fetherCount uint,
 ) error {
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
@@ -101,7 +105,7 @@ func (w *Worker) syncDiffs(
 	finalizedCh := make(chan finalizedResult)
 
 	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
-	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
+	fetchPool.Resize(fetherCount)
 	defer fetchPool.Stop()
 
 	heartbeat := heartbeat{}
@@ -113,7 +117,7 @@ func (w *Worker) syncDiffs(
 
 	lastFullyAppliedRound := lastFinalizedRound
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
-	latestBlockRound := w.undefinedRound
+	latestBlockRound := undefinedRound
 	for {
 		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
 
@@ -185,7 +189,7 @@ func (w *Worker) syncDiffs(
 			// nudgeAvailability may incorrectly set the node as available too early.
 			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
 
-			if err := w.fetchMissingBlockHeaders(ctx, lastFullyAppliedRound, blk, summaryCache); err != nil {
+			if err := w.fetchMissingBlockHeaders(ctx, lastFullyAppliedRound, undefinedRound, blk, summaryCache); err != nil {
 				return fmt.Errorf("failed to fetch missing block headers: %w", err) // Suggestion: databases can fail, consider retrying.
 			}
 
@@ -235,8 +239,8 @@ func (w *Worker) syncDiffs(
 	}
 }
 
-func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedRound uint64, blk *block.Block, summaryCache map[uint64]*blockSummary) error {
-	if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound { // Suggestion: Helper that is only done once.
+func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedRound, undefinedRound uint64, blk *block.Block, summaryCache map[uint64]*blockSummary) error {
+	if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == undefinedRound { // Suggestion: Helper that is only done once.
 		dummy := blockSummary{
 			Namespace: blk.Header.Namespace,
 			Round:     lastFullyAppliedRound + 1,

@@ -634,5 +634,10 @@ func (w *Worker) Run(ctx context.Context) error { // nolint: gocyclo
 	w.status = api.StatusSyncingRounds
 	w.statusLock.Unlock()
 
-	return w.syncDiffs(ctx, cachedLastRound)
+	return w.syncDiffs(
+		ctx,
+		cachedLastRound,
+		w.undefinedRound,
+		config.GlobalConfig.Storage.FetcherCount,
+	)
 }
