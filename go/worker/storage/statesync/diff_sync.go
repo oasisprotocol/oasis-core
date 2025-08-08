@@ -135,10 +135,21 @@ func (ds *diffSyncer) sync(
 	undefinedRound uint64,
 	fetcherThreads uint,
 ) error {
+	// Suggestion:
+	// 1. Move the logic for fetching into a separate goroutine, that should watch
+	// new block headers and the result of application of the fetched diffs
+	// (and act upon it), confining all the vars below into it.
+	// 2. Apply reads from channel written to in 1., applies, and acknowledges
+	// success/failure to 1. of applying concrete storage diff. Finaly it writes to finalize
+	// channel when ready to finalize (that should be buffered) and of size dbApi.MaxPendingVersions-1.
+	// 3. The finalize go routine should only finalize and notify finalized version.
+	//
+	// Spawn 3 go routines, errgroup and return g.Wait().
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
 	pendingApply := &minRoundQueue{}
-	pendingFinalize := &minRoundQueue{} // Suggestion: slice would suffice given that application must happen in order.
+	// Suggestion: slice would suffice given that application must happen in order, buffered channel even better.
+	pendingFinalize := &minRoundQueue{}
 
 	diffCh := make(chan *fetchedDiff)
 	finalizedCh := make(chan finalizedResult)
@@ -252,11 +263,10 @@ func (ds *diffSyncer) sync(
 			if finalized.err != nil { // Suggestion: DB operations can always fail, consider retrying.
 				return fmt.Errorf("failed to flush synced state: %w", finalized.err)
 			}
+			lastFinalizedRound = finalized.summary.Round
 			ds.finalizedNotifier.Broadcast(finalized.summary)
 
 			storageWorkerLastFullRound.With(ds.getMetricLabels()).Set(float64(finalized.summary.Round))
-		case <-ctx.Done():
-			return ctx.Err()
 		}
 	}
 }
