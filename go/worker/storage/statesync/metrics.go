@@ -49,12 +49,6 @@ var (
 	prometheusOnce sync.Once
 )
 
-func (n *Worker) getMetricLabels() prometheus.Labels {
-	return prometheus.Labels{
-		"runtime": n.commonNode.Runtime.ID().String(),
-	}
-}
-
 func initMetrics() {
 	prometheusOnce.Do(func() {
 		prometheus.MustRegister(storageWorkerCollectors...)

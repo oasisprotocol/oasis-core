@@ -14,9 +14,11 @@ import (
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -48,6 +50,14 @@ const (
 	defaultUndefinedRound = ^uint64(0)
 
 	checkpointSyncRetryDelay = 10 * time.Second
+
+	// The maximum number of rounds the worker can be behind the chain before it's sensible for
+	// it to register as available.
+	maximumRoundDelayForAvailability = 10
+
+	// The minimum number of rounds the worker can be behind the chain before it's sensible for
+	// it to stop advertising availability.
+	minimumRoundDelayForUnavailability = 15
 
 	// chunkerThreads is target number of subtrees during parallel checkpoint creation.
 	// It is intentionally non-configurable since we want operators to produce
@@ -634,10 +644,122 @@ func (w *Worker) Run(ctx context.Context) error { // nolint: gocyclo
 	w.status = api.StatusSyncingRounds
 	w.statusLock.Unlock()
 
-	return w.syncDiffs(
-		ctx,
-		cachedLastRound,
-		w.undefinedRound,
-		config.GlobalConfig.Storage.FetcherCount,
-	)
+	return w.sync(ctx, cachedLastRound, w.undefinedRound, config.GlobalConfig.Storage.FetcherCount)
+}
+
+// sync watches new consensus runtime blocks headers and fetches corresponding storage diffs from the
+// p2p network. Those diffs are then finalized.
+//
+// In addition it continuously updates the checkpointer about last finalized (synced) round, and
+// registers availability to the consensus service if synced reasonably close to the latest known
+// block header.
+func (w *Worker) sync(ctx context.Context, lastFinalizedRound, undefinedRound uint64, fetcherThreads uint) error {
+	diffSyncer := newDiffSyncer(w.commonNode.Runtime.ID(), w.localStorage, w.commonNode.Runtime.History(), w)
+	// BlkCh will try to track consensus blocks as close as possible. If to many pending blocks, process
+	// sufficiently enough of them, so that we know we are still behind the consensus.
+	maxBlkChSize := maximumRoundDelayForAvailability * 10
+	blkCh := make(chan *block.Block, maxBlkChSize)
+	syncerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	syncerDone := make(chan struct{})
+	go func() {
+		defer close(syncerDone)
+		err := diffSyncer.sync(
+			syncerCtx,
+			blkCh,
+			lastFinalizedRound,
+			undefinedRound,
+			fetcherThreads,
+		)
+		if err != nil {
+			w.logger.Error("Syncer stopped with error", "err", err)
+		}
+	}()
+
+	ch, sub, err := diffSyncer.watchFinalizedSummaries()
+	if err != nil {
+		return fmt.Errorf("failed to subcribe to diff syncer finalizations: %w", err)
+	}
+	defer sub.Close()
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	latestKnownRound := w.undefinedRound
+	for {
+		// Don't register availability immediately, we want to know how far behind consensus are we.
+		if len(blkCh) < maxBlkChSize {
+			select {
+			case inBlk := <-w.blockCh.Out():
+				blk := inBlk.(*block.Block)
+				w.logger.Debug("incoming block",
+					"round", blk.Header.Round,
+					"last_finalized", lastFinalizedRound,
+				)
+				latestKnownRound = blk.Header.Round
+				w.updateAvailability(lastFinalizedRound, latestKnownRound)
+				blkCh <- blk
+				continue
+			default:
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-syncerDone:
+			return fmt.Errorf("syncer stopped")
+		case finalized := <-ch:
+			lastFinalizedRound, err = w.flushSyncedState(finalized)
+			if err != nil {
+				w.logger.Error("failed to flush synced state", "err", err)
+				continue // TODO: Previously this waited next round but probably we should fail?
+			}
+			w.updateAvailability(lastFinalizedRound, latestKnownRound)
+			w.checkpointer.NotifyNewVersion(finalized.Round)
+		case <-ticker.C: // TODO: to prevent deadlock (not sure even needed).
+			break
+		}
+
+	}
+}
+
+// fetchDiff fetches writelog using diff sync p2p protocol client.
+//
+// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
+func (w *Worker) fetchDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err == nil { // if NO error
+		return rsp1.WriteLog, pf, nil
+	}
+
+	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.WriteLog, pf, nil
+}
+
+func (w *Worker) updateAvailability(lastSynced, latestKnown uint64) {
+	if lastSynced == w.undefinedRound || latestKnown == w.undefinedRound {
+		return
+	}
+	if latestKnown-lastSynced < maximumRoundDelayForAvailability && !w.roleAvailable {
+		w.roleProvider.SetAvailable(func(_ *node.Node) error {
+			return nil
+		})
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
+				return nil
+			})
+		}
+		w.roleAvailable = true
+	}
+	if latestKnown-lastSynced > minimumRoundDelayForUnavailability && w.roleAvailable {
+		w.roleProvider.SetUnavailable()
+		if w.rpcRoleProvider != nil {
+			w.rpcRoleProvider.SetUnavailable()
+		}
+		w.roleAvailable = false
+	}
 }
