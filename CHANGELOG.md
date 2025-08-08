@@ -12,6 +12,93 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.5 (2025-08-08)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Removals and Breaking Changes
+
+- go/consensus/cometbft: Switch to Protobuf encoding for block metadata
+  ([#6235](https://github.com/oasisprotocol/oasis-core/issues/6235))
+
+  Block metadata now uses Protobuf encoding for the block header and the last
+  commit. This change addresses an issue with CBOR encoding, which stripped
+  milliseconds from timestamps, preventing light clients from verifying
+  them.
+
+### Features
+
+- go: Split storage sync p2p protocol
+  ([#5751](https://github.com/oasisprotocol/oasis-core/issues/5751))
+
+  Storage sync protocol was split into two independent protocols (checkpoint
+  and diff sync).
+
+  This change was made since there may be fewer nodes that expose checkpoints
+  than storage diff. Previously, this could lead to issues with state sync
+  when a node was connected with peers that supported storage sync protocol
+  but had no checkpoints available.
+
+  This was done in backwards compatible manner, so that both protocols are still
+  advertised and used. Eventually, we plan to remove legacy protocol.
+
+- go/storage/mkvs: Parallelize checkpoint creation
+  ([#6204](https://github.com/oasisprotocol/oasis-core/issues/6204))
+
+- go/consensus/cometbft: Add stateless client node
+  ([#6235](https://github.com/oasisprotocol/oasis-core/issues/6235))
+
+  A stateless client node can now be started using the following configuration.
+  To ensure compatibility, all provider nodes specified must be running
+  the latest version of Oasis Core.
+
+  ```yaml
+  mode: client-stateless
+  # ... sections not relevant are omitted ...
+  consensus:
+      providers:
+          - <node-address-1>
+          - <node-address-2>
+          # Add more node addresses as needed
+  ```
+
+### Bug Fixes
+
+- go/worker/storage/committee: Fix stuck storage finalization
+  ([#6239](https://github.com/oasisprotocol/oasis-core/issues/6239))
+
+- go/runtime/rofl/api: Fix attestation field name
+  ([#6267](https://github.com/oasisprotocol/oasis-core/issues/6267))
+
+### Documentation Improvements
+
+- docs/oasis-node: Fix Configuring in Pull Mode
+  ([#6250](https://github.com/oasisprotocol/oasis-core/issues/6250))
+
+  Updated instructions for configuring oasis-node in pull mode and added
+  instructions for how to enable Prometheus metrics.
+
+### Internal Changes
+
+- keymanager/src/crypto: Deprecate checksum in key pair
+  ([#6244](https://github.com/oasisprotocol/oasis-core/issues/6244))
+
+- go: Bump github.com/libp2p/go-libp2p to v0.42.0
+  ([#6256](https://github.com/oasisprotocol/oasis-core/issues/6256))
+
+- go/p2p: Ensure only server providers advertise themselves
+  ([#6270](https://github.com/oasisprotocol/oasis-core/issues/6270))
+
+  Previously, the host would advertise itself upon creation
+  of p2p protocol client, even if the server was not running.
+
+  Advertisement is now independent and is only triggered
+  when serving the P2P protocol.
+
 ## 25.4 (2025-06-19)
 
 | Protocol          | Version   |
