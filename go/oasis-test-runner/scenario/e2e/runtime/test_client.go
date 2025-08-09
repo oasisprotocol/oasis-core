@@ -65,12 +65,22 @@ type TestClient struct {
 
 	scenario TestClientScenario
 
-	seed string
-	rng  rand.Source64
+	sender string
+	seed   string
+	rng    rand.Source64
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
 	errCh    chan error
+}
+
+// NewTestClient creates a new test client.
+func NewTestClient() *TestClient {
+	return &TestClient{
+		sender:   "sender",
+		seed:     "seed",
+		scenario: func(_ func(req any) error) error { return nil },
+	}
 }
 
 // Init initializes the test client.
@@ -141,6 +151,12 @@ func (cli *TestClient) WithSeed(seed string) *TestClient {
 	return cli
 }
 
+// WithSender sets the sender.
+func (cli *TestClient) WithSender(sender string) *TestClient {
+	cli.sender = sender
+	return cli
+}
+
 // WithScenario sets the scenario.
 func (cli *TestClient) WithScenario(scenario TestClientScenario) *TestClient {
 	cli.scenario = scenario
@@ -204,6 +220,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		ciphertext, err := cli.sc.submitKeyValueRuntimeEncryptTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Epoch,
 			req.KeyPairID,
@@ -215,6 +232,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		plaintext, err := cli.sc.submitKeyValueRuntimeDecryptTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Epoch,
 			req.KeyPairID,
@@ -231,6 +249,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Key,
 			req.Value,
@@ -249,6 +268,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Key,
 			req.Generation,
@@ -266,6 +286,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Key,
 			req.Generation,
@@ -283,6 +304,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		rsp, err := cli.sc.submitKeyValueRuntimeRemoveTx(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Key,
 			req.Generation,
@@ -300,6 +322,7 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		err := cli.sc.submitKeyValueRuntimeInsertMsg(
 			ctx,
 			KeyValueRuntimeID,
+			cli.sender,
 			rng.Uint64(),
 			req.Key,
 			req.Value,
@@ -312,19 +335,19 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 		}
 
 	case GetRuntimeIDTx:
-		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, KeyValueRuntimeID, rng.Uint64())
+		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, KeyValueRuntimeID, cli.sender, rng.Uint64())
 		if err != nil {
 			return err
 		}
 
 	case ConsensusTransferTx:
-		err := cli.sc.submitConsensusTransferTx(ctx, KeyValueRuntimeID, rng.Uint64(), staking.Transfer{})
+		err := cli.sc.submitConsensusTransferTx(ctx, KeyValueRuntimeID, cli.sender, rng.Uint64(), staking.Transfer{})
 		if err != nil {
 			return err
 		}
 
 	case ConsensusAccountsTx:
-		err := cli.sc.submitConsensusAccountsTx(ctx, KeyValueRuntimeID, rng.Uint64())
+		err := cli.sc.submitConsensusAccountsTx(ctx, KeyValueRuntimeID, cli.sender, rng.Uint64())
 		if err != nil {
 			return err
 		}
@@ -336,22 +359,16 @@ func (cli *TestClient) submit(ctx context.Context, req any, rng rand.Source64) e
 	return nil
 }
 
-func NewTestClient() *TestClient {
-	return &TestClient{
-		seed:     "seed",
-		scenario: func(_ func(req any) error) error { return nil },
-	}
-}
-
 func (sc *Scenario) submitRuntimeTxAndDecode(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	method string,
 	args any,
 	rsp any,
 ) error {
-	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, method, args)
+	rawRsp, err := sc.submitRuntimeTx(ctx, id, sender, nonce, method, args)
 	if err != nil {
 		return fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
 	}
@@ -366,12 +383,13 @@ func (sc *Scenario) submitRuntimeTxAndDecode(
 func (sc *Scenario) submitRuntimeTxAndDecodeString(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	method string,
 	args any,
 ) (string, error) {
 	var rsp string
-	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
+	if err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp); err != nil {
 		return "", err
 	}
 	return rsp, nil
@@ -380,12 +398,13 @@ func (sc *Scenario) submitRuntimeTxAndDecodeString(
 func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	method string,
 	args any,
 ) ([]byte, error) {
 	var rsp []byte
-	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
+	if err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -394,6 +413,7 @@ func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
 func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
@@ -411,12 +431,13 @@ func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
 		Plaintext: plaintext,
 	}
 
-	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, nonce, "encrypt", args)
+	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, sender, nonce, "encrypt", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeDecryptTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
@@ -434,12 +455,13 @@ func (sc *Scenario) submitKeyValueRuntimeDecryptTx(
 		Ciphertext: ciphertext,
 	}
 
-	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, nonce, "decrypt", args)
+	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, sender, nonce, "decrypt", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	key, value string,
 	generation uint64,
@@ -471,12 +493,13 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 		ChurpID:    churpID,
 	}
 
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	key string,
 	generation uint64,
@@ -506,12 +529,13 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 		ChurpID:    churpID,
 	}
 
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	key string,
 	generation uint64,
@@ -541,17 +565,18 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 		ChurpID:    churpID,
 	}
 
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 ) (string, error) {
 	sc.Logger.Info("retrieving runtime ID")
 
-	rsp, err := sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "get_runtime_id", nil)
+	rsp, err := sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, "get_runtime_id", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to query remote runtime ID: %w", err)
 	}
@@ -562,6 +587,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
 func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	key, value string,
 	generation uint64,
@@ -593,7 +619,7 @@ func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
 		ChurpID:    churpID,
 	}
 
-	return sc.submitRuntimeInMsg(ctx, id, nonce, method, args)
+	return sc.submitRuntimeInMsg(ctx, id, sender, nonce, method, args)
 }
 
 func (sc *Scenario) submitAndDecodeRuntimeQuery(
@@ -637,6 +663,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetQuery(
 func (sc *Scenario) submitConsensusTransferTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	transfer staking.Transfer,
 ) error {
@@ -644,7 +671,7 @@ func (sc *Scenario) submitConsensusTransferTx(
 		"transfer", transfer,
 	)
 
-	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_transfer", TransferCall{
+	_, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_transfer", TransferCall{
 		Transfer: transfer,
 	})
 	if err != nil {
@@ -657,11 +684,12 @@ func (sc *Scenario) submitConsensusTransferTx(
 func (sc *Scenario) submitConsensusAccountsTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 ) error {
 	sc.Logger.Info("submitting consensus accounts query")
 
-	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_accounts", nil)
+	_, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_accounts", nil)
 	if err != nil {
 		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)
 	}
