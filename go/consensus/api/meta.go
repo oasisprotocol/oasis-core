@@ -23,7 +23,7 @@ const BlockMetadataMaxSize = 16_384
 type BlockMetadata struct {
 	// StateRoot is the state root after executing all logic in the block.
 	StateRoot hash.Hash `json:"state_root"`
-	// EventsRoot is the provable events root.
+	// EventsRoot is the root hash of all events emitted in the block.
 	EventsRoot []byte `json:"events_root"`
 }
 

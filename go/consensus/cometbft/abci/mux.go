@@ -531,27 +531,24 @@ func (mux *abciMux) executeProposal(
 	mux.state.resetProposal()
 	mux.state.proposal.hash = hash
 
-	resultsBeginBlock := mux.BeginBlock(types.RequestBeginBlock{
+	// The proposal is updated inside every call, as the end block phase
+	// requires these results immediately to validate system transactions.
+	mux.BeginBlock(types.RequestBeginBlock{
 		Hash:                hash,
 		Header:              header,
 		LastCommitInfo:      lastCommit,
 		ByzantineValidators: misbehavior,
 	})
 
-	resultsDeliverTx := make([]*types.ResponseDeliverTx, 0, len(txs))
 	for _, tx := range txs {
-		resp := mux.DeliverTx(types.RequestDeliverTx{
+		mux.DeliverTx(types.RequestDeliverTx{
 			Tx: tx,
 		})
-		resultsDeliverTx = append(resultsDeliverTx, &resp)
 	}
 
-	resultsEndBlock := mux.EndBlock(types.RequestEndBlock{
+	mux.EndBlock(types.RequestEndBlock{
 		Height: header.Height,
 	})
-
-	// Update the proposal with results, marking the proposal as executed.
-	mux.state.proposal.setResults(&resultsBeginBlock, resultsDeliverTx, &resultsEndBlock)
 
 	return nil
 }
@@ -638,19 +635,22 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		}
 	}
 
-	response := mux.BaseApplication.BeginBlock(req)
+	result := mux.BaseApplication.BeginBlock(req)
 
 	// During the first block, also collect and prepend application events generated during
 	// InitChain to BeginBlock events.
 	if mux.state.BlockHeight() == 0 {
-		response.Events = append(response.Events, mux.state.initEvents...)
+		result.Events = append(result.Events, mux.state.initEvents...)
 	}
 
 	// Collect and return events from the application's BeginBlock calls.
-	response.Events = append(response.Events, ctx.GetEvents()...)
+	result.Events = append(result.Events, ctx.GetEvents()...)
 	mux.processProvableEvents(ctx)
 
-	return response
+	// Update the proposal.
+	mux.state.proposal.resultsBeginBlock = &result
+
+	return result
 }
 
 func (mux *abciMux) notifyInvalidatedCheckTx(txHash hash.Hash, err error) {
@@ -715,7 +715,17 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	ctx := mux.state.NewContext(api.ContextDeliverTx)
 	defer ctx.Close()
 
-	if err := mux.executeTx(ctx, req.Tx); err != nil {
+	var results types.ResponseDeliverTx
+	switch err := mux.executeTx(ctx, req.Tx); err {
+	case nil:
+		results = types.ResponseDeliverTx{
+			Code:      types.CodeTypeOK,
+			Data:      cbor.Marshal(ctx.Data()),
+			Events:    ctx.GetEvents(),
+			GasWanted: int64(ctx.Gas().GasWanted()),
+			GasUsed:   int64(ctx.Gas().GasUsed()),
+		}
+	default:
 		if api.IsUnavailableStateError(err) {
 			// Make sure to not commit any transactions which include results based on unavailable
 			// and/or corrupted state -- doing so can further corrupt state.
@@ -726,9 +736,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 		}
 		module, code := errors.Code(err)
 
-		mux.processProvableEvents(ctx)
-
-		return types.ResponseDeliverTx{
+		results = types.ResponseDeliverTx{
 			Codespace: module,
 			Code:      code,
 			Log:       err.Error(),
@@ -740,13 +748,10 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 
 	mux.processProvableEvents(ctx)
 
-	return types.ResponseDeliverTx{
-		Code:      types.CodeTypeOK,
-		Data:      cbor.Marshal(ctx.Data()),
-		Events:    ctx.GetEvents(),
-		GasWanted: int64(ctx.Gas().GasWanted()),
-		GasUsed:   int64(ctx.Gas().GasUsed()),
-	}
+	// Update the proposal.
+	mux.state.proposal.resultsDeliverTx = append(mux.state.proposal.resultsDeliverTx, &results)
+
+	return results
 }
 
 func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
@@ -768,9 +773,9 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	defer ctx.Close()
 
 	// Dispatch EndBlock to all applications.
-	resp := mux.BaseApplication.EndBlock(req)
+	results := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {
-		newResp, err := app.EndBlock(ctx)
+		newResults, err := app.EndBlock(ctx)
 		if err != nil {
 			mux.logger.Error("EndBlock: fatal error in application",
 				"err", err,
@@ -779,7 +784,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			panic(fmt.Errorf("mux: EndBlock: fatal error in application: '%s': %w", app.Name(), err))
 		}
 		if app.Blessed() {
-			resp = newResp
+			results = newResults
 		}
 	}
 
@@ -798,22 +803,25 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	}
 
 	// Collect and return events.
-	resp.Events = ctx.GetEvents()
+	results.Events = ctx.GetEvents()
 	mux.processProvableEvents(ctx)
 
 	// Update version to what we are actually running.
-	resp.ConsensusParamUpdates = &cmtproto.ConsensusParams{
+	results.ConsensusParamUpdates = &cmtproto.ConsensusParams{
 		Version: &cmtproto.VersionParams{
 			App: version.CometBFTAppVersion,
 		},
 	}
+
+	// Update the proposal.
+	mux.state.proposal.resultsEndBlock = &results
 
 	// Validate system transactions included by the proposer.
 	if err := mux.validateSystemTxs(); err != nil {
 		panic(fmt.Errorf("proposed block has invalid system transactions: %w", err))
 	}
 
-	return resp
+	return results
 }
 
 func (mux *abciMux) Commit() types.ResponseCommit {

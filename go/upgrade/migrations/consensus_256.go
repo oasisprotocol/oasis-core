@@ -14,6 +14,8 @@ import (
 // This upgrade includes:
 //   - The `MayQuery“ field in the CHURP SGX policy, which defines which enclave identities
 //     are allowed to query runtime key shares.
+//   - An updated events root in the block metadata system transaction to capture all events
+//     emitted in the block.
 const Consensus256 = "consensus256"
 
 // Version256 is the Oasis Core 25.6 version.
