@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	cmtcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto/merkle"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // prepareSystemTxs prepares a list of system transactions to be included in a proposed block in
@@ -28,9 +29,9 @@ func (mux *abciMux) prepareSystemTxs() ([][]byte, []*types.ResponseDeliverTx, er
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to compute working state root: %w", err)
 	}
-	eventsRoot, err := mux.computeProvableEventsRoot()
+	eventsRoot, err := mux.computeEventsRoot()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compute provable events root: %w", err)
+		return nil, nil, fmt.Errorf("failed to compute events root: %w", err)
 	}
 
 	blockMeta := consensus.NewBlockMetadataTx(&consensus.BlockMetadata{
@@ -124,10 +125,10 @@ func (mux *abciMux) validateSystemTxs() error {
 				return fmt.Errorf("invalid state root in block metadata (expected: %s got: %s)", stateRoot, meta.StateRoot)
 			}
 
-			// Verify provable events root.
-			eventsRoot, err := mux.computeProvableEventsRoot()
+			// Verify events root.
+			eventsRoot, err := mux.computeEventsRoot()
 			if err != nil {
-				return fmt.Errorf("failed to compute provable events root: %w", err)
+				return fmt.Errorf("failed to compute events root: %w", err)
 			}
 			if !bytes.Equal(eventsRoot, meta.EventsRoot) {
 				return fmt.Errorf("invalid events root in block metadata (expected: %x got: %x)", eventsRoot, meta.EventsRoot)
@@ -148,11 +149,30 @@ func (mux *abciMux) validateSystemTxs() error {
 	return nil
 }
 
-func (mux *abciMux) computeProvableEventsRoot() ([]byte, error) {
-	provable := mux.state.blockCtx.ProvableEvents
-	provableEvents := make([][]byte, len(provable))
-	for i, pe := range provable {
-		provableEvents[i] = cbor.Marshal(pe.ProvableRepresentation())
+func (mux *abciMux) computeEventsRoot() ([]byte, error) {
+	if !mux.state.ConsensusParameters().IsFeatureVersion(migrations.Version256) {
+		// Events root used to be computed only from provable events.
+		provable := mux.state.blockCtx.ProvableEvents
+		provableEvents := make([][]byte, len(provable))
+		for i, pe := range provable {
+			provableEvents[i] = cbor.Marshal(pe.ProvableRepresentation())
+		}
+		return merkle.RootHash(provableEvents), nil
 	}
-	return merkle.RootHash(provableEvents), nil
+
+	// Events root is now computed from all emitted events.
+	var events [][]byte
+	for _, ev := range mux.state.proposal.resultsBeginBlock.Events {
+		events = append(events, cbor.Marshal(ev))
+	}
+	for _, res := range mux.state.proposal.resultsDeliverTx {
+		for _, ev := range res.Events {
+			events = append(events, cbor.Marshal(ev))
+		}
+	}
+	for _, ev := range mux.state.proposal.resultsEndBlock.Events {
+		events = append(events, cbor.Marshal(ev))
+	}
+
+	return merkle.RootHash(events), nil
 }
