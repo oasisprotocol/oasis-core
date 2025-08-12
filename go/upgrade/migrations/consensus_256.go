@@ -8,33 +8,34 @@ import (
 	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 )
 
-// Consensus242 is the name of the upgrade that enables features introduced in Oasis Core 24.2.
+// Consensus256 is the name of the upgrade that enables features introduced up to and including
+// Oasis Core 25.6.
 //
 // This upgrade includes:
 //   - The `MayQuery“ field in the CHURP SGX policy, which defines which enclave identities
 //     are allowed to query runtime key shares.
-const Consensus242 = "consensus242"
+const Consensus256 = "consensus256"
 
-// Version242 is the Oasis Core 24.2 version.
-var Version242 = version.MustFromString("24.2")
+// Version256 is the Oasis Core 25.6 version.
+var Version256 = version.MustFromString("25.6")
 
-var _ Handler = (*Handler242)(nil)
+var _ Handler = (*Handler256)(nil)
 
-// Handler242 is the upgrade handler that transitions Oasis Core from version 24.1 to 24.2.
-type Handler242 struct{}
+// Handler256 is the upgrade handler that transitions Oasis Core from version 24.1 to 25.6.
+type Handler256 struct{}
 
 // HasStartupUpgrade implements Handler.
-func (h *Handler242) HasStartupUpgrade() bool {
+func (h *Handler256) HasStartupUpgrade() bool {
 	return false
 }
 
 // StartupUpgrade implements Handler.
-func (h *Handler242) StartupUpgrade() error {
+func (h *Handler256) StartupUpgrade() error {
 	return nil
 }
 
 // ConsensusUpgrade implements Handler.
-func (h *Handler242) ConsensusUpgrade(privateCtx any) error {
+func (h *Handler256) ConsensusUpgrade(privateCtx any) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:
@@ -47,7 +48,7 @@ func (h *Handler242) ConsensusUpgrade(privateCtx any) error {
 			return fmt.Errorf("failed to load consensus parameters: %w", err)
 		}
 
-		consParams.FeatureVersion = &Version242
+		consParams.FeatureVersion = &Version256
 
 		if err = consState.SetConsensusParameters(abciCtx, consParams); err != nil {
 			return fmt.Errorf("failed to set consensus parameters: %w", err)
@@ -59,5 +60,5 @@ func (h *Handler242) ConsensusUpgrade(privateCtx any) error {
 }
 
 func init() {
-	Register(Consensus242, &Handler242{})
+	Register(Consensus256, &Handler256{})
 }
