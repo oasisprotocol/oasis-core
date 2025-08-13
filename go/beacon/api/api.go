@@ -144,12 +144,12 @@ type ConsensusParameters struct {
 }
 
 // Interval returns the epoch interval (in blocks).
-func (cp *ConsensusParameters) Interval() int64 {
-	switch cp.Backend {
+func (p *ConsensusParameters) Interval() int64 {
+	switch p.Backend {
 	case BackendInsecure:
-		return cp.InsecureParameters.Interval
+		return p.InsecureParameters.Interval
 	case BackendVRF:
-		return cp.VRFParameters.Interval
+		return p.VRFParameters.Interval
 	default:
 		panic("invalid backend")
 	}
