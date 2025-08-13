@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cometbft/cometbft/abci/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -16,31 +17,43 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
-// prepareSystemTxs prepares a list of system transactions to be included in a proposed block in
-// case where the node is currently the block proposer.
-func (mux *abciMux) prepareSystemTxs() ([][]byte, []*types.ResponseDeliverTx, error) {
-	var (
-		systemTxs       [][]byte
-		systemTxResults []*types.ResponseDeliverTx
-	)
+// prepareSystemTxs prepares a list of system transactions to be included
+// in a proposed block in case where the node is currently the block proposer.
+func (mux *abciMux) prepareSystemTxs() ([][]byte, error) {
+	blockMetaTx, err := mux.prepareBlockMetaTx()
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare block metadata transaction: %w", err)
+	}
+	return [][]byte{blockMetaTx}, nil
+}
 
-	// Append block metadata as a system transaction.
+// prepareSystemTxResults prepares a list of system transaction results to be included
+// in a proposed block in case where the node is currently the block proposer.
+func (mux *abciMux) prepareSystemTxResults() []*types.ResponseDeliverTx {
+	blockMetaResults := mux.prepareBlockMetaTxResults()
+	return []*types.ResponseDeliverTx{blockMetaResults}
+}
+
+// prepareBlockMetaTx prepares block metadata system transaction.
+func (mux *abciMux) prepareBlockMetaTx() ([]byte, error) {
 	stateRoot, err := mux.state.workingStateRoot()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compute working state root: %w", err)
+		return nil, fmt.Errorf("failed to compute working state root: %w", err)
 	}
 	eventsRoot, err := mux.computeEventsRoot()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compute events root: %w", err)
+		return nil, fmt.Errorf("failed to compute events root: %w", err)
 	}
+	resultsHash := mux.computeResultsHash()
 
 	blockMeta := consensus.NewBlockMetadataTx(&consensus.BlockMetadata{
-		StateRoot:  stateRoot,
-		EventsRoot: eventsRoot,
+		StateRoot:   stateRoot,
+		EventsRoot:  eventsRoot,
+		ResultsHash: resultsHash,
 	})
 	sigBlockMeta, err := transaction.Sign(mux.state.identity.ConsensusSigner, blockMeta)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sign block metadata transaction: %w", err)
+		return nil, fmt.Errorf("failed to sign block metadata transaction: %w", err)
 	}
 	sigBlockMetaRaw := cbor.Marshal(sigBlockMeta)
 	if l := len(sigBlockMetaRaw); l > consensus.BlockMetadataMaxSize {
@@ -48,15 +61,18 @@ func (mux *abciMux) prepareSystemTxs() ([][]byte, []*types.ResponseDeliverTx, er
 			"meta_size", l,
 			"max_meta_size", consensus.BlockMetadataMaxSize,
 		)
-		return nil, nil, fmt.Errorf("serialized block metadata would be oversized")
+		return nil, fmt.Errorf("serialized block metadata would be oversized")
 	}
-	systemTxs = append(systemTxs, sigBlockMetaRaw)
-	systemTxResults = append(systemTxResults, &types.ResponseDeliverTx{
+
+	return sigBlockMetaRaw, nil
+}
+
+// prepareBlockMetaTxResults prepares block metadata system transaction results.
+func (mux *abciMux) prepareBlockMetaTxResults() *types.ResponseDeliverTx {
+	return &types.ResponseDeliverTx{
 		Code: types.CodeTypeOK,
 		Data: cbor.Marshal(nil),
-	})
-
-	return systemTxs, systemTxResults, nil
+	}
 }
 
 // processSystemTx processes a system transaction in DeliverTx context.
@@ -102,7 +118,7 @@ func (mux *abciMux) validateSystemTxs() error {
 	for _, tx := range mux.state.blockCtx.SystemTransactions {
 		switch tx.Method {
 		case consensus.MethodMeta:
-			// Block metadata, verify state root.
+			// Decode block metadata.
 			if hasBlockMetadata {
 				return fmt.Errorf("duplicate block metadata in block")
 			}
@@ -134,9 +150,16 @@ func (mux *abciMux) validateSystemTxs() error {
 				return fmt.Errorf("invalid events root in block metadata (expected: %x got: %x)", eventsRoot, meta.EventsRoot)
 			}
 
+			// Verify results hash.
+			resultsHash := mux.computeResultsHash()
+			if !bytes.Equal(resultsHash, meta.ResultsHash) {
+				return fmt.Errorf("invalid results hash in block metadata (expected: %x got: %x)", resultsHash, meta.ResultsHash)
+			}
+
 			mux.logger.Debug("validated block metadata",
 				"state_root", meta.StateRoot,
 				"events_root", hex.EncodeToString(eventsRoot),
+				"results_hash", hex.EncodeToString(resultsHash),
 			)
 		default:
 			return fmt.Errorf("unknown system method: %s", tx.Method)
@@ -175,4 +198,11 @@ func (mux *abciMux) computeEventsRoot() ([]byte, error) {
 	}
 
 	return merkle.RootHash(events), nil
+}
+
+func (mux *abciMux) computeResultsHash() []byte {
+	if !mux.state.ConsensusParameters().IsFeatureVersion(migrations.Version256) {
+		return nil
+	}
+	return cmttypes.NewResults(mux.state.proposal.resultsDeliverTx).Hash()
 }

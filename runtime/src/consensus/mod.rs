@@ -49,4 +49,7 @@ pub struct BlockMetadata {
     pub state_root: Hash,
     // Root hash of all events emitted in the block.
     pub events_root: Vec<u8>,
+    // Hash of transaction results in the block.
+    #[cbor(optional)]
+    pub results_hash: Vec<u8>,
 }

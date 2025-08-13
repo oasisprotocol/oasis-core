@@ -25,12 +25,17 @@ type BlockMetadata struct {
 	StateRoot hash.Hash `json:"state_root"`
 	// EventsRoot is the root hash of all events emitted in the block.
 	EventsRoot []byte `json:"events_root"`
+	// ResultsHash is the hash of transaction results in the block.
+	ResultsHash []byte `json:"results_hash,omitempty"`
 }
 
 // ValidateBasic performs basic block metadata structure validation.
 func (bm *BlockMetadata) ValidateBasic() error {
 	if len(bm.EventsRoot) != 32 {
 		return fmt.Errorf("malformed events root")
+	}
+	if bm.ResultsHash != nil && len(bm.ResultsHash) != 32 {
+		return fmt.Errorf("malformed results hash")
 	}
 	return nil
 }
