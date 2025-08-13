@@ -520,7 +520,6 @@ TransferWaitLoop:
 					if evt.Transfer != nil {
 						if evt.Transfer.From.Equal(te.From) && evt.Transfer.To.Equal(te.To) && evt.Transfer.Amount.Cmp(&te.Amount) == 0 {
 							gotTransfer = true
-							require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 							break
 						}
 					}
@@ -633,7 +632,6 @@ func testBurn(t *testing.T, state *stakingTestsState, staking api.Backend, conse
 						if evt.Transfer != nil {
 							if evt.Transfer.From.Equal(te.From) && evt.Transfer.To.Equal(te.To) && evt.Transfer.Amount.Cmp(&te.Amount) == 0 {
 								gotIt = true
-								require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 								break
 							}
 						}
@@ -1092,7 +1090,6 @@ AllowWaitLoop:
 				ac2 := ev2.AllowanceChange
 				if ac2.Owner.Equal(ac.Owner) && ac2.Beneficiary.Equal(ac.Beneficiary) {
 					require.EqualValues(ac, ac2, "GetEvents should return the same event")
-					require.True(!ev2.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 					break AllowWaitLoop
 				}
 			}

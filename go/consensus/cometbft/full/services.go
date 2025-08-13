@@ -61,7 +61,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 				logger.Error("failed to deliver block height to service client", "err", err)
 			}
 		case ev := <-evCh:
-			if err := svc.DeliverEvent(ctx, ev.height, ev.tx, &ev.ev); err != nil {
+			if err := svc.DeliverEvent(ctx, ev.height, &ev.ev); err != nil {
 				logger.Error("failed to deliver event to service client", "err", err)
 			}
 		}
@@ -70,7 +70,6 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 
 type annotatedEvent struct {
 	height int64
-	tx     cmttypes.Tx
 	ev     cmtabcitypes.Event
 }
 
@@ -97,21 +96,20 @@ func (h *eventHandler) handle(ctx context.Context, msg cmtpubsub.Message) {
 }
 
 func (h *eventHandler) handleBlockEvent(ctx context.Context, ev cmttypes.EventDataNewBlockHeader) {
-	h.deliverEvents(ctx, ev.Header.Height, nil, ev.ResultBeginBlock.GetEvents())
-	h.deliverEvents(ctx, ev.Header.Height, nil, ev.ResultEndBlock.GetEvents())
+	h.deliverEvents(ctx, ev.Header.Height, ev.ResultBeginBlock.GetEvents())
+	h.deliverEvents(ctx, ev.Header.Height, ev.ResultEndBlock.GetEvents())
 }
 
 func (h *eventHandler) handleTxEvent(ctx context.Context, ev cmttypes.EventDataTx) {
-	h.deliverEvents(ctx, ev.Height, ev.Tx, ev.Result.Events)
+	h.deliverEvents(ctx, ev.Height, ev.Result.Events)
 }
 
-func (h *eventHandler) deliverEvents(ctx context.Context, height int64, tx cmttypes.Tx, events []cmtabcitypes.Event) {
+func (h *eventHandler) deliverEvents(ctx context.Context, height int64, events []cmtabcitypes.Event) {
 	// Skip all events not matching the initial query. This is required as we get all
 	// events not only those matching the query so we need to do a separate pass.
 	for _, ev := range h.filter.Apply(events) {
 		ev := annotatedEvent{
 			height: height,
-			tx:     tx,
 			ev:     ev,
 		}
 		select {

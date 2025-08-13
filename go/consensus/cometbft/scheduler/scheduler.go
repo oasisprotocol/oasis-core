@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -124,7 +123,7 @@ func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 }
 
 // DeliverEvent implements api.ServiceClient.
-func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(ctx context.Context, height int64, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
 			var e api.ElectedEvent

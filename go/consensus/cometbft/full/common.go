@@ -699,7 +699,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		return nil, err
 	}
 
-	txResults, err := TransactionResultsFromCometBFT(height, txs, blockResults.TxsResults)
+	txResults, err := TransactionResultsFromCometBFT(height, blockResults.TxsResults)
 	if err != nil {
 		return nil, err
 	}
@@ -914,10 +914,10 @@ func newCommonNode(ctx context.Context, cfg CommonConfig) *commonNode {
 
 // TransactionResultsFromCometBFT converts CometBFT transactions and responses
 // into transaction results.
-func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmtabcitypes.ResponseDeliverTx) ([]*results.Result, error) {
-	txResults := make([]*results.Result, 0, len(txs))
+func TransactionResultsFromCometBFT(height int64, responses []*cmtabcitypes.ResponseDeliverTx) ([]*results.Result, error) {
+	txResults := make([]*results.Result, 0, len(responses))
 
-	for idx, rs := range responses {
+	for _, rs := range responses {
 		// Transaction result.
 		result := &results.Result{
 			Error: results.Error{
@@ -929,7 +929,7 @@ func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmt
 		}
 
 		// Transaction staking events.
-		stakingEvents, err := tmstaking.EventsFromCometBFT(txs[idx], height, rs.Events)
+		stakingEvents, err := tmstaking.EventsFromCometBFT(height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -938,7 +938,7 @@ func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmt
 		}
 
 		// Transaction registry events.
-		registryEvents, _, err := tmregistry.EventsFromCometBFT(txs[idx], height, rs.Events)
+		registryEvents, _, err := tmregistry.EventsFromCometBFT(height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -947,7 +947,7 @@ func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmt
 		}
 
 		// Transaction roothash events.
-		roothashEvents, err := tmroothash.EventsFromCometBFT(txs[idx], height, rs.Events)
+		roothashEvents, err := tmroothash.EventsFromCometBFT(height, rs.Events)
 		if err != nil {
 			return nil, err
 		}
@@ -956,7 +956,7 @@ func TransactionResultsFromCometBFT(height int64, txs [][]byte, responses []*cmt
 		}
 
 		// Transaction governance events.
-		governanceEvents, err := tmgovernance.EventsFromCometBFT(txs[idx], height, rs.Events)
+		governanceEvents, err := tmgovernance.EventsFromCometBFT(height, rs.Events)
 		if err != nil {
 			return nil, err
 		}

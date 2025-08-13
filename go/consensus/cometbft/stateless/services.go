@@ -242,11 +242,6 @@ func (s *Services) handleBlock(ctx context.Context, blk *consensusAPI.Block) err
 
 	s.logger.Debug("new block", "height", blk.Height)
 
-	txs, err := s.consensus.GetTransactions(ctx, blk.Height)
-	if err != nil {
-		return fmt.Errorf("failed to get transactions: %w", err)
-	}
-
 	results, err := s.consensus.GetBlockResults(ctx, blk.Height)
 	if err != nil {
 		return fmt.Errorf("failed to get block results: %w", err)
@@ -262,7 +257,7 @@ func (s *Services) handleBlock(ctx context.Context, blk *consensusAPI.Block) err
 			return fmt.Errorf("failed to deliver block height: %w", err)
 		}
 
-		if err := s.deliverEvents(ctx, svc, filter, blk.Height, txs, meta); err != nil {
+		if err := s.deliverEvents(ctx, svc, filter, blk.Height, meta); err != nil {
 			return fmt.Errorf("failed to deliver block events: %w", err)
 		}
 	}
@@ -274,29 +269,25 @@ func (s *Services) deliverHeight(ctx context.Context, svc api.ServiceClient, hei
 	return svc.DeliverHeight(ctx, height)
 }
 
-func (s *Services) deliverEvents(ctx context.Context, svc api.ServiceClient, filter *full.EventFilter, height int64, txs [][]byte, meta *api.BlockResultsMeta) error {
+func (s *Services) deliverEvents(ctx context.Context, svc api.ServiceClient, filter *full.EventFilter, height int64, meta *api.BlockResultsMeta) error {
 	s.updateEventFilter(svc, filter)
 
-	if len(txs) != len(meta.TxsResults) {
-		return fmt.Errorf("mismatched number of transaction results")
-	}
-
-	if err := s.filterAndDeliverEvents(ctx, svc, filter, height, nil, meta.BeginBlockEvents); err != nil {
+	if err := s.filterAndDeliverEvents(ctx, svc, filter, height, meta.BeginBlockEvents); err != nil {
 		return err
 	}
 
-	for i, tx := range txs {
-		if err := s.filterAndDeliverEvents(ctx, svc, filter, height, tx, meta.TxsResults[i].Events); err != nil {
+	for _, result := range meta.TxsResults {
+		if err := s.filterAndDeliverEvents(ctx, svc, filter, height, result.Events); err != nil {
 			return err
 		}
 	}
 
-	return s.filterAndDeliverEvents(ctx, svc, filter, height, nil, meta.EndBlockEvents)
+	return s.filterAndDeliverEvents(ctx, svc, filter, height, meta.EndBlockEvents)
 }
 
-func (s *Services) filterAndDeliverEvents(ctx context.Context, svc api.ServiceClient, filter *full.EventFilter, height int64, tx cmttypes.Tx, events []cmtabcitypes.Event) error {
+func (s *Services) filterAndDeliverEvents(ctx context.Context, svc api.ServiceClient, filter *full.EventFilter, height int64, events []cmtabcitypes.Event) error {
 	for _, ev := range filter.Apply(events) {
-		if err := svc.DeliverEvent(ctx, height, tx, &ev); err != nil {
+		if err := svc.DeliverEvent(ctx, height, &ev); err != nil {
 			return err
 		}
 	}

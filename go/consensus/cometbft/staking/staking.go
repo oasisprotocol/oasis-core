@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -256,30 +255,17 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		return nil, err
 	}
 
-	// Get transactions at given height.
-	txns, err := sc.consensus.GetTransactions(ctx, results.Height)
-	if err != nil {
-		sc.logger.Error("failed to get cometbft transactions",
-			"err", err,
-			"height", results.Height,
-		)
-		return nil, err
-	}
-
 	var events []*api.Event
 	// Decode events from block results (at the beginning of the block).
-	blockEvs, err := EventsFromCometBFT(nil, results.Height, results.Meta.BeginBlockEvents)
+	blockEvs, err := EventsFromCometBFT(results.Height, results.Meta.BeginBlockEvents)
 	if err != nil {
 		return nil, err
 	}
 	events = append(events, blockEvs...)
 
 	// Decode events from transaction results.
-	for txIdx, txResult := range results.Meta.TxsResults {
-		// The order of transactions in txns and results.TxsResults is
-		// supposed to match, so the same index in both slices refers to the
-		// same transaction.
-		evs, txErr := EventsFromCometBFT(txns[txIdx], results.Height, txResult.Events)
+	for _, txResult := range results.Meta.TxsResults {
+		evs, txErr := EventsFromCometBFT(results.Height, txResult.Events)
 		if txErr != nil {
 			return nil, txErr
 		}
@@ -287,7 +273,7 @@ func (sc *ServiceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Decode events from block results (at the end of the block).
-	blockEvs, err = EventsFromCometBFT(nil, results.Height, results.Meta.EndBlockEvents)
+	blockEvs, err = EventsFromCometBFT(results.Height, results.Meta.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -319,8 +305,8 @@ func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 }
 
 // DeliverEvent implements api.ServiceClient.
-func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
-	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
+func (sc *ServiceClient) DeliverEvent(_ context.Context, height int64, ev *cmtabcitypes.Event) error {
+	events, err := EventsFromCometBFT(height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("staking: failed to process cometbft events: %w", err)
 	}

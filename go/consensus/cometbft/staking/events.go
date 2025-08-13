@@ -5,28 +5,14 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // EventsFromCometBFT extracts staking events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
+func EventsFromCometBFT(height int64, tmEvents []cmtabcitypes.Event) ([]*api.Event, error) {
 	var events []*api.Event
 	var errs error
 	for _, tmEv := range tmEvents {
@@ -48,7 +34,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
+				evt := &api.Event{Height: height, Escrow: &api.EscrowEvent{Take: &e}}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.TransferEvent{}):
 				// Transfer event.
@@ -58,7 +44,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Transfer: &e}
+				evt := &api.Event{Height: height, Transfer: &e}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
 				// Reclaim escrow event.
@@ -68,7 +54,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
+				evt := &api.Event{Height: height, Escrow: &api.EscrowEvent{Reclaim: &e}}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.AddEscrowEvent{}):
 				// Add escrow event.
@@ -78,7 +64,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
+				evt := &api.Event{Height: height, Escrow: &api.EscrowEvent{Add: &e}}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
 				// Debonding start escrow event.
@@ -88,7 +74,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{DebondingStart: &e}}
+				evt := &api.Event{Height: height, Escrow: &api.EscrowEvent{DebondingStart: &e}}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.BurnEvent{}):
 				// Burn event.
@@ -98,7 +84,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
+				evt := &api.Event{Height: height, Burn: &e}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
 				// Allowance change event.
@@ -108,7 +94,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, AllowanceChange: &e}
+				evt := &api.Event{Height: height, AllowanceChange: &e}
 				events = append(events, evt)
 			default:
 				errs = errors.Join(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))

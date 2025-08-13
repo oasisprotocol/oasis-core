@@ -221,7 +221,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
-							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							receivedEvt = evt
 							break
@@ -309,7 +308,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					for _, evt := range evts {
 						if evt.NodeEvent != nil {
 							if evt.NodeEvent.Node.ID.Equal(tn.Node.ID) && evt.NodeEvent.IsRegistration {
-								require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 								require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 								receivedEvt = evt
 								break
@@ -490,7 +488,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, evt := range evts {
 					if evt.NodeEvent != nil {
 						if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && !evt.NodeEvent.IsRegistration {
-							require.True(evt.TxHash.IsEmpty(), "Node expiration event hash should be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							receivedEvt = evt
 							break
@@ -575,7 +572,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			for _, evt := range evts {
 				if evt.EntityEvent != nil {
 					if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
-						require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 						require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 						receivedEvt = evt
 						break
@@ -622,7 +618,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
-							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							receivedEvt = evt
 							break
@@ -1589,7 +1584,6 @@ func (rt *TestRuntime) MustRegister(t *testing.T, registry api.Backend, consensu
 				for _, evt := range evts {
 					if evt.RuntimeStartedEvent != nil {
 						if evt.RuntimeStartedEvent.Runtime.ID.Equal(&v.ID) {
-							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							receivedEvt = evt
 							break
@@ -1682,7 +1676,6 @@ func BulkPopulate(t *testing.T, registry api.Backend, consensus consensusAPI.Ser
 		for _, evt := range evts {
 			if evt.EntityEvent != nil {
 				if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
-					require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 					require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 					gotIt = true
 					break
@@ -1717,7 +1710,6 @@ func BulkPopulate(t *testing.T, registry api.Backend, consensus consensusAPI.Ser
 			for _, evt := range evts {
 				if evt.NodeEvent != nil {
 					if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && evt.NodeEvent.IsRegistration {
-						require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 						require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 						gotIt = true
 						break

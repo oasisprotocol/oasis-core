@@ -10,7 +10,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -500,8 +499,7 @@ func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 
 // Event signifies a governance event, returned via GetEvents.
 type Event struct {
-	Height int64     `json:"height,omitempty"`
-	TxHash hash.Hash `json:"tx_hash,omitempty"`
+	Height int64 `json:"height,omitempty"`
 
 	ProposalSubmitted *ProposalSubmittedEvent `json:"proposal_submitted,omitempty"`
 	ProposalExecuted  *ProposalExecutedEvent  `json:"proposal_executed,omitempty"`

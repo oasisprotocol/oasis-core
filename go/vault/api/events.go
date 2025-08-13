@@ -1,14 +1,12 @@
 package api
 
 import (
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // Event signifies a vault event.
 type Event struct {
-	Height int64     `json:"height,omitempty"`
-	TxHash hash.Hash `json:"tx_hash,omitempty"`
+	Height int64 `json:"height,omitempty"`
 
 	ActionSubmitted  *ActionSubmittedEvent  `json:"action_submitted,omitempty"`
 	ActionCanceled   *ActionCanceledEvent   `json:"action_canceled,omitempty"`

@@ -5,28 +5,14 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 )
 
 // EventsFromCometBFT extracts governance events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
+func EventsFromCometBFT(height int64, tmEvents []cmtabcitypes.Event) ([]*api.Event, error) {
 	var events []*api.Event
 	var errs error
 	for _, tmEv := range tmEvents {
@@ -48,7 +34,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalSubmitted: &e}
+				evt := &api.Event{Height: height, ProposalSubmitted: &e}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
 				//  Proposal executed event.
@@ -58,7 +44,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalExecuted: &e}
+				evt := &api.Event{Height: height, ProposalExecuted: &e}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
 				// Proposal finalized event.
@@ -68,7 +54,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalFinalized: &e}
+				evt := &api.Event{Height: height, ProposalFinalized: &e}
 				events = append(events, evt)
 			case eventsAPI.IsAttributeKind(key, &api.VoteEvent{}):
 				// Vote event.
@@ -78,7 +64,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Vote: &e}
+				evt := &api.Event{Height: height, Vote: &e}
 				events = append(events, evt)
 			default:
 				errs = errors.Join(errs, fmt.Errorf("governance: unknown event type: key: %s, val: %s", key, val))

@@ -5,28 +5,14 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 // EventsFromCometBFT extracts vault events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*vault.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
+func EventsFromCometBFT(height int64, tmEvents []cmtabcitypes.Event) ([]*vault.Event, error) {
 	var events []*vault.Event
 	var errs error
 	for _, tmEv := range tmEvents {
@@ -39,7 +25,7 @@ func EventsFromCometBFT(
 			key := pair.GetKey()
 			val := pair.GetValue()
 
-			evt := &vault.Event{Height: height, TxHash: txHash}
+			evt := &vault.Event{Height: height}
 			switch {
 			case eventsAPI.IsAttributeKind(key, &vault.ActionSubmittedEvent{}):
 				// Action submitted event.

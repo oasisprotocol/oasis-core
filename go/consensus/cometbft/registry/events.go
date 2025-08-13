@@ -5,28 +5,14 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // EventsFromCometBFT extracts registry events from CometBFT events.
-func EventsFromCometBFT(
-	tx cmttypes.Tx,
-	height int64,
-	tmEvents []cmtabcitypes.Event,
-) ([]*api.Event, []*NodeListEpochInternalEvent, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
+func EventsFromCometBFT(height int64, tmEvents []cmtabcitypes.Event) ([]*api.Event, []*NodeListEpochInternalEvent, error) {
 	var events []*api.Event
 	var nodeListEvents []*NodeListEpochInternalEvent
 	var errs error
@@ -52,7 +38,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeStartedEvent: &e})
+				events = append(events, &api.Event{Height: height, RuntimeStartedEvent: &e})
 			case eventsAPI.IsAttributeKind(key, &api.RuntimeSuspendedEvent{}):
 				// Runtime suspended event.
 				var e api.RuntimeSuspendedEvent
@@ -61,7 +47,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeSuspendedEvent: &e})
+				events = append(events, &api.Event{Height: height, RuntimeSuspendedEvent: &e})
 			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
 				// Entity event.
 				var e api.EntityEvent
@@ -70,7 +56,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: &e})
+				events = append(events, &api.Event{Height: height, EntityEvent: &e})
 			case eventsAPI.IsAttributeKind(key, &api.NodeEvent{}):
 				// Node event.
 				var e api.NodeEvent
@@ -79,7 +65,7 @@ func EventsFromCometBFT(
 					continue
 				}
 
-				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: &e})
+				events = append(events, &api.Event{Height: height, NodeEvent: &e})
 			case eventsAPI.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
 				// Node unfrozen event.
 				var e api.NodeUnfrozenEvent
@@ -87,7 +73,7 @@ func EventsFromCometBFT(
 					errs = errors.Join(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}
-				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeUnfrozenEvent: &e})
+				events = append(events, &api.Event{Height: height, NodeUnfrozenEvent: &e})
 			}
 		}
 	}

@@ -522,8 +522,7 @@ func (me *MessageEvent) IsSuccess() bool {
 
 // Event is a roothash event.
 type Event struct {
-	Height int64     `json:"height,omitempty"`
-	TxHash hash.Hash `json:"tx_hash,omitempty"`
+	Height int64 `json:"height,omitempty"`
 
 	RuntimeID common.Namespace `json:"runtime_id"`
 

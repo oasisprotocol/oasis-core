@@ -106,9 +106,6 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	}
 	expectedRegistryEvents := make(map[hash.Hash]int)
 	for _, event := range registryEvents {
-		if event.TxHash.IsEmpty() {
-			continue
-		}
 		h := hash.NewFromBytes(cbor.Marshal(event)[:])
 		expectedRegistryEvents[h] = expectedRegistryEvents[h] + 1
 	}
@@ -119,9 +116,6 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	}
 	expectedStakingEvents := make(map[hash.Hash]int)
 	for _, event := range stakingEvents {
-		if event.TxHash.IsEmpty() {
-			continue
-		}
 		h := hash.NewFromBytes(cbor.Marshal(event)[:])
 		expectedStakingEvents[h] = expectedStakingEvents[h] + 1
 	}
@@ -132,9 +126,6 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	}
 	expectedGovernanceEvents := make(map[hash.Hash]int)
 	for _, event := range governanceEvents {
-		if event.TxHash.IsEmpty() {
-			continue
-		}
 		h := hash.NewFromBytes(cbor.Marshal(event)[:])
 		expectedGovernanceEvents[h] = expectedGovernanceEvents[h] + 1
 	}

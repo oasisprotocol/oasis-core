@@ -11,7 +11,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -371,8 +370,7 @@ func (e *NodeListEpochEvent) DecodeValue(string) error {
 
 // Event is a registry event returned via GetEvents.
 type Event struct {
-	Height int64     `json:"height,omitempty"`
-	TxHash hash.Hash `json:"tx_hash,omitempty"`
+	Height int64 `json:"height,omitempty"`
 
 	RuntimeStartedEvent   *RuntimeStartedEvent   `json:"runtime_started,omitempty"`
 	RuntimeSuspendedEvent *RuntimeSuspendedEvent `json:"runtime_suspended,omitempty"`

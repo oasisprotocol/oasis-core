@@ -5,10 +5,8 @@ import (
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -16,18 +14,9 @@ import (
 
 // EventsFromCometBFT extracts roothash events from CometBFT events.
 func EventsFromCometBFT(
-	tx cmttypes.Tx,
 	height int64,
 	tmEvents []cmtabcitypes.Event,
 ) ([]*roothash.Event, error) {
-	var txHash hash.Hash
-	switch tx {
-	case nil:
-		txHash.Empty()
-	default:
-		txHash = hash.NewFromBytes(tx)
-	}
-
 	var events []*roothash.Event
 	var errs error
 EventLoop:
@@ -105,7 +94,6 @@ EventLoop:
 		if ev != nil {
 			ev.RuntimeID = *runtimeID
 			ev.Height = height
-			ev.TxHash = txHash
 			events = append(events, ev)
 		}
 	}

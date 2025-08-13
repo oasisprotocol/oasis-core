@@ -7,7 +7,6 @@ import (
 	"io"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -265,8 +264,7 @@ type EscrowEvent struct {
 
 // Event signifies a staking event, returned via GetEvents.
 type Event struct {
-	Height int64     `json:"height,omitempty"`
-	TxHash hash.Hash `json:"tx_hash,omitempty"`
+	Height int64 `json:"height,omitempty"`
 
 	Transfer        *TransferEvent        `json:"transfer,omitempty"`
 	Burn            *BurnEvent            `json:"burn,omitempty"`

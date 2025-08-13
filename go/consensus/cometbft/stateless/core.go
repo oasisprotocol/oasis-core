@@ -344,7 +344,7 @@ func (c *Core) GetTransactionsWithResults(ctx context.Context, height int64) (*c
 		return nil, err
 	}
 
-	txResults, err := full.TransactionResultsFromCometBFT(lb.Height, txs, meta.TxsResults)
+	txResults, err := full.TransactionResultsFromCometBFT(lb.Height, meta.TxsResults)
 	if err != nil {
 		return nil, err
 	}

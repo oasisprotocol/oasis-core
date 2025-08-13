@@ -361,7 +361,7 @@ type ServiceClient interface {
 	DeliverHeight(ctx context.Context, height int64) error
 
 	// DeliverEvent delivers an event emitted by the consensus service.
-	DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error
+	DeliverEvent(ctx context.Context, height int64, ev *types.Event) error
 }
 
 // BaseServiceClient is a default ServiceClient implementation that provides noop implementations of
@@ -374,7 +374,7 @@ func (bsc *BaseServiceClient) DeliverHeight(context.Context, int64) error {
 }
 
 // DeliverEvent implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverEvent(context.Context, int64, cmttypes.Tx, *types.Event) error {
+func (bsc *BaseServiceClient) DeliverEvent(context.Context, int64, *types.Event) error {
 	return nil
 }
 

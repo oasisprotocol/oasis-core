@@ -6,7 +6,6 @@ import (
 	"context"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
-	cmttypes "github.com/cometbft/cometbft/types"
 
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
@@ -73,7 +72,7 @@ func (sc *ServiceClient) ServiceDescriptor() *tmapi.ServiceDescriptor {
 }
 
 // DeliverEvent implements api.ServiceClient.
-func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *ServiceClient) DeliverEvent(_ context.Context, _ int64, ev *cmtabcitypes.Event) error {
 	if err := sc.secretsClient.DeliverEvent(ev); err != nil {
 		return err
 	}
