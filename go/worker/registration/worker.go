@@ -337,7 +337,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	defer entitySub.Close()
 
 	var (
-		epoch beacon.EpochTime = beacon.EpochInvalid
+		epoch = beacon.EpochInvalid
 
 		reregisterHeight int64 = math.MaxInt64
 

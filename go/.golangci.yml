@@ -1,62 +1,6 @@
-linters-settings:
-  goconst:
-    ignore-tests: true
-    ignore-strings: "unix:.*"
-  goimports:
-    # Put local imports after 3rd-party packages.
-    local-prefixes: github.com/oasisprotocol/oasis-core
-  gosec:
-    excludes:
-      # https://github.com/securego/gosec#available-rules
-      - G402
-      - G404
-      - G115 # Integer conversion with overflow check; many false positives
-  govet:
-    shadow: true
-    # Enable once suggested fixes are shown: https://github.com/golangci/golangci-lint/issues/2134
-    #enable:
-    #  - fieldalignment
-  depguard:
-    rules:
-      main:
-        files:
-          - $all
-        allow:
-          - $gostd
-          - github.com/a8m/envsubst
-          - github.com/btcsuite/btcutil
-          - github.com/cenkalti/backoff/v4
-          - github.com/cometbft/cometbft
-          - github.com/cosmos/gogoproto/proto
-          - github.com/dgraph-io/badger/v4
-          - github.com/eapache/channels
-          - github.com/fxamacker/cbor/v2
-          - github.com/gammazero/deque
-          - github.com/go-kit/log
-          - github.com/goki/go-difflib
-          - github.com/golang/protobu
-          - github.com/golang/snappy
-          - github.com/google/btree
-          - github.com/hashicorp/go-hclog
-          - github.com/hashicorp/go-plugin
-          - github.com/hpcloud/tail
-          - github.com/ipfs/go-log/v2
-          - github.com/libp2p/go-libp2p
-          - github.com/multiformats/go-multiaddr
-          - github.com/oasisprotocol
-          - github.com/olekukonko/tablewriter
-          - github.com/powerman/rpc-codec
-          - github.com/prometheus
-          - github.com/seccomp/libseccomp-golang
-          - github.com/spf13
-          - github.com/stretchr
-          - github.com/tidwall/btree
-          - github.com/tyler-smith/go-bip39
-          - github.com/mdlayher/vsock
-          - github.com/nxadm/tail
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - copyloopvar
@@ -64,32 +8,108 @@ linters:
     - errcheck
     - goconst
     - gocyclo
-    - gofumpt
-    - goimports
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - misspell
     - revive
     - rowserrcheck
     - staticcheck
-    - typecheck
     - unconvert
     - unused
-
-run:
-
-exclude-use-default: false
-
-issues:
-  include:
-    - EXC0014 # un-exclude revive `exported` which warns about incorrect comments on exported items.
-  exclude:
-    - context-as-argument # revive
-  exclude-dirs:
-    # golang-ci-lint requires that files compile for certain linters
-    # to run, and Go plugins do not compile unless `-buildmode=plugin`
-    # is set, which linters do not do.
-    - oasis-test-runner/scenario/pluginsigner/example_signer_plugin
+  settings:
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          files:
+            - $all
+          allow:
+            - $gostd
+            - github.com/a8m/envsubst
+            - github.com/btcsuite/btcutil
+            - github.com/cenkalti/backoff/v4
+            - github.com/cometbft/cometbft
+            - github.com/cosmos/gogoproto/proto
+            - github.com/dgraph-io/badger/v4
+            - github.com/eapache/channels
+            - github.com/fxamacker/cbor/v2
+            - github.com/gammazero/deque
+            - github.com/go-kit/log
+            - github.com/goki/go-difflib
+            - github.com/golang/protobu
+            - github.com/golang/snappy
+            - github.com/google/btree
+            - github.com/hashicorp/go-hclog
+            - github.com/hashicorp/go-plugin
+            - github.com/hpcloud/tail
+            - github.com/ipfs/go-log/v2
+            - github.com/libp2p/go-libp2p
+            - github.com/multiformats/go-multiaddr
+            - github.com/oasisprotocol
+            - github.com/olekukonko/tablewriter
+            - github.com/powerman/rpc-codec
+            - github.com/prometheus
+            - github.com/seccomp/libseccomp-golang
+            - github.com/spf13
+            - github.com/stretchr
+            - github.com/tidwall/btree
+            - github.com/tyler-smith/go-bip39
+            - github.com/mdlayher/vsock
+            - github.com/nxadm/tail
+    goconst:
+      ignore-string-values: unix:.*
+    gosec:
+      excludes:
+        - G402
+        - G404
+        - G115
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+        - -QF1001
+        - -QF1002
+        - -QF1003
+        - -QF1006
+        - -QF1008
+        - -ST1000
+        - -ST1003
+        - -ST1019
+        - -S1000
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - path: (.+)\.go$
+        text: context-as-argument
+      - linters:
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - oasis-test-runner/scenario/pluginsigner/example_signer_plugin
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/oasisprotocol/oasis-core
+  exclusions:
+    generated: lax
+    paths:
+      - oasis-test-runner/scenario/pluginsigner/example_signer_plugin
+      - third_party$
+      - builtin$
+      - examples$

@@ -245,7 +245,7 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 		return fmt.Errorf("logging: already initialized")
 	}
 
-	var logger log.Logger = backend.baseLogger
+	logger := backend.baseLogger
 	if w != nil {
 		w = log.NewSyncWriter(w)
 		switch format {
