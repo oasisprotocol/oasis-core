@@ -433,8 +433,15 @@ func (mux *abciMux) PrepareProposal(req types.RequestPrepareProposal) types.Resp
 		return types.ResponsePrepareProposal{}
 	}
 
-	// Inject system transactions at the end of the block.
-	systemTxs, systemTxResults, err := mux.prepareSystemTxs()
+	// Inject system transactions and their results at the end of the block.
+	//
+	// It is important to inject the results first, so that the results hash
+	// in the block metadata transaction includes all results, including results
+	// from system transactions.
+	systemTxResults := mux.prepareSystemTxResults()
+	mux.state.proposal.resultsDeliverTx = append(mux.state.proposal.resultsDeliverTx, systemTxResults...)
+
+	systemTxs, err := mux.prepareSystemTxs()
 	if err != nil {
 		mux.logger.Error("failed to prepare system transactions",
 			"height", req.Height,
@@ -444,7 +451,6 @@ func (mux *abciMux) PrepareProposal(req types.RequestPrepareProposal) types.Resp
 		return types.ResponsePrepareProposal{}
 	}
 	txs = append(txs, systemTxs...)
-	mux.state.proposal.resultsDeliverTx = append(mux.state.proposal.resultsDeliverTx, systemTxResults...)
 
 	// Record proposal inputs so we can compare in ProcessProposal.
 	p := mux.state.proposal
