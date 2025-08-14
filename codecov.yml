@@ -1,3 +1,13 @@
+# Codecov configuration.
+
+# For more information, see:
+# https://docs.codecov.com/docs/codecov-yaml.
+
+coverage:
+  # Customize coverage reporting to consider below 60% as red, between 60% and
+  # 80% as yellow and above 80% as green.
+  range: 60..80
+
 ignore:
   - "**/*.pb.go"
   - "go/consensus/tendermint/fuzz" # Fuzz tests.
