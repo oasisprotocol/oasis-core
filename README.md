@@ -17,11 +17,11 @@ work around that and make the second (non-header) row also bold. -->
 <!-- markdownlint-disable line-length -->
 [buildkite-badge]: https://badge.buildkite.com/16896a68bd8fba45d7b41fd608f26f87c726da10f7f24694a0.svg?branch=master
 [buildkite-link]: https://buildkite.com/oasisprotocol/oasis-core-ci
-[github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-lint/badge.svg
+[github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/actions/workflows/ci-lint.yml/badge.svg?branch=master
 [github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint+branch:master
-[github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
+[github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/actions/workflows/ci-reproducibility.yml/badge.svg?branch=master
 [github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
-[github-docker-badge]: https://github.com/oasisprotocol/oasis-core/workflows/docker/badge.svg
+[github-docker-badge]: https://github.com/oasisprotocol/oasis-core/actions/workflows/docker.yml/badge.svg?branch=master
 [github-docker-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:docker
 [github-release-badge]: https://github.com/oasisprotocol/oasis-core/workflows/release/badge.svg
 [github-release-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:release
