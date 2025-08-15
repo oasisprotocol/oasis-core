@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 )
 
 const (
@@ -162,6 +161,8 @@ type connection struct { // nolint: maligned
 	quitWg  sync.WaitGroup
 
 	logger *logging.Logger
+
+	metricsEnabled bool
 }
 
 func (c *connection) getState() state {
@@ -248,7 +249,7 @@ func (c *connection) Call(ctx context.Context, body *Body) (*Body, error) {
 func (c *connection) call(ctx context.Context, body *Body) (result *Body, err error) {
 	start := time.Now()
 	defer func() {
-		if !metrics.Enabled() {
+		if !c.metricsEnabled {
 			return
 		}
 
@@ -545,8 +546,10 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 }
 
 // NewConnection creates a new uninitialized RHP connection.
-func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler Handler) (Connection, error) {
-	initMetrics()
+func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler Handler, metricsEnabled bool) (Connection, error) {
+	if metricsEnabled {
+		initMetrics()
+	}
 
 	return &connection{
 		runtimeID:       runtimeID,
@@ -557,5 +560,6 @@ func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler H
 		outCh:           make(chan *Message),
 		closeCh:         make(chan struct{}),
 		logger:          logger,
+		metricsEnabled:  metricsEnabled,
 	}, nil
 }
