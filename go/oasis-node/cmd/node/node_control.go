@@ -312,10 +312,10 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Fetch storage worker status.
-		if storageNode := n.StorageWorker.GetRuntime(rt.ID()); storageNode != nil {
-			status.Storage, err = storageNode.GetStatus(ctx)
+		if stateSync := n.StorageWorker.GetRuntime(rt.ID()); stateSync != nil {
+			status.Storage, err = stateSync.GetStatus(ctx)
 			if err != nil {
-				logger.Error("failed to fetch storage worker status", "err", err)
+				logger.Error("failed to fetch state sync worker status", "err", err)
 			}
 		}
 
