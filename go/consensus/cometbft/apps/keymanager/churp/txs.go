@@ -559,8 +559,8 @@ func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
 }
 
 func verifyPolicy(ctx *tmapi.Context, policy *churp.SignedPolicySGX) error {
-	// Allow non-empty `MayQuery` field with the 24.2 release.
-	enabled, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	// Allow non-empty `MayQuery` field when this feature is available.
+	enabled, err := features.IsFeatureVersion(ctx, migrations.Version256)
 	if err != nil {
 		return err
 	}
