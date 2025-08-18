@@ -7,19 +7,11 @@ use std::{
 
 use anyhow::Result;
 use lazy_static::lazy_static;
-use sgx_isa::Keypolicy;
 use tiny_keccak::{Hasher, Sha3};
 
 use oasis_core_runtime::{
-    common::{
-        namespace::Namespace,
-        sgx::{
-            seal::{seal, unseal},
-            EnclaveIdentity,
-        },
-    },
-    consensus::{beacon::EpochTime, keymanager::SignedPolicySGX},
-    storage::KeyValue,
+    common::{namespace::Namespace, sgx::EnclaveIdentity},
+    consensus::keymanager::SignedPolicySGX,
 };
 
 use crate::api::KeyManagerError;
@@ -29,9 +21,6 @@ use super::verify_data_and_trusted_signers;
 lazy_static! {
     static ref POLICY: Policy = Policy::new();
 }
-
-const POLICY_STORAGE_KEY: &[u8] = b"keymanager_policy";
-const POLICY_SEAL_CONTEXT: &[u8] = b"oasis-core/keymanager: policy seal";
 
 /// Policy, which manages the key manager policy.
 pub struct Policy {
@@ -66,7 +55,7 @@ impl Policy {
     ///
     /// The policy is presumed trustworthy, so it's up to the caller to verify it against
     /// the consensus layer state. Empty polices are allowed only in unsafe builds.
-    pub fn init(&self, storage: &dyn KeyValue, policy: Option<SignedPolicySGX>) -> Result<Vec<u8>> {
+    pub fn init(&self, policy: Option<SignedPolicySGX>) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if policy.is_none() && Self::unsafe_skip() {
             return Ok(vec![]);
@@ -74,41 +63,32 @@ impl Policy {
 
         // Cache the new policy.
         let policy = policy.ok_or(KeyManagerError::PolicyRequired)?;
-        let raw_policy = cbor::to_vec(policy.clone());
-        let new_policy = CachedPolicy::parse(policy, &raw_policy)?;
+        let new_policy = CachedPolicy::parse(policy)?;
 
         // Lock as late as possible.
         let mut inner = self.inner.write().unwrap();
 
-        // If there is no existing policy, attempt to load from local storage.
-        let old_policy = inner
-            .policy
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| Self::load_policy(storage).unwrap_or_default());
-
         // Compare the new serial number with the old serial number, ensure
         // it is greater.
-        match old_policy.serial.cmp(&new_policy.serial) {
-            Ordering::Greater => Err(KeyManagerError::PolicyRollback.into()),
-            Ordering::Equal if old_policy.checksum != new_policy.checksum => {
-                // Policy should be identical.
-                Err(KeyManagerError::PolicyChanged.into())
+        if let Some(old_policy) = inner.policy.as_ref() {
+            match old_policy.serial.cmp(&new_policy.serial) {
+                Ordering::Greater => return Err(KeyManagerError::PolicyRollback.into()),
+                Ordering::Equal => {
+                    if old_policy.checksum != new_policy.checksum {
+                        // Policy should be identical.
+                        return Err(KeyManagerError::PolicyChanged.into());
+                    }
+                    return Ok(new_policy.checksum);
+                }
+                Ordering::Less => {}
             }
-            Ordering::Equal => {
-                inner.policy = Some(old_policy.clone());
-                Ok(old_policy.checksum)
-            }
-            Ordering::Less => {
-                // Persist then apply the new policy.
-                Self::save_raw_policy(storage, &raw_policy);
-                let new_checksum = new_policy.checksum.clone();
-                inner.policy = Some(new_policy);
+        };
 
-                // Return the checksum of the newly applied policy.
-                Ok(new_checksum)
-            }
-        }
+        // Return the checksum of the newly applied policy.
+        let new_checksum = new_policy.checksum.clone();
+        inner.policy = Some(new_policy);
+
+        Ok(new_checksum)
     }
 
     /// Check if the MRSIGNER/MRENCLAVE may query keys for the given
@@ -172,82 +152,51 @@ impl Policy {
             false => Some(src_set),
         }
     }
-
-    fn load_policy(storage: &dyn KeyValue) -> Option<CachedPolicy> {
-        let ciphertext = storage.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
-
-        unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext)
-            .unwrap()
-            .map(|plaintext| {
-                // Deserialization failures are fatal, because it is state corruption.
-                CachedPolicy::parse_raw(&plaintext).expect("failed to deserialize persisted policy")
-            })
-    }
-
-    fn save_raw_policy(storage: &dyn KeyValue, raw_policy: &[u8]) {
-        let ciphertext = seal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, raw_policy);
-
-        // Persist the encrypted policy.
-        storage
-            .insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
-            .expect("failed to persist policy");
-    }
 }
 
 #[derive(Clone, Default, Debug)]
 struct CachedPolicy {
     pub checksum: Vec<u8>,
     pub serial: u32,
-    pub runtime_id: Namespace,
     pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
     pub may_replicate: HashSet<EnclaveIdentity>,
     pub may_replicate_from: HashSet<EnclaveIdentity>,
-    pub master_secret_rotation_interval: EpochTime,
-    pub max_ephemeral_secret_age: EpochTime,
 }
 
 impl CachedPolicy {
-    fn parse_raw(raw: &[u8]) -> Result<Self> {
-        let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw)?;
-        Self::parse(untrusted_policy, raw)
-    }
-
-    fn parse(untrusted_policy: SignedPolicySGX, raw: &[u8]) -> Result<Self> {
+    fn parse(untrusted_policy: SignedPolicySGX) -> Result<Self> {
         let policy = verify_data_and_trusted_signers(&untrusted_policy)?;
-        let checksum = Self::checksum_policy(raw);
-
-        let mut cached_policy = Self::default();
-        cached_policy.serial = policy.serial;
-        cached_policy.runtime_id = policy.id;
-        cached_policy.checksum = checksum;
 
         // Convert the policy into a cached one.
-        let enclave_identity = match EnclaveIdentity::current() {
-            Some(enclave_identity) => enclave_identity,
-            None => return Ok(cached_policy),
+        let mut cached_policy = CachedPolicy {
+            serial: policy.serial,
+            ..Default::default()
         };
-        let enclave_policy = match policy.enclaves.get(&enclave_identity) {
-            Some(enclave_policy) => enclave_policy,
-            None => return Ok(cached_policy), // No policy for the current enclave.
-        };
-        for (rt_id, ids) in &enclave_policy.may_query {
-            let mut query_ids = HashSet::new();
-            for e_id in ids {
-                query_ids.insert(e_id.clone());
-            }
-            cached_policy.may_query.insert(*rt_id, query_ids);
-        }
-        for e_id in &enclave_policy.may_replicate {
-            cached_policy.may_replicate.insert(e_id.clone());
-        }
-        for (e_id, other_policy) in &policy.enclaves {
-            if other_policy.may_replicate.contains(&enclave_identity) {
-                cached_policy.may_replicate_from.insert(e_id.clone());
+
+        if let Some(enclave_identity) = EnclaveIdentity::current() {
+            if let Some(enclave_policy) = policy.enclaves.get(&enclave_identity) {
+                for (rt_id, ids) in &enclave_policy.may_query {
+                    let mut query_ids = HashSet::new();
+                    for e_id in ids {
+                        query_ids.insert(e_id.clone());
+                    }
+                    cached_policy.may_query.insert(*rt_id, query_ids);
+                }
+
+                for e_id in &enclave_policy.may_replicate {
+                    cached_policy.may_replicate.insert(e_id.clone());
+                }
+
+                for (e_id, other_policy) in &policy.enclaves {
+                    if other_policy.may_replicate.contains(&enclave_identity) {
+                        cached_policy.may_replicate_from.insert(e_id.clone());
+                    }
+                }
             }
         }
 
-        cached_policy.master_secret_rotation_interval = policy.master_secret_rotation_interval;
-        cached_policy.max_ephemeral_secret_age = policy.max_ephemeral_secret_age;
+        let raw = cbor::to_vec(untrusted_policy);
+        cached_policy.checksum = Self::checksum_policy(&raw);
 
         Ok(cached_policy)
     }
