@@ -4,7 +4,6 @@ package beacon
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -22,8 +21,7 @@ type Worker struct {
 	identity  *identity.Identity
 	consensus consensus.Service
 
-	allQuitCh chan struct{}
-	allQuitWg sync.WaitGroup
+	quitCh chan struct{}
 }
 
 func (w *Worker) Start() error {
@@ -39,11 +37,13 @@ func (w *Worker) Start() error {
 func (w *Worker) Stop() {
 	if w.vrf != nil {
 		w.vrf.Stop()
+		<-w.vrf.Quit()
 	}
+	close(w.quitCh)
 }
 
 func (w *Worker) Quit() <-chan struct{} {
-	return w.allQuitCh
+	return w.quitCh
 }
 
 func (w *Worker) Cleanup() {
@@ -62,48 +62,28 @@ func New(
 	consensus consensus.Service,
 	registrationWorker *registration.Worker,
 ) (*Worker, error) {
-	var (
-		err     error
-		created bool
-	)
 	w := &Worker{
 		ctx:       context.Background(),
 		identity:  identity,
 		consensus: consensus,
-		allQuitCh: make(chan struct{}),
+		quitCh:    make(chan struct{}),
 	}
 
-	initLogger := logging.GetLogger(workerName)
+	logger := logging.GetLogger(workerName)
 	if registrationWorker.WillNeverRegister() {
 		// Some node configurations never register, and that's ok.
-		initLogger.Info("registration worker disabled, also disabling beacon worker")
-		close(w.allQuitCh)
+		logger.Info("registration worker disabled, also disabling beacon worker")
 		return w, nil
 	}
 
-	if w.vrf, err = newVRF(w); err == nil {
-		w.allQuitWg.Add(1)
-		go func() {
-			defer w.allQuitWg.Done()
-			<-w.vrf.Quit()
-		}()
-
-		created = true
-	} else {
-		initLogger.Error("failed to initialize VRF worker",
+	vrf, err := newVRF(w)
+	if err != nil {
+		logger.Error("failed to initialize VRF worker",
 			"err", err,
 		)
+		return nil, err
 	}
-
-	if created {
-		go func() {
-			defer close(w.allQuitCh)
-			w.allQuitWg.Wait()
-		}()
-	} else {
-		close(w.allQuitCh)
-		return nil, fmt.Errorf("worker/beacon: failed to create any workers")
-	}
+	w.vrf = vrf
 
 	return w, nil
 }
