@@ -55,6 +55,8 @@ pub struct Status {
     pub nodes: Vec<PublicKey>,
     /// Key manager policy.
     pub policy: Option<SignedPolicySGX>,
+    /// Key manager policy scheduled to take effect in the next epoch.
+    pub next_policy: Option<SignedPolicySGX>,
     /// Runtime signing key of the key manager.
     pub rsk: Option<PublicKey>,
 }
@@ -226,6 +228,7 @@ mod test {
                 checksum: vec![],
                 nodes: vec![],
                 policy: None,
+                next_policy: None,
                 rsk: None,
             },
             Status {
@@ -261,6 +264,7 @@ mod test {
                         },
                     ],
                 }),
+                next_policy: None,
                 rsk: None,
             },
         ];
