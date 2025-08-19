@@ -486,6 +486,7 @@ func (w *Worker) syncCheckpoints(ctx context.Context, genesisRound uint64, wantO
 			}
 		}
 
+		// Suggestion: Limit the max time for restoring checkpoint.
 		status, err := w.handleCheckpoint(ctx, check, w.checkpointSyncCfg.ChunkFetcherCount)
 		switch status {
 		case checkpointStatusDone:

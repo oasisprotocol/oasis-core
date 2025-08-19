@@ -342,10 +342,7 @@ func (w *Worker) fetchDiff(ctx context.Context, round uint64, prevRoot, thisRoot
 		"new_root", thisRoot,
 	)
 
-	diffCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	wl, pf, err := w.getDiff(diffCtx, prevRoot, thisRoot)
+	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
@@ -355,6 +352,8 @@ func (w *Worker) fetchDiff(ctx context.Context, round uint64, prevRoot, thisRoot
 }
 
 // getDiff fetches writelog using diff sync p2p protocol client.
+//
+// The request relies on the default timeout of the underlying p2p protocol clients.
 //
 // In case of no peers or error, it fallbacks to the legacy storage sync protocol.
 func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
