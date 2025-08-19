@@ -117,7 +117,7 @@ impl Secrets {
 
         // Empty policies are allowed only in unsafe builds.
         let policy = Policy::global();
-        let policy_checksum = policy.init(status.policy)?;
+        let policy_checksum = policy.init(status.policy, status.next_policy)?;
 
         // Initialize or update the KDF.
         let generation = status.generation;

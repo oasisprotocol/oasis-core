@@ -43,6 +43,11 @@ func generateStatus( // nolint: gocyclo
 		Policy:        oldStatus.Policy,
 	}
 
+	// Transition to the scheduled policy.
+	if oldStatus.NextPolicy != nil {
+		status.Policy = oldStatus.NextPolicy
+	}
+
 	// Data needed to count the nodes that have replicated the proposal for the next master secret.
 	var (
 		nextGeneration uint64

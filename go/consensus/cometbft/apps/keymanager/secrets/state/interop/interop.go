@@ -109,6 +109,7 @@ func InitializeTestKeyManagerSecretsState(ctx context.Context, mkvs mkvs.Tree) e
 			Checksum:      nil,
 			Nodes:         nil,
 			Policy:        nil,
+			NextPolicy:    nil,
 			RSK:           nil,
 		},
 		{
@@ -120,8 +121,9 @@ func InitializeTestKeyManagerSecretsState(ctx context.Context, mkvs mkvs.Tree) e
 				signers[0].Public(),
 				signers[1].Public(),
 			},
-			Policy: &sigPolicy,
-			RSK:    nil,
+			Policy:     &sigPolicy,
+			NextPolicy: nil,
+			RSK:        nil,
 		},
 	} {
 		if err = state.SetStatus(ctx, status); err != nil {

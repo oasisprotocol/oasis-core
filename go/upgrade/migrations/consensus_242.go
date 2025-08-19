@@ -13,6 +13,8 @@ import (
 // This upgrade includes:
 //   - The `MayQuery“ field in the CHURP SGX policy, which defines which enclave identities
 //     are allowed to query runtime key shares.
+//   - An updated key manager policy update transaction that applies a new policy at the epoch
+//     boundary.
 const Consensus242 = "consensus242"
 
 // Version242 is the Oasis Core 24.2 version.
