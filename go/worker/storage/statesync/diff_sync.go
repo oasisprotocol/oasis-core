@@ -181,7 +181,7 @@ func (w *Worker) syncDiffs(
 				return fmt.Errorf("failed to fetch missing block headers: %w", err) // Suggestion: databases can fail, consider retrying.
 			}
 
-			w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 		case item := <-diffCh:
 			if item.err != nil {
 				w.logger.Error("error calling getdiff",
@@ -199,12 +199,12 @@ func (w *Worker) syncDiffs(
 			// Item was successfully processed, trigger more round fetches.
 			// This ensures that new rounds are processed as fast as possible
 			// when we're syncing and are far behind.
-			w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			heartbeat.reset()
 		case <-heartbeat.C:
 			if latestBlockRound != w.undefinedRound {
 				w.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
-				w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+				w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			}
 		case finalized := <-finalizedCh:
 			if finalized.err != nil {
@@ -274,7 +274,6 @@ func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedR
 
 func (w *Worker) triggerRoundFetches(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	fetchPool *workerpool.Pool,
 	diffCh chan<- *fetchedDiff,
 	syncingRounds map[uint64]*inFlight,
@@ -330,9 +329,7 @@ func (w *Worker) triggerRoundFetches(
 			rootType := prevRoots[i].Type
 			if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 				syncing.scheduleDiff(rootType)
-				wg.Add(1)
 				fetchPool.Submit(func() {
-					defer wg.Done()
 					w.fetchDiff(ctx, diffCh, this.Round, prevRoots[i], this.Roots[i])
 				})
 			}
