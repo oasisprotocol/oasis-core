@@ -93,6 +93,8 @@ func (w *Worker) syncDiffs(
 	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
 	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 	defer fetchPool.Stop()
+	fetchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	heartbeat := heartbeat{}
 	heartbeat.reset()
@@ -179,7 +181,7 @@ func (w *Worker) syncDiffs(
 				return fmt.Errorf("failed to fetch missing block headers: %w", err) // Suggestion: databases can fail, consider retrying.
 			}
 
-			w.triggerRoundFetches(ctx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 		case item := <-diffCh:
 			if item.err != nil {
 				w.logger.Error("error calling getdiff",
@@ -197,12 +199,12 @@ func (w *Worker) syncDiffs(
 			// Item was successfully processed, trigger more round fetches.
 			// This ensures that new rounds are processed as fast as possible
 			// when we're syncing and are far behind.
-			w.triggerRoundFetches(ctx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			heartbeat.reset()
 		case <-heartbeat.C:
 			if latestBlockRound != w.undefinedRound {
 				w.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
-				w.triggerRoundFetches(ctx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+				w.triggerRoundFetches(fetchCtx, &wg, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			}
 		case finalized := <-finalizedCh:
 			var err error
