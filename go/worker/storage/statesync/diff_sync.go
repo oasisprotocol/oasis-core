@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -18,6 +17,7 @@ import (
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -65,11 +65,6 @@ type fetchedDiff struct {
 
 func (d *fetchedDiff) GetRound() uint64 {
 	return d.round
-}
-
-type finalizedResult struct {
-	summary *blockSummary
-	err     error
 }
 
 // Fetcher fetches storage diffs from the peers.
@@ -125,92 +120,63 @@ func (ds *diffSyncer) getMetricLabels() prometheus.Labels {
 
 // syncDiffs is responsible for fetching, applying and finalizing storage diffs
 // as the new runtimes block headers arrive from the consensus service.
-//
-// In addition, it is also responsible for updating availability of the registration
-// service and notifying block history and checkpointer of the newly finalized rounds.
-//
-// Suggestion: Ideally syncDiffs is refactored into independent worker and made only
-// responsible for the syncing.
 func (ds *diffSyncer) sync(
 	ctx context.Context,
 	blkCh <-chan *block.Block,
 	lastFinalizedRound uint64,
 	fetcherThreads uint,
 ) error {
+	applyCh := make(chan *fetchedDiff, dbApi.MaxPendingVersions-1) // TODO: explain there could be any buffer size.
+	appliedCh := make(chan applyResult)
+	finalizeCh := make(chan *blockSummary, dbApi.MaxPendingVersions-1) // -1 since one may be already finalizing.
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return ds.fetch(ctx, blkCh, lastFinalizedRound, fetcherThreads, applyCh, appliedCh, finalizeCh)
+	})
+	g.Go(func() error {
+		return ds.apply(ctx, applyCh, appliedCh)
+	})
+	g.Go(func() error {
+		return ds.finalize(ctx, finalizeCh)
+	})
+	return g.Wait()
+}
+
+func (ds *diffSyncer) fetch( // TODO this is not just fetching.
+	ctx context.Context,
+	blkCh <-chan *block.Block,
+	lastFinalizedRound uint64,
+	fetcherThreads uint,
+	applyCh chan<- *fetchedDiff,
+	appliedCh <-chan applyResult,
+	finalizeCh chan<- *blockSummary,
+) error {
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
 	pendingApply := &minRoundQueue{}
-	pendingFinalize := &minRoundQueue{} // Suggestion: slice would suffice given that application must happen in order.
-
-	diffCh := make(chan *fetchedDiff)
-	finalizedCh := make(chan finalizedResult)
 
 	fetchPool := workerpool.New("diff_sync_fetcher/" + ds.runtimeID.String())
 	fetchPool.Resize(fetcherThreads)
 	defer fetchPool.Stop()
 	fetchCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	diffCh := make(chan *fetchedDiff)
 
 	heartbeat := heartbeat{}
 	heartbeat.reset()
 	defer heartbeat.Stop()
 
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
 	lastFullyAppliedRound := lastFinalizedRound
 	latestBlockRound := ds.undefinedRound
 	for {
-		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
 
-		// Apply fetched writelogs, but only if they are for the round after the last fully applied one
-		// and current number of pending roots to be finalized is smaller than max allowed.
-		applyNext := pendingApply.Len() > 0 &&
-			lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() &&
-			pendingFinalize.Len() < dbApi.MaxPendingVersions-1 // -1 since one may be already finalizing.
-		if applyNext {
-			lastDiff := heap.Pop(pendingApply).(*fetchedDiff)
-			err := ds.apply(ctx, lastDiff)
-
-			syncing := syncingRounds[lastDiff.round]
-			if err != nil {
-				syncing.retry(lastDiff.thisRoot.Type)
-				continue
+		if pendingApply.Len() > 0 && lastFullyAppliedRound+1 == (*pendingApply)[0].GetRound() {
+			next := heap.Pop(pendingApply).(*fetchedDiff)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case applyCh <- next:
 			}
-			syncing.outstanding.remove(lastDiff.thisRoot.Type)
-			if !syncing.outstanding.isEmpty() || !syncing.awaitingRetry.isEmpty() {
-				continue
-			}
-
-			// We have fully synced the given round.
-			ds.logger.Debug("finished syncing round", "round", lastDiff.round)
-			delete(syncingRounds, lastDiff.round)
-			summary := summaryCache[lastDiff.round]
-			delete(summaryCache, lastDiff.round-1)
-			lastFullyAppliedRound = lastDiff.round
-
-			// Suggestion: Rename to lastAppliedRoundMetric, as synced is synonim for finalized in this code.
-			storageWorkerLastSyncedRound.With(ds.getMetricLabels()).Set(float64(lastDiff.round))
-			// Suggestion: Ideally this would be recorded once the round is finalized (synced).
-			storageWorkerRoundSyncLatency.With(ds.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
-
-			// Trigger finalization for this round, that will happen concurently
-			// with respect to Apply operations for subsequent rounds.
-			heap.Push(pendingFinalize, summary)
-
-			continue
-		}
-
-		// Check if any new rounds were fully applied and need to be finalized.
-		// Only finalize if it's the round after the one that was finalized last.
-		// As a consequence at most one finalization can be happening at the time.
-		if len(*pendingFinalize) > 0 && lastFinalizedRound+1 == (*pendingFinalize)[0].GetRound() {
-			summary := heap.Pop(pendingFinalize).(*blockSummary)
-			wg.Add(1)
-			go func() { // Don't block fetching and applying remaining rounds.
-				defer wg.Done()
-				ds.finalize(ctx, summary, finalizedCh)
-			}()
 			continue
 		}
 
@@ -243,18 +209,40 @@ func (ds *diffSyncer) sync(
 			// when we're syncing and are far behind.
 			ds.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			heartbeat.reset()
+		case applied := <-appliedCh:
+			syncing := syncingRounds[applied.round]
+			if applied.err != nil {
+				syncing.retry(applied.thisRoot.Type)
+				continue
+			}
+			syncing.outstanding.remove(applied.thisRoot.Type)
+			if !syncing.outstanding.isEmpty() || !syncing.awaitingRetry.isEmpty() {
+				continue
+			}
+
+			// We have fully synced the given round.
+			ds.logger.Debug("finished syncing round", "round", applied.round)
+			delete(syncingRounds, applied.round)
+			summary := summaryCache[applied.round]
+			delete(summaryCache, applied.round-1)
+			lastFullyAppliedRound = applied.round
+
+			// Suggestion: Rename to lastAppliedRoundMetric, as synced is synonim for finalized in this code.
+			storageWorkerLastSyncedRound.With(ds.getMetricLabels()).Set(float64(applied.round))
+			// Suggestion: Ideally this would be recorded once the round is finalized (synced).
+			storageWorkerRoundSyncLatency.With(ds.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
+
+			select { // This will block if the current number of pending roots to be finalized is greater than max allowed.
+			case <-ctx.Done():
+				return ctx.Err()
+			case finalizeCh <- summary:
+			}
+
 		case <-heartbeat.C:
 			if latestBlockRound != ds.undefinedRound {
 				ds.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
 				ds.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			}
-		case finalized := <-finalizedCh:
-			if finalized.err != nil {
-				return fmt.Errorf("failed to finalize %+v: %w", finalized.summary, finalized.err)
-			}
-			lastFinalizedRound = finalized.summary.Round
-			ds.finalizedNotifier.Broadcast(finalized.summary)
-			storageWorkerLastFullRound.With(ds.getMetricLabels()).Set(float64(finalized.summary.Round))
 		}
 	}
 }
@@ -413,62 +401,88 @@ func (ds *diffSyncer) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff
 	result.writeLog = wl
 }
 
-func (ds *diffSyncer) apply(ctx context.Context, diff *fetchedDiff) error {
-	if !diff.fetched {
-		return nil
-	}
-
-	err := ds.localStorage.Apply(ctx, &api.ApplyRequest{
-		Namespace: diff.thisRoot.Namespace,
-		RootType:  diff.thisRoot.Type,
-		SrcRound:  diff.prevRoot.Version,
-		SrcRoot:   diff.prevRoot.Hash,
-		DstRound:  diff.thisRoot.Version,
-		DstRoot:   diff.thisRoot.Hash,
-		WriteLog:  diff.writeLog,
-	})
-	switch {
-	case err == nil:
-		diff.pf.RecordSuccess()
-	case errors.Is(err, api.ErrExpectedRootMismatch):
-		diff.pf.RecordBadPeer()
-	default:
-		ds.logger.Error("can't apply write log",
-			"err", err,
-			"old_root", diff.prevRoot,
-			"new_root", diff.thisRoot,
-		)
-		diff.pf.RecordSuccess()
-	}
-
-	return err
+type applyResult struct {
+	*fetchedDiff
+	err error
 }
 
-func (ds *diffSyncer) finalize(ctx context.Context, summary *blockSummary, finalizedCh chan<- finalizedResult) {
-	err := ds.localStorage.NodeDB().Finalize(summary.Roots)
-	switch err {
-	case nil:
-		ds.logger.Debug("storage round finalized",
-			"round", summary.Round,
-		)
-	case api.ErrAlreadyFinalized:
-		// This can happen if we are restoring after a roothash migration or if
-		// we crashed before updating the sync state.
-		ds.logger.Warn("storage round already finalized",
-			"round", summary.Round,
-		)
-		err = nil
-	default:
-		ds.logger.Error("failed to finalize", "err", err, "summary", summary)
-	}
+func (ds *diffSyncer) apply(ctx context.Context, applyCh <-chan *fetchedDiff, appliedCh chan<- applyResult) error {
+	for {
+		var diff *fetchedDiff
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case diff = <-applyCh:
+		}
 
-	result := finalizedResult{
-		summary: summary,
-		err:     err,
-	}
+		if !diff.fetched {
+			appliedCh <- applyResult{
+				fetchedDiff: diff,
+				err:         nil,
+			}
+			continue
+		}
 
-	select {
-	case finalizedCh <- result:
-	case <-ctx.Done():
+		err := ds.localStorage.Apply(ctx, &api.ApplyRequest{
+			Namespace: diff.thisRoot.Namespace,
+			RootType:  diff.thisRoot.Type,
+			SrcRound:  diff.prevRoot.Version,
+			SrcRoot:   diff.prevRoot.Hash,
+			DstRound:  diff.thisRoot.Version,
+			DstRoot:   diff.thisRoot.Hash,
+			WriteLog:  diff.writeLog,
+		})
+		switch {
+		case err == nil:
+			diff.pf.RecordSuccess()
+		case errors.Is(err, api.ErrExpectedRootMismatch):
+			diff.pf.RecordBadPeer()
+		default:
+			ds.logger.Error("can't apply write log",
+				"err", err,
+				"old_root", diff.prevRoot,
+				"new_root", diff.thisRoot,
+			)
+			diff.pf.RecordSuccess()
+		}
+
+		appliedCh <- applyResult{
+			fetchedDiff: diff,
+			err:         err,
+		}
+	}
+}
+
+func (ds *diffSyncer) finalize(ctx context.Context, finalizeCh <-chan *blockSummary) error {
+	for {
+		var summary *blockSummary
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case summary = <-finalizeCh:
+		}
+
+		err := ds.localStorage.NodeDB().Finalize(summary.Roots)
+		switch err {
+		case nil:
+			ds.logger.Debug("storage round finalized",
+				"round", summary.Round,
+			)
+		case api.ErrAlreadyFinalized:
+			// This can happen if we are restoring after a roothash migration or if
+			// we crashed before updating the sync state.
+			ds.logger.Warn("storage round already finalized",
+				"round", summary.Round,
+			)
+			err = nil
+		default:
+			ds.logger.Error("failed to finalize", "err", err, "summary", summary)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to finalize %+v: %w", summary, err)
+		}
+		ds.finalizedNotifier.Broadcast(summary)
+		storageWorkerLastFullRound.With(ds.getMetricLabels()).Set(float64(summary.Round))
 	}
 }
