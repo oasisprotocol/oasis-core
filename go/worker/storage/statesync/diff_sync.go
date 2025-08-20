@@ -8,14 +8,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
-	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/diffsync"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -70,6 +72,57 @@ type finalizedResult struct {
 	err     error
 }
 
+// Fetcher fetches storage diffs from the peers.
+type fetcher interface {
+	// fetchDiff fetches storage diff between two storage roots.
+	fetchDiff(ctx context.Context, prevRoot, thisRoot api.Root) (api.WriteLog, rpc.PeerFeedback, error)
+}
+
+// LightHistory is the history that contains runtime's block headers.
+type lightHistory interface {
+	// GetCommittedBlock returns the block header at a specific round.
+	GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error)
+}
+
+// diffSyncer is responsible for fetching, applying and finalizing storage diffs.
+type diffSyncer struct {
+	runtimeID         common.Namespace
+	localStorage      storageApi.LocalBackend
+	fetcher           fetcher
+	lightClient       lightHistory
+	finalizedNotifier *pubsub.Broker
+	logger            *logging.Logger
+	undefinedRound    uint64 // TODO: find a better solution
+}
+
+// newDiffSyncer creates a new diffSyncer.
+func newDiffSyncer(runtimeID common.Namespace, storage storageApi.LocalBackend, lightClient lightHistory, fetcher fetcher, undefinedRound uint64) diffSyncer {
+	return diffSyncer{
+		runtimeID:         runtimeID,
+		localStorage:      storage,
+		lightClient:       lightClient,
+		fetcher:           fetcher,
+		finalizedNotifier: pubsub.NewBroker(false),
+		logger:            logging.GetLogger("worker/storage/statesync/diffsync").With("runtime_id", runtimeID),
+		undefinedRound:    undefinedRound,
+	}
+}
+
+// WatchFinalizedSumarries watches summaries of block rounds that have been successfully finalized.
+func (ds *diffSyncer) watchFinalizedSummaries() (<-chan *blockSummary, pubsub.ClosableSubscription, error) {
+	ch := make(chan *blockSummary)
+	sub := ds.finalizedNotifier.Subscribe()
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
+func (ds *diffSyncer) getMetricLabels() prometheus.Labels {
+	return prometheus.Labels{
+		"runtime": ds.runtimeID.String(),
+	}
+}
+
 // syncDiffs is responsible for fetching, applying and finalizing storage diffs
 // as the new runtimes block headers arrive from the consensus service.
 //
@@ -78,9 +131,11 @@ type finalizedResult struct {
 //
 // Suggestion: Ideally syncDiffs is refactored into independent worker and made only
 // responsible for the syncing.
-func (w *Worker) syncDiffs(
+func (ds *diffSyncer) sync(
 	ctx context.Context,
+	blkCh <-chan *block.Block,
 	lastFinalizedRound uint64,
+	fetcherThreads uint,
 ) error {
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
@@ -90,8 +145,8 @@ func (w *Worker) syncDiffs(
 	diffCh := make(chan *fetchedDiff)
 	finalizedCh := make(chan finalizedResult)
 
-	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
-	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
+	fetchPool := workerpool.New("diff_sync_fetcher/" + ds.runtimeID.String())
+	fetchPool.Resize(fetcherThreads)
 	defer fetchPool.Stop()
 	fetchCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -104,8 +159,7 @@ func (w *Worker) syncDiffs(
 	defer wg.Wait()
 
 	lastFullyAppliedRound := lastFinalizedRound
-	// Don't register availability immediately, we want to know first how far behind consensus we are.
-	latestBlockRound := w.undefinedRound
+	latestBlockRound := ds.undefinedRound
 	for {
 		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
 
@@ -116,7 +170,7 @@ func (w *Worker) syncDiffs(
 			pendingFinalize.Len() < dbApi.MaxPendingVersions-1 // -1 since one may be already finalizing.
 		if applyNext {
 			lastDiff := heap.Pop(pendingApply).(*fetchedDiff)
-			err := w.apply(ctx, lastDiff)
+			err := ds.apply(ctx, lastDiff)
 
 			syncing := syncingRounds[lastDiff.round]
 			if err != nil {
@@ -129,16 +183,16 @@ func (w *Worker) syncDiffs(
 			}
 
 			// We have fully synced the given round.
-			w.logger.Debug("finished syncing round", "round", lastDiff.round)
+			ds.logger.Debug("finished syncing round", "round", lastDiff.round)
 			delete(syncingRounds, lastDiff.round)
 			summary := summaryCache[lastDiff.round]
 			delete(summaryCache, lastDiff.round-1)
 			lastFullyAppliedRound = lastDiff.round
 
 			// Suggestion: Rename to lastAppliedRoundMetric, as synced is synonim for finalized in this code.
-			storageWorkerLastSyncedRound.With(w.getMetricLabels()).Set(float64(lastDiff.round))
+			storageWorkerLastSyncedRound.With(ds.getMetricLabels()).Set(float64(lastDiff.round))
 			// Suggestion: Ideally this would be recorded once the round is finalized (synced).
-			storageWorkerRoundSyncLatency.With(w.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
+			storageWorkerRoundSyncLatency.With(ds.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
 
 			// Trigger finalization for this round, that will happen concurently
 			// with respect to Apply operations for subsequent rounds.
@@ -155,7 +209,7 @@ func (w *Worker) syncDiffs(
 			wg.Add(1)
 			go func() { // Don't block fetching and applying remaining rounds.
 				defer wg.Done()
-				w.finalize(ctx, summary, finalizedCh)
+				ds.finalize(ctx, summary, finalizedCh)
 			}()
 			continue
 		}
@@ -163,28 +217,16 @@ func (w *Worker) syncDiffs(
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case inBlk := <-w.blockCh.Out():
-			blk := inBlk.(*block.Block)
-			w.logger.Debug("incoming block",
-				"round", blk.Header.Round,
-				"last_fully_applied", lastFullyAppliedRound,
-				"last_finalized", lastFinalizedRound,
-			)
-
-			// Check if we're far enough to reasonably register as available.
+		case blk := <-blkCh:
 			latestBlockRound = blk.Header.Round
-			// Fixme: If block channel has many pending blocks (e.g. after checkpoint sync),
-			// nudgeAvailability may incorrectly set the node as available too early.
-			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
-
-			if err := w.fetchMissingBlockHeaders(ctx, lastFullyAppliedRound, blk, summaryCache); err != nil {
+			if err := ds.fetchMissingBlockHeaders(ctx, lastFullyAppliedRound, blk, summaryCache); err != nil {
 				return fmt.Errorf("failed to fetch missing block headers: %w", err) // Suggestion: databases can fail, consider retrying.
 			}
 
-			w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			ds.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 		case item := <-diffCh:
 			if item.err != nil {
-				w.logger.Error("error calling getdiff",
+				ds.logger.Error("error calling getdiff",
 					"err", item.err,
 					"round", item.round,
 					"old_root", item.prevRoot,
@@ -199,36 +241,26 @@ func (w *Worker) syncDiffs(
 			// Item was successfully processed, trigger more round fetches.
 			// This ensures that new rounds are processed as fast as possible
 			// when we're syncing and are far behind.
-			w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			ds.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			heartbeat.reset()
 		case <-heartbeat.C:
-			if latestBlockRound != w.undefinedRound {
-				w.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
-				w.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
+			if latestBlockRound != ds.undefinedRound {
+				ds.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
+				ds.triggerRoundFetches(fetchCtx, fetchPool, diffCh, syncingRounds, summaryCache, lastFullyAppliedRound+1, latestBlockRound)
 			}
 		case finalized := <-finalizedCh:
-			var err error
-			lastFinalizedRound, err = w.flushSyncedState(finalized.summary)
-			if err != nil { // Suggestion: DB operations can always fail, consider retrying.
-				return fmt.Errorf("failed to flush synced state: %w", err)
+			if finalized.err != nil {
+				return fmt.Errorf("failed to finalize %+v: %w", finalized.summary, finalized.err)
 			}
-			storageWorkerLastFullRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
-
-			// Check if we're far enough to reasonably register as available.
-			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
-
-			// Notify the checkpointer that there is a new finalized round.
-			if config.GlobalConfig.Storage.Checkpointer.Enabled {
-				w.checkpointer.NotifyNewVersion(finalized.summary.Round)
-			}
-		case <-ctx.Done():
-			return ctx.Err()
+			lastFinalizedRound = finalized.summary.Round
+			ds.finalizedNotifier.Broadcast(finalized.summary)
+			storageWorkerLastFullRound.With(ds.getMetricLabels()).Set(float64(finalized.summary.Round))
 		}
 	}
 }
 
-func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedRound uint64, blk *block.Block, summaryCache map[uint64]*blockSummary) error {
-	if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound { // Suggestion: Helper that is only done once.
+func (ds *diffSyncer) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedRound uint64, blk *block.Block, summaryCache map[uint64]*blockSummary) error {
+	if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == ds.undefinedRound { // Suggestion: Helper that is only done once.
 		dummy := blockSummary{
 			Namespace: blk.Header.Namespace,
 			Round:     lastFullyAppliedRound + 1,
@@ -252,14 +284,14 @@ func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedR
 	// since the undefined round may be unsigned -1 and in this case the loop
 	// would not do any iterations.
 	startSummaryRound := lastFullyAppliedRound
-	if startSummaryRound == w.undefinedRound {
+	if startSummaryRound == ds.undefinedRound {
 		startSummaryRound++
 	}
 	for i := startSummaryRound; i < blk.Header.Round; i++ {
 		if _, ok := summaryCache[i]; ok {
 			continue
 		}
-		oldBlock, err := w.commonNode.Runtime.History().GetCommittedBlock(ctx, i)
+		oldBlock, err := ds.lightClient.GetCommittedBlock(ctx, i)
 		if err != nil {
 			return fmt.Errorf("getting block for round %d (current round: %d): %w", i, blk.Header.Round, err)
 		}
@@ -271,7 +303,7 @@ func (w *Worker) fetchMissingBlockHeaders(ctx context.Context, lastFullyAppliedR
 	return nil
 }
 
-func (w *Worker) triggerRoundFetches(
+func (ds *diffSyncer) triggerRoundFetches(
 	ctx context.Context,
 	fetchPool *workerpool.Pool,
 	diffCh chan<- *fetchedDiff,
@@ -298,10 +330,10 @@ func (w *Worker) triggerRoundFetches(
 			syncingRounds[r] = syncing
 
 			if r == end {
-				storageWorkerLastPendingRound.With(w.getMetricLabels()).Set(float64(r))
+				storageWorkerLastPendingRound.With(ds.getMetricLabels()).Set(float64(r))
 			}
 		}
-		w.logger.Debug("preparing round sync",
+		ds.logger.Debug("preparing round sync",
 			"round", r,
 			"outstanding_mask", syncing.outstanding,
 			"awaiting_retry", syncing.awaitingRetry,
@@ -329,14 +361,14 @@ func (w *Worker) triggerRoundFetches(
 			if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 				syncing.scheduleDiff(rootType)
 				fetchPool.Submit(func() {
-					w.fetchDiff(ctx, diffCh, this.Round, prevRoots[i], this.Roots[i])
+					ds.fetchDiff(ctx, diffCh, this.Round, prevRoots[i], this.Roots[i])
 				})
 			}
 		}
 	}
 }
 
-func (w *Worker) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff, round uint64, prevRoot, thisRoot api.Root) {
+func (ds *diffSyncer) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff, round uint64, prevRoot, thisRoot api.Root) {
 	result := &fetchedDiff{
 		fetched:  false,
 		pf:       rpc.NewNopPeerFeedback(),
@@ -352,7 +384,7 @@ func (w *Worker) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff, rou
 	}()
 
 	// Check if the new root doesn't already exist.
-	if w.localStorage.NodeDB().HasRoot(thisRoot) {
+	if ds.localStorage.NodeDB().HasRoot(thisRoot) {
 		return
 	}
 
@@ -367,12 +399,12 @@ func (w *Worker) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff, rou
 	}
 
 	// New root does not yet exist in storage and we need to fetch it from a peer.
-	w.logger.Debug("calling GetDiff",
+	ds.logger.Debug("calling GetDiff",
 		"old_root", prevRoot,
 		"new_root", thisRoot,
 	)
 
-	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
+	wl, pf, err := ds.fetcher.fetchDiff(ctx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
@@ -381,30 +413,12 @@ func (w *Worker) fetchDiff(ctx context.Context, fetchCh chan<- *fetchedDiff, rou
 	result.writeLog = wl
 }
 
-// getDiff fetches writelog using diff sync p2p protocol client.
-//
-// The request relies on the default timeout of the underlying p2p protocol clients.
-//
-// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
-func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot api.Root) (api.WriteLog, rpc.PeerFeedback, error) {
-	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-	if err == nil { // if NO error
-		return rsp1.WriteLog, pf, nil
-	}
-
-	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-	if err != nil {
-		return nil, nil, err
-	}
-	return rsp2.WriteLog, pf, nil
-}
-
-func (w *Worker) apply(ctx context.Context, diff *fetchedDiff) error {
+func (ds *diffSyncer) apply(ctx context.Context, diff *fetchedDiff) error {
 	if !diff.fetched {
 		return nil
 	}
 
-	err := w.localStorage.Apply(ctx, &api.ApplyRequest{
+	err := ds.localStorage.Apply(ctx, &api.ApplyRequest{
 		Namespace: diff.thisRoot.Namespace,
 		RootType:  diff.thisRoot.Type,
 		SrcRound:  diff.prevRoot.Version,
@@ -419,7 +433,7 @@ func (w *Worker) apply(ctx context.Context, diff *fetchedDiff) error {
 	case errors.Is(err, api.ErrExpectedRootMismatch):
 		diff.pf.RecordBadPeer()
 	default:
-		w.logger.Error("can't apply write log",
+		ds.logger.Error("can't apply write log",
 			"err", err,
 			"old_root", diff.prevRoot,
 			"new_root", diff.thisRoot,
@@ -430,22 +444,22 @@ func (w *Worker) apply(ctx context.Context, diff *fetchedDiff) error {
 	return err
 }
 
-func (w *Worker) finalize(ctx context.Context, summary *blockSummary, finalizedCh chan<- finalizedResult) {
-	err := w.localStorage.NodeDB().Finalize(summary.Roots)
+func (ds *diffSyncer) finalize(ctx context.Context, summary *blockSummary, finalizedCh chan<- finalizedResult) {
+	err := ds.localStorage.NodeDB().Finalize(summary.Roots)
 	switch err {
 	case nil:
-		w.logger.Debug("storage round finalized",
+		ds.logger.Debug("storage round finalized",
 			"round", summary.Round,
 		)
 	case api.ErrAlreadyFinalized:
 		// This can happen if we are restoring after a roothash migration or if
 		// we crashed before updating the sync state.
-		w.logger.Warn("storage round already finalized",
+		ds.logger.Warn("storage round already finalized",
 			"round", summary.Round,
 		)
 		err = nil
 	default:
-		w.logger.Error("failed to finalize", "err", err, "summary", summary)
+		ds.logger.Error("failed to finalize", "err", err, "summary", summary)
 	}
 
 	result := finalizedResult{

@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -509,7 +510,77 @@ func (w *Worker) Run(ctx context.Context) error { // nolint: gocyclo
 	w.status = api.StatusSyncingRounds
 	w.statusLock.Unlock()
 
-	return w.syncDiffs(ctx, cachedLastRound)
+	return w.sync(ctx, cachedLastRound, config.GlobalConfig.Storage.FetcherCount)
+}
+
+func (w *Worker) sync(ctx context.Context, lastFinalizedRound uint64, fetcherCount uint) error {
+	blkCh := make(chan *block.Block)
+
+	diffSyncer := newDiffSyncer(w.commonNode.Runtime.ID(), w.localStorage, w.commonNode.Runtime.History(), w, w.undefinedRound)
+	syncerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	syncerDone := make(chan error)
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case syncerDone <- diffSyncer.sync(syncerCtx, blkCh, lastFinalizedRound, fetcherCount):
+		}
+	}()
+
+	finalizedCh, sub, err := diffSyncer.watchFinalizedSummaries()
+	if err != nil {
+		return fmt.Errorf("failed to subcribe to diff syncer finalizations: %w", err)
+	}
+	defer sub.Close()
+
+	// Don't register availability immediately, we want to know first how far behind consensus we are.
+	latestBlockRound := w.undefinedRound
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-syncerDone:
+			if err != nil {
+				return fmt.Errorf("Syncer stopped with error: %w", err)
+			}
+			return nil
+		case inBlk := <-w.blockCh.Out():
+			blk := inBlk.(*block.Block)
+			w.logger.Debug("incoming block",
+				"round", blk.Header.Round,
+				"last_finalized", lastFinalizedRound,
+			)
+			latestBlockRound = blk.Header.Round
+			// Fixme: If block channel has many pending blocks (e.g. after checkpoint sync),
+			// nudgeAvailability may incorrectly set the node as available too early.
+			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
+			select { // TODO annoying that you duplicate this part.
+			case <-ctx.Done():
+				return ctx.Err()
+			case err := <-syncerDone:
+				if err != nil {
+					return fmt.Errorf("Syncer stopped with error: %w", err)
+				}
+				return nil
+			case blkCh <- blk:
+			}
+		case finalized := <-finalizedCh:
+			var err error
+			lastFinalizedRound, err = w.flushSyncedState(finalized)
+			if err != nil { // Suggestion: DB operations can always fail, consider retrying.
+				return fmt.Errorf("failed to flush synced state: %w", err)
+			}
+
+			// Check if we're far enough to reasonably register as available.
+			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
+
+			// Notify the checkpointer that there is a new finalized round.
+			if config.GlobalConfig.Storage.Checkpointer.Enabled {
+				w.checkpointer.NotifyNewVersion(finalized.Round)
+			}
+		}
+	}
 }
 
 func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
@@ -665,4 +736,22 @@ func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
 		}
 		w.roleAvailable = false
 	}
+}
+
+// fetchDiff fetches writelog using diff sync p2p protocol client.
+//
+// The request relies on the default timeout of the underlying p2p protocol clients.
+//
+// In case of no peers or error, it fallbacks to the legacy storage sync protocol.
+func (w *Worker) fetchDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err == nil { // if NO error
+		return rsp1.WriteLog, pf, nil
+	}
+
+	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+	if err != nil {
+		return nil, nil, err
+	}
+	return rsp2.WriteLog, pf, nil
 }
