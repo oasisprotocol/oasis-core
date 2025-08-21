@@ -1,4 +1,4 @@
-package committee
+package statesync
 
 import (
 	"sync"
@@ -49,9 +49,9 @@ var (
 	prometheusOnce sync.Once
 )
 
-func (n *Node) getMetricLabels() prometheus.Labels {
+func (w *Worker) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.commonNode.Runtime.ID().String(),
+		"runtime": w.commonNode.Runtime.ID().String(),
 	}
 }
 

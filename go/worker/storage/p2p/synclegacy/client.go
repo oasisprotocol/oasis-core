@@ -24,6 +24,8 @@ const (
 type Client interface {
 	// GetDiff requests a write log of entries that must be applied to get from the first given root
 	// to the second one.
+	//
+	// The request times out in [MaxGetDiffResponseTime].
 	GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error)
 
 	// GetCheckpoints returns a list of checkpoint metadata for all known checkpoints.
