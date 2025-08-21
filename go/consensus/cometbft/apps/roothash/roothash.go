@@ -132,7 +132,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, state *roothashStat
 			return fmt.Errorf("failed to fetch runtime state: %w", err)
 		}
 
-		// Expire past evidence of runtime node misbehaviour.
+		// Expire past evidence of runtime node misbehavior.
 		if rtState.LastBlock != nil {
 			if round := rtState.LastBlock.Header.Round; round > params.MaxEvidenceAge {
 				ctx.Logger().Debug("removing expired runtime evidence",
@@ -162,7 +162,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, state *roothashStat
 		}
 
 		// If there are no committees for this runtime, suspend the runtime as this
-		// means that there is noone to pay the maintenance fees.
+		// means that there is no one to pay the maintenance fees.
 		//
 		// Also suspend the runtime in case the registering entity no longer has enough stake to
 		// cover the entity and runtime deposits (this check is skipped if the runtime would be
