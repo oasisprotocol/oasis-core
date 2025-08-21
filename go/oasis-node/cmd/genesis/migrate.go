@@ -412,8 +412,8 @@ func computeStakeClaims(
 
 	// Runtime stake claims.
 	for _, rt := range runtimes {
-		addr := rt.StakingAddress()
-		if addr == nil {
+		addr, ok := rt.StakingAddress()
+		if !ok {
 			continue
 		}
 

@@ -23,8 +23,8 @@ func AddStakeClaims(statuses []*Status, runtimes []*registry.Runtime, escrows ma
 			continue
 		}
 
-		addr := rt.StakingAddress()
-		if addr == nil {
+		addr, ok := rt.StakingAddress()
+		if !ok {
 			continue
 		}
 		escrow, ok := escrows[*addr]

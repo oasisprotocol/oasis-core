@@ -137,8 +137,8 @@ func suspendRuntimes(ctx *api.Context) error {
 			continue
 		}
 
-		acctAddr := rt.StakingAddress()
-		if acctAddr == nil {
+		acctAddr, ok := rt.StakingAddress()
+		if !ok {
 			// This should never happen.
 			ctx.Logger().Error("unknown runtime governance model",
 				"rt_id", rt.ID,

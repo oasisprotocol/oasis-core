@@ -169,8 +169,8 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, state *roothashStat
 		// suspended anyway due to nobody being there to pay maintenance fees).
 		sufficientStake := true
 		if committee != nil && !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
-			acctAddr := rt.StakingAddress()
-			if acctAddr == nil {
+			acctAddr, ok := rt.StakingAddress()
+			if !ok {
 				// This should never happen.
 				ctx.Logger().Error("unknown runtime governance model",
 					"rt_id", rt.ID,

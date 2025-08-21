@@ -627,9 +627,8 @@ func (r *Runtime) IsCompute() bool {
 }
 
 // StakingAddress returns the correct staking address for the runtime based
-// on its governance model or nil if there is no staking address under the
-// given governance model.
-func (r *Runtime) StakingAddress() *staking.Address {
+// on its governance model, if it exists.
+func (r *Runtime) StakingAddress() (*staking.Address, bool) {
 	var acctAddr staking.Address
 	switch r.GovernanceModel {
 	case GovernanceEntity:
@@ -637,9 +636,9 @@ func (r *Runtime) StakingAddress() *staking.Address {
 	case GovernanceRuntime:
 		acctAddr = staking.NewRuntimeAddress(r.ID)
 	default:
-		return nil
+		return nil, false
 	}
-	return &acctAddr
+	return &acctAddr, true
 }
 
 // VersionInfo is the per-runtime version information.
