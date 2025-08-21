@@ -223,6 +223,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(
 				ctx,
+				epoch,
 				params,
 				beaconState,
 				beaconParameters,
@@ -427,6 +428,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // Operates on consensus connection.
 func (app *Application) electAllCommittees(
 	ctx *api.Context,
+	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
@@ -441,6 +443,7 @@ func (app *Application) electAllCommittees(
 	for _, runtime := range runtimes {
 		if err := app.electCommittee(
 			ctx,
+			epoch,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,

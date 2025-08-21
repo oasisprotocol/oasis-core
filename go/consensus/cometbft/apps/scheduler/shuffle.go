@@ -148,6 +148,7 @@ func shuffleValidatorsByEntropy(
 
 func (app *Application) electCommittee( //nolint: gocyclo
 	ctx *api.Context,
+	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
@@ -171,15 +172,14 @@ func (app *Application) electCommittee( //nolint: gocyclo
 		scheduler.RoleBackupWorker,
 	}
 
-	// Figure out the when (epoch) and how (beacon backend).
-	epoch, _, err := beaconState.GetEpoch(ctx)
-	if err != nil {
-		return fmt.Errorf("cometbft/scheduler: failed to query current epoch: %w", err)
-	}
+	// Figure out how (beacon backend).
 	useVRF := beaconParameters.Backend == beacon.BackendVRF
 
 	// If a VRF-based election is to be done, query the VRF state.
-	var prevState *beacon.PrevVRFState
+	var (
+		prevState *beacon.PrevVRFState
+		err       error
+	)
 	if useVRF {
 		if prevState, err = getPrevVRFState(ctx, beaconState); err != nil {
 			return err
