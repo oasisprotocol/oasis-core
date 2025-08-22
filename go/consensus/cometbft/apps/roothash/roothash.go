@@ -23,7 +23,8 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // Application is a roothash application.
@@ -86,154 +87,163 @@ func (app *Application) OnCleanup() {
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if rescheduling has taken place.
-	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
 	// Check if there was an epoch transition.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 
-	state := roothashState.NewMutableState(ctx.State())
-
 	switch {
 	case epochChanged, rescheduled:
-		return app.onCommitteeChanged(ctx, state, epoch)
+		return app.onCommitteeChanged(ctx, epoch)
 	}
 
 	return nil
 }
 
-func (app *Application) onCommitteeChanged(ctx *api.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
-	schedState := schedulerState.NewMutableState(ctx.State())
-	regState := registryState.NewMutableState(ctx.State())
-	runtimes, _ := regState.Runtimes(ctx)
+func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochTime) error {
+	roothash := roothashState.NewImmutableState(ctx.State())
+	registry := registryState.NewImmutableState(ctx.State())
 
-	params, err := state.ConsensusParameters(ctx)
+	params, err := roothash.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
-	var stakeAcc *stakingState.StakeAccumulatorCache
-	if !params.DebugBypassStake {
-		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
-		}
-		defer stakeAcc.Discard()
+	stake, err := stakingState.NewStakeAccumulatorCache(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create stake accumulator cache: %w", err)
 	}
+	defer stake.Discard()
 
+	runtimes, _ := registry.Runtimes(ctx)
 	for _, rt := range runtimes {
-		if !rt.IsCompute() {
-			ctx.Logger().Debug("skipping non-compute runtime",
-				"runtime", rt.ID,
-			)
-			continue
-		}
-
-		rtState, err := state.RuntimeState(ctx, rt.ID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch runtime state: %w", err)
-		}
-
-		// Expire past evidence of runtime node misbehavior.
-		if rtState.LastBlock != nil {
-			if round := rtState.LastBlock.Header.Round; round > params.MaxEvidenceAge {
-				ctx.Logger().Debug("removing expired runtime evidence",
-					"runtime", rt.ID,
-					"round", round,
-					"max_evidence_age", params.MaxEvidenceAge,
-				)
-				if err = state.RemoveExpiredEvidence(ctx, rt.ID, round-params.MaxEvidenceAge); err != nil {
-					return fmt.Errorf("failed to remove expired runtime evidence: %s %w", rt.ID, err)
-				}
-			}
-		}
-
-		// Prepare new runtime committee based on what the scheduler did.
-		committee, err := schedState.Committee(ctx, scheduler.KindComputeExecutor, rt.ID)
-		if err != nil {
-			ctx.Logger().Error("failed to get executor committee from scheduler",
-				"err", err,
-				"runtime", rt.ID,
-			)
+		if err := app.onRuntimeCommitteeChanged(ctx, rt, epoch, params, stake); err != nil {
 			return err
 		}
-		if committee == nil {
-			ctx.Logger().Warn("no executor committee",
-				"runtime", rt.ID,
+	}
+
+	return nil
+}
+
+func (app *Application) onRuntimeCommitteeChanged(
+	ctx *api.Context,
+	rt *registry.Runtime,
+	epoch beacon.EpochTime,
+	params *roothash.ConsensusParameters,
+	stake *stakingState.StakeAccumulatorCache,
+) error {
+	logger := ctx.Logger().With("runtime", rt.ID)
+
+	if !rt.IsCompute() {
+		logger.Debug("skipping non-compute runtime")
+		return nil
+	}
+
+	registry := registryState.NewMutableState(ctx.State())
+	roothash := roothashState.NewMutableState(ctx.State())
+	scheduler := schedulerState.NewImmutableState(ctx.State())
+
+	rtState, err := roothash.RuntimeState(ctx, rt.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch runtime state: %w", err)
+	}
+
+	// Expire past evidence of runtime node misbehavior.
+	if rtState.LastBlock != nil {
+		if round := rtState.LastBlock.Header.Round; round > params.MaxEvidenceAge {
+			logger.Debug("removing expired runtime evidence",
+				"round", round,
+				"max_evidence_age", params.MaxEvidenceAge,
 			)
-		}
-
-		// If there are no committees for this runtime, suspend the runtime as this
-		// means that there is no one to pay the maintenance fees.
-		//
-		// Also suspend the runtime in case the registering entity no longer has enough stake to
-		// cover the entity and runtime deposits (this check is skipped if the runtime would be
-		// suspended anyway due to nobody being there to pay maintenance fees).
-		sufficientStake := true
-		if committee != nil && !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
-			acctAddr, ok := rt.StakingAddress()
-			if !ok {
-				// This should never happen.
-				ctx.Logger().Error("unknown runtime governance model",
-					"rt_id", rt.ID,
-					"gov_model", rt.GovernanceModel,
-				)
-				return fmt.Errorf("unknown runtime governance model on runtime %s: %s", rt.ID, rt.GovernanceModel)
-			}
-
-			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
-				ctx.Logger().Debug("insufficient stake for runtime operation",
-					"err", err,
-					"entity", rt.EntityID,
-					"account", *acctAddr,
-				)
-				sufficientStake = false
+			if err = roothash.RemoveExpiredEvidence(ctx, rt.ID, round-params.MaxEvidenceAge); err != nil {
+				return fmt.Errorf("failed to remove expired runtime evidence: %s %w", rt.ID, err)
 			}
 		}
-		suspend := committee == nil || !sufficientStake && !params.DebugDoNotSuspendRuntimes
+	}
 
-		switch suspend {
-		case true:
-			ctx.Logger().Debug("suspending runtime, maintenance fees not paid or owner debonded",
-				"runtime_id", rt.ID,
-				"epoch", epoch,
+	// Prepare new runtime committee based on what the scheduler did.
+	committee, err := scheduler.Committee(ctx, schedulerAPI.KindComputeExecutor, rt.ID)
+	if err != nil {
+		logger.Error("failed to get executor committee from scheduler", "err", err)
+		return err
+	}
+
+	// Suspend the runtime if needed.
+	var suspend bool
+	switch {
+	case committee == nil:
+		logger.Warn("no executor committee")
+		// If there are no committees for this runtime, suspend the runtime
+		// as this means that there is no one to pay the maintenance fees.
+		suspend = true
+	case params.DebugDoNotSuspendRuntimes, params.DebugBypassStake:
+		// If the debug flag is set, do not suspend the runtime.
+	default:
+		// Also suspend the runtime in case the registering entity no longer
+		// has enough stake to cover the entity and runtime deposits.
+		addr, ok := rt.StakingAddress()
+		if !ok {
+			// This should never happen.
+			logger.Error("unknown runtime governance model",
+				"gov_model", rt.GovernanceModel,
 			)
+			return fmt.Errorf("unknown runtime governance model on runtime %s: %s", rt.ID, rt.GovernanceModel)
+		}
 
-			if err = regState.SuspendRuntime(ctx, rt.ID); err != nil {
-				return err
-			}
-
-			// Emit an empty block signalling that the runtime was suspended.
-			if err = app.finalizeBlock(ctx, rtState, block.Suspended, nil); err != nil {
-				return fmt.Errorf("failed to emit empty block: %w", err)
-			}
-
-			rtState.Suspended = true
-			rtState.Committee = nil
-		case false:
-			ctx.Logger().Debug("updating committee for runtime",
-				"runtime_id", rt.ID,
-				"epoch", epoch,
-				"committee", committee,
+		switch err := stake.CheckStakeClaims(*addr); err {
+		case nil:
+			// Sufficient stake is available.
+		case stakingAPI.ErrInsufficientStake:
+			logger.Debug("insufficient stake for runtime operation",
+				"entity", rt.EntityID,
+				"account", *addr,
 			)
+			suspend = true
+		default:
+			return fmt.Errorf("failed to check stake claims: %w", err)
+		}
+	}
 
-			// Emit an empty block signaling epoch transition. This is required so that
-			// the clients can be sure what state is final when an epoch transition occurs.
-			if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
-				return fmt.Errorf("failed to emit empty block: %w", err)
-			}
+	switch suspend {
+	case true:
+		logger.Debug("suspending runtime, maintenance fees not paid or owner debonded",
+			"epoch", epoch,
+		)
 
-			// Warning: Non-suspended runtimes can still have a nil committee.
-			rtState.Suspended = false
-			rtState.Committee = committee
+		if err = registry.SuspendRuntime(ctx, rt.ID); err != nil {
+			return err
 		}
 
-		// Clear liveness statistics.
-		rtState.LivenessStatistics = nil
-		// Update the runtime descriptor to the latest per-epoch value.
-		rtState.Runtime = rt
-
-		if err = state.SetRuntimeState(ctx, rtState); err != nil {
-			return fmt.Errorf("failed to set runtime state: %w", err)
+		// Emit an empty block signalling that the runtime was suspended.
+		if err = app.finalizeBlock(ctx, rtState, block.Suspended, nil); err != nil {
+			return fmt.Errorf("failed to emit empty block: %w", err)
 		}
+
+		rtState.Suspended = true
+		rtState.Committee = nil
+	case false:
+		logger.Debug("updating committee for runtime",
+			"epoch", epoch,
+			"committee", committee,
+		)
+
+		// Emit an empty block signaling epoch transition. This is required so that
+		// the clients can be sure what state is final when an epoch transition occurs.
+		if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
+			return fmt.Errorf("failed to emit empty block: %w", err)
+		}
+
+		// Warning: Non-suspended runtimes can still have a nil committee.
+		rtState.Suspended = false
+		rtState.Committee = committee
+	}
+
+	// Clear liveness statistics.
+	rtState.LivenessStatistics = nil
+	// Update the runtime descriptor to the latest per-epoch value.
+	rtState.Runtime = rt
+
+	if err = roothash.SetRuntimeState(ctx, rtState); err != nil {
+		return fmt.Errorf("failed to set runtime state: %w", err)
 	}
 
 	return nil
