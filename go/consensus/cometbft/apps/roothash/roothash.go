@@ -86,13 +86,15 @@ func (app *Application) OnCleanup() {
 
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
-	// Check if rescheduling has taken place.
-	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
 	// Check if there was an epoch transition.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
+	if epochChanged {
+		return app.onCommitteeChanged(ctx, epoch)
+	}
 
-	switch {
-	case epochChanged, rescheduled:
+	// Check if rescheduling has taken place.
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
+	if rescheduled {
 		return app.onCommitteeChanged(ctx, epoch)
 	}
 
