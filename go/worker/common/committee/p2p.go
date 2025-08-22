@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
 
 type txMsgHandler struct {
@@ -42,7 +41,7 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey,
 		// Ignore transactions on stateless clients.
 	default:
 		// Queue in local transaction pool if we are not running a stateless client.
-		result, err := h.n.TxPool.SubmitTx(ctx, tx, &txpool.TransactionMeta{Local: false})
+		result, err := h.n.TxPool.SubmitTx(ctx, tx, false, false)
 		switch {
 		case err != nil:
 			return p2pError.Permanent(err)

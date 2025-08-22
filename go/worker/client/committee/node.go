@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -145,7 +144,7 @@ func (n *Node) SubmitTx(ctx context.Context, tx []byte) (*SubmitTxSubscription, 
 	}
 
 	// Submit transaction to the pool and wait for it to get checked.
-	result, err := n.commonNode.TxPool.SubmitTx(ctx, tx, &txpool.TransactionMeta{Local: true})
+	result, err := n.commonNode.TxPool.SubmitTx(ctx, tx, true, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,7 +168,7 @@ func (n *Node) SubmitTx(ctx context.Context, tx []byte) (*SubmitTxSubscription, 
 }
 
 func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult, error) {
-	return n.commonNode.TxPool.SubmitTx(ctx, tx, &txpool.TransactionMeta{Local: true, Discard: true})
+	return n.commonNode.TxPool.SubmitTx(ctx, tx, true, true)
 }
 
 func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *component.ID) ([]byte, error) {
