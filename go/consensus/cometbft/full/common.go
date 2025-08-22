@@ -511,7 +511,7 @@ func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
 		// Do not let CometBFT determine the latest height (e.g., by passing nil) as that
 		// completely ignores ABCI processing so it can return a block for which local state does
 		// not yet exist. Use our mux notion of latest height instead.
-		tmHeight := n.mux.State().BlockHeight()
+		tmHeight := n.mux.State().LastHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
 			return 0, consensusAPI.ErrNoCommittedBlocks

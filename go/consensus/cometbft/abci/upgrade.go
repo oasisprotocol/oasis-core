@@ -24,7 +24,7 @@ func (mux *abciMux) maybeHaltForUpgrade() {
 		)
 		return
 	}
-	height := mux.state.BlockHeight()
+	height := mux.state.LastHeight()
 
 	// Check if we need to halt for an upgrade -- but do not actually run the upgrade.
 	switch err := upgrader.ConsensusUpgrade(nil, epoch, height); err {

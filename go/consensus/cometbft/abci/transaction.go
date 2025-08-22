@@ -156,7 +156,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 
 	// Certain modules, in particular the beacon require InitChain or BeginBlock
 	// to have completed before initialization is complete.
-	if mux.state.BlockHeight() == 0 {
+	if mux.state.LastHeight() == 0 {
 		return 0, consensus.ErrNoCommittedBlocks
 	}
 
