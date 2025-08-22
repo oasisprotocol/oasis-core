@@ -261,9 +261,9 @@ func (c *upgrade242Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	if err != nil {
 		return fmt.Errorf("can't get consensus parameters: %w", err)
 	}
-	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != migrations.Version242 {
+	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != migrations.Version256 {
 		return fmt.Errorf("consensus parameter FeatureVersion not updated correctly (expected: %s actual: %s)",
-			migrations.Version242,
+			migrations.Version256,
 			consParams.Parameters.FeatureVersion,
 		)
 	}
@@ -279,7 +279,7 @@ var (
 	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
 	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{}, false)
 	// NodeUpgradeConsensus242 is the node upgrade scenario for migrating to consensus 24.2.
-	NodeUpgradeConsensus242 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus242, &upgrade242Checker{}, false)
+	NodeUpgradeConsensus242 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus256, &upgrade242Checker{}, false)
 
 	malformedDescriptor = []byte(`{
 		"v": 1,

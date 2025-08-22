@@ -112,17 +112,6 @@ func (ps *proposalState) needsExecution() bool {
 	return ps.resultsBeginBlock == nil || ps.resultsDeliverTx == nil || ps.resultsEndBlock == nil
 }
 
-// setResults sets the proposal execution results.
-func (ps *proposalState) setResults(
-	resultsBeginBlock *types.ResponseBeginBlock,
-	resultsDeliverTx []*types.ResponseDeliverTx,
-	resultsEndBlock *types.ResponseEndBlock,
-) {
-	ps.resultsBeginBlock = resultsBeginBlock
-	ps.resultsDeliverTx = resultsDeliverTx
-	ps.resultsEndBlock = resultsEndBlock
-}
-
 type applicationState struct { // nolint: maligned
 	logger *logging.Logger
 

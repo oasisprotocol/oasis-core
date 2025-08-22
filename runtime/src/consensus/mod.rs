@@ -47,6 +47,9 @@ pub enum Event {
 pub struct BlockMetadata {
     /// State root after executing all logic in the block.
     pub state_root: Hash,
-    // EventsRoot is the provable events root.
+    // Root hash of all events emitted in the block.
     pub events_root: Vec<u8>,
+    // Hash of transaction results in the block.
+    #[cbor(optional)]
+    pub results_hash: Vec<u8>,
 }

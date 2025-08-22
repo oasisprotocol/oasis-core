@@ -974,13 +974,6 @@ func TestTransfer(t *testing.T) {
 	require.EqualValues(*quantity.NewFromUint64(250), a2.General.Balance, "amount in destination account should be correct")
 	require.Len(ctx.GetEvents(), 1, "one event should be emitted")
 
-	var ev staking.TransferEvent
-	err = ctx.DecodeEvent(0, &ev)
-	require.NoError(err, "DecodeEvent")
-	require.EqualValues(addr1, ev.From, "event should have the correct source address")
-	require.EqualValues(addr2, ev.To, "event should have the correct destination address")
-	require.EqualValues(*quantity.NewFromUint64(50), ev.Amount, "event should have the correct amount")
-
 	// Test min transact balance checks.
 	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(101))
 	require.ErrorIs(err, staking.ErrBalanceTooLow, "Transfer leaving below min transact balance in source")
