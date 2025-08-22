@@ -45,15 +45,6 @@ const (
 	republishLimitReinvokeTimeout = 1 * time.Second
 )
 
-// TransactionMeta contains the per-transaction metadata.
-type TransactionMeta struct {
-	// Local is a flag indicating that the transaction was obtained from a local client.
-	Local bool
-
-	// Discard is a flag indicating that the transaction should be discarded after checks.
-	Discard bool
-}
-
 // TransactionPool is an interface for managing a pool of transactions.
 type TransactionPool interface {
 	// Start starts the service.
@@ -67,10 +58,10 @@ type TransactionPool interface {
 
 	// SubmitTx adds the transaction into the transaction pool, first performing checks on it by
 	// invoking the runtime. This method waits for the checks to complete.
-	SubmitTx(ctx context.Context, tx []byte, meta *TransactionMeta) (*protocol.CheckTxResult, error)
+	SubmitTx(ctx context.Context, tx []byte, local bool, discard bool) (*protocol.CheckTxResult, error)
 
 	// SubmitTxNoWait adds the transaction into the transaction pool and returns immediately.
-	SubmitTxNoWait(tx []byte, meta *TransactionMeta) error
+	SubmitTxNoWait(tx []byte, local bool) error
 
 	// SubmitProposedBatch adds the given (possibly new) transaction batch into the current
 	// proposal queue.
@@ -202,11 +193,9 @@ func (t *txPool) Quit() <-chan struct{} {
 	return t.quitCh
 }
 
-func (t *txPool) SubmitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta) (*protocol.CheckTxResult, error) {
-	notifyCh := make(chan *protocol.CheckTxResult, 1)
-	err := t.submitTx(rawTx, meta, notifyCh)
+func (t *txPool) SubmitTx(ctx context.Context, tx []byte, local bool, discard bool) (*protocol.CheckTxResult, error) {
+	pct, err := t.submitTx(tx, local, discard, true)
 	if err != nil {
-		close(notifyCh)
 		return nil, err
 	}
 
@@ -216,52 +205,67 @@ func (t *txPool) SubmitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 		return nil, ctx.Err()
 	case <-t.stopCh:
 		return nil, fmt.Errorf("shutting down")
-	case result := <-notifyCh:
+	case result := <-pct.notifyCh:
 		return result, nil
 	}
 }
 
-func (t *txPool) SubmitTxNoWait(tx []byte, meta *TransactionMeta) error {
-	return t.submitTx(tx, meta, nil)
+func (t *txPool) SubmitTxNoWait(tx []byte, local bool) error {
+	_, err := t.submitTx(tx, local, false, false)
+	return err
 }
 
-func (t *txPool) submitTx(rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
-	tx := &TxQueueMeta{
-		raw:       rawTx,
-		hash:      hash.NewFromBytes(rawTx),
-		firstSeen: time.Now(),
-	}
+func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*PendingCheckTransaction, error) {
 	// Skip recently seen transactions.
-	if _, seen := t.seenCache.Peek(tx.Hash()); seen {
-		t.logger.Debug("ignoring already seen transaction", "tx_hash", tx.Hash())
-		return fmt.Errorf("duplicate transaction")
+	hash := hash.NewFromBytes(tx)
+	if _, seen := t.seenCache.Peek(hash); seen {
+		t.logger.Debug("ignoring already seen transaction", "hash", hash)
+		return nil, fmt.Errorf("duplicate transaction")
 	}
 
 	// Queue transaction for checks.
-	pct := &PendingCheckTransaction{
-		TxQueueMeta: tx,
-		notifyCh:    notifyCh,
-	}
-	if meta.Discard {
-		pct.dstQueue = nil
-	} else if meta.Local {
-		pct.dstQueue = t.localQueue
-	} else {
-		pct.dstQueue = t.mainQueue
+	var queue RecheckableTransactionStore
+	switch {
+	case discard:
+	case local:
+		queue = t.localQueue
+	default:
+		queue = t.mainQueue
 	}
 
-	return t.addToCheckQueue(pct)
+	var notifyCh chan *protocol.CheckTxResult
+	if wait {
+		notifyCh = make(chan *protocol.CheckTxResult, 1)
+	}
+
+	meta := &TxQueueMeta{
+		raw:       tx,
+		hash:      hash,
+		firstSeen: time.Now(),
+	}
+
+	pct := &PendingCheckTransaction{
+		TxQueueMeta: meta,
+		dstQueue:    queue,
+		notifyCh:    notifyCh,
+	}
+
+	if err := t.addToCheckQueue(pct); err != nil {
+		return nil, err
+	}
+
+	return pct, nil
 }
 
 func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 	t.logger.Debug("queuing transaction for check",
 		"tx", pct.Raw(),
-		"tx_hash", pct.Hash(),
+		"hash", pct.Hash(),
 		"recheck", pct.flags.isRecheck(),
 	)
 	if err := t.checkTxQueue.add(pct); err != nil {
 		t.logger.Warn("unable to queue transaction",
-			"tx_hash", pct.Hash(),
+			"hash", pct.Hash(),
 			"err", err,
 		)
 		return err
@@ -278,7 +282,7 @@ func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 	// Also ingest into the regular pool (may fail).
 	for _, rawTx := range batch {
-		_ = t.SubmitTxNoWait(rawTx, &TransactionMeta{Local: false})
+		_ = t.SubmitTxNoWait(rawTx, false)
 	}
 
 	t.proposedTxsLock.Lock()
@@ -523,11 +527,11 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 
 	notifySubmitter := func(i int) {
 		// Send back the result of running the checks.
-		if batch[i].notifyCh != nil {
-			batch[i].notifyCh <- &results[i]
-			close(batch[i].notifyCh)
-			batch[i].notifyCh = nil
+		pct := batch[i]
+		if pct.notifyCh == nil {
+			return
 		}
+		pct.notifyCh <- &results[i]
 	}
 
 	newTxs := make([]*PendingCheckTransaction, 0, len(results))
@@ -538,7 +542,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 			rejectedTransactions.With(t.getMetricLabels()).Inc()
 			t.logger.Debug("check tx failed",
 				"tx", batch[i].Raw(),
-				"tx_hash", batch[i].Hash(),
+				"hash", batch[i].Hash(),
 				"result", res,
 				"recheck", batch[i].flags.isRecheck(),
 			)
@@ -586,7 +590,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		if err = pct.dstQueue.OfferChecked(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
 			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
-				"tx_hash", pct.Hash(),
+				"hash", pct.Hash(),
 			)
 
 			// Change the result into an error and notify submitter.
@@ -860,7 +864,7 @@ func (t *txPool) recheck() {
 		if err != nil {
 			t.logger.Warn("failed to submit transaction for recheck",
 				"err", err,
-				"tx_hash", pct.Hash(),
+				"hash", pct.Hash(),
 			)
 		}
 	}
