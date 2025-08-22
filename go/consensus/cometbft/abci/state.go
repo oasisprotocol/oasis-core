@@ -183,7 +183,7 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		blockCtx *api.BlockContext
 		state    mkvs.OverlayTree
 	)
-	blockHeight := int64(s.stateRoot.Version)
+	lastHeight := int64(s.stateRoot.Version)
 	now := s.blockTime
 	switch mode {
 	case api.ContextInitChain:
@@ -193,7 +193,7 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		s.initState = mkvs.NewOverlay(mkvs.New(nil, nil, storage.RootTypeState, mkvs.WithoutWriteLog()))
 		state = s.initState
 		// Configure block height so that current height will be correctly computed.
-		blockHeight = int64(s.initialHeight) - 1
+		lastHeight = int64(s.initialHeight) - 1
 	case api.ContextCheckTx:
 		state = mkvs.NewOverlayWrapper(s.checkState)
 	case api.ContextDeliverTx, api.ContextBeginBlock, api.ContextEndBlock:
@@ -215,8 +215,8 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		api.NewNopGasAccountant(),
 		s,
 		state,
-		blockHeight,
 		blockCtx,
+		lastHeight,
 		int64(s.initialHeight),
 	)
 }

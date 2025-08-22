@@ -218,7 +218,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to get epoch",
 			"err", err,
@@ -233,7 +233,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		sigNode,
 		untrustedEntity,
 		ctx.Now(),
-		uint64(ctx.BlockHeight()),
+		uint64(ctx.LastHeight()),
 		ctx.IsInitChain(),
 		false,
 		epoch,
@@ -534,7 +534,7 @@ func (app *Application) unfreezeNode(
 	}
 
 	// Ensure if we can actually unfreeze.
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return err
 	}
@@ -574,7 +574,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, registry.ErrForbidden
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return nil, err
 	}

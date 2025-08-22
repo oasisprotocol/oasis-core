@@ -79,8 +79,8 @@ type Context struct {
 
 	appState      ApplicationState
 	state         mkvs.KeyValueTree
-	blockHeight   int64
 	blockCtx      *BlockContext
+	lastHeight    int64
 	initialHeight int64
 
 	logger *logging.Logger
@@ -101,8 +101,8 @@ func NewContext(
 	gasAccountant GasAccountant,
 	appState ApplicationState,
 	state mkvs.KeyValueTree,
-	blockHeight int64,
 	blockCtx *BlockContext,
+	lastHeight int64,
 	initialHeight int64,
 ) *Context {
 	c := &Context{
@@ -112,8 +112,8 @@ func NewContext(
 		priority:      0,
 		appState:      appState,
 		state:         state,
-		blockHeight:   blockHeight,
 		blockCtx:      blockCtx,
+		lastHeight:    lastHeight,
 		initialHeight: initialHeight,
 		logger:        logging.GetLogger("consensus/cometbft/abci").With("mode", mode),
 	}
@@ -229,7 +229,7 @@ func (c *Context) NewChild() *Context {
 		callerAddress:      c.callerAddress,
 		appState:           c.appState,
 		state:              c.state,
-		blockHeight:        c.blockHeight,
+		lastHeight:         c.lastHeight,
 		blockCtx:           c.blockCtx,
 		initialHeight:      c.initialHeight,
 		logger:             c.logger,
@@ -421,9 +421,14 @@ func (c *Context) InitialHeight() int64 {
 	return c.initialHeight
 }
 
-// BlockHeight returns the current block height.
-func (c *Context) BlockHeight() int64 {
-	return c.blockHeight
+// LastHeight returns the last committed block height.
+func (c *Context) LastHeight() int64 {
+	return c.lastHeight
+}
+
+// CurrentHeight returns the height of the block being built.
+func (c *Context) CurrentHeight() int64 {
+	return c.lastHeight + 1
 }
 
 // LastStateRootHash returns the last state root hash.

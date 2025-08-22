@@ -392,9 +392,9 @@ func (app *Application) onNewRuntime(ctx *api.Context, runtime *registry.Runtime
 		Runtime:          runtime,
 		Suspended:        true,
 		LastBlock:        genesisBlock,
-		LastBlockHeight:  ctx.BlockHeight() + 1, // Current height is ctx.BlockHeight() + 1
+		LastBlockHeight:  ctx.CurrentHeight(),
 		LastNormalRound:  genesisBlock.Header.Round,
-		LastNormalHeight: ctx.BlockHeight() + 1, // Current height is ctx.BlockHeight() + 1
+		LastNormalHeight: ctx.CurrentHeight(),
 		GenesisBlock:     genesisBlock,
 		NextTimeout:      roothash.TimeoutNever,
 	})

@@ -101,14 +101,14 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 
 		// Re-arm round timeout. Give backup workers enough time to submit commitments.
 		prevTimeout := rtState.NextTimeout
-		rtState.NextTimeout = ctx.BlockHeight() + 1 + (rtState.Runtime.Executor.RoundTimeout*backupWorkerTimeoutFactorNumerator)/backupWorkerTimeoutFactorDenominator // Current height is ctx.BlockHeight() + 1
+		rtState.NextTimeout = ctx.CurrentHeight() + (rtState.Runtime.Executor.RoundTimeout*backupWorkerTimeoutFactorNumerator)/backupWorkerTimeoutFactorDenominator
 
 		if err = rearmRoundTimeout(ctx, rtState.Runtime.ID, round, prevTimeout, rtState.NextTimeout); err != nil {
 			return err
 		}
 
 		// Update the timeout flag to correctly handle the case when the round timeout is set to 0.
-		timeout = rtState.NextTimeout == ctx.BlockHeight()+1 // Current height is ctx.BlockHeight() + 1
+		timeout = rtState.NextTimeout == ctx.CurrentHeight()
 
 		// Retry as we may be able to already perform discrepancy resolution.
 		sc, err = pool.ProcessCommitments(rtState.Committee, rtState.Runtime.Executor.AllowedStragglers, timeout)
@@ -293,18 +293,18 @@ func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.Runt
 
 	// Hook up the new block.
 	rtState.LastBlock = blk
-	rtState.LastBlockHeight = ctx.BlockHeight() + 1 // Current height is ctx.BlockHeight() + 1
+	rtState.LastBlockHeight = ctx.CurrentHeight()
 
 	switch hdrType {
 	case block.Normal:
 		rtState.LastNormalRound = blk.Header.Round
-		rtState.LastNormalHeight = ctx.BlockHeight() + 1 // Current height is ctx.BlockHeight() + 1
+		rtState.LastNormalHeight = ctx.CurrentHeight()
 	}
 
 	// Emit event.
 	ctx.Logger().Debug("new runtime block",
 		"runtime_id", rtState.Runtime.ID,
-		"height", ctx.BlockHeight()+1, // Current height is ctx.BlockHeight() + 1
+		"height", ctx.CurrentHeight(),
 		"round", blk.Header.Round,
 		"type", blk.Header.HeaderType,
 		"time", blk.Header.Timestamp,

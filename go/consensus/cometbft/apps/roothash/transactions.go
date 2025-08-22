@@ -144,7 +144,7 @@ func (app *Application) executorCommit(
 
 		// Re-arm round timeout. Give workers enough time to submit commitments.
 		prevTimeout := rtState.NextTimeout
-		rtState.NextTimeout = ctx.BlockHeight() + 1 + rtState.Runtime.Executor.RoundTimeout // Current height is ctx.BlockHeight() + 1
+		rtState.NextTimeout = ctx.CurrentHeight() + rtState.Runtime.Executor.RoundTimeout
 
 		if err := rearmRoundTimeout(ctx, cc.ID, round, prevTimeout, rtState.NextTimeout); err != nil {
 			return err

@@ -36,7 +36,7 @@ func (c *consensusMock) Populate(ctx context.Context, ndb db.NodeDB) (*node.Root
 	}
 
 	// Use a dummy ABCI InitChain context, as SetConsensusParameters methods require a specific ABCI context.
-	ctx = api.NewContext(ctx, api.ContextInitChain, time.Time{}, nil, nil, nil, 0, nil, 0)
+	ctx = api.NewContext(ctx, api.ContextInitChain, time.Time{}, nil, nil, nil, nil, 0, 0)
 
 	mkvsTree := mkvs.New(nil, ndb, node.RootTypeState, mkvs.WithoutWriteLog())
 	if err = stakingInterop.InitializeTestStakingState(ctx, mkvsTree); err != nil {

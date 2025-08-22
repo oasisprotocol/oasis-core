@@ -214,7 +214,7 @@ func (ms *mockApplicationState) NewContext(mode ContextMode) *Context {
 		gasAccountant: NewNopGasAccountant(),
 		state:         ms.tree,
 		appState:      ms,
-		blockHeight:   ms.cfg.BlockHeight,
+		lastHeight:    ms.cfg.BlockHeight,
 		blockCtx:      ms.blockCtx,
 		initialHeight: ms.InitialHeight(),
 		logger:        logging.GetLogger("consensus/cometbft/abci").With("mode", mode),
@@ -267,7 +267,7 @@ func NewImmutableStateAt(ctx context.Context, state ApplicationQueryState, versi
 		// - If this request was made from InitChain, no blocks and states have been submitted yet.
 		// - If this request was made from an ABCI app and is for the current (future) height.
 		//
-		if abciCtx.IsInitChain() || version == abciCtx.BlockHeight()+1 {
+		if abciCtx.IsInitChain() || version == abciCtx.CurrentHeight() {
 			return &ImmutableState{abciCtx.State()}, nil
 		}
 	}

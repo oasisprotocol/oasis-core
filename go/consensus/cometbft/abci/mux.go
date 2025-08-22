@@ -790,7 +790,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			panic(fmt.Errorf("mux: can't get current epoch in BeginBlock: %w", err))
 		}
 
-		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.BlockHeight())
+		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.LastHeight())
 		// This should never fail as all the checks were already performed in BeginBlock.
 		if err != nil {
 			panic(fmt.Errorf("mux: error while trying to perform consensus upgrade: %w", err))

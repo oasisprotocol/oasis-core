@@ -79,7 +79,7 @@ func (app *Application) submitProposal(
 		return nil, stakingAPI.ErrInsufficientBalance
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		ctx.Logger().Error("governance: failed to get epoch",
 			"err", err,

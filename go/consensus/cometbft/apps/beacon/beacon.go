@@ -144,7 +144,7 @@ func (app *Application) onNewBeacon(ctx *api.Context, value []byte) error {
 // Note that this is insecure and is vulnerable to adversarial manipulation.
 func insecureBlockEntropy(ctx *api.Context) []byte {
 	var blockHeight [8]byte
-	binary.LittleEndian.PutUint64(blockHeight[:], uint64(ctx.BlockHeight()))
+	binary.LittleEndian.PutUint64(blockHeight[:], uint64(ctx.LastHeight()))
 
 	var time [8]byte
 	binary.LittleEndian.PutUint64(time[:], uint64(ctx.Now().Unix()))

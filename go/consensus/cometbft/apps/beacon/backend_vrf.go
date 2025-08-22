@@ -65,7 +65,7 @@ func (impl *backendVRF) OnBeginBlock(
 		return fmt.Errorf("beacon: failed to get VRF state: %w", err)
 	}
 
-	height := ctx.BlockHeight() + 1 // Get the current height.
+	height := ctx.CurrentHeight()
 
 	// If vrfState == nil, must be the first epoch.  Generate the bootstrap
 	// VRF state with a low-quality alpha.
@@ -277,7 +277,7 @@ func (impl *backendVRF) doProveTx(
 	}
 
 	// Ensure that the minimum delay has passed since alpha was generated.
-	if ctx.BlockHeight()+1 <= vrfState.SubmitAfter {
+	if ctx.CurrentHeight() <= vrfState.SubmitAfter {
 		return fmt.Errorf("beacon: premature VRF proof")
 	}
 
@@ -424,7 +424,7 @@ func (impl *backendVRF) scheduleEpochTransitionBlock(
 	nextEpoch beacon.EpochTime,
 ) error {
 	// Schedule the epoch transition based on block height.
-	nextHeight := (ctx.BlockHeight() + 1) + params.Interval
+	nextHeight := ctx.CurrentHeight() + params.Interval
 	return impl.app.scheduleEpochTransitionBlock(ctx, state, nextEpoch, nextHeight)
 }
 

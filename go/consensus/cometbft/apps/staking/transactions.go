@@ -444,7 +444,7 @@ func (app *Application) reclaimEscrow(ctx *api.Context, state *stakingState.Muta
 		)
 		return nil, err
 	}
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +554,7 @@ func (app *Application) amendCommissionSchedule(
 		return nil
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return err
 	}

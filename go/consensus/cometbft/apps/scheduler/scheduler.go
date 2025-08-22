@@ -397,7 +397,7 @@ func (app *Application) isSuitableExecutorWorker(
 			if err := nrt.Capabilities.TEE.Verify(
 				registryParams.TEEFeatures,
 				ctx.Now(),
-				uint64(ctx.BlockHeight()),
+				uint64(ctx.LastHeight()),
 				activeDeployment.TEE,
 				n.node.ID,
 			); err != nil {
