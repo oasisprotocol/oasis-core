@@ -57,11 +57,11 @@ func (impl *backendInsecure) OnBeginBlock(
 	switch {
 	case future.Height < height:
 		// What the fuck, we missed transitioning the epoch?
-		ctx.Logger().Error("height mismatch in defered set",
+		ctx.Logger().Error("height mismatch in deferred set",
 			"height", height,
 			"expected_height", future.Height,
 		)
-		return fmt.Errorf("beacon: height mismatch in defered set")
+		return fmt.Errorf("beacon: height mismatch in deferred set")
 	case future.Height > height:
 		// The epoch transition is scheduled to happen in the grim
 		// darkness of the far future.
