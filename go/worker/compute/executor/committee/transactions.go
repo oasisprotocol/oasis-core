@@ -73,7 +73,7 @@ func (n *Node) requestMissingTransactions(ctx context.Context, hashes []hash.Has
 		}
 
 		rsp, err := n.txSync.GetTxs(ctx, &txsync.GetTxsRequest{
-			Txs: hashes,
+			Hashes: hashes,
 		})
 		if err != nil {
 			n.logger.Warn("failed to request missing transactions from peers",

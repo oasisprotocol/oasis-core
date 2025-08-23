@@ -28,7 +28,7 @@ func (s *service) HandleRequest(_ context.Context, method string, body cbor.RawM
 }
 
 func (s *service) handleGetTxs(req *GetTxsRequest) (*GetTxsResponse, error) {
-	hashes := req.Txs
+	hashes := req.Hashes
 	if len(hashes) > MaxGetTxsCount {
 		// TODO: Could punish calling peer.
 		hashes = hashes[:MaxGetTxsCount]
