@@ -800,7 +800,7 @@ func (t *txPool) republishWorker() {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
 					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
-						nextPendingRepublish = remaining + 1*time.Second
+						nextPendingRepublish = remaining + time.Second
 					}
 					continue
 				}

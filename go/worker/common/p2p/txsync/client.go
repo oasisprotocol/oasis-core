@@ -30,11 +30,11 @@ type client struct {
 
 func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, error) {
 	// Make sure we don't request too many transactions.
-	if len(request.Txs) > MaxGetTxsCount {
-		request.Txs = request.Txs[:MaxGetTxsCount]
+	if len(request.Hashes) > MaxGetTxsCount {
+		request.Hashes = request.Hashes[:MaxGetTxsCount]
 	}
-	txHashMap := make(map[hash.Hash]struct{}, len(request.Txs))
-	for _, txHash := range request.Txs {
+	txHashMap := make(map[hash.Hash]struct{}, len(request.Hashes))
+	for _, txHash := range request.Hashes {
 		txHashMap[txHash] = struct{}{}
 	}
 	resultTxMap := make(map[hash.Hash][]byte)
@@ -45,7 +45,7 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 			rsp := rawRsp.(*GetTxsResponse)
 
 			// If we received more transactions than we requested, this is an error.
-			if len(rsp.Txs) > len(request.Txs) {
+			if len(rsp.Txs) > len(request.Hashes) {
 				pf.RecordFailure()
 				return true
 			}
