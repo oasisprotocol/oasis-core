@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"golang.org/x/exp/maps"
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -65,16 +64,16 @@ func (n *Node) checkWaitingForTxsState(state *StateWaitingForTxs) {
 	}
 }
 
-func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.Hash) {
-	txs := make([][]byte, 0, len(txHashes))
+func (n *Node) requestMissingTransactions(ctx context.Context, hashes []hash.Hash) {
+	txs := make([][]byte, 0, len(hashes))
 
 	requestOp := func() error {
-		if len(txHashes) == 0 {
+		if len(hashes) == 0 {
 			return nil
 		}
 
 		rsp, err := n.txSync.GetTxs(ctx, &txsync.GetTxsRequest{
-			Txs: txHashes,
+			Txs: hashes,
 		})
 		if err != nil {
 			n.logger.Warn("failed to request missing transactions from peers",
@@ -85,12 +84,12 @@ func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.H
 
 		n.logger.Debug("resolved (some) missing transactions",
 			"resolved", len(rsp.Txs),
-			"missing", len(txHashes),
+			"missing", len(hashes),
 		)
 
 		if len(rsp.Txs) == 0 {
 			n.logger.Debug("no peer returned transactions",
-				"tx_hashes", txHashes,
+				"hashes", hashes,
 			)
 		}
 
@@ -99,12 +98,18 @@ func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.H
 		// Queue all transactions in the transaction pool.
 		n.commonNode.TxPool.SubmitProposedBatch(rsp.Txs)
 
-		// Check if there are still missing transactions.
-		_, missingTxs := n.commonNode.TxPool.GetKnownBatch(txHashes)
-		if len(missingTxs) == 0 {
+		// Check if there are still missing transactions, by reusing the slice.
+		missing := hashes[:0]
+		for _, hash := range hashes {
+			if !n.commonNode.TxPool.Has(hash) {
+				missing = append(missing, hash)
+			}
+		}
+		hashes = missing
+
+		if len(hashes) == 0 {
 			return nil
 		}
-		txHashes = maps.Keys(missingTxs)
 
 		// Perform another request.
 		return fmt.Errorf("need to resolve more transactions")

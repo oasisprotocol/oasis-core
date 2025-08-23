@@ -27,26 +27,21 @@ func (s *service) HandleRequest(_ context.Context, method string, body cbor.RawM
 	}
 }
 
-func (s *service) handleGetTxs(request *GetTxsRequest) (*GetTxsResponse, error) {
-	var rsp GetTxsResponse
-	switch {
-	case len(request.Txs) == 0:
-		return &rsp, nil
-	case len(request.Txs) > MaxGetTxsCount:
+func (s *service) handleGetTxs(req *GetTxsRequest) (*GetTxsResponse, error) {
+	hashes := req.Txs
+	if len(hashes) > MaxGetTxsCount {
 		// TODO: Could punish calling peer.
-		request.Txs = request.Txs[:MaxGetTxsCount]
-	default:
+		hashes = hashes[:MaxGetTxsCount]
 	}
 
-	txs, _ := s.txPool.GetKnownBatch(request.Txs)
-	rsp.Txs = make([][]byte, 0, len(txs))
-	for _, tx := range txs {
-		if tx == nil {
-			continue
+	txs := make([][]byte, 0, len(hashes))
+	for _, hash := range hashes {
+		if tx, ok := s.txPool.Get(hash); ok {
+			txs = append(txs, tx.Raw())
 		}
-		rsp.Txs = append(rsp.Txs, tx.Raw())
 	}
-	return &rsp, nil
+
+	return &GetTxsResponse{Txs: txs}, nil
 }
 
 // NewServer creates a new transaction sync protocol server.
