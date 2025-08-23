@@ -56,6 +56,12 @@ type TransactionPool interface {
 	// Quit returns a channel that will be closed when the service terminates.
 	Quit() <-chan struct{}
 
+	// Has reports whether a transaction with the given hash is in the pool.
+	Has(hash hash.Hash) bool
+
+	// Get returns the transaction with the given hash if it is in the pool.
+	Get(hash hash.Hash) (*TxQueueMeta, bool)
+
 	// SubmitTx adds the transaction into the transaction pool, first performing checks on it by
 	// invoking the runtime. This method waits for the checks to complete.
 	SubmitTx(ctx context.Context, tx []byte, local bool, discard bool) (*protocol.CheckTxResult, error)
@@ -101,12 +107,6 @@ type TransactionPool interface {
 	// FinishScheduling finishes a scheduling session, which resumes transaction rechecking and
 	// republishing.
 	FinishScheduling()
-
-	// GetKnownBatch gets a set of known transactions from the transaction pool.
-	//
-	// For any missing transactions nil will be returned in their place and the map of missing
-	// transactions will be populated accordingly.
-	GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ProcessBlock updates the last known runtime block information.
 	ProcessBlock(bi *runtime.BlockInfo)
@@ -191,6 +191,28 @@ func (t *txPool) Stop() {
 
 func (t *txPool) Quit() <-chan struct{} {
 	return t.quitCh
+}
+
+func (t *txPool) Has(hash hash.Hash) bool {
+	_, ok := t.Get(hash)
+	return ok
+}
+
+func (t *txPool) Get(hash hash.Hash) (*TxQueueMeta, bool) {
+	for _, q := range t.usableSources {
+		if tx, ok := q.GetTxByHash(hash); ok {
+			return tx, true
+		}
+	}
+
+	t.proposedTxsLock.Lock()
+	defer t.proposedTxsLock.Unlock()
+
+	if tx, ok := t.proposedTxs[hash]; ok {
+		return tx, true
+	}
+
+	return nil, false
 }
 
 func (t *txPool) SubmitTx(ctx context.Context, tx []byte, local bool, discard bool) (*protocol.CheckTxResult, error) {
