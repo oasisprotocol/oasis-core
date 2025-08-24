@@ -880,12 +880,6 @@ func (w *Worker) worker() { // nolint: gocyclo
 		}
 	}
 
-	// Notify the checkpointer of the genesis round so it can be checkpointed.
-	if w.checkpointer != nil {
-		w.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
-		w.checkpointer.Flush()
-	}
-
 	// Check if we are able to fetch the first block that we would be syncing if we used iterative
 	// syncing. In case we cannot (likely because we synced the consensus layer via state sync), we
 	// must wait for a later checkpoint to become available.
@@ -1075,6 +1069,12 @@ func (w *Worker) worker() { // nolint: gocyclo
 		}
 	}
 	close(w.initCh)
+
+	// Notify the checkpointer of the genesis round so it can be checkpointed.
+	if w.checkpointer != nil {
+		w.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
+		w.checkpointer.Flush()
+	}
 
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
 	latestBlockRound := w.undefinedRound
