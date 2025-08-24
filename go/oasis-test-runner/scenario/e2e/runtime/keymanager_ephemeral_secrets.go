@@ -297,6 +297,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("encrypting plaintext")
 	ciphertext, err := sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -312,6 +313,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext")
 	decrypted, err := sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -330,6 +332,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with wrong epoch")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch-1,
 		keyPairID,
@@ -345,6 +348,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with wrong key pair id")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch,
 		"wrong key pair id",
@@ -365,6 +369,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("encrypting plaintext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -380,6 +385,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
+		"sender",
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -400,12 +406,13 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	ctx context.Context,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
 	plaintext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "encrypt", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "encrypt", struct {
 		Epoch     uint64 `json:"epoch"`
 		KeyPairID string `json:"key_pair_id"`
 		Plaintext []byte `json:"plaintext"`
@@ -428,12 +435,13 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	ctx context.Context,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
 	ciphertext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "decrypt", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "decrypt", struct {
 		Epoch      uint64 `json:"epoch"`
 		KeyPairID  string `json:"key_pair_id"`
 		Ciphertext []byte `json:"ciphertext"`
