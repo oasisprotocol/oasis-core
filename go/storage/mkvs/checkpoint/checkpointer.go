@@ -72,7 +72,7 @@ type CreationParameters struct {
 	ChunkerThreads uint16
 }
 
-// Checkpointer is a checkpointer.
+// Checkpointer is responsible for creating the storage snapshots (checkpoints).
 type Checkpointer interface {
 	// NotifyNewVersion notifies the checkpointer that a new version has been finalized.
 	NotifyNewVersion(version uint64)
@@ -95,6 +95,9 @@ type Checkpointer interface {
 	// intervals; after unpausing, a checkpoint won't be created immediately, but the checkpointer
 	// will wait for the next regular event.
 	Pause(pause bool)
+
+	// Serve starts running the checkpointer.
+	Serve(ctx context.Context) error
 }
 
 type checkpointer struct {
@@ -285,7 +288,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	return nil
 }
 
-func (c *checkpointer) worker(ctx context.Context) {
+func (c *checkpointer) Serve(ctx context.Context) error {
 	c.logger.Debug("storage checkpointer started",
 		"check_interval", c.cfg.CheckInterval,
 	)
@@ -310,7 +313,7 @@ func (c *checkpointer) worker(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-time.After(interval):
 		case <-c.flushCh.Out():
 		case paused = <-c.pausedCh:
@@ -323,7 +326,7 @@ func (c *checkpointer) worker(ctx context.Context) {
 		)
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case v := <-c.notifyCh.Out():
 			version = v.(uint64)
 		case v := <-c.forceCh.Out():
@@ -387,12 +390,7 @@ func (c *checkpointer) worker(ctx context.Context) {
 
 // NewCheckpointer creates a new checkpointer that can be notified of new finalized versions and
 // will automatically generate the configured number of checkpoints.
-func NewCheckpointer(
-	ctx context.Context,
-	ndb db.NodeDB,
-	creator Creator,
-	cfg CheckpointerConfig,
-) (Checkpointer, error) {
+func NewCheckpointer(ndb db.NodeDB, creator Creator, cfg CheckpointerConfig) Checkpointer {
 	c := &checkpointer{
 		cfg:        cfg,
 		ndb:        ndb,
@@ -405,6 +403,5 @@ func NewCheckpointer(
 		cpNotifier: pubsub.NewBroker(false),
 		logger:     logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
-	go c.worker(ctx)
-	return c, nil
+	return c
 }
