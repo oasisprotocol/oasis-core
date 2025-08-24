@@ -80,7 +80,7 @@ type hostedRuntime struct {
 }
 
 // Node defines the common fields for all node types.
-type Node struct { // nolint: maligned
+type Node struct {
 	sync.Mutex
 
 	Name   string
@@ -472,7 +472,7 @@ func (n *Node) setProvisionedIdentity(seed string) error {
 }
 
 // NodeCfg defines the common node configuration options.
-type NodeCfg struct { // nolint: maligned
+type NodeCfg struct {
 	Name string
 
 	AllowEarlyTermination       bool

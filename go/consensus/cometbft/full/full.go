@@ -102,7 +102,7 @@ type Config struct {
 }
 
 // fullService implements a full CometBFT node.
-type fullService struct { // nolint: maligned
+type fullService struct {
 	sync.Mutex
 	*commonNode
 

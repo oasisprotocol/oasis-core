@@ -46,7 +46,7 @@ import (
 )
 
 // Network is a test Oasis network.
-type Network struct { // nolint: maligned
+type Network struct {
 	logger *logging.Logger
 
 	env     *env.Env
@@ -96,7 +96,7 @@ type MetricsCfg struct {
 }
 
 // NetworkCfg is the Oasis test network configuration.
-type NetworkCfg struct { // nolint: maligned
+type NetworkCfg struct {
 	// GenesisFile is an optional genesis file to use.
 	GenesisFile string `json:"genesis_file,omitempty"`
 

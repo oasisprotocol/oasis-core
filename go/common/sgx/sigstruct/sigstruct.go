@@ -49,7 +49,7 @@ var (
 // The most recent version of the Intel documentation defines more fields
 // that were formerly reserved, however support for setting such things
 // is currently not implemented.
-type Sigstruct struct { //nolint: maligned
+type Sigstruct struct {
 	BuildDate      time.Time
 	SwDefined      [4]byte
 	MiscSelect     uint32

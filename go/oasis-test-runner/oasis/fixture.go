@@ -132,7 +132,7 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 }
 
 // ConsensusFixture is a fixture containing consensus-related configuration.
-type ConsensusFixture struct { // nolint: maligned
+type ConsensusFixture struct {
 	// MinGasPrice specifies the minimum gas price accepted by a validator node.
 	MinGasPrice uint64 `json:"min_gas_price"`
 	// SubmissionGasPrice is the gas price to use when submitting consensus transactions.
@@ -177,7 +177,7 @@ type TEEFixture struct {
 }
 
 // ValidatorFixture is a validator fixture.
-type ValidatorFixture struct { // nolint: maligned
+type ValidatorFixture struct {
 	NodeFixture
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
@@ -227,7 +227,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 }
 
 // RuntimeFixture is a runtime fixture.
-type RuntimeFixture struct { // nolint: maligned
+type RuntimeFixture struct {
 	ID         common.Namespace     `json:"id"`
 	Kind       registry.RuntimeKind `json:"kind"`
 	Entity     int                  `json:"entity"`
@@ -591,7 +591,7 @@ func (f *StatelessClientFixture) Create(net *Network) (*StatelessClient, error) 
 }
 
 // ByzantineFixture is a byzantine node fixture.
-type ByzantineFixture struct { // nolint: maligned
+type ByzantineFixture struct {
 	NodeFixture
 
 	Script    string     `json:"script"`

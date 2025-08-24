@@ -48,7 +48,7 @@ var (
 const executeBatchTimeoutFactor = 3
 
 // Node is a committee node.
-type Node struct { // nolint: maligned
+type Node struct {
 	runtimeReady         bool
 	runtimeTrustSynced   bool
 	runtimeTrustSyncCncl context.CancelFunc

@@ -66,7 +66,7 @@ const (
 )
 
 // Node represents public connectivity information about an Oasis node.
-type Node struct { // nolint: maligned
+type Node struct {
 	cbor.Versioned
 
 	// ID is the public key identifying the node.
@@ -105,7 +105,7 @@ type Node struct { // nolint: maligned
 
 // nodeV2 represents (to be deprecated) V2 version of node descriptors.
 // TODO: remove after networks are upgraded and no V2 descriptors exist.
-type nodeV2 struct { // nolint: maligned
+type nodeV2 struct {
 	cbor.Versioned
 
 	// ID is the public key identifying the node.

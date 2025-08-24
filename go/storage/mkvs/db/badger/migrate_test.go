@@ -33,7 +33,7 @@ var (
 	testKey3 = []byte("this key shares a prefix")
 	testVal3 = []byte("but not the value")
 
-	testData = [][][]byte{ // nolint: deadcode, varcheck, unused
+	testData = [][][]byte{
 		{testKey1, testVal1},
 		{testKey2, testVal2},
 		{testKey3, testVal3},
@@ -487,7 +487,7 @@ func TestBadgerV5KeyVersioning(t *testing.T) {
 	}
 }
 
-func prettyPrintDBV5(ndb api.NodeDB) { // nolint: deadcode, unused
+func prettyPrintDBV5(ndb api.NodeDB) { //nolint: unused
 	db := ndb.(*badgerNodeDB).db
 	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -532,7 +532,7 @@ func prettyPrintDBV5(ndb api.NodeDB) { // nolint: deadcode, unused
 	}
 }
 
-func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) { // nolint: deadcode, unused
+func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) {
 	data, err := os.ReadFile(filepath.Join("testdata", caseName))
 	require.NoError(t, err, "ReadFile")
 	err = json.Unmarshal(data, &tc)
@@ -553,7 +553,7 @@ func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) { // 
 	return
 }
 
-func dumpDB(ndb api.NodeDB, caseName string, tc testCase) { // nolint: deadcode, unused
+func dumpDB(ndb api.NodeDB, caseName string, tc testCase) { //nolint: unused
 	db := ndb.(*badgerNodeDB).db
 	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()

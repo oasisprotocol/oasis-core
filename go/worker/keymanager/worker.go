@@ -46,7 +46,7 @@ var _ service.BackgroundService = (*Worker)(nil)
 // It behaves differently from other workers as the key manager has its
 // own runtime. It needs to keep track of executor committees for other
 // runtimes in order to update the access control lists.
-type Worker struct { // nolint: maligned
+type Worker struct {
 	sync.RWMutex
 	*runtimeRegistry.RuntimeHostNode
 

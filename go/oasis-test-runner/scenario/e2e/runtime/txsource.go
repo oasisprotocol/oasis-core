@@ -152,7 +152,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	numClientNodes: 2,
 }
 
-type txSourceImpl struct { // nolint: maligned
+type txSourceImpl struct {
 	Scenario
 
 	clientWorkloads  []string

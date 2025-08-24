@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
-//nolint:deadcode,varcheck
 const (
 	pcsAPISubscriptionKeyHeader              = "Ocp-Apim-Subscription-Key"
 	pcsAPITimeout                            = 10 * time.Second

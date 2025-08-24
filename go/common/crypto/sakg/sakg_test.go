@@ -12,7 +12,7 @@ import (
 func TestGetAccountSigner(t *testing.T) {
 	require := require.New(t)
 
-	testVectors := []struct { // nolint: maligned
+	testVectors := []struct {
 		mnemonic             string
 		passphrase           string
 		number               uint32

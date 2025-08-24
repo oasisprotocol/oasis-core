@@ -10,7 +10,7 @@ import (
 )
 
 // Config contains common worker config.
-type Config struct { // nolint: maligned
+type Config struct {
 	SentryAddresses []node.TLSAddress
 
 	TxPool tpConfig.Config

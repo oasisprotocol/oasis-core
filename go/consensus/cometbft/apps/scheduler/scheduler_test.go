@@ -118,7 +118,7 @@ func TestElectCommittee(t *testing.T) {
 	entityID1 := signature.NewPublicKey("1000000000000000000000000000000000000000000000000000000000000001")
 	entityID2 := signature.NewPublicKey("1000000000000000000000000000000000000000000000000000000000000002")
 
-	for _, tc := range []struct { //nolint: maligned
+	for _, tc := range []struct {
 		msg               string
 		kind              scheduler.CommitteeKind
 		nodes             []*node.Node

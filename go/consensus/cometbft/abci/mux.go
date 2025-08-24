@@ -53,7 +53,7 @@ var (
 )
 
 // ApplicationConfig is the configuration for the consensus application.
-type ApplicationConfig struct { // nolint: maligned
+type ApplicationConfig struct {
 	DataDir        string
 	StorageBackend string
 	Pruning        PruneConfig

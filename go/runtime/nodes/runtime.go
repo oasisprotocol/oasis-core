@@ -31,7 +31,7 @@ func TagsForRoleMask(nodeRoles node.RolesMask) (tags []string) {
 	return
 }
 
-type runtimeNodesWatcher struct { // nolint: maligned
+type runtimeNodesWatcher struct {
 	sync.RWMutex
 
 	consensus consensus.Service

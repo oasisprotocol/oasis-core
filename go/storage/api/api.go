@@ -70,7 +70,7 @@ var (
 )
 
 // Config is the storage backend configuration.
-type Config struct { // nolint: maligned
+type Config struct {
 	// Backend is the database backend.
 	Backend string
 

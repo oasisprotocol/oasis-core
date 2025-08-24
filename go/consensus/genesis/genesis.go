@@ -18,7 +18,7 @@ type Genesis struct {
 }
 
 // Parameters are the consensus parameters.
-type Parameters struct { // nolint: maligned
+type Parameters struct {
 	// TimeoutCommit specifies the duration to wait after committing a block
 	// before starting a new height.
 	TimeoutCommit time.Duration `json:"timeout_commit"`

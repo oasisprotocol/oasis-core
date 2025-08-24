@@ -119,7 +119,7 @@ type finalizeResult struct {
 }
 
 // Node watches blocks for storage changes.
-type Node struct { // nolint: maligned
+type Node struct {
 	commonNode *committee.Node
 
 	roleProvider    registration.RoleProvider

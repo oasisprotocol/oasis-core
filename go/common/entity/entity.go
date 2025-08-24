@@ -42,7 +42,7 @@ const (
 
 // Entity represents an entity that controls one or more Nodes and or
 // services.
-type Entity struct { // nolint: maligned
+type Entity struct {
 	cbor.Versioned
 
 	// ID is the public key identifying the entity.
@@ -66,7 +66,7 @@ func (e *Entity) UnmarshalCBOR(data []byte) error {
 	switch v {
 	case 1:
 		// Old version had an extra field that was used only for debugging/tests.
-		type EntityV1 struct { // nolint: maligned
+		type EntityV1 struct {
 			cbor.Versioned
 			ID                     signature.PublicKey   `json:"id"`
 			Nodes                  []signature.PublicKey `json:"nodes,omitempty"`

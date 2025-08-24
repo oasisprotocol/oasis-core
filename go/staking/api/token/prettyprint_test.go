@@ -52,7 +52,7 @@ func TestConvertToTokenAmount(t *testing.T) {
 func TestPrettyPrintAmount(t *testing.T) {
 	require := require.New(t)
 
-	for _, t := range []struct { // nolint: maligned
+	for _, t := range []struct {
 		expectedPrettyPrint string
 		amount              *quantity.Quantity
 		addSymbol           bool

@@ -38,7 +38,7 @@ type deploymentCfg struct {
 }
 
 // Runtime is an Oasis runtime.
-type Runtime struct { // nolint: maligned
+type Runtime struct {
 	dir *env.Dir
 
 	kind registry.RuntimeKind
@@ -58,7 +58,7 @@ type Runtime struct { // nolint: maligned
 }
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
-type RuntimeCfg struct { // nolint: maligned
+type RuntimeCfg struct {
 	ID          common.Namespace
 	Kind        registry.RuntimeKind
 	Entity      *Entity

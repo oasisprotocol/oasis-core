@@ -391,7 +391,7 @@ func (e *ReclaimEscrowEvent) ProvableRepresentation() any {
 }
 
 // AllowanceChangeEvent is the event emitted when allowance is changed for a beneficiary.
-type AllowanceChangeEvent struct { // nolint: maligned
+type AllowanceChangeEvent struct {
 	Owner        Address           `json:"owner"`
 	Beneficiary  Address           `json:"beneficiary"`
 	Allowance    quantity.Quantity `json:"allowance"`
@@ -1226,7 +1226,7 @@ type Genesis struct {
 }
 
 // ConsensusParameters are the staking consensus parameters.
-type ConsensusParameters struct { // nolint: maligned
+type ConsensusParameters struct {
 	// TokenSymbol is the token's ticker symbol.
 	// Only upper case A-Z characters are allowed.
 	TokenSymbol string `json:"token_symbol,omitempty"`

@@ -61,7 +61,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	return db, nil
 }
 
-type badgerNodeDB struct { // nolint: maligned
+type badgerNodeDB struct {
 	logger *logging.Logger
 
 	namespace common.Namespace
