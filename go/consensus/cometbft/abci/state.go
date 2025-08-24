@@ -123,7 +123,7 @@ func (ps *proposalState) setResults(
 	ps.resultsEndBlock = resultsEndBlock
 }
 
-type applicationState struct { // nolint: maligned
+type applicationState struct {
 	logger *logging.Logger
 
 	ctx       context.Context

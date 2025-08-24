@@ -141,7 +141,7 @@ var validStateTransitions = map[state][]state{
 	stateClosed: {},
 }
 
-type connection struct { // nolint: maligned
+type connection struct {
 	sync.RWMutex
 
 	conn  net.Conn

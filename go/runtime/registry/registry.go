@@ -118,7 +118,7 @@ type Runtime interface {
 	LocalStorage() localstorage.LocalStorage
 }
 
-type runtime struct { // nolint: maligned
+type runtime struct {
 	sync.RWMutex
 	startOne cmSync.One
 

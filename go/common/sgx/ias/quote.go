@@ -93,7 +93,7 @@ func (b *Body) MarshalBinary() ([]byte, error) {
 }
 
 // Report is an enclave report body.
-type Report struct { // nolint: maligned
+type Report struct {
 	CPUSVN     [16]byte
 	MiscSelect uint32
 	Attributes sgx.Attributes

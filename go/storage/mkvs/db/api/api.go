@@ -65,7 +65,7 @@ var (
 )
 
 // Config is the node database backend configuration.
-type Config struct { // nolint: maligned
+type Config struct {
 	// DB is the path to the database.
 	DB string
 

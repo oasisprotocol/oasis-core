@@ -28,7 +28,7 @@ const (
 )
 
 // Compute is an Oasis compute node.
-type Compute struct { // nolint: maligned
+type Compute struct {
 	sync.RWMutex
 
 	*Node

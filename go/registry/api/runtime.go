@@ -295,7 +295,7 @@ const (
 )
 
 // Runtime represents a runtime.
-type Runtime struct { // nolint: maligned
+type Runtime struct {
 	cbor.Versioned
 
 	// ID is a globally unique long term identifier of the runtime.

@@ -987,7 +987,7 @@ func verifyNodeRuntimeChanges(
 				return false
 			}
 
-			if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) { //nolint:gosec
+			if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
 				curRtJSON, _ := json.Marshal(currentRuntime)
 				newRtJSON, _ := json.Marshal(newRuntime)
 				logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",

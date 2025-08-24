@@ -151,7 +151,7 @@ func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPo
 }
 
 // Keymanager is an Oasis key manager.
-type Keymanager struct { // nolint: maligned
+type Keymanager struct {
 	*Node
 
 	sentryIndices []int

@@ -427,7 +427,7 @@ func TestGenesis(t *testing.T) {
 						require.NoError(err, "SetActiveProposal")
 					case governance.StatePassed:
 						if p.Content.Upgrade != nil && p.Content.Upgrade.Descriptor.Epoch > currentEpoch {
-							err = state.SetPendingUpgrade(ctx, p.ID, &p.Content.Upgrade.Descriptor) //nolint:gosec
+							err = state.SetPendingUpgrade(ctx, p.ID, &p.Content.Upgrade.Descriptor)
 							require.NoError(err, "SetPendingUpgrade")
 						}
 						fallthrough

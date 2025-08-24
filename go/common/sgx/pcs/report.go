@@ -21,7 +21,7 @@ type ReportBody interface {
 }
 
 // SgxReport is an SGX enclave report body.
-type SgxReport struct { //nolint: maligned
+type SgxReport struct {
 	cpuSvn     [16]byte
 	miscSelect uint32
 	attributes sgx.Attributes
@@ -106,7 +106,7 @@ func (r *SgxReport) Raw() []byte {
 const TdEnclaveIdentityContext = "oasis-core/tdx: TD enclave identity"
 
 // TdReport is a TDX TD report body.
-type TdReport struct { //nolint: maligned
+type TdReport struct {
 	teeTcbSvn      [16]byte
 	mrSeam         [48]byte
 	mrSignerSeam   [48]byte

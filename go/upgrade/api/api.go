@@ -103,7 +103,7 @@ func (h HandlerName) ValidateBasic() error {
 }
 
 // Descriptor describes an upgrade.
-type Descriptor struct { // nolint: maligned
+type Descriptor struct {
 	cbor.Versioned
 
 	// Handler is the name of the upgrade handler.

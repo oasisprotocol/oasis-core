@@ -174,7 +174,7 @@ func (rp *roleProvider) SetUnavailable() {
 }
 
 // Worker is a service handling worker node registration.
-type Worker struct { // nolint: maligned
+type Worker struct {
 	sync.RWMutex
 
 	workerCommonCfg *workerCommon.Config

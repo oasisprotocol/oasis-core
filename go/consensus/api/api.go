@@ -333,7 +333,7 @@ func (s *StatusState) UnmarshalText(text []byte) error {
 }
 
 // Status is the current status overview.
-type Status struct { // nolint: maligned
+type Status struct {
 	// Status is an concise status of the consensus backend.
 	Status StatusState `json:"status"`
 

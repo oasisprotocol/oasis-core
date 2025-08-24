@@ -17,7 +17,7 @@ type SeedCfg struct {
 }
 
 // Seed is an Oasis seed node.
-type Seed struct { // nolint: maligned
+type Seed struct {
 	*Node
 
 	disableAddrBookFromGenesis bool

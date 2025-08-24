@@ -615,7 +615,7 @@ func TestWithdraw(t *testing.T) {
 		expectedBalance := beforeAcct.General.Balance
 		switch tc.err {
 		case nil:
-			err = expectedBalance.Sub(&tc.withdraw.Amount) //nolint:gosec
+			err = expectedBalance.Sub(&tc.withdraw.Amount)
 			require.NoError(err, "computing expected balance should not fail")
 
 			if expectedBalance.IsZero() {

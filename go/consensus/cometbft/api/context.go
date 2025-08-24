@@ -57,7 +57,7 @@ func (m ContextMode) String() string {
 }
 
 // Context is the context of processing a transaction/block.
-type Context struct { // nolint: maligned
+type Context struct {
 	context.Context
 
 	parent *Context

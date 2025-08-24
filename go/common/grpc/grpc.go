@@ -421,7 +421,7 @@ type Server struct {
 }
 
 // ServerConfig holds the configuration used for creating a server.
-type ServerConfig struct { // nolint: maligned
+type ServerConfig struct {
 	// Name of the server being constructed.
 	Name string
 	// Port is the port used for TCP servers.

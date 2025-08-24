@@ -66,7 +66,7 @@ const (
 // Header is a block header.
 //
 // Keep this in sync with /runtime/src/consensus/roothash/block.rs.
-type Header struct { // nolint: maligned
+type Header struct {
 	// Version is the protocol version number.
 	Version uint16 `json:"version"`
 

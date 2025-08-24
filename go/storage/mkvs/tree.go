@@ -11,7 +11,7 @@ import (
 
 var _ Tree = (*tree)(nil)
 
-type tree struct { // nolint: maligned
+type tree struct {
 	cache *cache
 
 	rootType node.RootType
