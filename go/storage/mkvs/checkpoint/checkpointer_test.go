@@ -25,7 +25,8 @@ const (
 
 func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, interval uint64, preExistingData bool) {
 	require := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	// Initialize a database.
 	dir, err := os.MkdirTemp("", "mkvs.checkpointer")
@@ -70,7 +71,7 @@ func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, inte
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpointer.
-	cp, err := NewCheckpointer(ctx, ndb, fc, CheckpointerConfig{
+	cp, err := NewCheckpointer(ndb, fc, CheckpointerConfig{
 		Name:            "test",
 		Namespace:       testNs,
 		CheckInterval:   testCheckInterval,
@@ -90,6 +91,7 @@ func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, inte
 		},
 	})
 	require.NoError(err, "NewCheckpointer")
+	go cp.Serve(ctx)
 
 	// Start watching checkpoints.
 	cpCh, sub, err := cp.WatchCheckpoints()

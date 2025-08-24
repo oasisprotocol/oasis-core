@@ -225,11 +225,12 @@ func New(
 	w.ctx, w.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a checkpointer (even if checkpointing is disabled) to ensure the genesis checkpoint is available.
-	checkpointer, err := w.newCheckpointer(w.ctx, commonNode, localStorage)
+	checkpointer, err := w.newCheckpointer(commonNode, localStorage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 	}
 	w.checkpointer = checkpointer
+	go w.checkpointer.Serve(w.ctx)
 
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
@@ -255,7 +256,7 @@ func New(
 	return w, nil
 }
 
-func (w *Worker) newCheckpointer(ctx context.Context, commonNode *committee.Node, localStorage storageApi.LocalBackend) (checkpoint.Checkpointer, error) {
+func (w *Worker) newCheckpointer(commonNode *committee.Node, localStorage storageApi.LocalBackend) (checkpoint.Checkpointer, error) {
 	checkInterval := checkpoint.CheckIntervalDisabled
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
@@ -303,7 +304,6 @@ func (w *Worker) newCheckpointer(ctx context.Context, commonNode *committee.Node
 	}
 
 	return checkpoint.NewCheckpointer(
-		ctx,
 		localStorage.NodeDB(),
 		localStorage.Checkpointer(),
 		checkpointerCfg,
