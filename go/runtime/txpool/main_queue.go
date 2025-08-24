@@ -88,7 +88,7 @@ func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(nil, countHint)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
-		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }
@@ -109,7 +109,7 @@ func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQu
 	txMetas := mq.inner.getPrioritizedBatch(offset, limit)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
-		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }
@@ -118,7 +118,7 @@ func (mq *mainQueue) PeekAll() []*TxQueueMeta {
 	allTxs := mq.inner.getAll()
 	txs := make([]*TxQueueMeta, 0, len(allTxs))
 	for _, tx := range allTxs {
-		txs = append(txs, &tx.TxQueueMeta) //nolint:gosec
+		txs = append(txs, &tx.TxQueueMeta)
 	}
 	return txs
 }
@@ -128,7 +128,7 @@ func (mq *mainQueue) TakeAll() []*TxQueueMeta {
 	mq.inner.clear()
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
-		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }

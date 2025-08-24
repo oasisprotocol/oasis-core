@@ -180,7 +180,7 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 		if step.RateMax.Cmp(CommissionRateDenominator) > 0 {
 			return fmt.Errorf("bound step %d maximum rate %v/%v over unity", i, step.RateMax, CommissionRateDenominator)
 		}
-		if step.RateMax.Cmp(&step.RateMin) < 0 { //nolint:gosec
+		if step.RateMax.Cmp(&step.RateMin) < 0 {
 			return fmt.Errorf("bound step %d maximum rate %v/%v less than minimum rate %v/%v", i, step.RateMax, CommissionRateDenominator, step.RateMin, CommissionRateDenominator)
 		}
 		if step.RateMax.Cmp(&rules.MinCommissionRate) < 0 {

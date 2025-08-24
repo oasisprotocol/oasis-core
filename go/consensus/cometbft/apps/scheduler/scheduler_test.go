@@ -799,7 +799,7 @@ func TestElectCommittee(t *testing.T) {
 			nil,
 			nil,
 			tc.validatorEntities,
-			&tc.rt, //nolint:gosec
+			&tc.rt,
 			nodes,
 			tc.kind,
 		)

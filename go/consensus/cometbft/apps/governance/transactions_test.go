@@ -282,7 +282,7 @@ func TestSubmitProposal(t *testing.T) {
 
 		err = governanceDepositsAfter.Sub(governanceDepositsBefore)
 		require.NoError(err, "quantity.Sub")
-		require.EqualValues(&tc.params.MinProposalDeposit, governanceDepositsAfter, tc.msg) //nolint:gosec
+		require.EqualValues(&tc.params.MinProposalDeposit, governanceDepositsAfter, tc.msg)
 	}
 }
 

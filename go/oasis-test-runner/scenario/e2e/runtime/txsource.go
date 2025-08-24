@@ -203,7 +203,7 @@ func (sc *txSourceImpl) PreInit() error {
 	if err != nil {
 		return fmt.Errorf("failed to create random source: %w", err)
 	}
-	sc.rng = rand.New(mathrand.New(src)) //nolint:gosec
+	sc.rng = rand.New(mathrand.New(src))
 
 	return nil
 }
