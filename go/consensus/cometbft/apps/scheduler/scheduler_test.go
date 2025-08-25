@@ -98,9 +98,10 @@ func TestElectCommittee(t *testing.T) {
 
 	schedulerState := schedulerState.NewMutableState(ctx.State())
 
+	epoch := beacon.EpochTime(1)
 	beaconState := beaconState.NewMutableState(ctx.State())
 	_ = beaconState.DebugForceSetBeacon(ctx, []byte("mock random beacon mock random beacon mock random beacon!!"))
-	_ = beaconState.SetEpoch(ctx, 1, 69)
+	_ = beaconState.SetEpoch(ctx, epoch, 69)
 
 	beaconParameters := &beacon.ConsensusParameters{
 		Backend: beacon.BackendInsecure,
@@ -792,6 +793,7 @@ func TestElectCommittee(t *testing.T) {
 
 		err := app.electCommittee(
 			ctx,
+			epoch,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,

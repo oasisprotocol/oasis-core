@@ -351,14 +351,14 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 
 	// If the next block will be an epoch transition block, do not propose anything as it will be
 	// reverted anyway (since the committee will change).
-	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, n.blockInfo.ConsensusBlock.Height) // TODO: is this height ok?
+	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, n.blockInfo.ConsensusBlock.Height)
 	if err != nil {
 		n.logger.Error("failed to fetch future epoch state",
 			"err", err,
 		)
 		return
 	}
-	if epochState != nil && epochState.Height == n.blockInfo.ConsensusBlock.Height+1 { // TODO: is this height ok?
+	if epochState != nil && epochState.Height == n.blockInfo.ConsensusBlock.Height+1 {
 		n.logger.Debug("not scheduling, next consensus block is an epoch transition")
 		return
 	}

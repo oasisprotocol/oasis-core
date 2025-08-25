@@ -63,7 +63,7 @@ func generateStatus( // nolint: gocyclo
 	policyHash := sha3.Sum256(rawPolicy)
 
 	ts := ctx.Now()
-	height := uint64(ctx.BlockHeight())
+	height := uint64(ctx.LastHeight())
 
 	// Construct a key manager committee. A node is added to the committee if it supports
 	// at least one version of the key manager runtime and if all supported versions conform

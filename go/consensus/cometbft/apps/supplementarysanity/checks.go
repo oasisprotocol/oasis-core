@@ -69,7 +69,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.BlockHeight()))
+	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.LastHeight()))
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}
@@ -130,7 +130,7 @@ func checkRootHash(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	}
 	for i, id := range runtimeIDs {
 		height := heights[i]
-		if height < ctx.BlockHeight()+1 { // Current height is ctx.BlockHeight() + 1
+		if height < ctx.CurrentHeight() {
 			return fmt.Errorf("round timeout for runtime %s was scheduled at %d but did not trigger", id, height)
 		}
 		if rtState := runtimesByID[id]; rtState.NextTimeout != height {

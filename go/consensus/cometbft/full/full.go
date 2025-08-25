@@ -571,7 +571,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
 		ChunkerThreads:            threads,
-		InitialHeight:             uint64(t.genesisHeight),
+		InitialHeight:             t.genesisHeight,
 		ChainContext:              t.chainContext,
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)

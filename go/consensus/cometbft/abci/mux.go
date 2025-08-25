@@ -75,7 +75,7 @@ type ApplicationConfig struct {
 	ReadOnlyStorage bool
 
 	// InitialHeight is the height of the initial block.
-	InitialHeight uint64
+	InitialHeight int64
 
 	// ChainContext is the chain context for the network.
 	ChainContext string
@@ -273,7 +273,7 @@ func (mux *abciMux) registerHaltHook(hook api.HaltHook) {
 func (mux *abciMux) Info(types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
 		AppVersion:       version.CometBFTAppVersion,
-		LastBlockHeight:  mux.state.BlockHeight(),
+		LastBlockHeight:  mux.state.LastHeight(),
 		LastBlockAppHash: mux.state.StateRootHash(),
 	}
 }
@@ -298,7 +298,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	})
 	mux.state.blockLock.Unlock()
 
-	if st.Height != req.InitialHeight || uint64(st.Height) != mux.state.initialHeight {
+	if st.Height != req.InitialHeight || st.Height != mux.state.initialHeight {
 		panic(fmt.Errorf("mux: inconsistent initial height (genesis: %d abci: %d state: %d)", st.Height, req.InitialHeight, mux.state.initialHeight))
 	}
 
@@ -570,12 +570,12 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		return *mux.state.proposal.resultsBeginBlock
 	}
 
-	blockHeight := mux.state.BlockHeight()
+	lastHeight := mux.state.LastHeight()
 
 	mux.logger.Debug("BeginBlock",
 		"req", req,
 		"hash", hex.EncodeToString(req.Hash),
-		"block_height", blockHeight,
+		"height", lastHeight,
 	)
 
 	params := mux.state.ConsensusParameters()
@@ -607,20 +607,20 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	// checks must run on each block to make sure that any pending upgrade descriptors are cleared
 	// after consensus upgrade is performed.
 	if upgrader := mux.state.Upgrader(); upgrader != nil {
-		switch err := upgrader.ConsensusUpgrade(ctx, currentEpoch, blockHeight); err {
+		switch err := upgrader.ConsensusUpgrade(ctx, currentEpoch, lastHeight); err {
 		case nil:
 			// Everything ok.
 		case upgrade.ErrStopForUpgrade:
 			// Signal graceful stop for upgrade.
-			mux.haltForUpgrade(blockHeight, currentEpoch, true)
+			mux.haltForUpgrade(lastHeight, currentEpoch, true)
 		default:
 			panic(fmt.Errorf("mux: error while trying to perform consensus upgrade: %w", err))
 		}
 	}
 
 	// Check if we need to halt based on local configuration.
-	if mux.state.shouldLocalHalt(blockHeight+1, currentEpoch) {
-		mux.haltForUpgrade(blockHeight, currentEpoch, true)
+	if mux.state.shouldLocalHalt(lastHeight+1, currentEpoch) {
+		mux.haltForUpgrade(lastHeight, currentEpoch, true)
 	}
 
 	// Dispatch BeginBlock to all applications.
@@ -632,7 +632,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			)
 
 			if errors.Is(err, upgrade.ErrStopForUpgrade) {
-				mux.haltForUpgrade(blockHeight, currentEpoch, true)
+				mux.haltForUpgrade(lastHeight, currentEpoch, true)
 			}
 			panic(fmt.Errorf("mux: BeginBlock: fatal error in application: '%s': %w", app.Name(), err))
 		}
@@ -642,7 +642,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// During the first block, also collect and prepend application events generated during
 	// InitChain to BeginBlock events.
-	if mux.state.BlockHeight() == 0 {
+	if mux.state.LastHeight() == 0 {
 		response.Events = append(response.Events, mux.state.initEvents...)
 	}
 
@@ -761,7 +761,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 
 	mux.logger.Debug("EndBlock",
 		"req", req,
-		"block_height", mux.state.BlockHeight(),
+		"height", mux.state.LastHeight(),
 	)
 
 	ctx := mux.state.NewContext(api.ContextEndBlock)
@@ -790,7 +790,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			panic(fmt.Errorf("mux: can't get current epoch in BeginBlock: %w", err))
 		}
 
-		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.BlockHeight())
+		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.LastHeight())
 		// This should never fail as all the checks were already performed in BeginBlock.
 		if err != nil {
 			panic(fmt.Errorf("mux: error while trying to perform consensus upgrade: %w", err))
@@ -829,7 +829,7 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 	}
 
 	mux.logger.Debug("Commit",
-		"block_height", mux.state.BlockHeight(),
+		"height", mux.state.LastHeight(),
 		"state_root_hash", hex.EncodeToString(mux.state.StateRootHash()),
 		"last_retained_version", lastRetainedVersion,
 	)
@@ -936,7 +936,7 @@ func (mux *abciMux) checkDependencies() error {
 }
 
 func (mux *abciMux) finishInitialization() error {
-	if mux.state.BlockHeight() >= mux.state.InitialHeight() {
+	if mux.state.LastHeight() >= mux.state.InitialHeight() {
 		mux.state.resetProposal()
 		defer mux.state.closeProposal()
 
@@ -996,7 +996,7 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 	mux.md.Subscribe(api.MessageExecuteSubcall, mux)
 
 	mux.logger.Debug("ABCI multiplexer initialized",
-		"block_height", state.BlockHeight(),
+		"height", state.LastHeight(),
 		"state_root_hash", hex.EncodeToString(state.StateRootHash()),
 	)
 

@@ -146,8 +146,9 @@ func shuffleValidatorsByEntropy(
 	return shuffled, nil
 }
 
-func (app *Application) electCommittee( //nolint: gocyclo
+func (app *Application) electCommittee(
 	ctx *api.Context,
+	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
@@ -164,6 +165,58 @@ func (app *Application) electCommittee( //nolint: gocyclo
 		return nil
 	}
 
+	members, err := app.electCommitteeMembers(
+		ctx,
+		epoch,
+		schedulerParameters,
+		beaconState,
+		beaconParameters,
+		registryParameters,
+		stakeAcc,
+		entitiesEligibleForReward,
+		validatorEntities,
+		rt,
+		nodeList,
+		kind,
+	)
+	if err != nil {
+		return err
+	}
+
+	if len(members) == 0 {
+		if err := schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+			return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
+		}
+		return nil
+	}
+
+	committee := &scheduler.Committee{
+		Kind:      kind,
+		RuntimeID: rt.ID,
+		Members:   members,
+		ValidFor:  epoch,
+	}
+	if err := schedulerState.NewMutableState(ctx.State()).PutCommittee(ctx, committee); err != nil {
+		return fmt.Errorf("cometbft/scheduler: failed to save committee: %w", err)
+	}
+
+	return nil
+}
+
+func (app *Application) electCommitteeMembers( //nolint: gocyclo
+	ctx *api.Context,
+	epoch beacon.EpochTime,
+	schedulerParameters *scheduler.ConsensusParameters,
+	beaconState *beaconState.MutableState,
+	beaconParameters *beacon.ConsensusParameters,
+	registryParameters *registry.ConsensusParameters,
+	stakeAcc *stakingState.StakeAccumulatorCache,
+	entitiesEligibleForReward map[staking.Address]bool,
+	validatorEntities map[staking.Address]bool,
+	rt *registry.Runtime,
+	nodeList []*nodeWithStatus,
+	kind scheduler.CommitteeKind,
+) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
 	// order for better performance.
 	committeeRoles := []scheduler.Role{
@@ -171,18 +224,17 @@ func (app *Application) electCommittee( //nolint: gocyclo
 		scheduler.RoleBackupWorker,
 	}
 
-	// Figure out the when (epoch) and how (beacon backend).
-	epoch, _, err := beaconState.GetEpoch(ctx)
-	if err != nil {
-		return fmt.Errorf("cometbft/scheduler: failed to query current epoch: %w", err)
-	}
+	// Figure out how (beacon backend).
 	useVRF := beaconParameters.Backend == beacon.BackendVRF
 
 	// If a VRF-based election is to be done, query the VRF state.
-	var prevState *beacon.PrevVRFState
+	var (
+		prevState *beacon.PrevVRFState
+		err       error
+	)
 	if useVRF {
 		if prevState, err = getPrevVRFState(ctx, beaconState); err != nil {
-			return err
+			return nil, err
 		}
 		if !prevState.CanElectCommittees {
 			if !schedulerParameters.DebugAllowWeakAlpha {
@@ -190,10 +242,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 					"kind", kind,
 					"runtime_id", rt.ID,
 				)
-				if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-					return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-				}
-				return nil
+				return nil, nil
 			}
 
 			ctx.Logger().Warn("epoch had weak VRF alpha, debug option set, allowing election anyway",
@@ -214,7 +263,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 		groupSizes[scheduler.RoleWorker] = int(rt.Executor.GroupSize)
 		groupSizes[scheduler.RoleBackupWorker] = int(rt.Executor.GroupBackupSize)
 	default:
-		return fmt.Errorf("cometbft/scheduler: invalid committee type: %v", kind)
+		return nil, fmt.Errorf("cometbft/scheduler: invalid committee type: %v", kind)
 	}
 
 	// Ensure that it is theoretically possible to elect a valid committee.
@@ -223,16 +272,13 @@ func (app *Application) electCommittee( //nolint: gocyclo
 			"kind", kind,
 			"runtime_id", rt.ID,
 		)
-		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-			return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-		}
-		return nil
+		return nil, nil
 	}
 
 	// Decode per-role constraints.
 	cs := rt.Constraints[kind]
 
-	// Perform pre-election eligiblity filtering.
+	// Perform pre-election eligibility filtering.
 	nodeLists := make(map[scheduler.Role][]*node.Node)
 	for _, n := range nodeList {
 		// Check if an entity has enough stake.
@@ -317,10 +363,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 					"role", role,
 					"runtime_id", rt.ID,
 				)
-				if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-					return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-				}
-				return nil
+				return nil, nil
 			}
 
 			switch useVRF {
@@ -360,10 +403,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 				"nr_nodes", nrNodes,
 				"min_pool_size", minPoolSize,
 			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-			}
-			return nil
+			return nil, nil
 		}
 
 		wantedNodes := groupSizes[role]
@@ -374,10 +414,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 				"wanted_nodes", wantedNodes,
 				"nr_nodes", nrNodes,
 			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-			}
-			return nil
+			return nil, nil
 		}
 
 		var idxs []int
@@ -396,17 +433,17 @@ func (app *Application) electCommittee( //nolint: gocyclo
 			case scheduler.RoleBackupWorker:
 				rngCtx = append(rngCtx, RNGContextRoleBackupWorker...)
 			default:
-				return fmt.Errorf("cometbft/scheduler: unsupported role: %v", role)
+				return nil, fmt.Errorf("cometbft/scheduler: unsupported role: %v", role)
 			}
 
 			var entropy []byte
 			if entropy, err = beaconState.Beacon(ctx); err != nil {
-				return fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
+				return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 			}
 
 			idxs, err = GetPerm(entropy, rt.ID, rngCtx, nrNodes)
 			if err != nil {
-				return fmt.Errorf("failed to derive permutation: %w", err)
+				return nil, fmt.Errorf("failed to derive permutation: %w", err)
 			}
 		case true:
 			// Use the VRF proofs to do the elections.
@@ -437,10 +474,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 			wantedNodes,
 		)
 		if !ok {
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-			}
-			return nil
+			return nil, nil
 		}
 
 		// Do the actual election by traversing the randomly sorted node
@@ -468,10 +502,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 						"role", role,
 						"num_entity_nodes", nodesPerEntity[n.EntityID],
 					)
-					if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-						return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-					}
-					return nil
+					return nil, nil
 				}
 				nodesPerEntity[n.EntityID]++
 			}
@@ -489,10 +520,7 @@ func (app *Application) electCommittee( //nolint: gocyclo
 				"runtime_id", rt.ID,
 				"available", len(elected),
 			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-			}
-			return nil
+			return nil, nil
 		}
 
 		// If the election is rigged for testing purposes, fixup the force
@@ -503,25 +531,13 @@ func (app *Application) electCommittee( //nolint: gocyclo
 			elected,
 			role,
 		); !ok {
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to drop committee: %w", err)
-			}
-			return nil
+			return nil, nil
 		}
 
 		members = append(members, elected...)
 	}
 
-	committee := &scheduler.Committee{
-		Kind:      kind,
-		RuntimeID: rt.ID,
-		Members:   members,
-		ValidFor:  epoch,
-	}
-	if err = schedulerState.NewMutableState(ctx.State()).PutCommittee(ctx, committee); err != nil {
-		return fmt.Errorf("cometbft/scheduler: failed to save committee: %w", err)
-	}
-	return nil
+	return members, nil
 }
 
 func committeeVRFBetaIndexes(

@@ -480,8 +480,12 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	// Transition the runtime governance model to runtime.
 	compRtDesc.GovernanceModel = registry.GovernanceRuntime
 	// Ensure runtime account has enough stake.
+	account, ok := compRtDesc.StakingAddress()
+	if !ok {
+		return fmt.Errorf("failed to get runtime staking address")
+	}
 	tx = staking.NewAddEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.Escrow{
-		Account: *compRtDesc.StakingAddress(),
+		Account: *account,
 		Amount:  enoughStake,
 	})
 	nonce++

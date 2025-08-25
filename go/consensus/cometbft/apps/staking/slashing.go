@@ -71,7 +71,7 @@ func onEvidenceByzantineConsensus(
 		var epoch beacon.EpochTime
 		// XXX: This should maybe use abciCtx and ctx.BlockHeight() + 1, but was
 		// kept like this to avoid potential consensus breaking changes at this time.
-		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.BlockHeight())
+		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.LastHeight())
 		if err != nil {
 			return err
 		}

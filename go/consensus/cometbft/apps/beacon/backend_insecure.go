@@ -53,15 +53,15 @@ func (impl *backendInsecure) OnBeginBlock(
 		return nil
 	}
 
-	height := ctx.BlockHeight() + 1 // Current height is ctx.BlockHeight() + 1
+	height := ctx.CurrentHeight()
 	switch {
 	case future.Height < height:
 		// What the fuck, we missed transitioning the epoch?
-		ctx.Logger().Error("height mismatch in defered set",
+		ctx.Logger().Error("height mismatch in deferred set",
 			"height", height,
 			"expected_height", future.Height,
 		)
-		return fmt.Errorf("beacon: height mismatch in defered set")
+		return fmt.Errorf("beacon: height mismatch in deferred set")
 	case future.Height > height:
 		// The epoch transition is scheduled to happen in the grim
 		// darkness of the far future.
@@ -122,7 +122,7 @@ func (impl *backendInsecure) onEpochChangeBeacon(
 		"epoch", epoch,
 		"beacon", hex.EncodeToString(b),
 		"block_hash", hex.EncodeToString(entropy),
-		"height", ctx.BlockHeight(),
+		"height", ctx.LastHeight(),
 	)
 
 	return impl.app.onNewBeacon(ctx, b)
@@ -168,7 +168,7 @@ func (impl *backendInsecure) doTxSetEpoch(
 		return fmt.Errorf("beacon: explicit epoch does not advance time")
 	}
 
-	height := ctx.BlockHeight() + 1 // Current height is ctx.BlockHeight() + 1
+	height := ctx.CurrentHeight()
 
 	ctx.Logger().Info("scheduling explicit epoch transition",
 		"epoch", epoch,

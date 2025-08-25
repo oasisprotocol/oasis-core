@@ -137,7 +137,7 @@ func (mux *abciMux) executeTx(ctx *api.Context, rawTx []byte) error {
 	// If we are in CheckTx mode and there is a pending upgrade in this block, make sure to reject
 	// any transactions before processing as they may potentially query incompatible state.
 	if upgrader := mux.state.Upgrader(); upgrader != nil && ctx.IsCheckOnly() {
-		hasUpgrade, err := upgrader.HasPendingUpgradeAt(ctx.BlockHeight() + 1)
+		hasUpgrade, err := upgrader.HasPendingUpgradeAt(ctx.CurrentHeight())
 		if err != nil {
 			return fmt.Errorf("failed to check for pending upgrades: %w", err)
 		}
@@ -156,7 +156,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 
 	// Certain modules, in particular the beacon require InitChain or BeginBlock
 	// to have completed before initialization is complete.
-	if mux.state.BlockHeight() == 0 {
+	if mux.state.LastHeight() == 0 {
 		return 0, consensus.ErrNoCommittedBlocks
 	}
 

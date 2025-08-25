@@ -144,7 +144,7 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 		height: dumpVersion,
 	}
 	doc := &genesis.Document{
-		Height:    qs.BlockHeight(),
+		Height:    qs.LastHeight(),
 		Time:      time.Now(), // XXX: Make this deterministic?
 		ChainID:   oldDoc.ChainID,
 		ExtraData: oldDoc.ExtraData,
@@ -280,7 +280,7 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 
 func dumpRegistry(ctx context.Context, qs *dumpQueryState) (*registry.Genesis, error) {
 	qf := registryApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create registry query: %w", err)
 	}
@@ -293,7 +293,7 @@ func dumpRegistry(ctx context.Context, qs *dumpQueryState) (*registry.Genesis, e
 
 func dumpRootHash(ctx context.Context, qs *dumpQueryState) (*roothash.Genesis, error) {
 	qf := roothashApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create root hash query: %w", err)
 	}
@@ -306,7 +306,7 @@ func dumpRootHash(ctx context.Context, qs *dumpQueryState) (*roothash.Genesis, e
 
 func dumpStaking(ctx context.Context, qs *dumpQueryState) (*staking.Genesis, error) {
 	qf := stakingApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create staking query: %w", err)
 	}
@@ -334,7 +334,7 @@ func dumpKeyManager(ctx context.Context, qs *dumpQueryState) (*keymanager.Genesi
 
 func dumpKeyManagerSecrets(ctx context.Context, qs *dumpQueryState) (*secrets.Genesis, error) {
 	qf := keymanagerSecretsApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create key manager secrets query: %w", err)
 	}
@@ -347,7 +347,7 @@ func dumpKeyManagerSecrets(ctx context.Context, qs *dumpQueryState) (*secrets.Ge
 
 func dumpKeyManagerChurp(ctx context.Context, qs *dumpQueryState) (*churp.Genesis, error) {
 	qf := keymanagerChurpApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create key manager CHURP query: %w", err)
 	}
@@ -360,7 +360,7 @@ func dumpKeyManagerChurp(ctx context.Context, qs *dumpQueryState) (*churp.Genesi
 
 func dumpScheduler(ctx context.Context, qs *dumpQueryState) (*scheduler.Genesis, error) {
 	qf := schedulerApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create scheduler query: %w", err)
 	}
@@ -373,7 +373,7 @@ func dumpScheduler(ctx context.Context, qs *dumpQueryState) (*scheduler.Genesis,
 
 func dumpGovernance(ctx context.Context, qs *dumpQueryState) (*governance.Genesis, error) {
 	qf := governanceApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create governance query: %w", err)
 	}
@@ -386,7 +386,7 @@ func dumpGovernance(ctx context.Context, qs *dumpQueryState) (*governance.Genesi
 
 func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error) {
 	qf := beaconApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create beacon query: %w", err)
 	}
@@ -399,7 +399,7 @@ func dumpBeacon(ctx context.Context, qs *dumpQueryState) (*beacon.Genesis, error
 
 func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis, error) {
 	qf := consensusApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create consensus query: %w", err)
 	}
@@ -415,7 +415,7 @@ func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis,
 
 func dumpVault(ctx context.Context, qs *dumpQueryState) (*vault.Genesis, error) {
 	qf := vaultApp.NewQueryFactory(qs)
-	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	q, err := qf.QueryAt(ctx, qs.LastHeight())
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create vault query: %w", err)
 	}
@@ -439,7 +439,7 @@ func (qs *dumpQueryState) Checkpointer() checkpoint.Checkpointer {
 	return nil
 }
 
-func (qs *dumpQueryState) BlockHeight() int64 {
+func (qs *dumpQueryState) LastHeight() int64 {
 	return qs.height
 }
 

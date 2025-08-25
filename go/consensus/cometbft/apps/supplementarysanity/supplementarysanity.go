@@ -89,7 +89,7 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 }
 
 func (app *Application) endBlockImpl(ctx *api.Context) error {
-	height := ctx.BlockHeight()
+	height := ctx.LastHeight()
 
 	if height == 1 {
 		logger.Debug("skipping checks before InitChain")
@@ -114,7 +114,7 @@ func (app *Application) endBlockImpl(ctx *api.Context) error {
 
 	logger.Debug("checking this block", "height", height)
 
-	now, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	now, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return fmt.Errorf("cometbft/supplementarysanity: failed to GetEpoch: %w", err)
 	}

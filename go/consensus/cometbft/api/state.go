@@ -83,8 +83,8 @@ type ApplicationQueryState interface {
 	// This may be nil in case checkpoints are disabled.
 	Checkpointer() checkpoint.Checkpointer
 
-	// BlockHeight returns the last committed block height.
-	BlockHeight() int64
+	// LastHeight returns the last committed block height.
+	LastHeight() int64
 
 	// GetEpoch returns epoch at block height.
 	GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error)
@@ -104,7 +104,7 @@ type MockApplicationState interface {
 
 // MockApplicationStateConfig is the configuration for the mock application state.
 type MockApplicationStateConfig struct {
-	BlockHeight   int64
+	LastHeight    int64
 	StateRootHash []byte
 
 	BaseEpoch    beacon.EpochTime
@@ -155,8 +155,8 @@ func (ms *mockApplicationState) InitialHeight() int64 {
 	return ms.cfg.Genesis.Height
 }
 
-func (ms *mockApplicationState) BlockHeight() int64 {
-	return ms.cfg.BlockHeight
+func (ms *mockApplicationState) LastHeight() int64 {
+	return ms.cfg.LastHeight
 }
 
 func (ms *mockApplicationState) StateRootHash() []byte {
@@ -214,7 +214,7 @@ func (ms *mockApplicationState) NewContext(mode ContextMode) *Context {
 		gasAccountant: NewNopGasAccountant(),
 		state:         ms.tree,
 		appState:      ms,
-		blockHeight:   ms.cfg.BlockHeight,
+		lastHeight:    ms.cfg.LastHeight,
 		blockCtx:      ms.blockCtx,
 		initialHeight: ms.InitialHeight(),
 		logger:        logging.GetLogger("consensus/cometbft/abci").With("mode", mode),
@@ -267,20 +267,20 @@ func NewImmutableStateAt(ctx context.Context, state ApplicationQueryState, versi
 		// - If this request was made from InitChain, no blocks and states have been submitted yet.
 		// - If this request was made from an ABCI app and is for the current (future) height.
 		//
-		if abciCtx.IsInitChain() || version == abciCtx.BlockHeight()+1 {
+		if abciCtx.IsInitChain() || version == abciCtx.CurrentHeight() {
 			return &ImmutableState{abciCtx.State()}, nil
 		}
 	}
 
 	// Handle a regular (external) query where we need to create a new tree.
-	if state.BlockHeight() == 0 {
+	if state.LastHeight() == 0 {
 		return nil, consensus.ErrNoCommittedBlocks
 	}
-	if version > state.BlockHeight() {
+	if version > state.LastHeight() {
 		return nil, consensus.ErrVersionNotFound
 	}
 	if version <= 0 {
-		version = state.BlockHeight()
+		version = state.LastHeight()
 	}
 
 	ndb := state.Storage().NodeDB()

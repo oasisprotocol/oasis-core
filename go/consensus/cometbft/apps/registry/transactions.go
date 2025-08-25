@@ -218,7 +218,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to get epoch",
 			"err", err,
@@ -233,7 +233,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		sigNode,
 		untrustedEntity,
 		ctx.Now(),
-		uint64(ctx.BlockHeight()),
+		uint64(ctx.LastHeight()),
 		ctx.IsInitChain(),
 		false,
 		epoch,
@@ -428,8 +428,8 @@ func (app *Application) registerNode( // nolint: gocyclo
 		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
 		// suspended again on the next epoch transition.
 		if !stakeParams.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
-			acctAddr := rt.StakingAddress()
-			if acctAddr == nil {
+			acctAddr, ok := rt.StakingAddress()
+			if !ok {
 				// This should never happen.
 				ctx.Logger().Error("unknown runtime governance model",
 					"rt_id", rt.ID,
@@ -534,7 +534,7 @@ func (app *Application) unfreezeNode(
 	}
 
 	// Ensure if we can actually unfreeze.
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return err
 	}
@@ -574,7 +574,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, registry.ErrForbidden
 	}
 
-	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -657,8 +657,8 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 			rtToCheck = rt
 		}
 
-		expectedAddr := rtToCheck.StakingAddress()
-		if expectedAddr == nil {
+		expectedAddr, ok := rtToCheck.StakingAddress()
+		if !ok {
 			ctx.Logger().Debug("RegisterRuntime: runtimes with consensus-layer governance can only be registered at genesis")
 			return nil, registry.ErrForbidden
 		}
@@ -694,7 +694,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, err
 	}
 
-	if rtAddress := rt.StakingAddress(); !stakeParams.DebugBypassStake && rtAddress != nil {
+	if rtAddress, ok := rt.StakingAddress(); ok && !stakeParams.DebugBypassStake {
 		claim := registry.StakeClaimForRuntime(rt.ID)
 		thresholds := registry.StakeThresholdsForRuntime(rt)
 
@@ -709,15 +709,28 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		}
 
 		// If owner was updated remove stake claim from previous owner.
-		if existingRt != nil && *existingRt.StakingAddress() != *rtAddress {
-			if err = stakingState.RemoveStakeClaim(ctx, *existingRt.StakingAddress(), claim); err != nil {
+		if err := func() error {
+			if existingRt == nil {
+				return nil
+			}
+			existingRtAddress, ok := existingRt.StakingAddress()
+			if !ok {
+				return nil
+			}
+			if *existingRtAddress == *rtAddress {
+				return nil
+			}
+			if err := stakingState.RemoveStakeClaim(ctx, *existingRtAddress, claim); err != nil {
 				ctx.Logger().Debug("RegisterRuntime: removing stake claim",
 					"err", err,
 					"entity", existingRt.EntityID,
 					"runtime", rt.ID,
 				)
-				return nil, err
+				return err
 			}
+			return nil
+		}(); err != nil {
+			return nil, err
 		}
 	}
 

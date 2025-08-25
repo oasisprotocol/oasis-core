@@ -279,7 +279,7 @@ func TestGenesis(t *testing.T) {
 	currentEpoch := beacon.EpochTime(80)
 
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{
-		BlockHeight:  1000,
+		LastHeight:   1000,
 		BaseEpoch:    1,
 		CurrentEpoch: currentEpoch,
 	})

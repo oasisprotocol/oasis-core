@@ -63,7 +63,7 @@ func TestChildContext(t *testing.T) {
 	require.EqualValues(ctx.State(), child.State(), "child.State should correspond to parent.State")
 	require.EqualValues(ctx.AppState(), child.AppState(), "child.Mode should correspond to parent.Mode")
 	require.EqualValues(ctx.InitialHeight(), child.InitialHeight(), "child.InitialHeight should correspond to parent.InitialHeight")
-	require.EqualValues(ctx.BlockHeight(), child.BlockHeight(), "child.BlockHeight should correspond to parent.BlockHeight")
+	require.EqualValues(ctx.LastHeight(), child.LastHeight(), "child.LastHeight should correspond to parent.LastHeight")
 	require.EqualValues(ctx.BlockContext(), child.BlockContext(), "child.BlockContext should correspond to parent.BlockContext")
 	require.EqualValues(1, child.CallDepth(), "child.CallDepth should be correct")
 

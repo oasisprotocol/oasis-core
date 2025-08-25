@@ -286,8 +286,8 @@ func AddStakeClaims(
 	}
 	for _, rt := range runtimes {
 		// Add runtime stake claims.
-		addr := rt.StakingAddress()
-		if addr == nil {
+		addr, ok := rt.StakingAddress()
+		if !ok {
 			continue
 		}
 		escrow, ok := escrows[*addr]

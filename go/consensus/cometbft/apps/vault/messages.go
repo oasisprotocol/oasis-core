@@ -82,7 +82,7 @@ func (app *Application) invokeAccountHook(ctx *api.Context, msg any) (any, error
 		if err != nil {
 			return nil, err
 		}
-		if !as.AuthorizeWithdrawal(ctx.BlockHeight()+1, hi.Amount) {
+		if !as.AuthorizeWithdrawal(ctx.CurrentHeight(), hi.Amount) {
 			return nil, vault.ErrForbidden
 		}
 

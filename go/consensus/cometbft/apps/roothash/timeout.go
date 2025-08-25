@@ -19,7 +19,7 @@ const (
 func (app *Application) processRoundTimeouts(ctx *tmapi.Context) error {
 	state := roothashState.NewMutableState(ctx.State())
 
-	roundTimeouts, err := state.RuntimesWithRoundTimeouts(ctx, ctx.BlockHeight()+1) // Current height is ctx.BlockHeight() + 1
+	roundTimeouts, err := state.RuntimesWithRoundTimeouts(ctx, ctx.CurrentHeight())
 	if err != nil {
 		return fmt.Errorf("failed to fetch runtimes with round timeouts: %w", err)
 	}
@@ -61,7 +61,7 @@ func rearmRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace, round uin
 		"round", round,
 		"prev_timeout", prevTimeout,
 		"next_timeout", nextTimeout,
-		"height", ctx.BlockHeight()+1, // Current height is ctx.BlockHeight() + 1
+		"height", ctx.CurrentHeight(),
 	)
 
 	state := roothashState.NewMutableState(ctx.State())

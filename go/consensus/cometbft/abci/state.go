@@ -129,7 +129,7 @@ type applicationState struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
-	initialHeight uint64
+	initialHeight int64
 
 	stateRoot storage.Root
 	storage   storage.LocalBackend
@@ -183,7 +183,7 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		blockCtx *api.BlockContext
 		state    mkvs.OverlayTree
 	)
-	blockHeight := int64(s.stateRoot.Version)
+	lastHeight := int64(s.stateRoot.Version)
 	now := s.blockTime
 	switch mode {
 	case api.ContextInitChain:
@@ -193,7 +193,7 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		s.initState = mkvs.NewOverlay(mkvs.New(nil, nil, storage.RootTypeState, mkvs.WithoutWriteLog()))
 		state = s.initState
 		// Configure block height so that current height will be correctly computed.
-		blockHeight = int64(s.initialHeight) - 1
+		lastHeight = s.initialHeight - 1
 	case api.ContextCheckTx:
 		state = mkvs.NewOverlayWrapper(s.checkState)
 	case api.ContextDeliverTx, api.ContextBeginBlock, api.ContextEndBlock:
@@ -215,9 +215,9 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 		api.NewNopGasAccountant(),
 		s,
 		state,
-		blockHeight,
 		blockCtx,
-		int64(s.initialHeight),
+		lastHeight,
+		s.initialHeight,
 	)
 }
 
@@ -234,25 +234,26 @@ func (s *applicationState) Checkpointer() checkpoint.Checkpointer {
 }
 
 func (s *applicationState) InitialHeight() int64 {
-	return int64(s.initialHeight)
+	return s.initialHeight
 }
 
-func (s *applicationState) BlockHeight() int64 {
+func (s *applicationState) LastHeight() int64 {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
-	height := s.stateRoot.Version
+	height := int64(s.stateRoot.Version)
 	if height < s.initialHeight {
 		height = 0
 	}
-	return int64(height)
+	return height
 }
 
 func (s *applicationState) StateRootHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
-	if s.stateRoot.Version < s.initialHeight {
+	height := int64(s.stateRoot.Version)
+	if height < s.initialHeight {
 		// CometBFT expects a nil hash when there is no state otherwise it will panic.
 		return nil
 	}
@@ -279,12 +280,12 @@ func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (bea
 }
 
 func (s *applicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTime, error) {
-	blockHeight := s.BlockHeight()
-	if blockHeight == 0 {
+	lastHeight := s.LastHeight()
+	if lastHeight == 0 {
 		return beacon.EpochInvalid, nil
 	}
 
-	latestHeight := blockHeight
+	latestHeight := lastHeight
 	if abciCtx := api.FromCtx(ctx); abciCtx != nil {
 		// If request was made from an ABCI application context, then use blockHeight + 1, to fetch
 		// the epoch at current (future) height. See cometbft/api.NewImmutableState for details.
@@ -297,23 +298,23 @@ func (s *applicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTim
 	if err != nil {
 		return beacon.EpochInvalid, fmt.Errorf("failed to get future epoch for height %d: %w", latestHeight, err)
 	}
-	if future != nil && future.Height == blockHeight+1 {
+	if future != nil && future.Height == lastHeight+1 {
 		return future.Epoch, nil
 	}
 
 	currentEpoch, err := s.timeSource.GetEpoch(ctx, latestHeight)
 	if err != nil {
-		return beacon.EpochInvalid, fmt.Errorf("failed to get epoch for height %d: %w", blockHeight+1, err)
+		return beacon.EpochInvalid, fmt.Errorf("failed to get epoch for height %d: %w", lastHeight+1, err)
 	}
 	return currentEpoch, nil
 }
 
 func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTime) {
-	blockHeight := s.BlockHeight()
-	if blockHeight == 0 {
+	lastHeight := s.LastHeight()
+	if lastHeight == 0 {
 		return false, beacon.EpochInvalid
 	}
-	latestHeight := blockHeight
+	latestHeight := lastHeight
 	if abciCtx := api.FromCtx(ctx); abciCtx != nil {
 		// If request was made from an ABCI application context, then use blockHeight + 1, to fetch
 		// the epoch at current (future) height. See cometbft/api.NewImmutableState for details.
@@ -328,7 +329,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTim
 		return false, beacon.EpochInvalid
 	}
 
-	if uint64(blockHeight) == s.initialHeight {
+	if lastHeight == s.initialHeight {
 		// There is no block before the first block. For historic reasons, this is defined as not
 		// having had a transition.
 		return false, currentEpoch
@@ -380,13 +381,14 @@ func (s *applicationState) doInitChain() error {
 
 	// We use the height before the initial height for the state before the first block. Note that
 	// this tree is not persisted, we only need it to compute the root hash.
-	_, stateRootHash, err := s.canonicalState.Commit(s.ctx, s.stateRoot.Namespace, s.initialHeight-1, mkvs.NoPersist())
+	version := uint64(s.initialHeight - 1)
+	_, stateRootHash, err := s.canonicalState.Commit(s.ctx, s.stateRoot.Namespace, version, mkvs.NoPersist())
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
 	s.stateRoot.Hash = stateRootHash
-	s.stateRoot.Version = s.initialHeight - 1
+	s.stateRoot.Version = version
 
 	return s.doCommitOrInitChainLocked()
 }
@@ -622,7 +624,7 @@ func (s *applicationState) pruneWorker() {
 			if err := s.statePruner.Prune(version); err != nil {
 				s.logger.Warn("failed to prune state",
 					"err", err,
-					"block_height", version,
+					"height", version,
 				)
 			}
 		}
@@ -756,7 +758,8 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	}
 
 	// Refresh consensus parameters when loading state if we are past genesis.
-	if latestVersion >= s.initialHeight {
+	initialVersion := uint64(s.initialHeight)
+	if latestVersion >= initialVersion {
 		if err = s.doCommitOrInitChainLocked(); err != nil {
 			return nil, fmt.Errorf("state: failed to run initial state commit hook: %w", err)
 		}
@@ -774,7 +777,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 					Interval:       params.StateCheckpointInterval,
 					NumKept:        params.StateCheckpointNumKept,
 					ChunkSize:      params.StateCheckpointChunkSize,
-					InitialVersion: cfg.InitialHeight,
+					InitialVersion: initialVersion,
 					ChunkerThreads: cfg.ChunkerThreads,
 				}, nil
 			},
