@@ -146,6 +146,9 @@ type Status struct {
 	// Policy is the key manager policy.
 	Policy *SignedPolicySGX `json:"policy"`
 
+	// NextPolicy is the key manager policy scheduled to take effect in the next epoch.
+	NextPolicy *SignedPolicySGX `json:"next_policy,omitempty"`
+
 	// RSK is the runtime signing key of the key manager.
 	RSK *signature.PublicKey `json:"rsk,omitempty"`
 }

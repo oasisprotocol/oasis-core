@@ -55,7 +55,11 @@ impl Policy {
     ///
     /// The policy is presumed trustworthy, so it's up to the caller to verify it against
     /// the consensus layer state. Empty polices are allowed only in unsafe builds.
-    pub fn init(&self, policy: Option<SignedPolicySGX>) -> Result<Vec<u8>> {
+    pub fn init(
+        &self,
+        policy: Option<SignedPolicySGX>,
+        next_policy: Option<SignedPolicySGX>,
+    ) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if policy.is_none() && Self::unsafe_skip() {
             return Ok(vec![]);
@@ -63,7 +67,7 @@ impl Policy {
 
         // Cache the new policy.
         let policy = policy.ok_or(KeyManagerError::PolicyRequired)?;
-        let new_policy = CachedPolicy::parse(policy)?;
+        let policy = CachedPolicy::parse(policy)?;
 
         // Lock as late as possible.
         let mut inner = self.inner.write().unwrap();
@@ -71,24 +75,35 @@ impl Policy {
         // Compare the new serial number with the old serial number, ensure
         // it is greater.
         if let Some(old_policy) = inner.policy.as_ref() {
-            match old_policy.serial.cmp(&new_policy.serial) {
+            match old_policy.serial.cmp(&policy.serial) {
                 Ordering::Greater => return Err(KeyManagerError::PolicyRollback.into()),
                 Ordering::Equal => {
-                    if old_policy.checksum != new_policy.checksum {
+                    if old_policy.checksum != policy.checksum {
                         // Policy should be identical.
                         return Err(KeyManagerError::PolicyChanged.into());
                     }
-                    return Ok(new_policy.checksum);
                 }
                 Ordering::Less => {}
             }
         };
 
-        // Return the checksum of the newly applied policy.
-        let new_checksum = new_policy.checksum.clone();
-        inner.policy = Some(new_policy);
+        // Compute checksum for registration.
+        let mut checksum = policy.checksum.clone();
 
-        Ok(new_checksum)
+        // Verify scheduled policy.
+        if let Some(next_policy) = next_policy {
+            let next_policy = CachedPolicy::parse(next_policy)?;
+            if next_policy.serial <= policy.serial {
+                return Err(KeyManagerError::PolicyRollback.into());
+            }
+            // If a new policy is scheduled, use its checksum for registration.
+            checksum = next_policy.checksum.clone();
+        }
+
+        // Cache the new policy.
+        inner.policy = Some(policy);
+
+        Ok(checksum)
     }
 
     /// Check if the MRSIGNER/MRENCLAVE may query keys for the given

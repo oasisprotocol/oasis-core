@@ -12,8 +12,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (ext *secretsExt) updatePolicy(
@@ -34,12 +36,12 @@ func (ext *secretsExt) updatePolicy(
 	}
 
 	// Get the existing policy document, if one exists.
-	oldStatus, err := state.Status(ctx, kmRt.ID)
+	status, err := state.Status(ctx, kmRt.ID)
 	switch err {
 	case nil:
 	case secrets.ErrNoSuchStatus:
 		// This must be a new key manager runtime.
-		oldStatus = &secrets.Status{
+		status = &secrets.Status{
 			ID: kmRt.ID,
 		}
 	default:
@@ -47,7 +49,7 @@ func (ext *secretsExt) updatePolicy(
 	}
 
 	// Validate the tx.
-	if err = secrets.SanityCheckSignedPolicySGX(oldStatus.Policy, sigPol); err != nil {
+	if err = secrets.SanityCheckSignedPolicySGX(status.Policy, sigPol); err != nil {
 		return err
 	}
 
@@ -70,32 +72,42 @@ func (ext *secretsExt) updatePolicy(
 		return nil
 	}
 
-	// Ok, as far as we can tell the new policy is valid, apply it.
-	//
-	// Note: The key manager cohort responsible for servicing this ID
-	// will be unresponsive for a minimum of one epoch as a new cohort
-	// will only be formed on the epoch transition.  If replication
-	// is in the picture, the replication process will take an
-	// additional epoch.
-	//
-	// TODO: It would be possible to update the cohort on each
-	// node-reregistration, but I'm not sure how often the policy
-	// will get updated.
-	epoch, err := ext.state.GetCurrentEpoch(ctx)
+	// Schedule the policy to take effect in the next epoch.
+	status.NextPolicy = sigPol
+
+	// Support legacy behavior where the policy was applied immediately.
+	ok, err := features.IsFeatureVersion(ctx, migrations.Version242)
 	if err != nil {
 		return err
 	}
+	if !ok {
+		// Ok, as far as we can tell the new policy is valid, apply it.
+		//
+		// Note: The key manager cohort responsible for servicing this ID
+		// will be unresponsive for a minimum of one epoch as a new cohort
+		// will only be formed on the epoch transition.  If replication
+		// is in the picture, the replication process will take an
+		// additional epoch.
+		//
+		// TODO: It would be possible to update the cohort on each
+		// node-reregistration, but I'm not sure how often the policy
+		// will get updated.
+		epoch, err := ext.state.GetCurrentEpoch(ctx)
+		if err != nil {
+			return err
+		}
 
-	regParams, err := regState.ConsensusParameters(ctx)
-	if err != nil {
-		return err
+		regParams, err := regState.ConsensusParameters(ctx)
+		if err != nil {
+			return err
+		}
+
+		nodes, _ := regState.Nodes(ctx)
+		registry.SortNodeList(nodes)
+		status = generateStatus(ctx, kmRt, status, nil, nodes, regParams, epoch)
 	}
 
-	nodes, _ := regState.Nodes(ctx)
-	registry.SortNodeList(nodes)
-	oldStatus.Policy = sigPol
-	newStatus := generateStatus(ctx, kmRt, oldStatus, nil, nodes, regParams, epoch)
-	if err := state.SetStatus(ctx, newStatus); err != nil {
+	if err := state.SetStatus(ctx, status); err != nil {
 		ctx.Logger().Error("keymanager: failed to set key manager status",
 			"err", err,
 		)
@@ -103,7 +115,7 @@ func (ext *secretsExt) updatePolicy(
 	}
 
 	ctx.EmitEvent(tmapi.NewEventBuilder(ext.appName).TypedAttribute(&secrets.StatusUpdateEvent{
-		Statuses: []*secrets.Status{newStatus},
+		Statuses: []*secrets.Status{status},
 	}))
 
 	return nil
