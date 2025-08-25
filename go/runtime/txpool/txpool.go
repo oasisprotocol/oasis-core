@@ -120,9 +120,6 @@ type TransactionPool interface {
 	// WatchCheckedTransactions subscribes to notifications about new transactions being available
 	// in the transaction pool for scheduling.
 	WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, pubsub.ClosableSubscription)
-
-	// PendingCheckSize returns the number of transactions currently pending to be checked.
-	PendingCheckSize() int
 }
 
 // TransactionPublisher is an interface representing a mechanism for publishing transactions.
@@ -296,7 +293,7 @@ func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 	// Wake up the check batcher.
 	t.checkTxCh.In() <- struct{}{}
 
-	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.PendingCheckSize()))
+	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.checkTxQueue.size()))
 
 	return nil
 }
@@ -449,10 +446,6 @@ func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, 
 	return ch, sub
 }
 
-func (t *txPool) PendingCheckSize() int {
-	return t.checkTxQueue.size()
-}
-
 func (t *txPool) All() [][]byte {
 	t.drainLock.Lock()
 	defer t.drainLock.Unlock()
@@ -547,7 +540,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		return err
 	}
 
-	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.PendingCheckSize()))
+	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.checkTxQueue.size()))
 
 	notifySubmitter := func(i int) {
 		// Send back the result of running the checks.
