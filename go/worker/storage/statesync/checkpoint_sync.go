@@ -21,8 +21,15 @@ import (
 const (
 	// cpListsTimeout is the timeout for fetching checkpoints from all nodes.
 	cpListsTimeout = 30 * time.Second
-	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from the remote peer.
-	cpRestoreTimeout = 60 * time.Second
+
+	// cpRestoreChunkTimeout is the timeout for restoring a checkpoint chunk from the remote peer.
+	cpRestoreChunkTimeout = 60 * time.Second
+
+	// cpRestoreTimeout is the timeout for restoring the whole checkpoint from the remote peers.
+	//
+	// As of now it takes ~10-30 min to restore the state from the checkpoint, however the timeout
+	// should be significantly higher to account for the growing state.
+	cpRestoreTimeout = 12 * time.Hour
 
 	checkpointStatusDone = 0
 	checkpointStatusNext = 1
@@ -99,7 +106,7 @@ func (w *Worker) checkpointChunkFetcher(
 			}
 		}
 
-		chunkCtx, cancel := context.WithTimeout(ctx, cpRestoreTimeout)
+		chunkCtx, cancel := context.WithTimeout(ctx, cpRestoreChunkTimeout)
 		defer cancel()
 
 		// Fetch chunk from peers.
@@ -195,6 +202,8 @@ func (w *Worker) fetchChunk(ctx context.Context, chunk *chunk) ([]byte, rpc.Peer
 }
 
 func (w *Worker) handleCheckpoint(ctx context.Context, check *checkpointsync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+	ctx, cancel := context.WithTimeout(ctx, cpRestoreTimeout)
+	defer cancel()
 	if err := w.localStorage.Checkpointer().StartRestore(ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
