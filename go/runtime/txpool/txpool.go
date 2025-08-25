@@ -60,7 +60,7 @@ type TransactionPool interface {
 	Has(hash hash.Hash) bool
 
 	// Get returns the transaction with the given hash if it is in the pool.
-	Get(hash hash.Hash) (*TxQueueMeta, bool)
+	Get(hash hash.Hash) ([]byte, bool)
 
 	// SubmitTx adds the transaction into the transaction pool, first performing checks on it by
 	// invoking the runtime. This method waits for the checks to complete.
@@ -122,7 +122,7 @@ type TransactionPool interface {
 	PendingCheckSize() int
 
 	// GetTxs returns all transactions currently queued in the transaction pool.
-	GetTxs() []*TxQueueMeta
+	GetTxs() [][]byte
 }
 
 // TransactionPublisher is an interface representing a mechanism for publishing transactions.
@@ -198,10 +198,10 @@ func (t *txPool) Has(hash hash.Hash) bool {
 	return ok
 }
 
-func (t *txPool) Get(hash hash.Hash) (*TxQueueMeta, bool) {
+func (t *txPool) Get(hash hash.Hash) ([]byte, bool) {
 	for _, q := range t.usableSources {
 		if tx, ok := q.GetTxByHash(hash); ok {
-			return tx, true
+			return tx.Raw(), true
 		}
 	}
 
@@ -209,7 +209,7 @@ func (t *txPool) Get(hash hash.Hash) (*TxQueueMeta, bool) {
 	defer t.proposedTxsLock.Unlock()
 
 	if tx, ok := t.proposedTxs[hash]; ok {
-		return tx, true
+		return tx.Raw(), true
 	}
 
 	return nil, false
@@ -453,13 +453,15 @@ func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
 }
 
-func (t *txPool) GetTxs() []*TxQueueMeta {
+func (t *txPool) GetTxs() [][]byte {
 	t.drainLock.Lock()
 	defer t.drainLock.Unlock()
 
-	var txs []*TxQueueMeta
+	var txs [][]byte
 	for _, q := range t.usableSources {
-		txs = append(txs, q.PeekAll()...)
+		for _, tx := range q.PeekAll() {
+			txs = append(txs, tx.Raw())
+		}
 	}
 	return txs
 }

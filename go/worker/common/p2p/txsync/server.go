@@ -37,7 +37,7 @@ func (s *service) handleGetTxs(req *GetTxsRequest) (*GetTxsResponse, error) {
 	txs := make([][]byte, 0, len(hashes))
 	for _, hash := range hashes {
 		if tx, ok := s.txPool.Get(hash); ok {
-			txs = append(txs, tx.Raw())
+			txs = append(txs, tx)
 		}
 	}
 
