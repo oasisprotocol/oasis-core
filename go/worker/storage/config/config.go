@@ -55,7 +55,7 @@ func DefaultConfig() Config {
 		Checkpointer: CheckpointerConfig{
 			Enabled:         false,
 			CheckInterval:   1 * time.Minute,
-			ParallelChunker: false,
+			ParallelChunker: true,
 		},
 	}
 }
