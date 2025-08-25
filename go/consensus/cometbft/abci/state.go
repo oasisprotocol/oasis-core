@@ -782,10 +782,11 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 				}, nil
 			},
 		}
-		s.checkpointer, err = checkpoint.NewCheckpointer(s.ctx, ndb, ldb.Checkpointer(), checkpointerCfg)
+		s.checkpointer, err = checkpoint.NewCheckpointer(ndb, ldb.Checkpointer(), checkpointerCfg)
 		if err != nil {
 			return nil, fmt.Errorf("state: failed to create checkpointer: %w", err)
 		}
+		go s.checkpointer.Serve(ctx)
 	}
 
 	go s.metricsWorker()
