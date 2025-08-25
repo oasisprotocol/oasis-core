@@ -71,6 +71,9 @@ const (
 	// same checkpoint hashes. The current value was chosen based on the benchmarks
 	// done on the modern developer machine.
 	chunkerThreads = 12
+
+	// diffResponseTimeout is the maximum time for fetching storage diff from the peer.
+	diffResponseTimeout = 15 * time.Second
 )
 
 type roundItem interface {
@@ -451,10 +454,7 @@ func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 		"new_root", thisRoot,
 	)
 
-	ctx, cancel := context.WithCancel(w.ctx)
-	defer cancel()
-
-	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
+	wl, pf, err := w.getDiff(w.ctx, prevRoot, thisRoot)
 	if err != nil {
 		result.err = err
 		return
@@ -467,11 +467,15 @@ func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 //
 // In case of no peers or error, it fallbacks to the legacy storage sync protocol.
 func (w *Worker) getDiff(ctx context.Context, prevRoot, thisRoot storageApi.Root) (storageApi.WriteLog, rpc.PeerFeedback, error) {
+	ctx, cancel := context.WithTimeout(ctx, diffResponseTimeout)
+	defer cancel()
 	rsp1, pf, err := w.diffSync.GetDiff(ctx, &diffsync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 	if err == nil { // if NO error
 		return rsp1.WriteLog, pf, nil
 	}
 
+	ctx, cancel = context.WithTimeout(ctx, diffResponseTimeout)
+	defer cancel()
 	rsp2, pf, err := w.legacyStorageSync.GetDiff(ctx, &synclegacy.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 	if err != nil {
 		return nil, nil, err

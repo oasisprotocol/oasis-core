@@ -22,7 +22,7 @@ const (
 	// cpListsTimeout is the timeout for fetching checkpoints from all nodes.
 	cpListsTimeout = 30 * time.Second
 	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from the remote peer.
-	cpRestoreTimeout = 60 * time.Second
+	cpRestoreTimeout = time.Minute
 
 	checkpointStatusDone = 0
 	checkpointStatusNext = 1
