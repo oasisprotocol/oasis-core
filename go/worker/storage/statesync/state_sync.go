@@ -71,6 +71,9 @@ const (
 	// same checkpoint hashes. The current value was chosen based on the benchmarks
 	// done on the modern developer machine.
 	chunkerThreads = 12
+
+	// diffResponseTimeout is the maximum time for fetching storage diff from the peer.
+	diffResponseTimeout = 15 * time.Second
 )
 
 type roundItem interface {
@@ -450,7 +453,7 @@ func (w *Worker) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 		"new_root", thisRoot,
 	)
 
-	ctx, cancel := context.WithCancel(w.ctx)
+	ctx, cancel := context.WithTimeout(w.ctx, diffResponseTimeout)
 	defer cancel()
 
 	wl, pf, err := w.getDiff(ctx, prevRoot, thisRoot)
