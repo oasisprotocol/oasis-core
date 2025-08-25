@@ -62,6 +62,9 @@ type TransactionPool interface {
 	// Get returns the transaction with the given hash if it is in the pool.
 	Get(hash hash.Hash) ([]byte, bool)
 
+	// All returns all transactions currently queued in the transaction pool.
+	All() [][]byte
+
 	// SubmitTx adds the transaction into the transaction pool, first performing checks on it by
 	// invoking the runtime. This method waits for the checks to complete.
 	SubmitTx(ctx context.Context, tx []byte, local bool, discard bool) (*protocol.CheckTxResult, error)
@@ -120,9 +123,6 @@ type TransactionPool interface {
 
 	// PendingCheckSize returns the number of transactions currently pending to be checked.
 	PendingCheckSize() int
-
-	// GetTxs returns all transactions currently queued in the transaction pool.
-	GetTxs() [][]byte
 }
 
 // TransactionPublisher is an interface representing a mechanism for publishing transactions.
@@ -453,7 +453,7 @@ func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
 }
 
-func (t *txPool) GetTxs() [][]byte {
+func (t *txPool) All() [][]byte {
 	t.drainLock.Lock()
 	defer t.drainLock.Unlock()
 

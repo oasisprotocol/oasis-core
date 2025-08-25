@@ -250,7 +250,7 @@ func (s *service) GetUnconfirmedTransactions(_ context.Context, runtimeID common
 		return nil, api.ErrNotFound
 	}
 
-	return rt.TxPool.GetTxs(), nil
+	return rt.TxPool.All(), nil
 }
 
 // Implements api.RuntimeClient.
