@@ -150,8 +150,6 @@ type Worker struct {
 
 	undefinedRound uint64
 
-	fetchPool *workerpool.Pool
-
 	workerCommonCfg workerCommon.Config
 
 	checkpointer         checkpoint.Checkpointer
@@ -187,10 +185,6 @@ func New(
 ) (*Worker, error) {
 	initMetrics()
 
-	// Create the fetcher pool.
-	fetchPool := workerpool.New("storage_fetch/" + commonNode.Runtime.ID().String())
-	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
-
 	w := &Worker{
 		commonNode: commonNode,
 
@@ -202,8 +196,6 @@ func New(
 		workerCommonCfg: workerCommonCfg,
 
 		localStorage: localStorage,
-
-		fetchPool: fetchPool,
 
 		checkpointSyncCfg: checkpointSyncCfg,
 
@@ -233,10 +225,6 @@ func New(
 		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 	}
 	w.checkpointer = checkpointer
-	go func() {
-		err := w.checkpointer.Serve(w.ctx)
-		w.logger.Error("checkpointer failed", "err", err)
-	}()
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
 		logger: w.logger,
@@ -320,20 +308,11 @@ func (w *Worker) newCheckpointer(commonNode *committee.Node, localStorage storag
 // Start causes the worker to start responding to CometBFT new block events.
 func (w *Worker) Start() error {
 	go w.worker()
-	if config.GlobalConfig.Storage.Checkpointer.Enabled {
-		go w.consensusCheckpointSyncer()
-	}
 	return nil
 }
 
 // Stop causes the worker to stop watching and shut down.
 func (w *Worker) Stop() {
-	w.statusLock.Lock()
-	w.status = api.StatusStopping
-	w.statusLock.Unlock()
-
-	w.fetchPool.Stop()
-
 	w.ctxCancel()
 }
 
@@ -817,10 +796,30 @@ func (w *Worker) worker() { // nolint: gocyclo
 	}
 
 	w.logger.Info("starting")
-
 	w.statusLock.Lock()
 	w.status = api.StatusStarting
 	w.statusLock.Unlock()
+
+	ctx, cancel := context.WithCancel(w.ctx)
+	defer cancel()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			w.statusLock.Lock()
+			w.status = api.StatusStopping
+			w.statusLock.Unlock()
+		}
+	}()
+	defer w.logger.Info("stopped")
+
+	go func() {
+		err := w.checkpointer.Serve(w.ctx)
+		w.logger.Error("checkpointer failed", "err", err)
+	}()
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
+		go w.consensusCheckpointSyncer()
+	}
 
 	// Determine genesis block.
 	genesisBlock, err := w.commonNode.Consensus.RootHash().GetGenesisBlock(w.ctx, &roothashApi.RuntimeRequest{
@@ -1074,6 +1073,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 		}
 	}
 	close(w.initCh)
+	w.logger.Info("initialized")
 
 	// Notify the checkpointer of the genesis round so it can be checkpointed.
 	if w.checkpointer != nil {
@@ -1090,6 +1090,11 @@ func (w *Worker) worker() { // nolint: gocyclo
 	var wg sync.WaitGroup
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
+
+	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
+	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
+	defer fetchPool.Stop()
+
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
 			syncing, ok := syncingRounds[i]
@@ -1140,7 +1145,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
 					wg.Add(1)
-					w.fetchPool.Submit(func() {
+					fetchPool.Submit(func() {
 						defer wg.Done()
 						w.fetchDiff(this.Round, prevRoots[i], this.Roots[i])
 					})
