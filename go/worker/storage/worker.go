@@ -29,7 +29,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes map[common.Namespace]*statesync.Worker
+	runtimes map[common.Namespace]*worker
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -51,7 +51,7 @@ func New(
 		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
-		runtimes:     make(map[common.Namespace]*statesync.Worker),
+		runtimes:     make(map[common.Namespace]*worker),
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -99,7 +99,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
 
-	worker, err := statesync.New(
+	worker, err := newRuntimeWorker(
 		commonNode,
 		rp,
 		rpRPC,
@@ -190,9 +190,9 @@ func (w *Worker) serve(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 	for id, r := range w.runtimes {
 		g.Go(func() error {
-			err := r.Serve(ctx)
+			err := r.serve(ctx)
 			if err != nil {
-				return fmt.Errorf("state sync worker failed (runtimeID: %s): %w", id, err)
+				return fmt.Errorf("runtime storage worker failed (runtimeID: %s): %w", id, err)
 			}
 			return nil
 		})
@@ -221,9 +221,11 @@ func (w *Worker) Quit() <-chan struct{} {
 func (w *Worker) Cleanup() {
 }
 
-// GetRuntime returns a storage committee node for the given runtime (if available).
+// GetRuntime returns the state sync for the given runtime (if available).
 //
 // In case the runtime with the specified id was not configured for this node it returns nil.
+//
+// Sugggestion: This is only used to get status, how about making this GetRuntimeStatus?
 func (w *Worker) GetRuntime(id common.Namespace) *statesync.Worker {
-	return w.runtimes[id]
+	return w.runtimes[id].stateSync
 }

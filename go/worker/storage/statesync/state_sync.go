@@ -24,12 +24,9 @@ import (
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
@@ -39,12 +36,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
-var (
-	_ committee.NodeHooks = (*Worker)(nil)
-
-	// ErrNonLocalBackend is the error returned when the storage backend doesn't implement the LocalBackend interface.
-	ErrNonLocalBackend = errors.New("storage: storage backend doesn't support local storage")
-)
+// ErrNonLocalBackend is the error returned when the storage backend doesn't implement the LocalBackend interface.
+var ErrNonLocalBackend = errors.New("storage: storage backend doesn't support local storage")
 
 const (
 	// RoundLatest is a magic value for the latest round.
@@ -150,8 +143,6 @@ type Worker struct {
 
 	undefinedRound uint64
 
-	workerCommonCfg workerCommon.Config
-
 	checkpointer         checkpoint.Checkpointer
 	checkpointSyncCfg    *CheckpointSyncConfig
 	checkpointSyncForced bool
@@ -175,6 +166,7 @@ func New(
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
 	localStorage storageApi.LocalBackend,
+	blockCh *channels.InfiniteChannel,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Worker, error) {
 	initMetrics()
@@ -193,7 +185,7 @@ func New(
 
 		status: api.StatusInitializing,
 
-		blockCh:    channels.NewInfiniteChannel(),
+		blockCh:    blockCh,
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
@@ -317,24 +309,6 @@ func (w *Worker) PauseCheckpointer(pause bool) error {
 	}
 	w.checkpointer.Pause(pause)
 	return nil
-}
-
-// NodeHooks implementation.
-
-// HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (w *Worker) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
-	// Nothing to do here.
-}
-
-// HandleNewBlockLocked is guarded by CrossNode.
-func (w *Worker) HandleNewBlockLocked(bi *runtime.BlockInfo) {
-	// Notify the state syncer that there is a new block.
-	w.blockCh.In() <- bi.RuntimeBlock
-}
-
-// HandleRuntimeHostEventLocked is guarded by CrossNode.
-func (w *Worker) HandleRuntimeHostEventLocked(*host.Event) {
-	// Nothing to do here.
 }
 
 // Watcher implementation.
