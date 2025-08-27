@@ -944,8 +944,6 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		"last_synced", cachedLastRound,
 	)
 
-	lastFullyAppliedRound := cachedLastRound
-
 	// Try to perform initial sync from state and io checkpoints if either:
 	//
 	// - Checkpoint sync has been forced because there is insufficient information available to use
@@ -1008,7 +1006,6 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 			if err != nil {
 				return fmt.Errorf("failed to flush synced state %w", err)
 			}
-			lastFullyAppliedRound = cachedLastRound
 			w.logger.Info("checkpoint sync succeeded",
 				logging.LogEvent, LogEventCheckpointSyncSuccess,
 			)
@@ -1025,19 +1022,19 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 
 	// Main syncing loop:
 	err = nil
-	// Don't register availability immediately, we want to know first how far behind consensus we are.
-	latestBlockRound := w.undefinedRound
-
-	heartbeat := heartbeat{}
-	heartbeat.reset()
-
 	var wg sync.WaitGroup
+
+	latestBlockRound := w.undefinedRound // Don't register availability immediately, we want to know first how far behind consensus we are.
+	lastFullyAppliedRound := cachedLastRound
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
 
 	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
 	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 	defer fetchPool.Stop()
+
+	heartbeat := heartbeat{}
+	heartbeat.reset()
 
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
