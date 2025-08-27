@@ -15,6 +15,7 @@ import (
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/statesync"
 )
 
@@ -79,6 +80,11 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
+	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id)
+	if err != nil {
+		return fmt.Errorf("can't create local storage backend: %w", err)
+	}
+
 	// Since the storage node is always coupled with another role, make sure to not add any
 	// particular role here. Instead this only serves to prevent registration until the storage node
 	// is synced by making the role provider unavailable.
@@ -93,10 +99,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 			return fmt.Errorf("failed to create rpc role provider: %w", err)
 		}
 	}
-
-	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id)
-	if err != nil {
-		return fmt.Errorf("can't create local storage backend: %w", err)
+	if rpRPC != nil {
+		commonNode.P2P.RegisterProtocolServer(pub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
 	}
 
 	worker, err := newRuntimeWorker(

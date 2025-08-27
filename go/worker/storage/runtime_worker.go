@@ -15,16 +15,20 @@ import (
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/availabilitynudger"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/checkpointer"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/statesync"
 )
 
 // Worker is handling storage operations for a single runtime.
 type worker struct {
-	logger         *logging.Logger
-	stateSync      *statesync.Worker
-	checkpointer   *checkpointer.Worker
-	stateSyncBlkCh *channels.InfiniteChannel
+	commonNode         *committeeCommon.Node
+	logger             *logging.Logger
+	stateSync          *statesync.Worker
+	checkpointer       *checkpointer.Worker
+	availabilityNudger *availabilitynudger.Worker
+	stateSyncBlkCh     *channels.InfiniteChannel
+	availabilityBlkCh  *channels.InfiniteChannel
 }
 
 func newRuntimeWorker(
@@ -36,14 +40,14 @@ func newRuntimeWorker(
 	checkpointerEnabled bool,
 ) (*worker, error) {
 	worker := &worker{
-		logger:         logging.GetLogger("worker/storage").With("runtimeID", commonNode.Runtime.ID()),
-		stateSyncBlkCh: channels.NewInfiniteChannel(),
+		commonNode:        commonNode,
+		logger:            logging.GetLogger("worker/storage").With("runtimeID", commonNode.Runtime.ID()),
+		stateSyncBlkCh:    channels.NewInfiniteChannel(),
+		availabilityBlkCh: channels.NewInfiniteChannel(),
 	}
 
 	stateSync, err := statesync.New(
 		commonNode,
-		rp,
-		rpRPC,
 		localStorage,
 		worker.stateSyncBlkCh,
 		checkpointSyncCfg,
@@ -64,6 +68,8 @@ func newRuntimeWorker(
 	}
 	worker.checkpointer = checkpointer
 
+	worker.availabilityNudger = availabilitynudger.New(rp, rpRPC, worker.availabilityBlkCh, stateSync, commonNode.Runtime.ID())
+
 	return worker, nil
 }
 
@@ -76,8 +82,9 @@ func (w *worker) HandleNewBlockEarlyLocked(*runtimeAPI.BlockInfo) {
 
 // HandleNewBlockLocked is guarded by CrossNode.
 func (w *worker) HandleNewBlockLocked(bi *runtimeAPI.BlockInfo) {
-	// Notify the state syncer that there is a new block.
+	// Notify the state syncer and availability nudger that there is a new block.
 	w.stateSyncBlkCh.In() <- bi.RuntimeBlock
+	w.availabilityBlkCh.In() <- bi.RuntimeBlock
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
@@ -117,7 +124,16 @@ func (w *worker) serve(ctx context.Context) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return w.stateSync.Serve(ctx)
+		if err := w.stateSync.Serve(ctx); err != nil {
+			return fmt.Errorf("state sync worker failed: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := w.availabilityNudger.Serve(ctx); err != nil {
+			return fmt.Errorf("availability nudger failed: %w", err)
+		}
+		return nil
 	})
 	return g.Wait()
 }

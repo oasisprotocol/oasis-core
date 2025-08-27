@@ -14,7 +14,6 @@ import (
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -26,11 +25,9 @@ import (
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/checkpointsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/diffsync"
-	storagePub "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/synclegacy"
 )
 
@@ -44,14 +41,6 @@ const (
 	defaultUndefinedRound = ^uint64(0)
 
 	checkpointSyncRetryDelay = 10 * time.Second
-
-	// The maximum number of rounds the worker can be behind the chain before it's sensible for
-	// it to register as available.
-	maximumRoundDelayForAvailability = uint64(10)
-
-	// The minimum number of rounds the worker can be behind the chain before it's sensible for
-	// it to stop advertising availability.
-	minimumRoundDelayForUnavailability = uint64(15)
 
 	// maxInFlightRounds is the maximum number of rounds that should be fetched before waiting
 	// for them to be applied.
@@ -114,16 +103,9 @@ type finalizeResult struct {
 // In addition this worker is responsible for:
 //  1. Initializing the runtime state, possibly using checkpoints (if configured).
 //  2. Pruning the state as specified by the configuration.
-//  3. Optionally creating runtime state checkpoints (used by other nodes) for the state sync.
-//  4. Creating (and optionally advertising) statesync p2p protocol clients and servers.
-//  5. Registering node availability when it has synced sufficiently close to
-//     the latest known block header.
+//  3. Creating (and optionally advertising) statesync p2p protocol clients and servers.
 type Worker struct {
 	commonNode *committee.Node
-
-	roleProvider    registration.RoleProvider
-	rpcRoleProvider registration.RoleProvider
-	roleAvailable   bool
 
 	logger *logging.Logger
 
@@ -156,8 +138,6 @@ type Worker struct {
 // New creates a new state sync worker.
 func New(
 	commonNode *committee.Node,
-	roleProvider registration.RoleProvider,
-	rpcRoleProvider registration.RoleProvider,
 	localStorage storageApi.LocalBackend,
 	blockCh *channels.InfiniteChannel,
 	checkpointSyncCfg *CheckpointSyncConfig,
@@ -166,9 +146,6 @@ func New(
 
 	w := &Worker{
 		commonNode: commonNode,
-
-		roleProvider:    roleProvider,
-		rpcRoleProvider: rpcRoleProvider,
 
 		logger: logging.GetLogger("worker/storage/statesync").With("runtime_id", commonNode.Runtime.ID()),
 
@@ -201,9 +178,6 @@ func New(
 	commonNode.P2P.RegisterProtocolServer(diffsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
 	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		commonNode.P2P.RegisterProtocolServer(checkpointsync.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
-	}
-	if rpcRoleProvider != nil {
-		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
 	}
 
 	// Create p2p protocol clients.
@@ -491,31 +465,6 @@ func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
 	}
 
 	return w.syncedState.Round, nil
-}
-
-// This is only called from the main worker goroutine, so no locking should be necessary.
-func (w *Worker) nudgeAvailability(lastSynced, latest uint64) {
-	if lastSynced == w.undefinedRound || latest == w.undefinedRound {
-		return
-	}
-	if latest-lastSynced < maximumRoundDelayForAvailability && !w.roleAvailable {
-		w.roleProvider.SetAvailable(func(_ *node.Node) error {
-			return nil
-		})
-		if w.rpcRoleProvider != nil {
-			w.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
-				return nil
-			})
-		}
-		w.roleAvailable = true
-	}
-	if latest-lastSynced > minimumRoundDelayForUnavailability && w.roleAvailable {
-		w.roleProvider.SetUnavailable()
-		if w.rpcRoleProvider != nil {
-			w.rpcRoleProvider.SetUnavailable()
-		}
-		w.roleAvailable = false
-	}
 }
 
 // Serve runs the state sync worker.
@@ -950,7 +899,6 @@ mainLoop:
 
 			// Check if we're far enough to reasonably register as available.
 			latestBlockRound = blk.Header.Round
-			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
 
 			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound {
 				dummy := blockSummary{
@@ -1042,9 +990,6 @@ mainLoop:
 				)
 			}
 			storageWorkerLastFinalizedRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
-
-			// Check if we're far enough to reasonably register as available.
-			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
 
 		case <-ctx.Done():
 			err = ctx.Err()
