@@ -150,6 +150,8 @@ type Worker struct {
 	syncedLock  sync.RWMutex
 	syncedState blockSummary
 
+	finalizedNotifier *pubsub.Broker
+
 	statusLock sync.RWMutex
 	status     api.StorageWorkerStatus
 
@@ -182,6 +184,8 @@ func New(
 		localStorage: localStorage,
 
 		checkpointSyncCfg: checkpointSyncCfg,
+
+		finalizedNotifier: pubsub.NewBroker(false),
 
 		status: api.StatusInitializing,
 
@@ -301,6 +305,15 @@ func (w *Worker) GetStatus(context.Context) (*api.Status, error) {
 		LastFinalizedRound: w.syncedState.Round,
 		Status:             w.status,
 	}, nil
+}
+
+// WatchFinalizedRounds watches block rounds that have been successfully finalized.
+func (w *Worker) WatchFinalizedRounds() (<-chan uint64, pubsub.ClosableSubscription, error) {
+	ch := make(chan uint64)
+	sub := w.finalizedNotifier.Subscribe()
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
 }
 
 func (w *Worker) PauseCheckpointer(pause bool) error {
@@ -550,6 +563,8 @@ func (w *Worker) flushSyncedState(summary *blockSummary) (uint64, error) {
 	defer w.syncedLock.Unlock()
 
 	w.syncedState = *summary
+	w.finalizedNotifier.Broadcast(summary.Round)
+
 	if err := w.commonNode.Runtime.History().StorageSyncCheckpoint(w.syncedState.Round); err != nil {
 		return 0, err
 	}
