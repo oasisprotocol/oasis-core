@@ -103,7 +103,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		commonNode,
 		rp,
 		rpRPC,
-		w.commonWorker.GetConfig(),
 		localStorage,
 		&statesync.CheckpointSyncConfig{
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,

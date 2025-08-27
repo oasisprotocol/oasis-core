@@ -174,7 +174,6 @@ func New(
 	commonNode *committee.Node,
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
-	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Worker, error) {
@@ -187,8 +186,6 @@ func New(
 		rpcRoleProvider: rpcRoleProvider,
 
 		logger: logging.GetLogger("worker/storage/statesync").With("runtime_id", commonNode.Runtime.ID()),
-
-		workerCommonCfg: workerCommonCfg,
 
 		localStorage: localStorage,
 
@@ -320,11 +317,6 @@ func (w *Worker) PauseCheckpointer(pause bool) error {
 	}
 	w.checkpointer.Pause(pause)
 	return nil
-}
-
-// GetLocalStorage returns the local storage backend used by this state sync worker.
-func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
-	return w.localStorage
 }
 
 // NodeHooks implementation.
