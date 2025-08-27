@@ -1365,6 +1365,7 @@ mainLoop:
 		}
 	}
 
+	cancel() // Ctx has to be canceled so that fetcher go routines can be emptied.
 	wg.Wait()
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
