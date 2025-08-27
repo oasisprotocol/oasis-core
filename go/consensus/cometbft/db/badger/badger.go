@@ -12,7 +12,6 @@ import (
 	dbm "github.com/cometbft/cometbft-db"
 	"github.com/cometbft/cometbft/node"
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/badger/v4/options"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -65,8 +64,6 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
-	opts = opts.WithSyncWrites(false)
-	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 
 	db, err := badger.Open(opts)
