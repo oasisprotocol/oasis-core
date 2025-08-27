@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	storageWorkerLastFullRound = prometheus.NewGaugeVec(
+	storageWorkerLastFinalizedRound = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "oasis_worker_storage_full_round",
 			Help: "The last round that was fully synced and finalized.",
@@ -15,7 +15,7 @@ var (
 		[]string{"runtime"},
 	)
 
-	storageWorkerLastSyncedRound = prometheus.NewGaugeVec(
+	storageWorkerLastFullyAppliedRound = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "oasis_worker_storage_synced_round",
 			Help: "The last round that was synced but not yet finalized.",
@@ -40,8 +40,8 @@ var (
 	)
 
 	storageWorkerCollectors = []prometheus.Collector{
-		storageWorkerLastFullRound,
-		storageWorkerLastSyncedRound,
+		storageWorkerLastFinalizedRound,
+		storageWorkerLastFullyAppliedRound,
 		storageWorkerLastPendingRound,
 		storageWorkerRoundSyncLatency,
 	}
