@@ -825,14 +825,14 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	}
 
 	w.syncedLock.RLock()
-	cachedLastRound := w.syncedState.Round
+	lastFinalizedRound := w.syncedState.Round
 	w.syncedLock.RUnlock()
-	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
-		cachedLastRound = w.undefinedRound
+	if lastFinalizedRound == defaultUndefinedRound || lastFinalizedRound < genesisBlock.Header.Round {
+		lastFinalizedRound = w.undefinedRound
 	}
 
 	// Initialize genesis from the runtime descriptor.
-	isInitialStartup := (cachedLastRound == w.undefinedRound)
+	isInitialStartup := (lastFinalizedRound == w.undefinedRound)
 	if isInitialStartup {
 		w.statusLock.Lock()
 		w.status = api.StatusInitializingGenesis
@@ -857,7 +857,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		w.statusLock.Unlock()
 
 		// Determine what is the first round that we would need to sync.
-		iterativeSyncStart := cachedLastRound
+		iterativeSyncStart := lastFinalizedRound
 		if iterativeSyncStart == w.undefinedRound {
 			iterativeSyncStart++
 		}
@@ -920,7 +920,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 						return fmt.Errorf("failed to finalize filled in version %v: %w", v, err)
 					}
 				}
-				cachedLastRound, err = w.flushSyncedState(summaryFromBlock(earlyBlk))
+				lastFinalizedRound, err = w.flushSyncedState(summaryFromBlock(earlyBlk))
 				if err != nil {
 					return fmt.Errorf("failed to flush synced state: %w", err)
 				}
@@ -946,7 +946,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 
 	w.logger.Info("worker initialized",
 		"genesis_round", genesisBlock.Header.Round,
-		"last_synced", cachedLastRound,
+		"last_finalized_round", lastFinalizedRound,
 	)
 
 	// Try to perform initial sync from state and io checkpoints if either:
@@ -1007,7 +1007,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		if err != nil {
 			w.logger.Info("checkpoint sync failed", "err", err)
 		} else {
-			cachedLastRound, err = w.flushSyncedState(summary)
+			lastFinalizedRound, err = w.flushSyncedState(summary)
 			if err != nil {
 				return fmt.Errorf("failed to flush synced state %w", err)
 			}
@@ -1027,7 +1027,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
 	latestBlockRound := w.undefinedRound
-	lastFullyAppliedRound := cachedLastRound
+	lastFullyAppliedRound := lastFinalizedRound
 
 	heartbeat := heartbeat{}
 	heartbeat.reset()
@@ -1164,7 +1164,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 			delete(summaryCache, lastDiff.round-1)
 			lastFullyAppliedRound = lastDiff.round
 
-			storageWorkerLastSyncedRound.With(w.getMetricLabels()).Set(float64(lastDiff.round))
+			storageWorkerLastFullyAppliedRound.With(w.getMetricLabels()).Set(float64(lastDiff.round))
 			storageWorkerRoundSyncLatency.With(w.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
 
 			// Finalize storage for this round. This happens asynchronously
@@ -1177,7 +1177,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		// Check if any new rounds were fully applied and need to be finalized.
 		// Only finalize if it's the round after the one that was finalized last.
 		// As a consequence at most one finalization can be happening at the time.
-		if len(*pendingFinalize) > 0 && cachedLastRound+1 == (*pendingFinalize)[0].GetRound() {
+		if len(*pendingFinalize) > 0 && lastFinalizedRound+1 == (*pendingFinalize)[0].GetRound() {
 			lastSummary := heap.Pop(pendingFinalize).(*blockSummary)
 			wg.Add(1)
 			go func() { // Don't block fetching and applying remaining rounds.
@@ -1192,13 +1192,13 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 			blk := inBlk.(*block.Block)
 			w.logger.Debug("incoming block",
 				"round", blk.Header.Round,
-				"last_synced", lastFullyAppliedRound,
-				"last_finalized", cachedLastRound,
+				"last_fully_applied", lastFullyAppliedRound,
+				"last_finalized", lastFinalizedRound,
 			)
 
 			// Check if we're far enough to reasonably register as available.
 			latestBlockRound = blk.Header.Round
-			w.nudgeAvailability(cachedLastRound, latestBlockRound)
+			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
 
 			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound {
 				dummy := blockSummary{
@@ -1273,23 +1273,23 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		case finalized := <-w.finalizeCh:
 			// If finalization failed, things start falling apart.
 			// There's no point redoing it, since it's probably not a transient
-			// error, and cachedLastRound also can't be updated legitimately.
+			// error, and lastFinalizedRound also can't be updated legitimately.
 			if finalized.err != nil {
 				return fmt.Errorf("failed to finalize (round: %d): %w", finalized.summary.Round, finalized.err)
 			}
 
 			// No further sync or out of order handling needed here, since
-			// only one finalize at a time is triggered (for round cachedLastRound+1)
-			cachedLastRound, err = w.flushSyncedState(finalized.summary)
+			// only one finalize at a time is triggered (for round lastFinalizedLastRound+1)
+			lastFinalizedRound, err = w.flushSyncedState(finalized.summary)
 			if err != nil {
 				w.logger.Error("failed to flush synced state",
 					"err", err,
 				)
 			}
-			storageWorkerLastFullRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
+			storageWorkerLastFinalizedRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
 
 			// Check if we're far enough to reasonably register as available.
-			w.nudgeAvailability(cachedLastRound, latestBlockRound)
+			w.nudgeAvailability(lastFinalizedRound, latestBlockRound)
 
 			// Notify the checkpointer that there is a new finalized round.
 			if config.GlobalConfig.Storage.Checkpointer.Enabled {
