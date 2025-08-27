@@ -8,12 +8,14 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	runtimeAPI "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/checkpointer"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/statesync"
 )
 
@@ -21,6 +23,7 @@ import (
 type worker struct {
 	logger         *logging.Logger
 	stateSync      *statesync.Worker
+	checkpointer   *checkpointer.Worker
 	stateSyncBlkCh *channels.InfiniteChannel
 }
 
@@ -29,7 +32,8 @@ func newRuntimeWorker(
 	rp registration.RoleProvider,
 	rpRPC registration.RoleProvider,
 	localStorage api.LocalBackend,
-	checkpointerCfg *statesync.CheckpointSyncConfig,
+	checkpointSyncCfg *statesync.CheckpointSyncConfig,
+	checkpointerEnabled bool,
 ) (*worker, error) {
 	worker := &worker{
 		logger:         logging.GetLogger("worker/storage").With("runtimeID", commonNode.Runtime.ID()),
@@ -42,13 +46,23 @@ func newRuntimeWorker(
 		rpRPC,
 		localStorage,
 		worker.stateSyncBlkCh,
-		checkpointerCfg,
+		checkpointSyncCfg,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state sync worker: %w", err)
 	}
-
 	worker.stateSync = stateSync
+
+	cpCfg := checkpointer.Config{
+		CheckpointerEnabled: config.GlobalConfig.Storage.Checkpointer.Enabled,
+		CheckInterval:       config.GlobalConfig.Storage.Checkpointer.CheckInterval,
+		ParallelChunker:     config.GlobalConfig.Storage.Checkpointer.ParallelChunker,
+	}
+	checkpointer, err := checkpointer.New(commonNode, localStorage, stateSync, cpCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkpointer worker: %w", err)
+	}
+	worker.checkpointer = checkpointer
 
 	return worker, nil
 }
@@ -81,12 +95,25 @@ func (w *worker) GetStatus(ctx context.Context) (*storageAPI.Status, error) {
 }
 
 func (w *worker) PauseCheckpointer(pause bool) error {
-	return w.stateSync.PauseCheckpointer(pause)
+	return w.checkpointer.PauseCheckpointer(pause)
 }
 
 func (w *worker) serve(ctx context.Context) error {
 	w.logger.Info("started")
 	defer w.logger.Info("stopped")
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Create runtime checkpoint for every consensus checkpoint, to make it faster for storage nodes
+	// that use consensus state sync to catch up as exactly the right checkpoint will be available.
+	// Intentionally not part of the errgroup below as failing checkpointer should not stop state sync.
+	go func() {
+		err := w.checkpointer.Serve(ctx)
+		if err != nil {
+			w.logger.Info("checkpointer worker failed", "err", err)
+		}
+	}()
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

@@ -88,6 +88,10 @@ type Checkpointer interface {
 	// versions are emitted before the checkpointing process starts.
 	WatchCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error)
 
+	// // WatchCreatedCheckpoints returns a channel that produces a stream of checkpointed versions. The
+	// versions are emitted immediately after the checkpoint is created.
+	WatchCreatedCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error)
+
 	// Flush makes the checkpointer immediately process any notifications.
 	Flush()
 
@@ -103,14 +107,15 @@ type Checkpointer interface {
 type checkpointer struct {
 	cfg CheckpointerConfig
 
-	ndb        db.NodeDB
-	creator    Creator
-	notifyCh   *channels.RingChannel
-	forceCh    *channels.RingChannel
-	flushCh    *channels.RingChannel
-	statusCh   chan struct{}
-	pausedCh   chan bool
-	cpNotifier *pubsub.Broker
+	ndb               db.NodeDB
+	creator           Creator
+	notifyCh          *channels.RingChannel
+	forceCh           *channels.RingChannel
+	flushCh           *channels.RingChannel
+	statusCh          chan struct{}
+	pausedCh          chan bool
+	cpNotifier        *pubsub.Broker
+	cpCreatedNotifier *pubsub.Broker
 
 	logger *logging.Logger
 }
@@ -119,16 +124,17 @@ type checkpointer struct {
 // will automatically generate the configured number of checkpoints.
 func NewCheckpointer(ndb db.NodeDB, creator Creator, cfg CheckpointerConfig) Checkpointer {
 	c := &checkpointer{
-		cfg:        cfg,
-		ndb:        ndb,
-		creator:    creator,
-		notifyCh:   channels.NewRingChannel(1),
-		forceCh:    channels.NewRingChannel(1),
-		flushCh:    channels.NewRingChannel(1),
-		statusCh:   make(chan struct{}),
-		pausedCh:   make(chan bool),
-		cpNotifier: pubsub.NewBroker(false),
-		logger:     logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
+		cfg:               cfg,
+		ndb:               ndb,
+		creator:           creator,
+		notifyCh:          channels.NewRingChannel(1),
+		forceCh:           channels.NewRingChannel(1),
+		flushCh:           channels.NewRingChannel(1),
+		statusCh:          make(chan struct{}),
+		pausedCh:          make(chan bool),
+		cpNotifier:        pubsub.NewBroker(false),
+		cpCreatedNotifier: pubsub.NewBroker(false),
+		logger:            logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
 	return c
 }
@@ -147,6 +153,15 @@ func (c *checkpointer) ForceCheckpoint(version uint64) {
 func (c *checkpointer) WatchCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error) {
 	ch := make(chan uint64)
 	sub := c.cpNotifier.Subscribe()
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
+// Implements Checkpointer.
+func (c *checkpointer) WatchCreatedCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error) {
+	ch := make(chan uint64)
+	sub := c.cpCreatedNotifier.Subscribe()
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
@@ -312,6 +327,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 			return fmt.Errorf("checkpointer: failed to create checkpoint: %w", err)
 		}
 	}
+	c.cpCreatedNotifier.Broadcast(version)
 	return nil
 }
 

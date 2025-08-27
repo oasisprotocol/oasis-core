@@ -108,6 +108,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
 			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
 		},
+		config.GlobalConfig.Storage.Checkpointer.Enabled,
 	)
 	if err != nil {
 		return err
