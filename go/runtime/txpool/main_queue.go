@@ -40,21 +40,6 @@ func (tx *MainQueueTransaction) String() string {
 	return fmt.Sprintf("MainQueueTransaction{hash: %s, first_seen: %s, priority: %d}", tx.Hash(), tx.FirstSeen(), tx.priority)
 }
 
-// Priority returns the transaction priority.
-func (tx *MainQueueTransaction) Priority() uint64 {
-	return tx.priority
-}
-
-// Sender returns the transaction sender.
-func (tx *MainQueueTransaction) Sender() string {
-	return tx.sender
-}
-
-// SenderSeq returns the per-sender sequence number.
-func (tx *MainQueueTransaction) SenderSeq() uint64 {
-	return tx.senderSeq
-}
-
 // setChecked populates transaction data retrieved from checks.
 func (tx *MainQueueTransaction) setChecked(meta *protocol.CheckTxMetadata) {
 	if meta != nil {
