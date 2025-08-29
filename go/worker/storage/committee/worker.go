@@ -824,6 +824,9 @@ func (w *Worker) worker() { // nolint: gocyclo
 	w.status = api.StatusStarting
 	w.statusLock.Unlock()
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	// Determine genesis block.
 	genesisBlock, err := w.commonNode.Consensus.RootHash().GetGenesisBlock(w.ctx, &roothashApi.RuntimeRequest{
 		RuntimeID: w.commonNode.Runtime.ID(),
@@ -1087,7 +1090,6 @@ func (w *Worker) worker() { // nolint: gocyclo
 	heartbeat := heartbeat{}
 	heartbeat.reset()
 
-	var wg sync.WaitGroup
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
 	triggerRoundFetches := func() {
@@ -1360,7 +1362,6 @@ mainLoop:
 		}
 	}
 
-	wg.Wait()
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
