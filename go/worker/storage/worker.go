@@ -12,7 +12,7 @@ import (
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/statesync"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
 // Worker is a worker handling storage operations for all common worker runtimes.
@@ -26,7 +26,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes map[common.Namespace]*statesync.Worker
+	runtimes map[common.Namespace]*committee.Worker
 }
 
 // New constructs a new storage worker.
@@ -44,14 +44,14 @@ func New(
 		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
-		runtimes:     make(map[common.Namespace]*statesync.Worker),
+		runtimes:     make(map[common.Namespace]*committee.Worker),
 	}
 
 	if !enabled {
 		return s, nil
 	}
 
-	// Register the state sync worker for every runtime.
+	// Register the storage worker for every runtime.
 	for id, rt := range s.commonWorker.GetRuntimes() {
 		if err := s.registerRuntime(rt); err != nil {
 			return nil, fmt.Errorf("failed to create storage worker for runtime %s: %w", id, err)
@@ -90,13 +90,13 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
 
-	worker, err := statesync.New(
+	worker, err := committee.New(
 		commonNode,
 		rp,
 		rpRPC,
 		w.commonWorker.GetConfig(),
 		localStorage,
-		&statesync.CheckpointSyncConfig{
+		&committee.CheckpointSyncConfig{
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
 			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
 		},
@@ -196,6 +196,6 @@ func (w *Worker) Cleanup() {
 // GetRuntime returns a storage committee node for the given runtime (if available).
 //
 // In case the runtime with the specified id was not configured for this node it returns nil.
-func (w *Worker) GetRuntime(id common.Namespace) *statesync.Worker {
+func (w *Worker) GetRuntime(id common.Namespace) *committee.Worker {
 	return w.runtimes[id]
 }

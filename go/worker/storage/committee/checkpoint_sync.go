@@ -1,4 +1,4 @@
-package statesync
+package committee
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ var ErrNoUsableCheckpoints = errors.New("storage: no checkpoint could be synced"
 
 // CheckpointSyncConfig is the checkpoint sync configuration.
 type CheckpointSyncConfig struct {
-	// Disabled specifies whether checkpoint sync should be disabled. In this case the state sync worker will
+	// Disabled specifies whether checkpoint sync should be disabled. In this case the storage worker will
 	// only sync by applying all diffs from genesis.
 	Disabled bool
 

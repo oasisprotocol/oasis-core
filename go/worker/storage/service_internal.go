@@ -9,12 +9,12 @@ import (
 var _ api.StorageWorker = (*Worker)(nil)
 
 func (w *Worker) GetLastSyncedRound(_ context.Context, request *api.GetLastSyncedRoundRequest) (*api.GetLastSyncedRoundResponse, error) {
-	node := w.runtimes[request.RuntimeID]
-	if node == nil {
+	worker := w.runtimes[request.RuntimeID]
+	if worker == nil {
 		return nil, api.ErrRuntimeNotFound
 	}
 
-	round, ioRoot, stateRoot := node.GetLastSynced()
+	round, ioRoot, stateRoot := worker.GetLastSynced()
 	return &api.GetLastSyncedRoundResponse{
 		Round:     round,
 		IORoot:    ioRoot,

@@ -1,4 +1,4 @@
-package statesync
+package committee
 
 import (
 	"fmt"

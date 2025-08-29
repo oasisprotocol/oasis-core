@@ -1,6 +1,6 @@
-// Package statesync defines the logic responsible for initializing, syncing,
+// Package committee defines the logic responsible for initializing, syncing,
 // and pruning of the runtime state using the relevant p2p protocol clients.
-package statesync
+package committee
 
 import (
 	"container/heap"
@@ -120,7 +120,7 @@ type finalizeResult struct {
 	err     error
 }
 
-// Worker is the runtime state sync worker, responsible for syncing state
+// Worker is the runtime storage worker, responsible for syncing state
 // that corresponds to the incoming runtime block headers received from the
 // consensus service.
 //
@@ -174,7 +174,7 @@ type Worker struct {
 	initCh chan struct{}
 }
 
-// New creates a new state sync worker.
+// New creates a new storage worker.
 func New(
 	commonNode *committee.Node,
 	roleProvider registration.RoleProvider,
@@ -195,7 +195,7 @@ func New(
 		roleProvider:    roleProvider,
 		rpcRoleProvider: rpcRoleProvider,
 
-		logger: logging.GetLogger("worker/storage/statesync").With("runtime_id", commonNode.Runtime.ID()),
+		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
 
 		workerCommonCfg: workerCommonCfg,
 
@@ -370,7 +370,7 @@ func (w *Worker) PauseCheckpointer(pause bool) error {
 	return nil
 }
 
-// GetLocalStorage returns the local storage backend used by this state sync worker.
+// GetLocalStorage returns the local storage backend used by the worker.
 func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
 	return w.localStorage
 }
