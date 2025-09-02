@@ -63,7 +63,7 @@ func (k Key) Equal(other Key) bool {
 }
 
 // Compare compares the key with some other key and returns 0 if both
-// keys are equal, -1 if the the key is smaller and 1 if the key is
+// keys are equal, -1 if the key is smaller and 1 if the key is
 // larger.
 func (k Key) Compare(other Key) int {
 	return bytes.Compare(k, other)
