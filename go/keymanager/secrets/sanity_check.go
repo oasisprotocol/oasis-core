@@ -25,6 +25,11 @@ func SanityCheckStatuses(statuses []*Status) error {
 				return err
 			}
 		}
+		if status.NextPolicy != nil {
+			if err := SanityCheckSignedPolicySGX(status.Policy, status.NextPolicy); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
