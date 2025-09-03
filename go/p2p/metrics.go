@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 )
 
 const metricsUpdateInterval = 60 * time.Second
@@ -46,9 +44,6 @@ var (
 
 func (p *p2p) metricsWorker() {
 	defer close(p.metricsClosedCh)
-	if !cmmetrics.Enabled() {
-		return
-	}
 
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(p2pCollectors...)
