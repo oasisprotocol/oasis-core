@@ -8,7 +8,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
-	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
+	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
 // LogAssertEvent returns a handler which checks whether a specific log event was
@@ -116,7 +116,7 @@ func LogAssertRoothashRoothashReindexing() log.WatcherHandlerFactory {
 // LogAssertCheckpointSync returns a handler which checks whether initial storage sync from
 // a checkpoint was successful or not.
 func LogAssertCheckpointSync() log.WatcherHandlerFactory {
-	return LogAssertEvent(workerStorage.LogEventCheckpointSyncSuccess, "checkpoint sync did not succeed")
+	return LogAssertEvent(storageWorker.LogEventCheckpointSyncSuccess, "checkpoint sync did not succeed")
 }
 
 // LogAssertDiscrepancyMajorityFailure returns a handler which checks whether a discrepancy resolution
