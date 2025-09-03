@@ -5,13 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -51,6 +55,16 @@ var (
 		Args:  cobra.ExactArgs(2),
 		Short: "change the namespace of a runtime database",
 		RunE:  doRenameNs,
+	}
+
+	storageCompactCmd = &cobra.Command{
+		Use:   "compact",
+		Args:  cobra.NoArgs,
+		Short: "trigger compaction across all the databases",
+		Long: `Optimize the storage for all the databases by doing the compaction.
+
+It is recommended to call this before doing storage snapshots or copying the data to a remote node.`,
+		RunE: doDbCompactions,
 	}
 
 	logger = logging.GetLogger("cmd/storage")
@@ -283,6 +297,79 @@ func doRenameNs(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+func doDbCompactions(_ *cobra.Command, args []string) error {
+	dataDir := cmdCommon.DataDir()
+
+	dbDirs, err := findDBInstances(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to find database instances: %w", err)
+	}
+
+	if len(dbDirs) == 0 {
+		return fmt.Errorf("no database instances found (dataDir: %s)", dataDir)
+	}
+
+	if pretty {
+		fmt.Println("Starting database compactions. This may take a while...")
+	}
+
+	for _, path := range dbDirs {
+		if err := compactDB(path); err != nil {
+			logger.Error("failed to compact", "path", path, "err", err)
+			if pretty {
+				fmt.Printf("Failed to compact %s: %v\n", path, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func findDBInstances(dataDir string) ([]string, error) {
+	var dbDirs []string
+	err := filepath.WalkDir(dataDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && strings.HasSuffix(d.Name(), ".db") {
+			dbDirs = append(dbDirs, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk dir %s: %w", dataDir, err)
+	}
+
+	return dbDirs, nil
+}
+
+func compactDB(path string) error {
+	logger = logger.With("path", path)
+
+	logger.Info("compacting")
+	if pretty {
+		fmt.Printf("Compacting %s\n", path)
+	}
+
+	opts := badgerDB.DefaultOptions(path).WithLogger(cmnBadger.NewLogAdapter(logger))
+	db, err := badgerDB.Open(opts)
+	if err != nil {
+		return fmt.Errorf("failed to open db: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.Flatten(8); err != nil {
+		return fmt.Errorf("failed to flatten db: %w", err)
+	}
+
+	logger.Info("compaction completed")
+	if pretty {
+		fmt.Printf("Compaction completed: %s\n", path)
+	}
+
+	return nil
+}
+
 // Register registers the client sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	storageMigrateCmd.Flags().AddFlagSet(bundle.Flags)
@@ -290,5 +377,6 @@ func Register(parentCmd *cobra.Command) {
 	storageCmd.AddCommand(storageMigrateCmd)
 	storageCmd.AddCommand(storageCheckCmd)
 	storageCmd.AddCommand(storageRenameNsCmd)
+	storageCmd.AddCommand(storageCompactCmd)
 	parentCmd.AddCommand(storageCmd)
 }
