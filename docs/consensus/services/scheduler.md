@@ -48,5 +48,5 @@ entity's [escrow account balance].
 [`RoleValidator`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#RoleValidator
 [escrow account balance]: staking.md#escrow
 [genesis document]:
-  https://github.com/oasisprotocol/docs/blob/main/docs/node/genesis-doc.md#committee-scheduler
+  https://github.com/oasisprotocol/docs/blob/main/docs/node/reference/genesis-doc.md#committee-scheduler
 <!-- markdownlint-enable line-length -->
