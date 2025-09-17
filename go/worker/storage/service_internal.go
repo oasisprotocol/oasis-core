@@ -14,7 +14,7 @@ func (w *Worker) GetLastSyncedRound(_ context.Context, request *api.GetLastSynce
 		return nil, api.ErrRuntimeNotFound
 	}
 
-	round, ioRoot, stateRoot := node.GetLastSynced()
+	round, ioRoot, stateRoot := node.stateSync.GetLastSynced()
 	return &api.GetLastSyncedRoundResponse{
 		Round:     round,
 		IORoot:    ioRoot,

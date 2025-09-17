@@ -72,7 +72,7 @@ type CreationParameters struct {
 	ChunkerThreads uint16
 }
 
-// Checkpointer is a checkpointer.
+// Checkpointer is responsible for creating the storage snapshots (checkpoints).
 type Checkpointer interface {
 	// NotifyNewVersion notifies the checkpointer that a new version has been finalized.
 	NotifyNewVersion(version uint64)
@@ -88,6 +88,10 @@ type Checkpointer interface {
 	// versions are emitted before the checkpointing process starts.
 	WatchCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error)
 
+	// // WatchCreatedCheckpoints returns a channel that produces a stream of checkpointed versions. The
+	// versions are emitted immediately after the checkpoint is created.
+	WatchCreatedCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error)
+
 	// Flush makes the checkpointer immediately process any notifications.
 	Flush()
 
@@ -95,21 +99,44 @@ type Checkpointer interface {
 	// intervals; after unpausing, a checkpoint won't be created immediately, but the checkpointer
 	// will wait for the next regular event.
 	Pause(pause bool)
+
+	// Serve starts running the checkpointer.
+	Serve(ctx context.Context) error
 }
 
 type checkpointer struct {
 	cfg CheckpointerConfig
 
-	ndb        db.NodeDB
-	creator    Creator
-	notifyCh   *channels.RingChannel
-	forceCh    *channels.RingChannel
-	flushCh    *channels.RingChannel
-	statusCh   chan struct{}
-	pausedCh   chan bool
-	cpNotifier *pubsub.Broker
+	ndb               db.NodeDB
+	creator           Creator
+	notifyCh          *channels.RingChannel
+	forceCh           *channels.RingChannel
+	flushCh           *channels.RingChannel
+	statusCh          chan struct{}
+	pausedCh          chan bool
+	cpNotifier        *pubsub.Broker
+	cpCreatedNotifier *pubsub.Broker
 
 	logger *logging.Logger
+}
+
+// NewCheckpointer creates a new checkpointer that can be notified of new finalized versions and
+// will automatically generate the configured number of checkpoints.
+func NewCheckpointer(ndb db.NodeDB, creator Creator, cfg CheckpointerConfig) Checkpointer {
+	c := &checkpointer{
+		cfg:               cfg,
+		ndb:               ndb,
+		creator:           creator,
+		notifyCh:          channels.NewRingChannel(1),
+		forceCh:           channels.NewRingChannel(1),
+		flushCh:           channels.NewRingChannel(1),
+		statusCh:          make(chan struct{}),
+		pausedCh:          make(chan bool),
+		cpNotifier:        pubsub.NewBroker(false),
+		cpCreatedNotifier: pubsub.NewBroker(false),
+		logger:            logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
+	}
+	return c
 }
 
 // Implements Checkpointer.
@@ -132,12 +159,121 @@ func (c *checkpointer) WatchCheckpoints() (<-chan uint64, pubsub.ClosableSubscri
 }
 
 // Implements Checkpointer.
+func (c *checkpointer) WatchCreatedCheckpoints() (<-chan uint64, pubsub.ClosableSubscription, error) {
+	ch := make(chan uint64)
+	sub := c.cpCreatedNotifier.Subscribe()
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
+// Implements Checkpointer.
 func (c *checkpointer) Flush() {
 	c.flushCh.In() <- struct{}{}
 }
 
 func (c *checkpointer) Pause(pause bool) {
 	c.pausedCh <- pause
+}
+
+func (c *checkpointer) Serve(ctx context.Context) error {
+	c.logger.Debug("storage checkpointer started",
+		"check_interval", c.cfg.CheckInterval,
+	)
+	defer func() {
+		c.logger.Debug("storage checkpointer terminating")
+	}()
+
+	paused := false
+
+	for {
+		var interval time.Duration
+		switch c.cfg.CheckInterval {
+		case CheckIntervalDisabled:
+			interval = CheckIntervalDisabled
+		default:
+			interval = random.GetRandomValueFromInterval(
+				checkpointIntervalRandomizationFactor,
+				rand.Float64(),
+				c.cfg.CheckInterval,
+			)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		case <-c.flushCh.Out():
+		case paused = <-c.pausedCh:
+			continue
+		}
+
+		var (
+			version uint64
+			force   bool
+		)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case v := <-c.notifyCh.Out():
+			version = v.(uint64)
+		case v := <-c.forceCh.Out():
+			version = v.(uint64)
+			force = true
+		}
+
+		// Fetch current checkpoint parameters.
+		params := c.cfg.Parameters
+		if params == nil && c.cfg.GetParameters != nil {
+			var err error
+			params, err = c.cfg.GetParameters(ctx)
+			if err != nil {
+				c.logger.Error("failed to get checkpoint parameters",
+					"err", err,
+					"version", version,
+				)
+				continue
+			}
+		}
+		if params == nil {
+			c.logger.Error("no checkpoint parameters")
+			continue
+		}
+
+		// Don't checkpoint if checkpoints are disabled.
+		switch {
+		case force:
+			// Always checkpoint when forced.
+		case paused:
+			continue
+		case params.Interval == 0:
+			continue
+		case c.cfg.CheckInterval == CheckIntervalDisabled:
+			continue
+		default:
+		}
+
+		var err error
+		switch force {
+		case false:
+			err = c.maybeCheckpoint(ctx, version, params)
+		case true:
+			err = c.checkpoint(ctx, version, params)
+		}
+		if err != nil {
+			c.logger.Error("failed to checkpoint",
+				"version", version,
+				"err", err,
+			)
+			continue
+		}
+
+		// Emit status update if someone is listening. This is only used in tests.
+		select {
+		case c.statusCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *CreationParameters) (err error) {
@@ -191,6 +327,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 			return fmt.Errorf("checkpointer: failed to create checkpoint: %w", err)
 		}
 	}
+	c.cpCreatedNotifier.Broadcast(version)
 	return nil
 }
 
@@ -283,128 +420,4 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	}
 
 	return nil
-}
-
-func (c *checkpointer) worker(ctx context.Context) {
-	c.logger.Debug("storage checkpointer started",
-		"check_interval", c.cfg.CheckInterval,
-	)
-	defer func() {
-		c.logger.Debug("storage checkpointer terminating")
-	}()
-
-	paused := false
-
-	for {
-		var interval time.Duration
-		switch c.cfg.CheckInterval {
-		case CheckIntervalDisabled:
-			interval = CheckIntervalDisabled
-		default:
-			interval = random.GetRandomValueFromInterval(
-				checkpointIntervalRandomizationFactor,
-				rand.Float64(),
-				c.cfg.CheckInterval,
-			)
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(interval):
-		case <-c.flushCh.Out():
-		case paused = <-c.pausedCh:
-			continue
-		}
-
-		var (
-			version uint64
-			force   bool
-		)
-		select {
-		case <-ctx.Done():
-			return
-		case v := <-c.notifyCh.Out():
-			version = v.(uint64)
-		case v := <-c.forceCh.Out():
-			version = v.(uint64)
-			force = true
-		}
-
-		// Fetch current checkpoint parameters.
-		params := c.cfg.Parameters
-		if params == nil && c.cfg.GetParameters != nil {
-			var err error
-			params, err = c.cfg.GetParameters(ctx)
-			if err != nil {
-				c.logger.Error("failed to get checkpoint parameters",
-					"err", err,
-					"version", version,
-				)
-				continue
-			}
-		}
-		if params == nil {
-			c.logger.Error("no checkpoint parameters")
-			continue
-		}
-
-		// Don't checkpoint if checkpoints are disabled.
-		switch {
-		case force:
-			// Always checkpoint when forced.
-		case paused:
-			continue
-		case params.Interval == 0:
-			continue
-		case c.cfg.CheckInterval == CheckIntervalDisabled:
-			continue
-		default:
-		}
-
-		var err error
-		switch force {
-		case false:
-			err = c.maybeCheckpoint(ctx, version, params)
-		case true:
-			err = c.checkpoint(ctx, version, params)
-		}
-		if err != nil {
-			c.logger.Error("failed to checkpoint",
-				"version", version,
-				"err", err,
-			)
-			continue
-		}
-
-		// Emit status update if someone is listening. This is only used in tests.
-		select {
-		case c.statusCh <- struct{}{}:
-		default:
-		}
-	}
-}
-
-// NewCheckpointer creates a new checkpointer that can be notified of new finalized versions and
-// will automatically generate the configured number of checkpoints.
-func NewCheckpointer(
-	ctx context.Context,
-	ndb db.NodeDB,
-	creator Creator,
-	cfg CheckpointerConfig,
-) (Checkpointer, error) {
-	c := &checkpointer{
-		cfg:        cfg,
-		ndb:        ndb,
-		creator:    creator,
-		notifyCh:   channels.NewRingChannel(1),
-		forceCh:    channels.NewRingChannel(1),
-		flushCh:    channels.NewRingChannel(1),
-		statusCh:   make(chan struct{}),
-		pausedCh:   make(chan bool),
-		cpNotifier: pubsub.NewBroker(false),
-		logger:     logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
-	}
-	go c.worker(ctx)
-	return c, nil
 }
