@@ -121,6 +121,29 @@ func TestQuoteV3_ECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.Error(err, "Quote verification should fail for invalid TCB evaluation data number")
 	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: invalid QE evaluation data number")
 
+	// Test whitelisted FMSPC.
+	quotePolicy = &QuotePolicy{
+		TCBValidityPeriod: 90,
+		FMSPCWhitelist:    []string{},
+	}
+	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
+	require.NoError(err, "Quote verification should succeed for whitelisted FMSPCs")
+
+	quotePolicy = &QuotePolicy{
+		TCBValidityPeriod: 90,
+		FMSPCWhitelist:    []string{"00606A000000"},
+	}
+	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
+	require.NoError(err, "Quote verification should succeed for whitelisted FMSPCs")
+
+	quotePolicy = &QuotePolicy{
+		TCBValidityPeriod: 90,
+		FMSPCWhitelist:    []string{"00606A000001"},
+	}
+	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
+	require.Error(err, "Quote verification should fail for non-whitelisted FMSPCs")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: FMSPC is not whitelisted")
+
 	// Test blacklisted FMSPC.
 	quotePolicy = &QuotePolicy{
 		TCBValidityPeriod: 90,
@@ -128,7 +151,7 @@ func TestQuoteV3_ECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for blacklisted FMSPCs")
-	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: blacklisted FMSPC")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: FMSPC is blacklisted")
 
 	// Test TCB info certificates missing.
 	tcbBundle2 := TCBBundle{
