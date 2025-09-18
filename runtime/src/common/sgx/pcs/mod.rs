@@ -41,6 +41,8 @@ pub enum Error {
     TCBMismatch,
     #[error("TCB evaluation data number is invalid")]
     TCBEvaluationDataNumberInvalid,
+    #[error("FMSPC is not whitelisted")]
+    NotWhitelistedFMSPC,
     #[error("FMSPC is blacklisted")]
     BlacklistedFMSPC,
     #[error("QE report is malformed")]
@@ -217,19 +219,48 @@ mod tests {
     }
 
     #[test]
+    fn test_quote_whitelisted_fmscp() {
+        // From Go implementation.
+        const RAW_QUOTE_BUNDLE: &[u8] =
+            include_bytes!("../../../../testdata/pcs_quote_bundle.cbor");
+
+        let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
+        let now = Utc.timestamp_opt(1671497404, 0).unwrap();
+
+        let policy = &QuotePolicy {
+            ..Default::default()
+        };
+        qb.verify(policy, now)
+            .expect("quote verification should succeed for whitelisted FMSPCs");
+
+        let policy = &QuotePolicy {
+            fmspc_whitelist: vec!["00606A000000".to_string()],
+            ..Default::default()
+        };
+        qb.verify(policy, now)
+            .expect("quote verification should succeed for whitelisted FMSPCs");
+
+        let policy: &QuotePolicy = &QuotePolicy {
+            fmspc_whitelist: vec!["00606A000001".to_string()],
+            ..Default::default()
+        };
+        qb.verify(policy, now)
+            .expect_err("quote verification should fail for non-whitelisted FMSPCs");
+    }
+
+    #[test]
     fn test_quote_blacklisted_fmscp() {
         // From Go implementation.
         const RAW_QUOTE_BUNDLE: &[u8] =
             include_bytes!("../../../../testdata/pcs_quote_bundle.cbor");
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
-
         let now = Utc.timestamp_opt(1671497404, 0).unwrap();
+
         let policy = &QuotePolicy {
             fmspc_blacklist: vec!["00606A000000".to_string()],
             ..Default::default()
         };
-
         qb.verify(policy, now)
             .expect_err("quote verification should fail for blacklisted FMSPCs");
     }

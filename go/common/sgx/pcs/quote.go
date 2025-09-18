@@ -144,7 +144,8 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 		policy = &QuotePolicy{
 			TCBValidityPeriod:          30,
 			MinTCBEvaluationDataNumber: DefaultMinTCBEvaluationDataNumber,
-			FMSPCBlacklist:             []string{},
+			FMSPCWhitelist:             make([]string, 0),
+			FMSPCBlacklist:             make([]string, 0),
 		}
 	}
 
