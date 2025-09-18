@@ -16,6 +16,10 @@ type QuotePolicy struct {
 	// valid. TCB bundles containing smaller values will be invalid.
 	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number" yaml:"min_tcb_evaluation_data_number"`
 
+	// FMSPCWhitelist is a list of hexadecimal encoded FMSPCs specifying which processor
+	// packages and platform instances are allowed.
+	FMSPCWhitelist []string `json:"fmspc_whitelist,omitempty" yaml:"fmspc_whitelist,omitempty"`
+
 	// FMSPCBlacklist is a list of hexadecimal encoded FMSPCs specifying which processor
 	// packages and platform instances are blocked.
 	FMSPCBlacklist []string `json:"fmspc_blacklist,omitempty" yaml:"fmspc_blacklist,omitempty"`
