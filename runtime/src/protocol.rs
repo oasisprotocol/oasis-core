@@ -73,7 +73,7 @@ impl Write for &Stream {
 }
 
 /// Maximum message size.
-const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024; // 16MiB
+const MAX_MESSAGE_SIZE: usize = 32 * 1024 * 1024; // 32MiB
 
 #[derive(Error, Debug)]
 pub enum ProtocolError {
