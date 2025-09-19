@@ -250,9 +250,15 @@ impl Protocol {
     fn io_write(self: &Arc<Protocol>) {
         info!(self.logger, "Starting protocol writer thread");
 
-        while let Ok(message) = self.outgoing_rx.recv() {
+        while let Ok(
+            message @ Message {
+                id, message_type, ..
+            },
+        ) = self.outgoing_rx.recv()
+        {
             if let Err(error) = self.write_message(message) {
                 warn!(self.logger, "Failed to write message"; "err" => %error);
+                self.handle_write_failure(id, message_type, error);
             }
         }
 
@@ -345,6 +351,57 @@ impl Protocol {
         Ok(())
     }
 
+    fn handle_write_failure(
+        &self,
+        message_id: u64,
+        message_type: MessageType,
+        error: anyhow::Error,
+    ) {
+        match message_type {
+            MessageType::Request => {
+                // For failed requests, notify the pending request handler.
+                let response_sender = {
+                    let mut pending_requests = self.pending_out_requests.lock().unwrap();
+                    pending_requests.remove(&message_id)
+                };
+
+                if let Some(response_sender) = response_sender {
+                    let error_body = Body::Error(Error::new(
+                        "rhp/write",
+                        1,
+                        &format!("Failed to write request: {error}"),
+                    ));
+
+                    if response_sender.send(error_body).is_err() {
+                        warn!(
+                            self.logger,
+                            "Failed to deliver error response to local handler"
+                        );
+                    }
+                }
+            }
+            MessageType::Response => {
+                // For failed responses, attempt to send an error response.
+                let error_response = Message {
+                    id: message_id,
+                    message_type: MessageType::Response,
+                    body: Body::Error(Error::new(
+                        "rhp/write",
+                        1,
+                        &format!("Failed to write response: {error}"),
+                    )),
+                };
+
+                if self.write_message(error_response).is_err() {
+                    warn!(self.logger, "Failed to write error message"; "err" => %error);
+                }
+            }
+            _ => {
+                warn!(self.logger, "Write failure for invalid message type"; "err" => %error)
+            }
+        }
+    }
+
     fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> anyhow::Result<()> {
         let message = self.decode_message(reader)?;
 
@@ -380,7 +437,7 @@ impl Protocol {
                 match response_sender {
                     Some(response_sender) => {
                         if response_sender.send(message.body).is_err() {
-                            warn!(self.logger, "Unable to deliver response to local handler");
+                            warn!(self.logger, "Failed to deliver response to local handler");
                         }
                     }
                     None => {
