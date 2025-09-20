@@ -70,10 +70,10 @@ impl Methods {
         Ok((result, delegations))
     }
 
-    pub fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
-        let nonce_key = NonceKeyFormat { nonce }.encode();
+    pub fn check_nonce(ctx: &mut TxContext, sender: Vec<u8>, nonce: u64) -> Result<(), String> {
+        let nonce_key = NonceKeyFormat { nonce, sender }.encode();
         match ctx.parent.core.runtime_state.get(&nonce_key) {
-            Some(_) => Err(format!("Duplicate nonce: {nonce}")),
+            Some(_) => Err(format!("Duplicate nonce key: {:?}", nonce_key)),
             None => {
                 if !ctx.is_check_only() {
                     ctx.parent.core.runtime_state.insert(&nonce_key, &[0x1]);

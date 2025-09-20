@@ -13,6 +13,10 @@ var (
 	_ RepublishableTransactionSource = (*mainQueue)(nil)
 )
 
+// maxTransactionsPerSender is the maximum number of transactions a single
+// sender can have queued at any given time.
+const maxTransactionsPerSender = 10
+
 // MainQueueTransaction is a transaction and its metadata in the main queue.
 type MainQueueTransaction struct {
 	TxQueueMeta
@@ -80,11 +84,11 @@ type mainQueue struct {
 
 func newMainQueue(capacity int) *mainQueue {
 	return &mainQueue{
-		inner: newScheduleQueue(capacity),
+		inner: newScheduleQueue(capacity, maxTransactionsPerSender),
 	}
 }
 
-func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+func (mq *mainQueue) GetSchedulingSuggestion(countHint int) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(nil, countHint)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
@@ -93,19 +97,19 @@ func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
 	return txs
 }
 
-func (mq *mainQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
-	txMetas, _ := mq.inner.getKnownBatch([]hash.Hash{h})
-	if txMetas[0] == nil {
-		return nil
+func (mq *mainQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
+	tx, ok := mq.inner.get(h)
+	if !ok {
+		return nil, false
 	}
-	return &txMetas[0].TxQueueMeta
+	return &tx.TxQueueMeta, true
 }
 
 func (mq *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
 	mq.inner.remove(hashes)
 }
 
-func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
+func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(offset, limit)
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
@@ -115,7 +119,7 @@ func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQu
 }
 
 func (mq *mainQueue) PeekAll() []*TxQueueMeta {
-	allTxs := mq.inner.getAll()
+	allTxs := mq.inner.all()
 	txs := make([]*TxQueueMeta, 0, len(allTxs))
 	for _, tx := range allTxs {
 		txs = append(txs, &tx.TxQueueMeta)
@@ -124,7 +128,7 @@ func (mq *mainQueue) PeekAll() []*TxQueueMeta {
 }
 
 func (mq *mainQueue) TakeAll() []*TxQueueMeta {
-	txMetas := mq.inner.getAll()
+	txMetas := mq.inner.all()
 	mq.inner.clear()
 	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {

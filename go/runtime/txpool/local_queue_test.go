@@ -28,16 +28,18 @@ func TestLocalQueueBasic(t *testing.T) {
 	// Schedule in original order.
 	require.EqualValues(t, []*TxQueueMeta{txA, txB}, lq.GetSchedulingSuggestion(50), "get scheduling suggestion")
 
-	tx := lq.GetTxByHash(txA.Hash())
+	tx, ok := lq.GetTxByHash(txA.Hash())
+	require.True(t, ok, "get tx by hash a")
 	require.EqualValues(t, txA, tx, "get tx by hash a")
 	hashC := hash.NewFromBytes([]byte("c"))
-	tx = lq.GetTxByHash(hashC)
+	tx, ok = lq.GetTxByHash(hashC)
+	require.False(t, ok, "get tx by hash c")
 	require.Nil(t, tx, "get tx by hash c")
 
 	lq.HandleTxsUsed([]hash.Hash{hashC})
-	require.EqualValues(t, map[hash.Hash]int{txA.Hash(): 0, txB.Hash(): 1}, lq.indexesByHash, "after handle txs used absent")
+	require.EqualValues(t, map[hash.Hash]*TxQueueMeta{txA.Hash(): txA, txB.Hash(): txB}, lq.txs, "after handle txs used absent")
 	lq.HandleTxsUsed([]hash.Hash{txA.Hash()})
-	require.EqualValues(t, map[hash.Hash]int{txB.Hash(): 0}, lq.indexesByHash, "after handle txs used")
+	require.EqualValues(t, map[hash.Hash]*TxQueueMeta{txB.Hash(): txB}, lq.txs, "after handle txs used")
 
 	require.EqualValues(t, []*TxQueueMeta{txB}, lq.TakeAll(), "take all")
 	require.Len(t, lq.GetSchedulingSuggestion(50), 0, "after take all")
