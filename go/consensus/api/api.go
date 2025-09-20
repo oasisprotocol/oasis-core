@@ -157,12 +157,6 @@ type Backend interface {
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence *Evidence) error
 
-	// GetSignerNonce returns the nonce that should be used by the given
-	// signer for transmitting the next transaction.
-	//
-	// Deprecated: Use staking backend instead.
-	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
-
 	// GetTransactions returns a list of all transactions contained within a
 	// consensus block at a specific height.
 	//
@@ -443,12 +437,6 @@ type StatePruneHandler interface {
 type EstimateGasRequest struct {
 	Signer      signature.PublicKey      `json:"signer"`
 	Transaction *transaction.Transaction `json:"transaction"`
-}
-
-// GetSignerNonceRequest is a GetSignerNonce request.
-type GetSignerNonceRequest struct {
-	AccountAddress staking.Address `json:"account_address"`
-	Height         int64           `json:"height"`
 }
 
 // TransactionsWithResults is GetTransactionsWithResults response.
