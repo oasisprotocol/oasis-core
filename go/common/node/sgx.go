@@ -97,7 +97,7 @@ func (sc *SGXConstraints) MarshalCBOR() ([]byte, error) {
 }
 
 // ValidateBasic performs basic structure validity checks.
-func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures) error {
+func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bool) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
 	}
@@ -114,6 +114,13 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures) error {
 	// Check for TDX enablement.
 	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
 		return fmt.Errorf("TDX policy not supported")
+	}
+
+	// Check that policy is compliant with the current feature version.
+	if sc.Policy != nil {
+		if err := sc.Policy.Validate(isFeatureVersion242); err != nil {
+			return fmt.Errorf("invalid policy: %w", err)
+		}
 	}
 
 	return nil
