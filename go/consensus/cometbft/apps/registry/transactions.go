@@ -12,8 +12,10 @@ import (
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (app *Application) registerEntity(
@@ -226,6 +228,14 @@ func (app *Application) registerNode( // nolint: gocyclo
 		return err
 	}
 
+	isFeatureVersion242 := true
+	if !ctx.IsInitChain() {
+		isFeatureVersion242, err = features.IsFeatureVersion(ctx, migrations.Version242)
+		if err != nil {
+			return err
+		}
+	}
+
 	newNode, paidRuntimes, err := registry.VerifyRegisterNodeArgs(
 		ctx,
 		params,
@@ -239,6 +249,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		epoch,
 		state,
 		state,
+		isFeatureVersion242,
 	)
 	if err != nil {
 		return err
@@ -579,7 +590,15 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, err
 	}
 
-	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch); err != nil {
+	isFeatureVersion242 := true
+	if !ctx.IsInitChain() {
+		isFeatureVersion242, err = features.IsFeatureVersion(ctx, migrations.Version242)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch, isFeatureVersion242); err != nil {
 		return nil, err
 	}
 
@@ -629,7 +648,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 	switch {
 	case existingRt != nil:
 		// Existing runtime, verify update.
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch, params)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch, params, isFeatureVersion242)
 	default:
 		// New runtime, verify new descriptor.
 		err = registry.VerifyRuntimeNew(ctx.Logger(), rt, epoch, params, ctx.IsInitChain())

@@ -6,8 +6,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -27,6 +30,12 @@ func TestChangeParameters(t *testing.T) {
 		MaxNodeExpiration: 10,
 	}
 	err := state.SetConsensusParameters(ctx, params)
+	require.NoError(t, err, "setting consensus parameters should succeed")
+
+	consensusState := consensusState.NewMutableState(ctx.State())
+	err = consensusState.SetConsensusParameters(ctx, &genesis.Parameters{
+		FeatureVersion: &version.Version{Major: 100},
+	})
 	require.NoError(t, err, "setting consensus parameters should succeed")
 
 	// Prepare proposal.

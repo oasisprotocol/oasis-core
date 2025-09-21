@@ -211,7 +211,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			&tc.n,
 		)
 		require.NoError(err, "singing node")
-		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), 1, false, false, beacon.EpochTime(10), rtLookup, ndLookup)
+		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), 1, false, false, beacon.EpochTime(10), rtLookup, ndLookup, true)
 		switch {
 		case tc.err == nil:
 			require.NoError(err, tc.msg)
