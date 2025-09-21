@@ -27,7 +27,7 @@ func TestSGXConstraintsV0(t *testing.T) {
 	err = cbor.Unmarshal(raw, &sc)
 	require.NoError(err, "Decode V0 SGX constraints")
 
-	err = sc.ValidateBasic(nil)
+	err = sc.ValidateBasic(nil, true)
 	require.NoError(err, "ValidateBasic V0 SGX constraints")
 
 	enc := cbor.Marshal(sc)
@@ -60,11 +60,11 @@ func TestSGXConstraintsV1(t *testing.T) {
 			},
 		},
 	}
-	err = sc.ValidateBasic(nil)
+	err = sc.ValidateBasic(nil, true)
 	require.Error(err, "ValidateBasic V1 SGX constraints without PCS support")
-	err = sc.ValidateBasic(&TEEFeatures{})
+	err = sc.ValidateBasic(&TEEFeatures{}, true)
 	require.Error(err, "ValidateBasic V1 SGX constraints without PCS support")
-	err = sc.ValidateBasic(&TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}})
+	err = sc.ValidateBasic(&TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}}, true)
 	require.NoError(err, "ValidateBasic V1 SGX constraints")
 }
 
