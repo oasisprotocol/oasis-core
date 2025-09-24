@@ -227,12 +227,13 @@ impl TCBInfo {
             return Err(Error::TCBEvaluationDataNumberInvalid);
         }
 
-        // Validate FMSPC not blacklisted.
-        let blocked = policy
-            .fmspc_blacklist
-            .iter()
-            .any(|blocked| blocked == &self.fmspc);
-        if blocked {
+        // Validate FMSPC is whitelisted.
+        if !policy.fmspc_whitelist.is_empty() && !policy.fmspc_whitelist.contains(&self.fmspc) {
+            return Err(Error::NotWhitelistedFMSPC);
+        }
+
+        // Validate FMSPC is not blacklisted.
+        if policy.fmspc_blacklist.contains(&self.fmspc) {
             return Err(Error::BlacklistedFMSPC);
         }
 

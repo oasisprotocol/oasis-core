@@ -16,7 +16,7 @@ func RegistryRuntimes(ctx *tmapi.Context, doc *genesis.Document, epoch beacon.Ep
 	regSt := doc.Registry
 	rtMap := make(map[common.Namespace]*registry.Runtime)
 	for _, rt := range regSt.Runtimes {
-		err := registry.VerifyRuntime(&regSt.Parameters, ctx.Logger(), rt, true, false, epoch)
+		err := registry.VerifyRuntime(&regSt.Parameters, ctx.Logger(), rt, true, false, epoch, true)
 		if err != nil {
 			ctx.Logger().Error("InitChain: Invalid runtime",
 				"err", err,
