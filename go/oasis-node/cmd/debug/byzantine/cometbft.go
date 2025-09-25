@@ -26,13 +26,13 @@ func newHonestCometBFT(genesis genesis.Provider, genesisDoc *genesis.Document) *
 	}
 }
 
-func (ht *honestCometBFT) start(id *identity.Identity, dataDir string) error {
+func (ht *honestCometBFT) start(id *identity.Identity, dataDir string, metricsEnabled bool) error {
 	if ht.service != nil {
 		return fmt.Errorf("honest CometBFT service already started")
 	}
 
 	var err error
-	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis, ht.genesisDoc, p2p.NewNop())
+	ht.service, err = cometbft.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis, ht.genesisDoc, p2p.NewNop(), metricsEnabled)
 	if err != nil {
 		return fmt.Errorf("cometbft New: %w", err)
 	}

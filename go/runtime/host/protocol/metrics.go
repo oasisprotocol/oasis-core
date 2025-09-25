@@ -4,8 +4,6 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 )
 
 var (
@@ -49,10 +47,6 @@ var (
 
 // initMetrics registers the metrics collectors.
 func initMetrics() {
-	if !metrics.Enabled() {
-		return
-	}
-
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(rhpCollectors...)
 	})
