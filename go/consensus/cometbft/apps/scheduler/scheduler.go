@@ -228,6 +228,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	// catastrophic, while failing to elect other committees is not.
 	validatorEntities, err := app.electValidators(
 		ctx,
+		epoch,
 		beaconState,
 		beaconParameters,
 		stakeAcc,
@@ -476,6 +477,7 @@ func (app *Application) electCommittees(
 
 func (app *Application) electValidators(
 	ctx *api.Context,
+	epoch beacon.EpochTime,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -514,7 +516,7 @@ func (app *Application) electValidators(
 	}
 
 	// Shuffle validator nodes.
-	shuffledNodes, err := shuffleValidators(ctx, schedulerParameters, beaconState, beaconParameters, validators)
+	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconState, beaconParameters, validators)
 	if err != nil {
 		return nil, err
 	}
