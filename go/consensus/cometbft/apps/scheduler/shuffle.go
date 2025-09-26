@@ -134,8 +134,15 @@ func electCommittee(
 	)
 
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
-		return nil
+	switch isFeatureVersion242 {
+	case false:
+		if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
+			return nil
+		}
+	case true:
+		if !rt.IsCompute() || kind != scheduler.KindComputeExecutor {
+			return nil
+		}
 	}
 
 	members, err := electCommitteeMembers(
