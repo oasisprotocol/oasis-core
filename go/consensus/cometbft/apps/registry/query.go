@@ -50,7 +50,7 @@ func (q *Query) Node(ctx context.Context, id signature.PublicKey) (*node.Node, e
 	}
 
 	// Do not return expired nodes.
-	if node.IsExpired(uint64(epoch)) {
+	if node.IsExpired(epoch) {
 		return nil, registry.ErrNoSuchNode
 	}
 	return node, nil
@@ -81,7 +81,7 @@ func (q *Query) Nodes(ctx context.Context) ([]*node.Node, error) {
 	// Filter out expired nodes.
 	var filteredNodes []*node.Node
 	for _, n := range nodes {
-		if n.IsExpired(uint64(epoch)) {
+		if n.IsExpired(epoch) {
 			continue
 		}
 		filteredNodes = append(filteredNodes, n)

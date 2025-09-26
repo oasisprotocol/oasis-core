@@ -181,7 +181,7 @@ func MustAdvanceEpochMulti(t *testing.T, consensus consensusAPI.Service, increme
 				if !nd.Node.HasRoles(node.RoleValidator) {
 					continue
 				}
-				if nd.Node.Expiration > uint64(epoch+1) {
+				if nd.Node.Expiration > epoch+1 {
 					break EVENTS
 				}
 			case <-time.After(recvTimeout):

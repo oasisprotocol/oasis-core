@@ -212,7 +212,7 @@ func (app *Application) onRegistryEpochChanged(ctx *api.Context, registryEpoch b
 	// otherwise the nodes could not be resolved.
 	var expiredNodes []*node.Node
 	for _, node := range nodes {
-		if !node.IsExpired(uint64(registryEpoch)) {
+		if !node.IsExpired(registryEpoch) {
 			continue
 		}
 
@@ -234,11 +234,11 @@ func (app *Application) onRegistryEpochChanged(ctx *api.Context, registryEpoch b
 		}
 
 		// If node has been expired for the debonding interval, finally remove it.
-		if math.MaxUint64-node.Expiration < uint64(debondingInterval) {
+		if math.MaxUint64-node.Expiration < debondingInterval {
 			// Overflow, the node will never be removed.
 			continue
 		}
-		if beacon.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
+		if node.Expiration+debondingInterval < registryEpoch {
 			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
 			)

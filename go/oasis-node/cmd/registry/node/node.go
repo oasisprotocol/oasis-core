@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -146,7 +147,7 @@ func doInit(*cobra.Command, []string) { // nolint: gocyclo
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         nodeIdentity.NodeSigner.Public(),
 		EntityID:   entityID,
-		Expiration: viper.GetUint64(CfgExpiration),
+		Expiration: beacon.EpochTime(viper.GetUint64(CfgExpiration)),
 		TLS: node.TLSInfo{
 			PubKey: nodeIdentity.TLSSigner.Public(),
 		},
