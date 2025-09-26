@@ -166,7 +166,7 @@ func (app *Application) electCommittee(
 	)
 
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
+	if !rt.IsCompute() || kind != scheduler.KindComputeExecutor {
 		return nil
 	}
 
