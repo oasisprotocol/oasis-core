@@ -12,7 +12,6 @@ import (
 	"github.com/cometbft/cometbft/abci/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -419,16 +418,6 @@ func (app *Application) isSuitableExecutorWorker(
 	return false
 }
 
-// GetPerm generates a permutation that we use to choose nodes from a list of eligible nodes to elect.
-func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes int) ([]int, error) {
-	drbg, err := drbg.New(crypto.SHA512, beacon, runtimeID[:], rngCtx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: couldn't instantiate DRBG: %w", err)
-	}
-	rng := rand.New(mathrand.New(drbg))
-	return rng.Perm(nrNodes), nil
-}
-
 func (app *Application) electCommittees(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
@@ -614,7 +603,7 @@ func stakingAddressMapToSliceByStake(
 	sortAddresses(addrs)
 
 	// Shuffle entities to make tie-breaks "random".
-	rng, err := initRNG(entropy)
+	rng, err := initRNG(entropy, nil, RNGContextEntities)
 	if err != nil {
 		return nil, err
 	}
@@ -654,13 +643,13 @@ func shuffleAddresses(addrs []staking.Address, rng *rand.Rand) {
 	})
 }
 
-func initRNG(entropy []byte) (*rand.Rand, error) {
-	drbg, err := drbg.New(crypto.SHA512, entropy, nil, RNGContextEntities)
+func initRNG(entropy []byte, nonce []byte, context []byte) (*rand.Rand, error) {
+	drbg, err := drbg.New(crypto.SHA512, entropy, nonce, context)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't instantiate DRBG: %w", err)
 	}
-	rngSrc := mathrand.New(drbg)
-	rng := rand.New(rngSrc)
+	src := mathrand.New(drbg)
+	rng := rand.New(src)
 	return rng, nil
 }
 
