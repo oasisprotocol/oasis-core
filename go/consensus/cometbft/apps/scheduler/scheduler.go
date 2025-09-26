@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
@@ -603,59 +604,76 @@ electLoop:
 }
 
 func stakingAddressMapToSliceByStake(
-	entMap map[staking.Address]struct{},
+	entities map[staking.Address]struct{},
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	beacon []byte,
+	entropy []byte,
 	schedulerParameters *scheduler.ConsensusParameters,
 ) ([]staking.Address, error) {
-	// Convert the map of entity's stake account addresses to a lexicographically
-	// sorted slice (i.e. make it deterministic).
-	entities := stakingAddressMapToSortedSlice(entMap)
+	// Sort addrs lexicographically, i.e. make order deterministic.
+	addrs := slices.Collect(maps.Keys(entities))
+	sortAddresses(addrs)
 
-	// Shuffle the sorted slice to make tie-breaks "random".
-	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextEntities)
+	// Shuffle entities to make tie-breaks "random".
+	rng, err := initRNG(entropy)
+	if err != nil {
+		return nil, err
+	}
+	shuffleAddresses(addrs, rng)
+
+	if schedulerParameters.DebugBypassStake {
+		return addrs, nil
+	}
+
+	// Stable-sort the shuffled slice by descending escrow balance.
+	balances, err := fetchBalances(addrs, stakeAcc)
+	if err != nil {
+		return nil, err
+	}
+	sortAddressesByBalance(addrs, balances)
+
+	return addrs, nil
+}
+
+func sortAddresses(addrs []staking.Address) {
+	sort.Slice(addrs, func(i, j int) bool {
+		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
+	})
+}
+
+func sortAddressesByBalance(addrs []staking.Address, balances map[staking.Address]*quantity.Quantity) {
+	sort.SliceStable(addrs, func(i, j int) bool {
+		bi := balances[addrs[i]]
+		bj := balances[addrs[j]]
+		return bi.Cmp(bj) == 1 // Note: Not -1 to get a reversed sort.
+	})
+}
+
+func shuffleAddresses(addrs []staking.Address, rng *rand.Rand) {
+	rng.Shuffle(len(addrs), func(i, j int) {
+		addrs[i], addrs[j] = addrs[j], addrs[i]
+	})
+}
+
+func initRNG(entropy []byte) (*rand.Rand, error) {
+	drbg, err := drbg.New(crypto.SHA512, entropy, nil, RNGContextEntities)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't instantiate DRBG: %w", err)
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
-
-	rng.Shuffle(len(entities), func(i, j int) {
-		entities[i], entities[j] = entities[j], entities[i]
-	})
-
-	if schedulerParameters.DebugBypassStake {
-		return entities, nil
-	}
-
-	// Stable-sort the shuffled slice by descending escrow balance.
-	var balanceErr error
-	sort.SliceStable(entities, func(i, j int) bool {
-		iBal, err := stakeAcc.GetEscrowBalance(entities[i])
-		if err != nil {
-			balanceErr = err
-			return false
-		}
-		jBal, err := stakeAcc.GetEscrowBalance(entities[j])
-		if err != nil {
-			balanceErr = err
-			return false
-		}
-		return iBal.Cmp(jBal) == 1 // Note: Not -1 to get a reversed sort.
-	})
-	if balanceErr != nil {
-		return nil, fmt.Errorf("failed to fetch escrow balance: %w", balanceErr)
-	}
-
-	return entities, nil
+	return rng, nil
 }
 
-func stakingAddressMapToSortedSlice(m map[staking.Address]struct{}) []staking.Address {
-	sorted := slices.Collect(maps.Keys(m))
-	sort.Slice(sorted, func(i, j int) bool {
-		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
-	})
-	return sorted
+func fetchBalances(addrs []staking.Address, stakeAcc *stakingState.StakeAccumulatorCache) (map[staking.Address]*quantity.Quantity, error) {
+	balances := make(map[staking.Address]*quantity.Quantity)
+	for _, addr := range addrs {
+		balance, err := stakeAcc.GetEscrowBalance(addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch escrow balance: %w", err)
+		}
+		balances[addr] = balance
+	}
+	return balances, nil
 }
 
 func fetchRuntimes(ctx *api.Context) ([]*registry.Runtime, error) {
@@ -668,7 +686,8 @@ func fetchRuntimes(ctx *api.Context) ([]*registry.Runtime, error) {
 }
 
 func distributeRewards(ctx *api.Context, epoch beacon.EpochTime, entities map[staking.Address]struct{}, schedulerParameters *scheduler.ConsensusParameters) error {
-	addrs := stakingAddressMapToSortedSlice(entities)
+	addrs := slices.Collect(maps.Keys(entities))
+	sortAddresses(addrs)
 	state := stakingState.NewMutableState(ctx.State())
 	return state.AddRewards(ctx, epoch, &schedulerParameters.RewardFactorEpochElectionAny, addrs)
 }
