@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"bytes"
-	"crypto"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -10,8 +9,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -117,24 +114,21 @@ func shuffleValidators(
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 	}
-	return shuffleValidatorsByEntropy(entropy, nodes)
+
+	rng, err := initRNG(entropy, nil, RNGContextValidators)
+	if err != nil {
+		return nil, err
+	}
+
+	return shuffleNodes(nodes, rng)
 }
 
-func shuffleValidatorsByEntropy(
-	entropy []byte,
-	nodes []*node.Node,
-) ([]*node.Node, error) {
-	drbg, err := drbg.New(crypto.SHA512, entropy, nil, RNGContextValidators)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: couldn't instantiate DRBG: %w", err)
-	}
-	rng := rand.New(mathrand.New(drbg))
-
+func shuffleNodes(nodes []*node.Node, rng *rand.Rand) ([]*node.Node, error) {
 	l := len(nodes)
 	idxs := rng.Perm(l)
 	shuffled := make([]*node.Node, 0, l)
 
-	for i := 0; i < l; i++ {
+	for i := range l {
 		shuffled = append(shuffled, nodes[idxs[i]])
 	}
 
@@ -442,15 +436,16 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 				return nil, fmt.Errorf("cometbft/scheduler: unsupported role: %v", role)
 			}
 
-			var entropy []byte
-			if entropy, err = beaconState.Beacon(ctx); err != nil {
+			entropy, err := beaconState.Beacon(ctx)
+			if err != nil {
 				return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 			}
 
-			idxs, err = GetPerm(entropy, rt.ID, rngCtx, nrNodes)
+			rng, err := initRNG(entropy, rt.ID[:], rngCtx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to derive permutation: %w", err)
+				return nil, err
 			}
+			idxs = rng.Perm(nrNodes)
 		case true:
 			// Use the VRF proofs to do the elections.
 			baseHasher := newCommitteeBetaHasher(
