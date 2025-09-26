@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -77,7 +78,7 @@ type Node struct {
 	EntityID signature.PublicKey `json:"entity_id"`
 
 	// Expiration is the epoch in which this node's commitment expires.
-	Expiration uint64 `json:"expiration"`
+	Expiration beacon.EpochTime `json:"expiration"`
 
 	// TLS contains information for connecting to this node via TLS.
 	TLS TLSInfo `json:"tls"`
@@ -116,7 +117,7 @@ type nodeV2 struct {
 	EntityID signature.PublicKey `json:"entity_id"`
 
 	// Expiration is the epoch in which this node's commitment expires.
-	Expiration uint64 `json:"expiration"`
+	Expiration beacon.EpochTime `json:"expiration"`
 
 	// TLS contains information for connecting to this node via TLS.
 	TLS nodeV2TLSInfo `json:"tls"`
@@ -385,7 +386,7 @@ func (n *Node) OnlyHasRoles(r RolesMask) bool {
 
 // IsExpired returns true if the node expiration epoch is strictly smaller
 // than the passed (current) epoch.
-func (n *Node) IsExpired(epoch uint64) bool {
+func (n *Node) IsExpired(epoch beacon.EpochTime) bool {
 	return n.Expiration < epoch
 }
 
