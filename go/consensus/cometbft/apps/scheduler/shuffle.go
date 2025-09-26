@@ -44,22 +44,18 @@ func getPrevVRFState(
 
 func shuffleValidators(
 	ctx *api.Context,
+	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	nodes []*node.Node,
 ) ([]*node.Node, error) {
-	epoch, _, err := beaconState.GetEpoch(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: failed to query current epoch: %w", err)
-	}
-
 	switch beaconParameters.Backend { // Used so that we can break to fallback.
 	case beacon.BackendVRF:
 		var prevState *beacon.PrevVRFState
 
 		// Do the VRF-based validator shuffle.
-		prevState, err = getPrevVRFState(ctx, beaconState)
+		prevState, err := getPrevVRFState(ctx, beaconState)
 		if err != nil {
 			return nil, err
 		}
