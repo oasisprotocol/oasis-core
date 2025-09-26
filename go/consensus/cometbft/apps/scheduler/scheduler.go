@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"sort"
 
 	"github.com/cometbft/cometbft/abci/types"
@@ -179,7 +181,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	// exactly how it expects.
 	filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !schedulerParameters.DebugAllowWeakAlpha
 
-	regState := registryState.NewMutableState(ctx.State())
+	regState := registryState.NewImmutableState(ctx.State())
 	registryParameters, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't get registry parameters: %w", err)
@@ -435,7 +437,7 @@ func (app *Application) electCommittees(
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	rewardableEntities map[staking.Address]struct{},
 	validatorEntities map[staking.Address]struct{},
-	nodeList []*nodeWithStatus,
+	nodes []*nodeWithStatus,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
 	if err != nil {
@@ -459,7 +461,7 @@ func (app *Application) electCommittees(
 				rewardableEntities,
 				validatorEntities,
 				runtime,
-				nodeList,
+				nodes,
 				kind,
 			); err != nil {
 				return err
@@ -481,9 +483,8 @@ func (app *Application) electValidators(
 	nodes []*node.Node,
 	schedulerParameters *scheduler.ConsensusParameters,
 ) (map[staking.Address]struct{}, error) {
-	// Filter the node list based on eligibility and minimum required
-	// entity stake.
-	var nodeList []*node.Node
+	// Filter nodes based on eligibility and minimum required entity stake.
+	var validators []*node.Node
 	entities := make(map[staking.Address]struct{})
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
@@ -497,7 +498,7 @@ func (app *Application) electValidators(
 			}
 		}
 
-		nodeList = append(nodeList, n)
+		validators = append(validators, n)
 		entities[entAddr] = struct{}{}
 	}
 
@@ -512,8 +513,8 @@ func (app *Application) electValidators(
 		return nil, err
 	}
 
-	// Shuffle the node list.
-	shuffledNodes, err := shuffleValidators(ctx, schedulerParameters, beaconState, beaconParameters, nodeList)
+	// Shuffle validator nodes.
+	shuffledNodes, err := shuffleValidators(ctx, schedulerParameters, beaconState, beaconParameters, validators)
 	if err != nil {
 		return nil, err
 	}
@@ -648,10 +649,7 @@ func stakingAddressMapToSliceByStake(
 }
 
 func stakingAddressMapToSortedSlice(m map[staking.Address]struct{}) []staking.Address {
-	sorted := make([]staking.Address, 0, len(m))
-	for mk := range m {
-		sorted = append(sorted, mk)
-	}
+	sorted := slices.Collect(maps.Keys(m))
 	sort.Slice(sorted, func(i, j int) bool {
 		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
 	})

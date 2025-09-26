@@ -47,7 +47,7 @@ func shuffleValidators(
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 ) ([]*node.Node, error) {
 	epoch, _, err := beaconState.GetEpoch(ctx)
 	if err != nil {
@@ -65,8 +65,8 @@ func shuffleValidators(
 		}
 
 		var numValidatorsWithPi int
-		for _, v := range nodeList {
-			if prevState.Pi[v.ID] != nil {
+		for _, n := range nodes {
+			if prevState.Pi[n.ID] != nil {
 				numValidatorsWithPi++
 			}
 		}
@@ -102,7 +102,7 @@ func shuffleValidators(
 		ret := sortNodesByHashedBeta(
 			prevState,
 			baseHasher,
-			nodeList,
+			nodes,
 		)
 
 		return ret, nil
@@ -121,12 +121,12 @@ func shuffleValidators(
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 	}
-	return shuffleValidatorsByEntropy(entropy, nodeList)
+	return shuffleValidatorsByEntropy(entropy, nodes)
 }
 
 func shuffleValidatorsByEntropy(
 	entropy []byte,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 ) ([]*node.Node, error) {
 	drbg, err := drbg.New(crypto.SHA512, entropy, nil, RNGContextValidators)
 	if err != nil {
@@ -134,12 +134,12 @@ func shuffleValidatorsByEntropy(
 	}
 	rng := rand.New(mathrand.New(drbg))
 
-	l := len(nodeList)
+	l := len(nodes)
 	idxs := rng.Perm(l)
 	shuffled := make([]*node.Node, 0, l)
 
 	for i := 0; i < l; i++ {
-		shuffled = append(shuffled, nodeList[idxs[i]])
+		shuffled = append(shuffled, nodes[idxs[i]])
 	}
 
 	return shuffled, nil
@@ -156,7 +156,7 @@ func (app *Application) electCommittee(
 	rewardableEntities map[staking.Address]struct{},
 	validatorEntities map[staking.Address]struct{},
 	rt *registry.Runtime,
-	nodeList []*nodeWithStatus,
+	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 ) error {
 	ctx.Logger().Debug("electing committee",
@@ -181,7 +181,7 @@ func (app *Application) electCommittee(
 		rewardableEntities,
 		validatorEntities,
 		rt,
-		nodeList,
+		nodes,
 		kind,
 	)
 	if err != nil {
@@ -225,7 +225,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	rewardableEntities map[staking.Address]struct{},
 	validatorEntities map[staking.Address]struct{},
 	rt *registry.Runtime,
-	nodeList []*nodeWithStatus,
+	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 ) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
@@ -290,8 +290,8 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	cs := rt.Constraints[kind]
 
 	// Perform pre-election eligibility filtering.
-	nodeLists := make(map[scheduler.Role][]*node.Node)
-	for _, n := range nodeList {
+	nodesPerRole := make(map[scheduler.Role][]*node.Node)
+	for _, n := range nodes {
 		// Check if an entity has enough stake.
 		entAddr := staking.NewAddress(n.node.EntityID)
 		if !schedulerParameters.DebugBypassStake {
@@ -343,7 +343,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 				}
 			}
 
-			nodeLists[role] = append(nodeLists[role], n.node)
+			nodesPerRole[role] = append(nodesPerRole[role], n.node)
 			eligible = true
 		}
 		if !eligible {
@@ -365,7 +365,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 		// will ensure fairness if the constraint is set to 1 (as is the
 		// case with all currently deployed runtimes with the constraint),
 		// but is still not ideal if the constraint is larger.
-		nodeList := nodeLists[role]
+		nodes := nodesPerRole[role]
 		if mn := cs[role].MaxNodes; mn != nil && mn.Limit > 0 {
 			if flags.DebugDontBlameOasis() && schedulerParameters.DebugForceElect != nil {
 				ctx.Logger().Error("debug force elect is incompatible with de-duplication",
@@ -380,24 +380,24 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			case false:
 				// Just use the first seen nodes in the node list up to
 				// the limit, per-entity.  This is only used in testing.
-				nodeList = dedupEntityNodesTrivial(
-					nodeList,
+				nodes = dedupEntityNodesTrivial(
+					nodes,
 					mn.Limit,
 				)
 			case true:
-				nodeList = dedupEntityNodesByHashedBeta(
+				nodes = dedupEntityNodesByHashedBeta(
 					prevState,
 					tmBeacon.MustGetChainContext(ctx),
 					epoch,
 					rt.ID,
 					kind,
 					role,
-					nodeList,
+					nodes,
 					mn.Limit,
 				)
 			}
 		}
-		nrNodes := len(nodeList)
+		nrNodes := len(nodes)
 
 		// Check election scheduling constraints.
 		var minPoolSize int
@@ -468,7 +468,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			idxs = committeeVRFBetaIndexes(
 				prevState,
 				baseHasher,
-				nodeList,
+				nodes,
 			)
 		}
 
@@ -480,7 +480,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			rt,
 			kind,
 			role,
-			nodeList,
+			nodes,
 			wantedNodes,
 		)
 		if !ok {
@@ -495,7 +495,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 				break
 			}
 
-			n := nodeList[idx]
+			n := nodes[idx]
 			if forceState != nil && forceState.elected[n.ID] {
 				// Already elected to the committee by the debug forcing option.
 				continue
@@ -553,17 +553,17 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 func committeeVRFBetaIndexes(
 	prevState *beacon.PrevVRFState,
 	baseHasher *tuplehash.Hasher,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 ) []int {
 	indexByNode := make(map[signature.PublicKey]int)
-	for i, n := range nodeList {
+	for i, n := range nodes {
 		indexByNode[n.ID] = i
 	}
 
 	sorted := sortNodesByHashedBeta(
 		prevState,
 		baseHasher,
-		nodeList,
+		nodes,
 	)
 
 	ret := make([]int, 0, len(sorted))
@@ -577,13 +577,13 @@ func committeeVRFBetaIndexes(
 func sortNodesByHashedBeta(
 	prevState *beacon.PrevVRFState,
 	baseHasher *tuplehash.Hasher,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 ) []*node.Node {
 	// Accumulate the hashed betas.
 	nodeByHashedBeta := make(map[hashedBeta]*node.Node)
-	betas := make([]hashedBeta, 0, len(nodeList))
-	for i := range nodeList {
-		n := nodeList[i]
+	betas := make([]hashedBeta, 0, len(nodes))
+	for i := range nodes {
+		n := nodes[i]
 		pi := prevState.Pi[n.ID]
 		if pi == nil {
 			continue
@@ -681,12 +681,12 @@ func dedupEntityNodesByHashedBeta(
 	runtimeID common.Namespace,
 	kind scheduler.CommitteeKind,
 	role scheduler.Role,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 	perEntityLimit uint16,
 ) []*node.Node {
 	// If there is no limit, just return.
 	if perEntityLimit == 0 {
-		return nodeList
+		return nodes
 	}
 
 	baseHasher := newCommitteeDedupBetaHasher(
@@ -698,32 +698,32 @@ func dedupEntityNodesByHashedBeta(
 	)
 
 	// Do the cryptographic sortition.
-	shuffledNodeList := sortNodesByHashedBeta(
+	shuffled := sortNodesByHashedBeta(
 		prevState,
 		baseHasher,
-		nodeList,
+		nodes,
 	)
 
 	return dedupEntityNodesTrivial(
-		shuffledNodeList,
+		shuffled,
 		perEntityLimit,
 	)
 }
 
 func dedupEntityNodesTrivial(
-	nodeList []*node.Node,
+	nodes []*node.Node,
 	perEntityLimit uint16,
 ) []*node.Node {
 	nodesPerEntity := make(map[signature.PublicKey]int)
-	dedupedNodeList := make([]*node.Node, 0, len(nodeList))
-	for i := range nodeList {
-		n := nodeList[i]
+	deduped := make([]*node.Node, 0, len(nodes))
+	for i := range nodes {
+		n := nodes[i]
 		if nodesPerEntity[n.EntityID] >= int(perEntityLimit) {
 			continue
 		}
 		nodesPerEntity[n.EntityID]++
-		dedupedNodeList = append(dedupedNodeList, n)
+		deduped = append(deduped, n)
 	}
 
-	return dedupedNodeList
+	return deduped
 }
