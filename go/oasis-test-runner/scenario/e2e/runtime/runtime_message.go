@@ -73,7 +73,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	//     contain message results of the consensus transfer.
 	sc.Logger.Debug("submitting consensus_transfer runtime transaction")
 	var txMetaResponse *api.SubmitTxMetaResponse
-	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, staking.Transfer{}, 0); err != nil {
+	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, staking.Transfer{}, "sender", 0); err != nil {
 		return err
 	}
 	if _, err = unpackRawTxResp(txMetaResponse.Output); err != nil {

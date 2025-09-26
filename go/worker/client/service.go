@@ -250,15 +250,7 @@ func (s *service) GetUnconfirmedTransactions(_ context.Context, runtimeID common
 		return nil, api.ErrNotFound
 	}
 
-	// Get currently pending transactions from the runtime's transaction pool.
-	pendingTxs := rt.TxPool.GetTxs()
-
-	// Copy the raw transactions to the output slice.
-	out := make([][]byte, 0, len(pendingTxs))
-	for _, tx := range pendingTxs {
-		out = append(out, tx.Raw())
-	}
-	return out, nil
+	return rt.TxPool.All(), nil
 }
 
 // Implements api.RuntimeClient.

@@ -30,7 +30,7 @@ const (
 
 // GetTxsRequest is a GetTxs request.
 type GetTxsRequest struct {
-	Txs []hash.Hash `json:"txs"`
+	Hashes []hash.Hash `json:"txs"`
 }
 
 // GetTxsResponse is a response to a GetTxs request.

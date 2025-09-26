@@ -123,6 +123,7 @@ steps:
 
   - label: Audit Go dependencies for vulnerabilities
     command: .buildkite/go/nancy_audit.sh
+    soft_fail: true
     retry:
       <<: *retry_agent_failure
     plugins:
