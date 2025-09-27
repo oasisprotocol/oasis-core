@@ -39,6 +39,12 @@ func (ns NodeStatus) IsFrozen() bool {
 	return ns.FreezeEndTime > 0
 }
 
+// Freeze makes the node frozen until the specified epoch, after which it may
+// become unfrozen.
+func (ns *NodeStatus) Freeze(epoch beacon.EpochTime) {
+	ns.FreezeEndTime = epoch
+}
+
 // Unfreeze makes the node unfrozen.
 func (ns *NodeStatus) Unfreeze() {
 	ns.FreezeEndTime = 0
