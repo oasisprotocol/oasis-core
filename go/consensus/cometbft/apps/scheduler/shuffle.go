@@ -46,6 +46,7 @@ func shuffleValidators(
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	nodes []*node.Node,
+	entropy []byte,
 ) ([]*node.Node, error) {
 	switch beaconParameters.Backend { // Used so that we can break to fallback.
 	case beacon.BackendVRF:
@@ -110,11 +111,6 @@ func shuffleValidators(
 		"epoch", epoch,
 	)
 
-	entropy, err := beaconState.Beacon(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
-	}
-
 	rng, err := initRNG(entropy, nil, RNGContextValidators)
 	if err != nil {
 		return nil, err
@@ -148,6 +144,7 @@ func electCommittee(
 	rt *registry.Runtime,
 	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
+	entropy []byte,
 	isFeatureVersion242 bool,
 ) error {
 	ctx.Logger().Debug("electing committee",
@@ -174,6 +171,7 @@ func electCommittee(
 		rt,
 		nodes,
 		kind,
+		entropy,
 		isFeatureVersion242,
 	)
 	if err != nil {
@@ -219,6 +217,7 @@ func electCommitteeMembers( //nolint: gocyclo
 	rt *registry.Runtime,
 	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
+	entropy []byte,
 	isFeatureVersion242 bool,
 ) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
@@ -437,11 +436,6 @@ func electCommitteeMembers( //nolint: gocyclo
 				rngCtx = append(rngCtx, RNGContextRoleBackupWorker...)
 			default:
 				return nil, fmt.Errorf("cometbft/scheduler: unsupported role: %v", role)
-			}
-
-			entropy, err := beaconState.Beacon(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 			}
 
 			rng, err := initRNG(entropy, rt.ID[:], rngCtx)
