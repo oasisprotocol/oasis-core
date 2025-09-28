@@ -811,7 +811,6 @@ func TestElectCommittee(t *testing.T) {
 			ctx,
 			epoch,
 			schedulerParameters,
-			beaconState,
 			beaconParameters,
 			registryParameters,
 			stakeAcc,
@@ -821,6 +820,7 @@ func TestElectCommittee(t *testing.T) {
 			nodes,
 			tc.kind,
 			entropy,
+			nil,
 			true,
 		)
 		require.NoError(err, "committee election should not fail")

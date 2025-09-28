@@ -181,6 +181,16 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 	}
+
+	var vrf *beacon.PrevVRFState
+	if beaconParameters.Backend == beacon.BackendVRF {
+		vrfState, err := beaconState.VRFState(ctx)
+		if err != nil {
+			return fmt.Errorf("cometbft/scheduler: failed to query VRF state: %w", err)
+		}
+		vrf = vrfState.PrevState
+	}
+
 	// If weak alphas are allowed then skip the eligibility check as
 	// well because the byzantine node and associated tests are extremely
 	// fragile, and breaks in hard-to-debug ways if timekeeping isn't
@@ -235,13 +245,13 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	validatorEntities, err := electValidators(
 		ctx,
 		epoch,
-		beaconState,
 		beaconParameters,
 		stakeAcc,
 		rewardableEntities,
 		nodes,
 		schedulerParameters,
 		entropy,
+		vrf,
 	)
 	if err != nil {
 		// It is unclear what the behavior should be if the validator
@@ -260,7 +270,6 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		ctx,
 		epoch,
 		schedulerParameters,
-		beaconState,
 		beaconParameters,
 		registryParameters,
 		stakeAcc,
@@ -268,6 +277,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		validatorEntities,
 		committeeNodes,
 		entropy,
+		vrf,
 		isFeatureVersion242,
 	); err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
@@ -439,7 +449,6 @@ func (app *Application) electCommittees(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -447,6 +456,7 @@ func (app *Application) electCommittees(
 	validatorEntities map[staking.Address]struct{},
 	nodes []*nodeWithStatus,
 	entropy []byte,
+	vrf *beacon.PrevVRFState,
 	isFeatureVersion242 bool,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
@@ -464,7 +474,6 @@ func (app *Application) electCommittees(
 				ctx,
 				epoch,
 				schedulerParameters,
-				beaconState,
 				beaconParameters,
 				registryParameters,
 				stakeAcc,
@@ -474,6 +483,7 @@ func (app *Application) electCommittees(
 				nodes,
 				kind,
 				entropy,
+				vrf,
 				isFeatureVersion242,
 			); err != nil {
 				return err
@@ -489,13 +499,13 @@ func (app *Application) electCommittees(
 func electValidators(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	rewardableEntities map[staking.Address]struct{},
 	nodes []*node.Node,
 	schedulerParameters *scheduler.ConsensusParameters,
 	entropy []byte,
+	vrf *beacon.PrevVRFState,
 ) (map[staking.Address]struct{}, error) {
 	// Filter nodes based on eligibility and minimum required entity stake.
 	var validators []*node.Node
@@ -524,7 +534,7 @@ func electValidators(
 	}
 
 	// Shuffle validator nodes.
-	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconState, beaconParameters, validators, entropy)
+	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconParameters, validators, entropy, vrf)
 	if err != nil {
 		return nil, err
 	}
