@@ -177,6 +177,10 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't get beacon parameters: %w", err)
 	}
+	entropy, err := beaconState.Beacon(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
+	}
 	// If weak alphas are allowed then skip the eligibility check as
 	// well because the byzantine node and associated tests are extremely
 	// fragile, and breaks in hard-to-debug ways if timekeeping isn't
@@ -237,6 +241,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		rewardableEntities,
 		nodes,
 		schedulerParameters,
+		entropy,
 	)
 	if err != nil {
 		// It is unclear what the behavior should be if the validator
@@ -262,6 +267,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		rewardableEntities,
 		validatorEntities,
 		committeeNodes,
+		entropy,
 		isFeatureVersion242,
 	); err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
@@ -440,6 +446,7 @@ func (app *Application) electCommittees(
 	rewardableEntities map[staking.Address]struct{},
 	validatorEntities map[staking.Address]struct{},
 	nodes []*nodeWithStatus,
+	entropy []byte,
 	isFeatureVersion242 bool,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
@@ -466,6 +473,7 @@ func (app *Application) electCommittees(
 				runtime,
 				nodes,
 				kind,
+				entropy,
 				isFeatureVersion242,
 			); err != nil {
 				return err
@@ -487,6 +495,7 @@ func electValidators(
 	rewardableEntities map[staking.Address]struct{},
 	nodes []*node.Node,
 	schedulerParameters *scheduler.ConsensusParameters,
+	entropy []byte,
 ) (map[staking.Address]struct{}, error) {
 	// Filter nodes based on eligibility and minimum required entity stake.
 	var validators []*node.Node
@@ -509,17 +518,13 @@ func electValidators(
 
 	// Sort all of the entities that are actually running eligible validator
 	// nodes by descending stake.
-	weakEntropy, err := beaconState.Beacon(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
-	}
-	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, weakEntropy, schedulerParameters)
+	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, entropy, schedulerParameters)
 	if err != nil {
 		return nil, err
 	}
 
 	// Shuffle validator nodes.
-	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconState, beaconParameters, validators)
+	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconState, beaconParameters, validators, entropy)
 	if err != nil {
 		return nil, err
 	}
