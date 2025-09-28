@@ -14,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmBeacon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
-	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -28,39 +27,20 @@ type nodeWithStatus struct {
 	status *registry.NodeStatus
 }
 
-func getPrevVRFState(
-	ctx *api.Context,
-	beaconState *beaconState.MutableState,
-) (*beacon.PrevVRFState, error) {
-	st, err := beaconState.VRFState(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: failed to query VRF state: %w", err)
-	}
-	return st.PrevState, nil
-}
-
 func shuffleValidators(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	nodes []*node.Node,
 	entropy []byte,
+	vrf *beacon.PrevVRFState,
 ) ([]*node.Node, error) {
 	switch beaconParameters.Backend { // Used so that we can break to fallback.
 	case beacon.BackendVRF:
-		var prevState *beacon.PrevVRFState
-
-		// Do the VRF-based validator shuffle.
-		prevState, err := getPrevVRFState(ctx, beaconState)
-		if err != nil {
-			return nil, err
-		}
-
 		var numValidatorsWithPi int
 		for _, n := range nodes {
-			if prevState.Pi[n.ID] != nil {
+			if vrf.Pi[n.ID] != nil {
 				numValidatorsWithPi++
 			}
 		}
@@ -83,7 +63,7 @@ func shuffleValidators(
 		ctx.Logger().Info(
 			"validator election: shuffling by hashed betas",
 			"epoch", epoch,
-			"num_proofs", len(prevState.Pi),
+			"num_proofs", len(vrf.Pi),
 		)
 
 		baseHasher := newBetaHasher(
@@ -94,7 +74,7 @@ func shuffleValidators(
 
 		// Do the cryptographic sortition.
 		ret := sortNodesByHashedBeta(
-			prevState,
+			vrf,
 			baseHasher,
 			nodes,
 		)
@@ -135,7 +115,6 @@ func electCommittee(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -145,6 +124,7 @@ func electCommittee(
 	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 	entropy []byte,
+	vrfState *beacon.PrevVRFState,
 ) error {
 	ctx.Logger().Debug("electing committee",
 		"epoch", epoch,
@@ -161,7 +141,6 @@ func electCommittee(
 		ctx,
 		epoch,
 		schedulerParameters,
-		beaconState,
 		beaconParameters,
 		registryParameters,
 		stakeAcc,
@@ -171,6 +150,7 @@ func electCommittee(
 		nodes,
 		kind,
 		entropy,
+		vrfState,
 	)
 	if err != nil {
 		return err
@@ -206,7 +186,6 @@ func electCommitteeMembers( //nolint: gocyclo
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -216,6 +195,7 @@ func electCommitteeMembers( //nolint: gocyclo
 	nodes []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 	entropy []byte,
+	vrfState *beacon.PrevVRFState,
 ) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
 	// order for better performance.
@@ -228,15 +208,9 @@ func electCommitteeMembers( //nolint: gocyclo
 	useVRF := beaconParameters.Backend == beacon.BackendVRF
 
 	// If a VRF-based election is to be done, query the VRF state.
-	var (
-		prevState *beacon.PrevVRFState
-		err       error
-	)
+	var err error
 	if useVRF {
-		if prevState, err = getPrevVRFState(ctx, beaconState); err != nil {
-			return nil, err
-		}
-		if !prevState.CanElectCommittees {
+		if !vrfState.CanElectCommittees {
 			if !schedulerParameters.DebugAllowWeakAlpha {
 				ctx.Logger().Error("epoch had weak VRF alpha, committee elections not allowed",
 					"kind", kind,
@@ -296,7 +270,7 @@ func electCommitteeMembers( //nolint: gocyclo
 
 		// If the election uses VRFs, make sure that the node bothered to submit
 		// a VRF proof for this election.
-		if useVRF && prevState.Pi[n.node.ID] == nil {
+		if useVRF && vrfState.Pi[n.node.ID] == nil {
 			// ... as long as we aren't testing with mandatory committee
 			// members.
 			isForceElect := false
@@ -375,7 +349,7 @@ func electCommitteeMembers( //nolint: gocyclo
 				)
 			case true:
 				nodes = dedupEntityNodesByHashedBeta(
-					prevState,
+					vrfState,
 					tmBeacon.MustGetChainContext(ctx),
 					epoch,
 					rt.ID,
@@ -451,7 +425,7 @@ func electCommitteeMembers( //nolint: gocyclo
 			)
 
 			idxs = committeeVRFBetaIndexes(
-				prevState,
+				vrfState,
 				baseHasher,
 				nodes,
 			)
@@ -536,7 +510,7 @@ func electCommitteeMembers( //nolint: gocyclo
 }
 
 func committeeVRFBetaIndexes(
-	prevState *beacon.PrevVRFState,
+	vrfState *beacon.PrevVRFState,
 	baseHasher *tuplehash.Hasher,
 	nodes []*node.Node,
 ) []int {
@@ -546,7 +520,7 @@ func committeeVRFBetaIndexes(
 	}
 
 	sorted := sortNodesByHashedBeta(
-		prevState,
+		vrfState,
 		baseHasher,
 		nodes,
 	)
@@ -560,7 +534,7 @@ func committeeVRFBetaIndexes(
 }
 
 func sortNodesByHashedBeta(
-	prevState *beacon.PrevVRFState,
+	vrfState *beacon.PrevVRFState,
 	baseHasher *tuplehash.Hasher,
 	nodes []*node.Node,
 ) []*node.Node {
@@ -569,7 +543,7 @@ func sortNodesByHashedBeta(
 	betas := make([]hashedBeta, 0, len(nodes))
 	for i := range nodes {
 		n := nodes[i]
-		pi := prevState.Pi[n.ID]
+		pi := vrfState.Pi[n.ID]
 		if pi == nil {
 			continue
 		}
@@ -660,7 +634,7 @@ func newBetaHasher(
 }
 
 func dedupEntityNodesByHashedBeta(
-	prevState *beacon.PrevVRFState,
+	vrfState *beacon.PrevVRFState,
 	chainContext []byte,
 	epoch beacon.EpochTime,
 	runtimeID common.Namespace,
@@ -684,7 +658,7 @@ func dedupEntityNodesByHashedBeta(
 
 	// Do the cryptographic sortition.
 	shuffled := sortNodesByHashedBeta(
-		prevState,
+		vrfState,
 		baseHasher,
 		nodes,
 	)
