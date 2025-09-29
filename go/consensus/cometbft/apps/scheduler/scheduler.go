@@ -262,12 +262,11 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
 	}
 
-	if reward {
-		accountAddrs := stakingAddressMapToSortedSlice(entitiesEligibleForReward)
-		stakingSt := stakingState.NewMutableState(ctx.State())
-		if err = stakingSt.AddRewards(ctx, epoch, &schedulerParameters.RewardFactorEpochElectionAny, accountAddrs); err != nil {
-			return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
-		}
+	if !reward {
+		return nil
+	}
+	if err := distributeRewards(ctx, epoch, entitiesEligibleForReward, schedulerParameters); err != nil {
+		return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
 	}
 
 	return nil
@@ -672,6 +671,12 @@ func fetchRuntimes(ctx *api.Context) ([]*registry.Runtime, error) {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't get runtimes: %w", err)
 	}
 	return runtimes, nil
+}
+
+func distributeRewards(ctx *api.Context, epoch beacon.EpochTime, entities map[staking.Address]bool, schedulerParameters *scheduler.ConsensusParameters) error {
+	addrs := stakingAddressMapToSortedSlice(entities)
+	state := stakingState.NewMutableState(ctx.State())
+	return state.AddRewards(ctx, epoch, &schedulerParameters.RewardFactorEpochElectionAny, addrs)
 }
 
 type electionDecision struct {
