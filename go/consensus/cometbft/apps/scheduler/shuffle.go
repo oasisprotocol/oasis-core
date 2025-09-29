@@ -338,9 +338,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			continue
 		}
 
-		if entitiesEligibleForReward != nil {
-			entitiesEligibleForReward[entAddr] = true
-		}
+		entitiesEligibleForReward[entAddr] = true
 	}
 
 	// Perform election.

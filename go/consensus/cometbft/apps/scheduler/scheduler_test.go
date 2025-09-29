@@ -799,7 +799,7 @@ func TestElectCommittee(t *testing.T) {
 			beaconParameters,
 			registryParameters,
 			nil,
-			nil,
+			make(map[staking.Address]bool),
 			tc.validatorEntities,
 			&tc.rt,
 			nodes,

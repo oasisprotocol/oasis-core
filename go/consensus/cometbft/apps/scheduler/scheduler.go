@@ -93,175 +93,209 @@ func (app *Application) OnCleanup() {}
 
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
+	return app.maybeElect(ctx)
+}
+
+// maybeElect determines whether elections should be performed and executes
+// them if needed.
+func (app *Application) maybeElect(ctx *api.Context) error {
+	res, err := app.shouldElect(ctx)
+	if err != nil {
+		return err
+	}
+	if !res.elect {
+		return nil
+	}
+	return app.elect(ctx, res.epoch, res.reward)
+}
+
+// shouldElect determines whether elections should be performed.
+func (app *Application) shouldElect(ctx *api.Context) (*electionDecision, error) {
+	// Check if epoch has changed.
+	// TODO: We'll later have this for each type of committee.
+	epochChanged, epoch := app.state.EpochChanged(ctx)
+	if epochChanged {
+		// For elections on epoch changes, distribute rewards.
+		return &electionDecision{
+			epoch:  epoch,
+			elect:  true,
+			reward: true,
+		}, nil
+	}
+
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
 	slashed := ctx.HasEvent(stakingapp.AppName, &staking.TakeEscrowEvent{})
-	// Check if epoch has changed.
-	// TODO: We'll later have this for each type of committee.
-	epochChanged, epoch := app.state.EpochChanged(ctx)
+	if !slashed {
+		return &electionDecision{}, nil
+	}
 
-	if epochChanged || slashed {
-		// Notify applications that we are going to schedule committees.
-		_, err := app.md.Publish(ctx, schedulerApi.MessageBeforeSchedule, epoch)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: before schedule notification failed: %w", err)
-		}
+	return &electionDecision{
+		epoch: epoch,
+		elect: true,
+	}, nil
+}
 
-		// The 0th epoch will not have suitable entropy for elections, nor
-		// will it have useful node registrations.
-		baseEpoch, err := app.state.GetBaseEpoch()
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
-		}
+// elect elects validators and runtime committees for the given epoch
+// and optionally distributes staking rewards.
+func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward bool) error {
+	// Notify applications that we are going to schedule committees.
+	_, err := app.md.Publish(ctx, schedulerApi.MessageBeforeSchedule, epoch)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: before schedule notification failed: %w", err)
+	}
 
-		if epoch == baseEpoch {
-			ctx.Logger().Info("system in bootstrap period, skipping election",
-				"epoch", epoch,
-			)
-			return nil
-		}
+	// The 0th epoch will not have suitable entropy for elections, nor
+	// will it have useful node registrations.
+	baseEpoch, err := app.state.GetBaseEpoch()
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
+	}
 
-		state := schedulerState.NewMutableState(ctx.State())
-		params, err := state.ConsensusParameters(ctx)
-		if err != nil {
-			ctx.Logger().Error("failed to fetch consensus parameters",
-				"err", err,
-			)
-			return err
-		}
-
-		beaconState := beaconState.NewMutableState(ctx.State())
-		beaconParameters, err := beaconState.ConsensusParameters(ctx)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't get beacon parameters: %w", err)
-		}
-		// If weak alphas are allowed then skip the eligibility check as
-		// well because the byzantine node and associated tests are extremely
-		// fragile, and breaks in hard-to-debug ways if timekeeping isn't
-		// exactly how it expects.
-		filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !params.DebugAllowWeakAlpha
-
-		regState := registryState.NewMutableState(ctx.State())
-		registryParameters, err := regState.ConsensusParameters(ctx)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't get registry parameters: %w", err)
-		}
-		runtimes, err := regState.Runtimes(ctx)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't get runtimes: %w", err)
-		}
-		allNodes, err := regState.Nodes(ctx)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't get nodes: %w", err)
-		}
-
-		// Filter nodes.
-		var (
-			nodes          []*node.Node
-			committeeNodes []*nodeWithStatus
-		)
-		for _, node := range allNodes {
-			var status *registry.NodeStatus
-			status, err = regState.NodeStatus(ctx, node.ID)
-			if err != nil {
-				return fmt.Errorf("cometbft/scheduler: couldn't get node status: %w", err)
-			}
-
-			// Nodes which are currently frozen cannot be scheduled.
-			if status.IsFrozen() {
-				continue
-			}
-			// Expired nodes cannot be scheduled (nodes can be expired and not yet removed).
-			if node.IsExpired(epoch) {
-				continue
-			}
-
-			nodes = append(nodes, node)
-			if !filterCommitteeNodes || (status.ElectionEligibleAfter != beacon.EpochInvalid && epoch > status.ElectionEligibleAfter) {
-				committeeNodes = append(committeeNodes, &nodeWithStatus{node, status})
-			}
-		}
-
-		var stakeAcc *stakingState.StakeAccumulatorCache
-		if !params.DebugBypassStake {
-			stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
-			if err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to create stake accumulator cache: %w", err)
-			}
-			defer stakeAcc.Discard()
-		}
-
-		var entitiesEligibleForReward map[staking.Address]bool
-		if epochChanged {
-			// For elections on epoch changes, distribute rewards to entities with any eligible nodes.
-			entitiesEligibleForReward = make(map[staking.Address]bool)
-		}
-
-		// Handle the validator election first, because no consensus is
-		// catastrophic, while failing to elect other committees is not.
-		var validatorEntities map[staking.Address]bool
-		if validatorEntities, err = app.electValidators(
-			ctx,
-			app.state,
-			beaconState,
-			beaconParameters,
-			stakeAcc,
-			entitiesEligibleForReward,
-			nodes,
-			params,
-		); err != nil {
-			// It is unclear what the behavior should be if the validator
-			// election fails.  The system can not ensure integrity, so
-			// presumably manual intervention is required...
-			return fmt.Errorf("cometbft/scheduler: couldn't elect validators: %w", err)
-		}
-
-		kinds := []scheduler.CommitteeKind{
-			scheduler.KindComputeExecutor,
-		}
-		for _, kind := range kinds {
-			if err = app.electAllCommittees(
-				ctx,
-				epoch,
-				params,
-				beaconState,
-				beaconParameters,
-				registryParameters,
-				stakeAcc,
-				entitiesEligibleForReward,
-				validatorEntities,
-				runtimes,
-				committeeNodes,
-				kind,
-			); err != nil {
-				return fmt.Errorf("cometbft/scheduler: couldn't elect %s committees: %w", kind, err)
-			}
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
-
-		var kindNames []string
-		for _, kind := range kinds {
-			kindNames = append(kindNames, kind.String())
-		}
-		var runtimeIDs []string
-		for _, rt := range runtimes {
-			runtimeIDs = append(runtimeIDs, rt.ID.String())
-		}
-		ctx.Logger().Debug("finished electing committees",
+	if epoch == baseEpoch {
+		ctx.Logger().Info("system in bootstrap period, skipping election",
 			"epoch", epoch,
-			"kinds", kindNames,
-			"runtimes", runtimeIDs,
 		)
+		return nil
+	}
 
-		if entitiesEligibleForReward != nil {
-			accountAddrs := stakingAddressMapToSortedSlice(entitiesEligibleForReward)
-			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accountAddrs); err != nil {
-				return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
-			}
+	state := schedulerState.NewMutableState(ctx.State())
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	beaconState := beaconState.NewMutableState(ctx.State())
+	beaconParameters, err := beaconState.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get beacon parameters: %w", err)
+	}
+	// If weak alphas are allowed then skip the eligibility check as
+	// well because the byzantine node and associated tests are extremely
+	// fragile, and breaks in hard-to-debug ways if timekeeping isn't
+	// exactly how it expects.
+	filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !params.DebugAllowWeakAlpha
+
+	regState := registryState.NewMutableState(ctx.State())
+	registryParameters, err := regState.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get registry parameters: %w", err)
+	}
+	runtimes, err := regState.Runtimes(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get runtimes: %w", err)
+	}
+	allNodes, err := regState.Nodes(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get nodes: %w", err)
+	}
+
+	// Filter nodes.
+	var (
+		nodes          []*node.Node
+		committeeNodes []*nodeWithStatus
+	)
+	for _, node := range allNodes {
+		var status *registry.NodeStatus
+		status, err = regState.NodeStatus(ctx, node.ID)
+		if err != nil {
+			return fmt.Errorf("cometbft/scheduler: couldn't get node status: %w", err)
+		}
+
+		// Nodes which are currently frozen cannot be scheduled.
+		if status.IsFrozen() {
+			continue
+		}
+		// Expired nodes cannot be scheduled (nodes can be expired and not yet removed).
+		if node.IsExpired(epoch) {
+			continue
+		}
+
+		nodes = append(nodes, node)
+		if !filterCommitteeNodes || (status.ElectionEligibleAfter != beacon.EpochInvalid && epoch > status.ElectionEligibleAfter) {
+			committeeNodes = append(committeeNodes, &nodeWithStatus{node, status})
 		}
 	}
+
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("cometbft/scheduler: failed to create stake accumulator cache: %w", err)
+		}
+		defer stakeAcc.Discard()
+	}
+
+	entitiesEligibleForReward := make(map[staking.Address]bool)
+
+	// Handle the validator election first, because no consensus is
+	// catastrophic, while failing to elect other committees is not.
+	var validatorEntities map[staking.Address]bool
+	if validatorEntities, err = app.electValidators(
+		ctx,
+		app.state,
+		beaconState,
+		beaconParameters,
+		stakeAcc,
+		entitiesEligibleForReward,
+		nodes,
+		params,
+	); err != nil {
+		// It is unclear what the behavior should be if the validator
+		// election fails.  The system can not ensure integrity, so
+		// presumably manual intervention is required...
+		return fmt.Errorf("cometbft/scheduler: couldn't elect validators: %w", err)
+	}
+
+	kinds := []scheduler.CommitteeKind{
+		scheduler.KindComputeExecutor,
+	}
+	for _, kind := range kinds {
+		if err = app.electAllCommittees(
+			ctx,
+			epoch,
+			params,
+			beaconState,
+			beaconParameters,
+			registryParameters,
+			stakeAcc,
+			entitiesEligibleForReward,
+			validatorEntities,
+			runtimes,
+			committeeNodes,
+			kind,
+		); err != nil {
+			return fmt.Errorf("cometbft/scheduler: couldn't elect %s committees: %w", kind, err)
+		}
+	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
+
+	var kindNames []string
+	for _, kind := range kinds {
+		kindNames = append(kindNames, kind.String())
+	}
+	var runtimeIDs []string
+	for _, rt := range runtimes {
+		runtimeIDs = append(runtimeIDs, rt.ID.String())
+	}
+	ctx.Logger().Debug("finished electing committees",
+		"epoch", epoch,
+		"kinds", kindNames,
+		"runtimes", runtimeIDs,
+	)
+
+	if reward {
+		accountAddrs := stakingAddressMapToSortedSlice(entitiesEligibleForReward)
+		stakingSt := stakingState.NewMutableState(ctx.State())
+		if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accountAddrs); err != nil {
+			return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -539,9 +573,7 @@ electLoop:
 			// If the entity gets a validator elected, it is eligible
 			// for rewards, but only once regardless of the number
 			// of validators owned by the entity in the set.
-			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[entAddr] = true
-			}
+			entitiesEligibleForReward[entAddr] = true
 
 			var power int64
 			if stakeAcc == nil {
@@ -646,4 +678,10 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
 	})
 	return sorted
+}
+
+type electionDecision struct {
+	epoch  beacon.EpochTime
+	elect  bool
+	reward bool
 }
