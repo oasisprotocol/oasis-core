@@ -288,36 +288,6 @@ func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error 
 	return fmt.Errorf("cometbft/scheduler: unexpected transaction")
 }
 
-func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]*scheduler.Validator) []types.ValidatorUpdate {
-	var updates []types.ValidatorUpdate
-	for v := range current {
-		if _, ok := pending[v]; !ok {
-			// Existing validator is not part of the new set, reduce its
-			// voting power to 0, to indicate removal.
-			logger.Debug("removing existing validator from validator set",
-				"id", v,
-			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
-		}
-	}
-
-	for v, new := range pending {
-		if curr, ok := current[v]; ok && curr.VotingPower == new.VotingPower {
-			logger.Debug("keeping existing validator in the validator set",
-				"id", v,
-			)
-			continue
-		}
-		// We're adding this validator or changing its power.
-		logger.Debug("upserting validator to validator set",
-			"id", v,
-			"power", new.VotingPower,
-		)
-		updates = append(updates, api.PublicKeyToValidatorUpdate(v, new.VotingPower))
-	}
-	return updates
-}
-
 // EndBlock implements api.Application.
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
@@ -355,6 +325,36 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 	}
 
 	return resp, nil
+}
+
+func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]*scheduler.Validator) []types.ValidatorUpdate {
+	var updates []types.ValidatorUpdate
+	for v := range current {
+		if _, ok := pending[v]; !ok {
+			// Existing validator is not part of the new set, reduce its
+			// voting power to 0, to indicate removal.
+			logger.Debug("removing existing validator from validator set",
+				"id", v,
+			)
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
+		}
+	}
+
+	for v, new := range pending {
+		if curr, ok := current[v]; ok && curr.VotingPower == new.VotingPower {
+			logger.Debug("keeping existing validator in the validator set",
+				"id", v,
+			)
+			continue
+		}
+		// We're adding this validator or changing its power.
+		logger.Debug("upserting validator to validator set",
+			"id", v,
+			"power", new.VotingPower,
+		)
+		updates = append(updates, api.PublicKeyToValidatorUpdate(v, new.VotingPower))
+	}
+	return updates
 }
 
 func isSuitableExecutorWorker(
