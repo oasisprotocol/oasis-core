@@ -135,7 +135,7 @@ func shuffleNodes(nodes []*node.Node, rng *rand.Rand) ([]*node.Node, error) {
 	return shuffled, nil
 }
 
-func (app *Application) electCommittee(
+func electCommittee(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
@@ -160,7 +160,7 @@ func (app *Application) electCommittee(
 		return nil
 	}
 
-	members, err := app.electCommitteeMembers(
+	members, err := electCommitteeMembers(
 		ctx,
 		epoch,
 		schedulerParameters,
@@ -204,7 +204,7 @@ func (app *Application) electCommittee(
 	return nil
 }
 
-func (app *Application) electCommitteeMembers( //nolint: gocyclo
+func electCommitteeMembers( //nolint: gocyclo
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
@@ -260,7 +260,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	groupSizes := make(map[scheduler.Role]int)
 	switch kind {
 	case scheduler.KindComputeExecutor:
-		isSuitableFn = app.isSuitableExecutorWorker
+		isSuitableFn = isSuitableExecutorWorker
 		groupSizes[scheduler.RoleWorker] = int(rt.Executor.GroupSize)
 		groupSizes[scheduler.RoleBackupWorker] = int(rt.Executor.GroupBackupSize)
 	default:
@@ -465,7 +465,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 
 		// If the election is rigged for testing purposes, force-elect the
 		// nodes if possible.
-		ok, elected, forceState := app.debugForceElect(
+		ok, elected, forceState := debugForceElect(
 			ctx,
 			schedulerParameters,
 			rt,
@@ -526,7 +526,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 
 		// If the election is rigged for testing purposes, fixup the force
 		// elected node roles.
-		if ok, elected = app.debugForceRoles(
+		if ok, elected = debugForceRoles(
 			ctx,
 			forceState,
 			elected,

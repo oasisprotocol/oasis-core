@@ -99,10 +99,6 @@ func TestElectCommittee(t *testing.T) {
 		require.NoError(err, "setting staking consensus parameters should succeed")
 	}()
 
-	app := &Application{
-		state: appState,
-	}
-
 	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
 
@@ -808,7 +804,7 @@ func TestElectCommittee(t *testing.T) {
 
 		rewardableEntities := make(map[staking.Address]struct{})
 
-		err = app.electCommittee(
+		err = electCommittee(
 			ctx,
 			epoch,
 			schedulerParameters,
