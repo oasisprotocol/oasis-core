@@ -161,7 +161,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	}
 
 	state := schedulerState.NewMutableState(ctx.State())
-	params, err := state.ConsensusParameters(ctx)
+	schedulerParameters, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("failed to fetch consensus parameters",
 			"err", err,
@@ -178,16 +178,12 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	// well because the byzantine node and associated tests are extremely
 	// fragile, and breaks in hard-to-debug ways if timekeeping isn't
 	// exactly how it expects.
-	filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !params.DebugAllowWeakAlpha
+	filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !schedulerParameters.DebugAllowWeakAlpha
 
 	regState := registryState.NewMutableState(ctx.State())
 	registryParameters, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't get registry parameters: %w", err)
-	}
-	runtimes, err := regState.Runtimes(ctx)
-	if err != nil {
-		return fmt.Errorf("cometbft/scheduler: couldn't get runtimes: %w", err)
 	}
 	allNodes, err := regState.Nodes(ctx)
 	if err != nil {
@@ -222,7 +218,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	}
 
 	var stakeAcc *stakingState.StakeAccumulatorCache
-	if !params.DebugBypassStake {
+	if !schedulerParameters.DebugBypassStake {
 		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
 		if err != nil {
 			return fmt.Errorf("cometbft/scheduler: failed to create stake accumulator cache: %w", err)
@@ -243,7 +239,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		stakeAcc,
 		entitiesEligibleForReward,
 		nodes,
-		params,
+		schedulerParameters,
 	); err != nil {
 		// It is unclear what the behavior should be if the validator
 		// election fails.  The system can not ensure integrity, so
@@ -251,47 +247,25 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		return fmt.Errorf("cometbft/scheduler: couldn't elect validators: %w", err)
 	}
 
-	kinds := []scheduler.CommitteeKind{
-		scheduler.KindComputeExecutor,
+	if err = app.electCommittees(
+		ctx,
+		epoch,
+		schedulerParameters,
+		beaconState,
+		beaconParameters,
+		registryParameters,
+		stakeAcc,
+		entitiesEligibleForReward,
+		validatorEntities,
+		committeeNodes,
+	); err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
 	}
-	for _, kind := range kinds {
-		if err = app.electAllCommittees(
-			ctx,
-			epoch,
-			params,
-			beaconState,
-			beaconParameters,
-			registryParameters,
-			stakeAcc,
-			entitiesEligibleForReward,
-			validatorEntities,
-			runtimes,
-			committeeNodes,
-			kind,
-		); err != nil {
-			return fmt.Errorf("cometbft/scheduler: couldn't elect %s committees: %w", kind, err)
-		}
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
-
-	var kindNames []string
-	for _, kind := range kinds {
-		kindNames = append(kindNames, kind.String())
-	}
-	var runtimeIDs []string
-	for _, rt := range runtimes {
-		runtimeIDs = append(runtimeIDs, rt.ID.String())
-	}
-	ctx.Logger().Debug("finished electing committees",
-		"epoch", epoch,
-		"kinds", kindNames,
-		"runtimes", runtimeIDs,
-	)
 
 	if reward {
 		accountAddrs := stakingAddressMapToSortedSlice(entitiesEligibleForReward)
 		stakingSt := stakingState.NewMutableState(ctx.State())
-		if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accountAddrs); err != nil {
+		if err = stakingSt.AddRewards(ctx, epoch, &schedulerParameters.RewardFactorEpochElectionAny, accountAddrs); err != nil {
 			return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
 		}
 	}
@@ -459,8 +433,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 	return rng.Perm(nrNodes), nil
 }
 
-// Operates on consensus connection.
-func (app *Application) electAllCommittees(
+func (app *Application) electCommittees(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
@@ -470,28 +443,40 @@ func (app *Application) electAllCommittees(
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,
 	validatorEntities map[staking.Address]bool,
-	runtimes []*registry.Runtime,
 	nodeList []*nodeWithStatus,
-	kind scheduler.CommitteeKind,
 ) error {
+	runtimes, err := fetchRuntimes(ctx)
+	if err != nil {
+		return err
+	}
+
+	kinds := []scheduler.CommitteeKind{
+		scheduler.KindComputeExecutor,
+	}
+
 	for _, runtime := range runtimes {
-		if err := app.electCommittee(
-			ctx,
-			epoch,
-			schedulerParameters,
-			beaconState,
-			beaconParameters,
-			registryParameters,
-			stakeAcc,
-			entitiesEligibleForReward,
-			validatorEntities,
-			runtime,
-			nodeList,
-			kind,
-		); err != nil {
-			return err
+		for _, kind := range kinds {
+			if err := app.electCommittee(
+				ctx,
+				epoch,
+				schedulerParameters,
+				beaconState,
+				beaconParameters,
+				registryParameters,
+				stakeAcc,
+				entitiesEligibleForReward,
+				validatorEntities,
+				runtime,
+				nodeList,
+				kind,
+			); err != nil {
+				return err
+			}
 		}
 	}
+
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
+
 	return nil
 }
 
@@ -678,6 +663,15 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
 	})
 	return sorted
+}
+
+func fetchRuntimes(ctx *api.Context) ([]*registry.Runtime, error) {
+	regState := registryState.NewImmutableState(ctx.State())
+	runtimes, err := regState.Runtimes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cometbft/scheduler: couldn't get runtimes: %w", err)
+	}
+	return runtimes, nil
 }
 
 type electionDecision struct {

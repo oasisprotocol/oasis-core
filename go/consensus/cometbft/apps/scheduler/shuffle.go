@@ -160,6 +160,12 @@ func (app *Application) electCommittee(
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 ) error {
+	ctx.Logger().Debug("electing committee",
+		"epoch", epoch,
+		"kind", kind,
+		"runtime", rt.ID,
+	)
+
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
 		return nil
@@ -199,6 +205,12 @@ func (app *Application) electCommittee(
 	if err := schedulerState.NewMutableState(ctx.State()).PutCommittee(ctx, committee); err != nil {
 		return fmt.Errorf("cometbft/scheduler: failed to save committee: %w", err)
 	}
+
+	ctx.Logger().Debug("finished electing committee",
+		"epoch", epoch,
+		"kind", kind,
+		"runtime", rt.ID,
+	)
 
 	return nil
 }
