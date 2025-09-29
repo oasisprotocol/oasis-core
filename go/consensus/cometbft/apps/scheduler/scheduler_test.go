@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -87,12 +88,23 @@ func TestElectCommittee(t *testing.T) {
 	require := require.New(t)
 
 	appState := api.NewMockApplicationState(&api.MockApplicationStateConfig{})
-	ctx := appState.NewContext(api.ContextBeginBlock)
-	defer ctx.Close()
+
+	// Initialize staking state.
+	func() {
+		ctx := appState.NewContext(api.ContextEndBlock)
+		defer ctx.Close()
+
+		stakingState := stakingState.NewMutableState(ctx.State())
+		err := stakingState.SetConsensusParameters(ctx, &staking.ConsensusParameters{})
+		require.NoError(err, "setting staking consensus parameters should succeed")
+	}()
 
 	app := &Application{
 		state: appState,
 	}
+
+	ctx := appState.NewContext(api.ContextBeginBlock)
+	defer ctx.Close()
 
 	schedulerParameters := &scheduler.ConsensusParameters{}
 
@@ -791,15 +803,20 @@ func TestElectCommittee(t *testing.T) {
 			nodes = append(nodes, &nodeWithStatus{node, status})
 		}
 
-		err := app.electCommittee(
+		stakeAcc, err := stakingState.NewStakeAccumulatorCache(ctx)
+		require.NoError(err, "creating stake accumulator cache should not fail")
+
+		rewardableEntities := make(map[staking.Address]struct{})
+
+		err = app.electCommittee(
 			ctx,
 			epoch,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,
 			registryParameters,
-			nil,
-			make(map[staking.Address]struct{}),
+			stakeAcc,
+			rewardableEntities,
 			tc.validatorEntities,
 			&tc.rt,
 			nodes,

@@ -215,13 +215,9 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		}
 	}
 
-	var stakeAcc *stakingState.StakeAccumulatorCache
-	if !schedulerParameters.DebugBypassStake {
-		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
-		if err != nil {
-			return fmt.Errorf("cometbft/scheduler: failed to create stake accumulator cache: %w", err)
-		}
-		defer stakeAcc.Discard()
+	stakeAcc, err := stakingState.NewStakeAccumulatorCache(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: failed to create stake accumulator cache: %w", err)
 	}
 
 	rewardableEntities := make(map[staking.Address]struct{})
@@ -483,7 +479,7 @@ func (app *Application) electValidators(
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	rewardableEntities map[staking.Address]struct{},
 	nodes []*node.Node,
-	params *scheduler.ConsensusParameters,
+	schedulerParameters *scheduler.ConsensusParameters,
 ) (map[staking.Address]struct{}, error) {
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
@@ -493,12 +489,14 @@ func (app *Application) electValidators(
 		if !n.HasRoles(node.RoleValidator) {
 			continue
 		}
+
 		entAddr := staking.NewAddress(n.EntityID)
-		if stakeAcc != nil {
+		if !schedulerParameters.DebugBypassStake {
 			if err := stakeAcc.CheckStakeClaims(entAddr); err != nil {
 				continue
 			}
 		}
+
 		nodeList = append(nodeList, n)
 		entities[entAddr] = struct{}{}
 	}
@@ -509,13 +507,13 @@ func (app *Application) electValidators(
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 	}
-	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, weakEntropy)
+	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, weakEntropy, schedulerParameters)
 	if err != nil {
 		return nil, err
 	}
 
 	// Shuffle the node list.
-	shuffledNodes, err := shuffleValidators(ctx, params, beaconState, beaconParameters, nodeList)
+	shuffledNodes, err := shuffleValidators(ctx, schedulerParameters, beaconState, beaconParameters, nodeList)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +541,7 @@ electLoop:
 		// This is usually a maximum of 1, but if more are allowed,
 		// like in certain test scenarios, then pick as many nodes
 		// as the entity's stake allows
-		for i := 0; i < params.MaxValidatorsPerEntity; i++ {
+		for i := 0; i < schedulerParameters.MaxValidatorsPerEntity; i++ {
 			if i >= len(nodes) {
 				break
 			}
@@ -556,7 +554,7 @@ electLoop:
 			rewardableEntities[entAddr] = struct{}{}
 
 			var power int64
-			if stakeAcc == nil {
+			if schedulerParameters.DebugBypassStake {
 				// In simplified no-stake deployments, make validators have flat voting power.
 				power = 1
 			} else {
@@ -564,7 +562,7 @@ electLoop:
 				if err != nil {
 					return nil, fmt.Errorf("failed to fetch escrow balance for account %s: %w", entAddr, err)
 				}
-				power, err = scheduler.VotingPowerFromStake(stake, params.VotingPowerDistribution)
+				power, err = scheduler.VotingPowerFromStake(stake, schedulerParameters.VotingPowerDistribution)
 				if err != nil {
 					return nil, fmt.Errorf("computing voting power for account %s with balance %v: %w",
 						entAddr, stake, err,
@@ -578,7 +576,7 @@ electLoop:
 				EntityID:    n.EntityID,
 				VotingPower: power,
 			}
-			if len(newValidators) >= params.MaxValidators {
+			if len(newValidators) >= schedulerParameters.MaxValidators {
 				break electLoop
 			}
 		}
@@ -587,7 +585,7 @@ electLoop:
 	if len(newValidators) == 0 {
 		return nil, fmt.Errorf("cometbft/scheduler: failed to elect any validators")
 	}
-	if len(newValidators) < params.MinValidators {
+	if len(newValidators) < schedulerParameters.MinValidators {
 		return nil, fmt.Errorf("cometbft/scheduler: insufficient validators")
 	}
 
@@ -605,6 +603,7 @@ func stakingAddressMapToSliceByStake(
 	entMap map[staking.Address]struct{},
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	beacon []byte,
+	schedulerParameters *scheduler.ConsensusParameters,
 ) ([]staking.Address, error) {
 	// Convert the map of entity's stake account addresses to a lexicographically
 	// sorted slice (i.e. make it deterministic).
@@ -622,7 +621,7 @@ func stakingAddressMapToSliceByStake(
 		entities[i], entities[j] = entities[j], entities[i]
 	})
 
-	if stakeAcc == nil {
+	if schedulerParameters.DebugBypassStake {
 		return entities, nil
 	}
 
