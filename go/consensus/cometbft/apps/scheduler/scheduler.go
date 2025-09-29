@@ -226,21 +226,21 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		defer stakeAcc.Discard()
 	}
 
-	entitiesEligibleForReward := make(map[staking.Address]bool)
+	rewardableEntities := make(map[staking.Address]struct{})
 
 	// Handle the validator election first, because no consensus is
 	// catastrophic, while failing to elect other committees is not.
-	var validatorEntities map[staking.Address]bool
-	if validatorEntities, err = app.electValidators(
+	validatorEntities, err := app.electValidators(
 		ctx,
 		app.state,
 		beaconState,
 		beaconParameters,
 		stakeAcc,
-		entitiesEligibleForReward,
+		rewardableEntities,
 		nodes,
 		schedulerParameters,
-	); err != nil {
+	)
+	if err != nil {
 		// It is unclear what the behavior should be if the validator
 		// election fails.  The system can not ensure integrity, so
 		// presumably manual intervention is required...
@@ -255,7 +255,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		beaconParameters,
 		registryParameters,
 		stakeAcc,
-		entitiesEligibleForReward,
+		rewardableEntities,
 		validatorEntities,
 		committeeNodes,
 	); err != nil {
@@ -265,7 +265,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	if !reward {
 		return nil
 	}
-	if err := distributeRewards(ctx, epoch, entitiesEligibleForReward, schedulerParameters); err != nil {
+	if err := distributeRewards(ctx, epoch, rewardableEntities, schedulerParameters); err != nil {
 		return fmt.Errorf("cometbft/scheduler: failed to add rewards: %w", err)
 	}
 
@@ -440,8 +440,8 @@ func (app *Application) electCommittees(
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[staking.Address]bool,
-	validatorEntities map[staking.Address]bool,
+	rewardableEntities map[staking.Address]struct{},
+	validatorEntities map[staking.Address]struct{},
 	nodeList []*nodeWithStatus,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
@@ -463,7 +463,7 @@ func (app *Application) electCommittees(
 				beaconParameters,
 				registryParameters,
 				stakeAcc,
-				entitiesEligibleForReward,
+				rewardableEntities,
 				validatorEntities,
 				runtime,
 				nodeList,
@@ -485,14 +485,14 @@ func (app *Application) electValidators(
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[staking.Address]bool,
+	rewardableEntities map[staking.Address]struct{},
 	nodes []*node.Node,
 	params *scheduler.ConsensusParameters,
-) (map[staking.Address]bool, error) {
+) (map[staking.Address]struct{}, error) {
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
 	var nodeList []*node.Node
-	entities := make(map[staking.Address]bool)
+	entities := make(map[staking.Address]struct{})
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
 			continue
@@ -504,7 +504,7 @@ func (app *Application) electValidators(
 			}
 		}
 		nodeList = append(nodeList, n)
-		entities[entAddr] = true
+		entities[entAddr] = struct{}{}
 	}
 
 	// Sort all of the entities that are actually running eligible validator
@@ -538,7 +538,7 @@ func (app *Application) electValidators(
 
 	// Go down the list of entities running nodes by stake, picking one node
 	// to act as a validator till the maximum is reached.
-	validatorEntities := make(map[staking.Address]bool)
+	validatorEntities := make(map[staking.Address]struct{})
 	newValidators := make(map[signature.PublicKey]*scheduler.Validator)
 electLoop:
 	for _, entAddr := range sortedEntities {
@@ -557,7 +557,7 @@ electLoop:
 			// If the entity gets a validator elected, it is eligible
 			// for rewards, but only once regardless of the number
 			// of validators owned by the entity in the set.
-			entitiesEligibleForReward[entAddr] = true
+			rewardableEntities[entAddr] = struct{}{}
 
 			var power int64
 			if stakeAcc == nil {
@@ -577,7 +577,7 @@ electLoop:
 				}
 			}
 
-			validatorEntities[entAddr] = true
+			validatorEntities[entAddr] = struct{}{}
 			newValidators[n.Consensus.ID] = &scheduler.Validator{
 				ID:          n.ID,
 				EntityID:    n.EntityID,
@@ -607,7 +607,7 @@ electLoop:
 }
 
 func stakingAddressMapToSliceByStake(
-	entMap map[staking.Address]bool,
+	entMap map[staking.Address]struct{},
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	beacon []byte,
 ) ([]staking.Address, error) {
@@ -653,7 +653,7 @@ func stakingAddressMapToSliceByStake(
 	return entities, nil
 }
 
-func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Address {
+func stakingAddressMapToSortedSlice(m map[staking.Address]struct{}) []staking.Address {
 	sorted := make([]staking.Address, 0, len(m))
 	for mk := range m {
 		sorted = append(sorted, mk)
@@ -673,7 +673,7 @@ func fetchRuntimes(ctx *api.Context) ([]*registry.Runtime, error) {
 	return runtimes, nil
 }
 
-func distributeRewards(ctx *api.Context, epoch beacon.EpochTime, entities map[staking.Address]bool, schedulerParameters *scheduler.ConsensusParameters) error {
+func distributeRewards(ctx *api.Context, epoch beacon.EpochTime, entities map[staking.Address]struct{}, schedulerParameters *scheduler.ConsensusParameters) error {
 	addrs := stakingAddressMapToSortedSlice(entities)
 	state := stakingState.NewMutableState(ctx.State())
 	return state.AddRewards(ctx, epoch, &schedulerParameters.RewardFactorEpochElectionAny, addrs)

@@ -124,7 +124,7 @@ func TestElectCommittee(t *testing.T) {
 		kind              scheduler.CommitteeKind
 		nodes             []*node.Node
 		nodeStatuses      map[signature.PublicKey]*registry.NodeStatus
-		validatorEntities map[staking.Address]bool
+		validatorEntities map[staking.Address]struct{}
 		rt                registry.Runtime
 		shouldElect       bool
 	}{
@@ -133,7 +133,7 @@ func TestElectCommittee(t *testing.T) {
 			scheduler.KindComputeExecutor,
 			[]*node.Node{},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{},
 			false,
 		},
@@ -162,7 +162,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -187,7 +187,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -226,7 +226,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -265,7 +265,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -304,7 +304,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -352,7 +352,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -400,7 +400,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -449,9 +449,9 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{
-				staking.NewAddress(entityID1): true,
-				staking.NewAddress(entityID2): true,
+			map[staking.Address]struct{}{
+				staking.NewAddress(entityID1): {},
+				staking.NewAddress(entityID2): {},
 			},
 			registry.Runtime{
 				ID:   rtID1,
@@ -501,7 +501,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -552,7 +552,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -607,7 +607,7 @@ func TestElectCommittee(t *testing.T) {
 					FreezeEndTime: 42, // Frozen.
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -657,7 +657,7 @@ func TestElectCommittee(t *testing.T) {
 					},
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -707,7 +707,7 @@ func TestElectCommittee(t *testing.T) {
 					},
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -760,7 +760,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -799,7 +799,7 @@ func TestElectCommittee(t *testing.T) {
 			beaconParameters,
 			registryParameters,
 			nil,
-			make(map[staking.Address]bool),
+			make(map[staking.Address]struct{}),
 			tc.validatorEntities,
 			&tc.rt,
 			nodes,
