@@ -216,7 +216,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		}
 
 		nodes = append(nodes, node)
-		if !filterCommitteeNodes || (status.ElectionEligibleAfter != beacon.EpochInvalid && epoch > status.ElectionEligibleAfter) {
+		if !filterCommitteeNodes || status.IsEligibleForElection(epoch) {
 			committeeNodes = append(committeeNodes, &nodeWithStatus{node, status})
 		}
 	}
