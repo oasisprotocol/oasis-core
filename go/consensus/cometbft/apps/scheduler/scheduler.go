@@ -180,13 +180,25 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		return fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
 	}
 
+	// Always use VRF state from the epoch preceding the election epoch.
 	var vrf *beacon.PrevVRFState
 	if beaconParameters.Backend == beacon.BackendVRF {
 		vrfState, err := beaconState.VRFState(ctx)
 		if err != nil {
 			return fmt.Errorf("cometbft/scheduler: failed to query VRF state: %w", err)
 		}
-		vrf = vrfState.PrevState
+
+		switch epoch {
+		case vrfState.Epoch:
+			vrf = vrfState.PrevState
+		case vrfState.Epoch + 1:
+			vrf = &beacon.PrevVRFState{
+				Pi:                 vrfState.Pi,
+				CanElectCommittees: vrfState.AlphaIsHighQuality,
+			}
+		default:
+			return fmt.Errorf("cometbft/scheduler: failed to query previous VRF state")
+		}
 	}
 
 	// If weak alphas are allowed then skip the eligibility check as
