@@ -294,11 +294,12 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	for _, n := range nodeList {
 		// Check if an entity has enough stake.
 		entAddr := staking.NewAddress(n.node.EntityID)
-		if stakeAcc != nil {
+		if !schedulerParameters.DebugBypassStake {
 			if err = stakeAcc.CheckStakeClaims(entAddr); err != nil {
 				continue
 			}
 		}
+
 		// Check general node compatibility.
 		if !isSuitableFn(ctx, n, rt, epoch, registryParameters) {
 			continue
