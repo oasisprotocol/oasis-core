@@ -89,6 +89,12 @@ func (ns *NodeStatus) IsSuspended(runtimeID common.Namespace, epoch beacon.Epoch
 	return fault.IsSuspended(epoch)
 }
 
+// IsEligibleForElection checks if the node is eligible to be included
+// in non-validator committee elections at the given epoch.
+func (ns *NodeStatus) IsEligibleForElection(epoch beacon.EpochTime) bool {
+	return epoch > ns.ElectionEligibleAfter
+}
+
 // Fault is used to track the state of nodes that are experiencing liveness failures.
 type Fault struct {
 	// Failures is the number of times a node has been declared faulty.
