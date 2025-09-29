@@ -320,24 +320,35 @@ func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error 
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
+	validatorUpdates, err := updateValidators(ctx, resp)
+	if err != nil {
+		return resp, err
+	}
+
+	resp.ValidatorUpdates = validatorUpdates
+
+	return resp, nil
+}
+
+func updateValidators(ctx *api.Context, resp types.ResponseEndBlock) ([]types.ValidatorUpdate, error) {
 	state := schedulerState.NewMutableState(ctx.State())
 	pendingValidators, err := state.PendingValidators(ctx)
 	if err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to query pending validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to query pending validators: %w", err)
 	}
 	if pendingValidators == nil {
 		// No validator updates to apply.
-		return resp, nil
+		return nil, nil
 	}
 
 	currentValidators, err := state.CurrentValidators(ctx)
 	if err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to query current validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to query current validators: %w", err)
 	}
 
 	// Clear out the pending validator update.
 	if err = state.PutPendingValidators(ctx, nil); err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to clear validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to clear validators: %w", err)
 	}
 
 	// CometBFT expects a vector of ValidatorUpdate that expresses
@@ -345,14 +356,13 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	resp.ValidatorUpdates = diffValidators(ctx.Logger(), currentValidators, pendingValidators)
+	validatorUpdates := diffValidators(ctx.Logger(), currentValidators, pendingValidators)
 
 	// Stash the updated validator set.
 	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to set validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to set validators: %w", err)
 	}
-
-	return resp, nil
+	return validatorUpdates, nil
 }
 
 func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]*scheduler.Validator) []types.ValidatorUpdate {
