@@ -154,8 +154,8 @@ func (app *Application) electCommittee(
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[staking.Address]bool,
-	validatorEntities map[staking.Address]bool,
+	rewardableEntities map[staking.Address]struct{},
+	validatorEntities map[staking.Address]struct{},
 	rt *registry.Runtime,
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
@@ -179,7 +179,7 @@ func (app *Application) electCommittee(
 		beaconParameters,
 		registryParameters,
 		stakeAcc,
-		entitiesEligibleForReward,
+		rewardableEntities,
 		validatorEntities,
 		rt,
 		nodeList,
@@ -223,8 +223,8 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[staking.Address]bool,
-	validatorEntities map[staking.Address]bool,
+	rewardableEntities map[staking.Address]struct{},
+	validatorEntities map[staking.Address]struct{},
 	rt *registry.Runtime,
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
@@ -337,7 +337,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 
 			// Validator set membership constraint.
 			if cs[role].ValidatorSet != nil {
-				if !validatorEntities[entAddr] {
+				if _, ok := validatorEntities[entAddr]; !ok {
 					// Not eligible if not in the validator set.
 					continue
 				}
@@ -350,7 +350,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			continue
 		}
 
-		entitiesEligibleForReward[entAddr] = true
+		rewardableEntities[entAddr] = struct{}{}
 	}
 
 	// Perform election.
