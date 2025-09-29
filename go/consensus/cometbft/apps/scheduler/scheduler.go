@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
@@ -196,8 +195,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		committeeNodes []*nodeWithStatus
 	)
 	for _, node := range allNodes {
-		var status *registry.NodeStatus
-		status, err = regState.NodeStatus(ctx, node.ID)
+		status, err := regState.NodeStatus(ctx, node.ID)
 		if err != nil {
 			return fmt.Errorf("cometbft/scheduler: couldn't get node status: %w", err)
 		}
@@ -232,7 +230,6 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	// catastrophic, while failing to elect other committees is not.
 	validatorEntities, err := app.electValidators(
 		ctx,
-		app.state,
 		beaconState,
 		beaconParameters,
 		stakeAcc,
@@ -481,7 +478,6 @@ func (app *Application) electCommittees(
 
 func (app *Application) electValidators(
 	ctx *api.Context,
-	appState api.ApplicationQueryState,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -519,7 +515,7 @@ func (app *Application) electValidators(
 	}
 
 	// Shuffle the node list.
-	shuffledNodes, err := shuffleValidators(ctx, appState, params, beaconState, beaconParameters, nodeList)
+	shuffledNodes, err := shuffleValidators(ctx, params, beaconState, beaconParameters, nodeList)
 	if err != nil {
 		return nil, err
 	}
@@ -564,8 +560,7 @@ electLoop:
 				// In simplified no-stake deployments, make validators have flat voting power.
 				power = 1
 			} else {
-				var stake *quantity.Quantity
-				stake, err = stakeAcc.GetEscrowBalance(entAddr)
+				stake, err := stakeAcc.GetEscrowBalance(entAddr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to fetch escrow balance for account %s: %w", entAddr, err)
 				}
