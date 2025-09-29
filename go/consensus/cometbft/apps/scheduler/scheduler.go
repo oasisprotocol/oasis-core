@@ -226,7 +226,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 
 	// Handle the validator election first, because no consensus is
 	// catastrophic, while failing to elect other committees is not.
-	validatorEntities, err := app.electValidators(
+	validatorEntities, err := electValidators(
 		ctx,
 		epoch,
 		beaconState,
@@ -357,7 +357,7 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 	return resp, nil
 }
 
-func (app *Application) isSuitableExecutorWorker(
+func isSuitableExecutorWorker(
 	ctx *api.Context,
 	n *nodeWithStatus,
 	rt *registry.Runtime,
@@ -441,7 +441,7 @@ func (app *Application) electCommittees(
 
 	for _, runtime := range runtimes {
 		for _, kind := range kinds {
-			if err := app.electCommittee(
+			if err := electCommittee(
 				ctx,
 				epoch,
 				schedulerParameters,
@@ -465,7 +465,7 @@ func (app *Application) electCommittees(
 	return nil
 }
 
-func (app *Application) electValidators(
+func electValidators(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	beaconState *beaconState.MutableState,
