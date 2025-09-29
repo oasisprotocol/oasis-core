@@ -29,9 +29,11 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 var (
@@ -94,13 +96,13 @@ func (app *Application) OnCleanup() {}
 
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
-	return app.maybeElect(ctx)
+	return app.maybeElectInBeginBlock(ctx)
 }
 
-// maybeElect determines whether elections should be performed and executes
-// them if needed.
-func (app *Application) maybeElect(ctx *api.Context) error {
-	res, err := app.shouldElect(ctx)
+// maybeElectInBeginBlock determines whether elections should be performed
+// in the begin block phase and executes them if needed.
+func (app *Application) maybeElectInBeginBlock(ctx *api.Context) error {
+	res, err := app.shouldElectInBeginBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -110,8 +112,18 @@ func (app *Application) maybeElect(ctx *api.Context) error {
 	return app.elect(ctx, res.epoch, res.reward)
 }
 
-// shouldElect determines whether elections should be performed.
-func (app *Application) shouldElect(ctx *api.Context) (*electionDecision, error) {
+// shouldElectInBeginBlock determines whether elections should be performed
+// in the begin block phase.
+func (app *Application) shouldElectInBeginBlock(ctx *api.Context) (*electionDecision, error) {
+	// Check if feature version disables old election logic.
+	ok, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return &electionDecision{}, nil
+	}
+
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
@@ -320,6 +332,10 @@ func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error 
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
+	if err := app.maybeElectInEndBlock(ctx); err != nil {
+		return resp, err
+	}
+
 	validatorUpdates, err := updateValidators(ctx, resp)
 	if err != nil {
 		return resp, err
@@ -393,6 +409,72 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 		updates = append(updates, api.PublicKeyToValidatorUpdate(v, new.VotingPower))
 	}
 	return updates
+}
+
+// maybeElectInEndBlock determines whether elections should be performed
+// in the end block phase and executes them if needed.
+func (app *Application) maybeElectInEndBlock(ctx *api.Context) error {
+	res, err := app.shouldElectInEndBlock(ctx)
+	if err != nil {
+		return err
+	}
+	if !res.elect {
+		return nil
+	}
+	return app.elect(ctx, res.epoch, res.reward)
+}
+
+// shouldElectInEndBlock determines whether elections should be performed
+// in the end block phase.
+func (app *Application) shouldElectInEndBlock(ctx *api.Context) (*electionDecision, error) {
+	// Check if feature version disables old election logic.
+	ok, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &electionDecision{}, nil
+	}
+
+	// Skip elections if the insecure beacon entropy required for elections
+	// is not available.
+	beaconState := beaconState.NewMutableState(ctx.State())
+	epoch, _, err := beaconState.GetEpoch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	baseEpoch, err := app.state.GetBaseEpoch()
+	if err != nil {
+		return nil, err
+	}
+	if epoch == baseEpoch {
+		return &electionDecision{}, nil
+	}
+
+	// Elect at the end of every epoch.
+	future, err := beaconState.GetFutureEpoch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if future != nil && future.Height == ctx.CurrentHeight()+1 {
+		// For elections on epoch end, distribute rewards.
+		return &electionDecision{
+			epoch:  future.Epoch,
+			elect:  true,
+			reward: true,
+		}, nil
+	}
+
+	// Re-elect if slashed.
+	slashed := ctx.HasEvent(stakingapp.AppName, &staking.TakeEscrowEvent{})
+	if !slashed {
+		return &electionDecision{}, nil
+	}
+
+	return &electionDecision{
+		epoch: epoch,
+		elect: true,
+	}, nil
 }
 
 func isSuitableExecutorWorker(
