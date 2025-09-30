@@ -48,7 +48,7 @@ func (c *Config) Validate() error {
 func DefaultConfig() Config {
 	return Config{
 		Backend:                "auto",
-		MaxCacheSize:           "64mb",
+		MaxCacheSize:           "256mb",
 		FetcherCount:           4,
 		PublicRPCEnabled:       false,
 		CheckpointSyncDisabled: false,
