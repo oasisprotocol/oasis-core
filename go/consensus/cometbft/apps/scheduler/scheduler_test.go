@@ -804,7 +804,6 @@ func TestElectCommittee(t *testing.T) {
 			&tc.rt,
 			nodes,
 			tc.kind,
-			true,
 		)
 		require.NoError(err, "committee election should not fail")
 

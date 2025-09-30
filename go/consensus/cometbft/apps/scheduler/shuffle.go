@@ -159,7 +159,6 @@ func (app *Application) electCommittee(
 	rt *registry.Runtime,
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
-	isFeatureVersion242 bool,
 ) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
@@ -179,7 +178,6 @@ func (app *Application) electCommittee(
 		rt,
 		nodeList,
 		kind,
-		isFeatureVersion242,
 	)
 	if err != nil {
 		return err
@@ -218,7 +216,6 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	rt *registry.Runtime,
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
-	isFeatureVersion242 bool,
 ) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
 	// order for better performance.
@@ -258,7 +255,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 	// Determine the committee size, and pre-filter the node-list based
 	// on eligibility, entity stake and other criteria.
 
-	var isSuitableFn func(*api.Context, *nodeWithStatus, *registry.Runtime, beacon.EpochTime, *registry.ConsensusParameters, bool) bool
+	var isSuitableFn func(*api.Context, *nodeWithStatus, *registry.Runtime, beacon.EpochTime, *registry.ConsensusParameters) bool
 	groupSizes := make(map[scheduler.Role]int)
 	switch kind {
 	case scheduler.KindComputeExecutor:
@@ -292,7 +289,7 @@ func (app *Application) electCommitteeMembers( //nolint: gocyclo
 			}
 		}
 		// Check general node compatibility.
-		if !isSuitableFn(ctx, n, rt, epoch, registryParameters, isFeatureVersion242) {
+		if !isSuitableFn(ctx, n, rt, epoch, registryParameters) {
 			continue
 		}
 

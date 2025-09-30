@@ -207,10 +207,10 @@ func TestGenerateStatus(t *testing.T) {
 	t.Run("No nodes", func(t *testing.T) {
 		require := require.New(t)
 
-		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes[0:6], params, epoch, true)
+		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes[0:6], params, epoch)
 		require.Equal(uninitializedStatus, newStatus, "key manager committee should be empty")
 
-		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes[0:6], params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes[0:6], params, epoch)
 		require.Equal(initializedStatus, newStatus, "key manager committee should be empty")
 	})
 
@@ -225,16 +225,16 @@ func TestGenerateStatus(t *testing.T) {
 			Policy:        &policy,
 			Nodes:         []signature.PublicKey{nodes[6].ID},
 		}
-		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes[6:7], params, epoch, true)
+		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes[6:7], params, epoch)
 		require.Equal(expStatus, newStatus, "node 6 should form the committee if key manager not initialized")
 
-		newStatus = generateStatus(ctx, runtimes[0], expStatus, nil, nodes[6:7], params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[0], expStatus, nil, nodes[6:7], params, epoch)
 		require.Equal(expStatus, newStatus, "node 6 should form the committee if key manager is not secure")
 
 		expStatus.IsSecure = true
 		expStatus.Checksum = checksum
 		expStatus.Nodes = nil
-		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes[6:7], params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes[6:7], params, epoch)
 		require.Equal(expStatus, newStatus, "node 6 should not be added to the committee if key manager is secure or checksum differs")
 	})
 
@@ -251,20 +251,20 @@ func TestGenerateStatus(t *testing.T) {
 			Policy:        &policy,
 			Nodes:         []signature.PublicKey{nodes[6].ID},
 		}
-		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes, params, epoch, true)
+		newStatus := generateStatus(ctx, runtimes[0], uninitializedStatus, nil, nodes, params, epoch)
 		require.Equal(expStatus, newStatus, "node 6 should be the source of truth and form the committee")
 
 		// If the order is reversed, it should be the other way around.
 		expStatus.IsSecure = true
 		expStatus.Nodes = []signature.PublicKey{nodes[7].ID}
-		newStatus = generateStatus(ctx, runtimes[0], uninitializedStatus, nil, reverse(nodes), params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[0], uninitializedStatus, nil, reverse(nodes), params, epoch)
 		require.Equal(expStatus, newStatus, "node 7 should be the source of truth and form the committee")
 
 		// If the key manager is already initialized as secure with a checksum, then all nodes
 		// except 8 and 9 are ignored.
 		expStatus.Checksum = checksum
 		expStatus.Nodes = []signature.PublicKey{nodes[8].ID, nodes[9].ID}
-		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes, params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[0], initializedStatus, nil, nodes, params, epoch)
 		require.Equal(expStatus, newStatus, "node 7 and 8 should form the committee if key manager is initialized as secure")
 
 		// The second key manager.
@@ -277,7 +277,7 @@ func TestGenerateStatus(t *testing.T) {
 			Nodes:         []signature.PublicKey{nodes[4].ID, nodes[9].ID},
 		}
 		initializedStatus.ID = runtimeIDs[1]
-		newStatus = generateStatus(ctx, runtimes[1], initializedStatus, nil, nodes, params, epoch, true)
+		newStatus = generateStatus(ctx, runtimes[1], initializedStatus, nil, nodes, params, epoch)
 		require.Equal(expStatus, newStatus, "node 4 and 9 should form the committee")
 	})
 }

@@ -16,7 +16,7 @@ import (
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.
-func (p *ConsensusParameters) SanityCheck(isFeatureVersion242 bool) error {
+func (p *ConsensusParameters) SanityCheck() error {
 	if !flags.DebugDontBlameOasis() {
 		if p.DebugAllowUnroutableAddresses || p.DebugDeployImmediately {
 			return fmt.Errorf("one or more unsafe debug flags set")
@@ -25,17 +25,6 @@ func (p *ConsensusParameters) SanityCheck(isFeatureVersion242 bool) error {
 			return fmt.Errorf("maximum node expiration not specified")
 		}
 	}
-
-	if p.TEEFeatures != nil {
-		defaultPolicy := p.TEEFeatures.SGX.DefaultPolicy
-		if defaultPolicy != nil {
-			if err := defaultPolicy.Validate(isFeatureVersion242); err != nil {
-				return err
-			}
-		}
-
-	}
-
 	return nil
 }
 
@@ -62,7 +51,7 @@ func (g *Genesis) SanityCheck(
 ) error {
 	logger := logging.NewNopLogger()
 
-	if err := g.Parameters.SanityCheck(true); err != nil {
+	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("registry: sanity check failed: %w", err)
 	}
 
@@ -73,13 +62,13 @@ func (g *Genesis) SanityCheck(
 	}
 
 	// Check runtimes.
-	runtimesLookup, err := SanityCheckRuntimes(logger, &g.Parameters, g.Runtimes, g.SuspendedRuntimes, true, baseEpoch, true)
+	runtimesLookup, err := SanityCheckRuntimes(logger, &g.Parameters, g.Runtimes, g.SuspendedRuntimes, true, baseEpoch)
 	if err != nil {
 		return err
 	}
 
 	// Check nodes.
-	nodeLookup, err := SanityCheckNodes(logger, &g.Parameters, g.Nodes, seenEntities, runtimesLookup, true, baseEpoch, now, height, true)
+	nodeLookup, err := SanityCheckNodes(logger, &g.Parameters, g.Nodes, seenEntities, runtimesLookup, true, baseEpoch, now, height)
 	if err != nil {
 		return err
 	}
@@ -145,12 +134,11 @@ func SanityCheckRuntimes(
 	suspendedRuntimes []*Runtime,
 	isGenesis bool,
 	now beacon.EpochTime,
-	isFeatureVersion242 bool,
 ) (RuntimeLookup, error) {
 	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
 	for _, rt := range runtimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now, isFeatureVersion242); err != nil {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenRuntimes = append(seenRuntimes, rt)
@@ -158,7 +146,7 @@ func SanityCheckRuntimes(
 
 	seenSuspendedRuntimes := []*Runtime{}
 	for _, rt := range suspendedRuntimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now, isFeatureVersion242); err != nil {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenSuspendedRuntimes = append(seenSuspendedRuntimes, rt)
@@ -196,7 +184,6 @@ func SanityCheckNodes(
 	epoch beacon.EpochTime,
 	now time.Time,
 	height uint64,
-	isFeatureVersion242 bool,
 ) (NodeLookup, error) { // nolint: gocyclo
 
 	nodeLookup := &sanityCheckNodeLookup{
@@ -231,7 +218,6 @@ func SanityCheckNodes(
 			epoch,
 			runtimesLookup,
 			nodeLookup,
-			isFeatureVersion242,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("registry: node sanity check failed: ID: %s, error: %w", n.ID.String(), err)

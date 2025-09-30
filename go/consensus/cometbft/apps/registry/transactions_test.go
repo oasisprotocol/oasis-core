@@ -17,10 +17,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
-	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
-	"github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -38,7 +36,6 @@ func TestRegisterNode(t *testing.T) {
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 	beaconState := beaconState.NewMutableState(ctx.State())
-	consensusState := consensusState.NewMutableState(ctx.State())
 
 	// Set up default staking consensus parameters.
 	defaultStakeParameters := staking.ConsensusParameters{
@@ -64,12 +61,6 @@ func TestRegisterNode(t *testing.T) {
 		Backend: beacon.BackendInsecure,
 	})
 	require.NoError(err, "beacon.SetConsensusParameters")
-
-	// Set consensus parameters.
-	err = consensusState.SetConsensusParameters(ctx, &genesis.Parameters{
-		FeatureVersion: &version.Version{Major: 100},
-	})
-	require.NoError(err, "consensus.SetConsensusParameters")
 
 	// Store all successful registrations in a map for easier reference in later test cases.
 	type testCaseData struct {
@@ -691,7 +682,6 @@ func TestRegisterRuntime(t *testing.T) {
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 	beaconState := beaconState.NewMutableState(ctx.State())
-	consensusState := consensusState.NewMutableState(ctx.State())
 
 	// Set up default staking consensus parameters.
 	defaultStakeParameters := staking.ConsensusParameters{
@@ -717,12 +707,6 @@ func TestRegisterRuntime(t *testing.T) {
 		Backend: beacon.BackendInsecure,
 	})
 	require.NoError(err, "beacon.SetConsensusParameters")
-
-	// Set consensus parameters.
-	err = consensusState.SetConsensusParameters(ctx, &genesis.Parameters{
-		FeatureVersion: &version.Version{Major: 100},
-	})
-	require.NoError(err, "consensus.SetConsensusParameters")
 
 	// Store all successful registrations in a map for easier reference in later test cases.
 	type testCaseData struct {

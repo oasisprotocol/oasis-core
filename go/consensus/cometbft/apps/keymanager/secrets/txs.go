@@ -76,11 +76,11 @@ func (ext *secretsExt) updatePolicy(
 	status.NextPolicy = sigPol
 
 	// Support legacy behavior where the policy was applied immediately.
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	ok, err := features.IsFeatureVersion(ctx, migrations.Version242)
 	if err != nil {
 		return err
 	}
-	if !isFeatureVersion242 {
+	if !ok {
 		// Ok, as far as we can tell the new policy is valid, apply it.
 		//
 		// Note: The key manager cohort responsible for servicing this ID
@@ -104,7 +104,7 @@ func (ext *secretsExt) updatePolicy(
 
 		nodes, _ := regState.Nodes(ctx)
 		registry.SortNodeList(nodes)
-		status = generateStatus(ctx, kmRt, status, nil, nodes, regParams, epoch, isFeatureVersion242)
+		status = generateStatus(ctx, kmRt, status, nil, nodes, regParams, epoch)
 	}
 
 	if err := state.SetStatus(ctx, status); err != nil {

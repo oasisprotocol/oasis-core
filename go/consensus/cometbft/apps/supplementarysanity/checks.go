@@ -13,7 +13,6 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
@@ -21,7 +20,6 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func checkEpochTime(_ *abciAPI.Context, now beacon.EpochTime) error {
@@ -61,12 +59,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
 
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
-	if err != nil {
-		return err
-	}
-
-	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false, now, isFeatureVersion242)
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false, now)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
@@ -76,7 +69,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.LastHeight()), isFeatureVersion242)
+	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.LastHeight()))
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}

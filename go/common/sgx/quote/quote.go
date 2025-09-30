@@ -64,20 +64,3 @@ type Policy struct {
 	IAS *ias.QuotePolicy `json:"ias,omitempty" yaml:"ias,omitempty"`
 	PCS *pcs.QuotePolicy `json:"pcs,omitempty" yaml:"pcs,omitempty"`
 }
-
-// Validate validates the policy.
-func (p *Policy) Validate(isFeatureVersion242 bool) error {
-	if isFeatureVersion242 {
-		return nil
-	}
-
-	if p.PCS == nil {
-		return nil
-	}
-
-	if len(p.PCS.FMSPCWhitelist) == 0 {
-		return nil
-	}
-
-	return fmt.Errorf("fmspc whitelist should be empty")
-}

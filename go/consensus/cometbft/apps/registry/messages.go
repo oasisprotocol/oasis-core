@@ -6,10 +6,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) (any, error) {
@@ -28,11 +26,6 @@ func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) 
 		return nil, fmt.Errorf("registry: failed to unmarshal consensus parameter changes: %w", err)
 	}
 
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
-	if err != nil {
-		return nil, err
-	}
-
 	// Validate changes against current parameters.
 	state := registryState.NewMutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
@@ -45,7 +38,7 @@ func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) 
 	if err = changes.Apply(params); err != nil {
 		return nil, fmt.Errorf("registry: failed to apply consensus parameter changes: %w", err)
 	}
-	if err = params.SanityCheck(isFeatureVersion242); err != nil {
+	if err = params.SanityCheck(); err != nil {
 		return nil, fmt.Errorf("registry: failed to validate consensus parameters: %w", err)
 	}
 

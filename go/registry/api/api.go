@@ -497,7 +497,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	epoch beacon.EpochTime,
 	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
-	isFeatureVersion242 bool,
 ) (*node.Node, []*Runtime, error) {
 	var n node.Node
 	if sigNode == nil {
@@ -619,7 +618,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// both validators and compute nodes and have out of date attestation evidence. Removing
 			// such nodes could lead to consensus not having the proper majority. This is safe as
 			// attestation evidence is independently verified before scheduling committees.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height); err != nil && !isSanityCheck && !isGenesis {
 				return nil, nil, err
 			}
 
@@ -801,7 +800,6 @@ func VerifyNodeRuntimeEnclaveIDs(
 	teeCfg *node.TEEFeatures,
 	ts time.Time,
 	height uint64,
-	isFeatureVersion242 bool,
 ) error {
 	// Verify that the node is running on the same hardware as the runtime.
 	hw := node.TEEHardwareInvalid
@@ -830,7 +828,7 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion242); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"node_id", nodeID,
 				"runtime_id", rt.ID,
@@ -1099,7 +1097,6 @@ func VerifyRuntime( // nolint: gocyclo
 	isGenesis bool,
 	isSanityCheck bool,
 	now beacon.EpochTime,
-	isFeatureVersion242 bool,
 ) error {
 	if rt == nil {
 		return fmt.Errorf("%w: no runtime given", ErrInvalidArgument)
@@ -1144,7 +1141,7 @@ func VerifyRuntime( // nolint: gocyclo
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	if err := rt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := rt.ValidateDeployments(now, params); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
@@ -1218,7 +1215,6 @@ func VerifyRuntimeUpdate(
 	currentRt, newRt *Runtime,
 	now beacon.EpochTime,
 	params *ConsensusParameters,
-	isFeatureVersion242 bool,
 ) error {
 	if !currentRt.ID.Equal(&newRt.ID) {
 		logger.Error("RegisterRuntime: trying to update runtime ID",
@@ -1274,7 +1270,7 @@ func VerifyRuntimeUpdate(
 
 	// Validate the deployments.
 	activeDeployment := currentRt.ActiveDeployment(now)
-	if err := currentRt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := currentRt.ValidateDeployments(now, params); err != nil {
 		// Invariant violation, this should NEVER happen.
 		logger.Error("RegisterRuntime: malformed deployments present in state",
 			"runtime_id", currentRt.ID,
@@ -1288,7 +1284,7 @@ func VerifyRuntimeUpdate(
 	}
 
 	newActiveDeployment := newRt.ActiveDeployment(now)
-	if err := newRt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := newRt.ValidateDeployments(now, params); err != nil {
 		logger.Error("RegisterRuntime: malformed deployments",
 			"runtime_id", currentRt.ID,
 			"err", err,

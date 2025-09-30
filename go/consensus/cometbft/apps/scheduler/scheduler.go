@@ -28,11 +28,9 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 var (
@@ -200,12 +198,6 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 			entitiesEligibleForReward = make(map[staking.Address]bool)
 		}
 
-		// Check if the current feature version is at least 24.2.
-		isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
-		if err != nil {
-			return err
-		}
-
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while failing to elect other committees is not.
 		var validatorEntities map[staking.Address]bool
@@ -242,7 +234,6 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 				runtimes,
 				committeeNodes,
 				kind,
-				isFeatureVersion242,
 			); err != nil {
 				return fmt.Errorf("cometbft/scheduler: couldn't elect %s committees: %w", kind, err)
 			}
@@ -369,7 +360,6 @@ func (app *Application) isSuitableExecutorWorker(
 	rt *registry.Runtime,
 	epoch beacon.EpochTime,
 	registryParams *registry.ConsensusParameters,
-	isFeatureVersion242 bool,
 ) bool {
 	if !n.node.HasRoles(node.RoleComputeWorker) {
 		return false
@@ -410,7 +400,6 @@ func (app *Application) isSuitableExecutorWorker(
 				uint64(ctx.LastHeight()),
 				activeDeployment.TEE,
 				n.node.ID,
-				isFeatureVersion242,
 			); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestation",
 					"err", err,
@@ -450,7 +439,6 @@ func (app *Application) electAllCommittees(
 	runtimes []*registry.Runtime,
 	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
-	isFeatureVersion242 bool,
 ) error {
 	for _, runtime := range runtimes {
 		if err := app.electCommittee(
@@ -466,7 +454,6 @@ func (app *Application) electAllCommittees(
 			runtime,
 			nodeList,
 			kind,
-			isFeatureVersion242,
 		); err != nil {
 			return err
 		}
