@@ -196,7 +196,8 @@ func (cli *TestClient) workload(ctx context.Context) error {
 	cli.sc.Logger.Info("starting k/v runtime test client")
 
 	if err := cli.scenario(func(req any) error {
-		return cli.submit(ctx, req)
+		_, err := cli.submit(ctx, req)
+		return err
 	}); err != nil {
 		return err
 	}
@@ -206,7 +207,7 @@ func (cli *TestClient) workload(ctx context.Context) error {
 	return nil
 }
 
-func (cli *TestClient) submit(ctx context.Context, req any) error {
+func (cli *TestClient) submit(ctx context.Context, req any) (uint64, error) {
 	switch req := req.(type) {
 	case KeyValueQuery:
 		rsp, err := cli.sc.submitKeyValueRuntimeGetQuery(
@@ -216,14 +217,14 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Round,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to query k/v pair: %w", err)
+			return 0, fmt.Errorf("failed to query k/v pair: %w", err)
 		}
 		if rsp != req.Response {
-			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+			return 0, fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
-
+		return 0, nil
 	case EncryptDecryptTx:
-		ciphertext, err := cli.sc.submitKeyValueRuntimeEncryptTx(
+		ciphertext, _, err := cli.sc.submitKeyValueRuntimeEncryptTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -233,9 +234,9 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Message,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt message: %w", err)
+			return 0, fmt.Errorf("failed to encrypt message: %w", err)
 		}
-		plaintext, err := cli.sc.submitKeyValueRuntimeDecryptTx(
+		plaintext, round, err := cli.sc.submitKeyValueRuntimeDecryptTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -245,14 +246,14 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			ciphertext,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to decrypt ciphertext: %w", err)
+			return 0, fmt.Errorf("failed to decrypt ciphertext: %w", err)
 		}
 		if !bytes.Equal(plaintext, req.Message) {
-			return fmt.Errorf("decrypted message does not have expected value (got: '%v', expected: '%v')", plaintext, req.Message)
+			return 0, fmt.Errorf("decrypted message does not have expected value (got: '%v', expected: '%v')", plaintext, req.Message)
 		}
-
+		return round, nil
 	case InsertKeyValueTx:
-		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
+		rsp, round, err := cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -264,14 +265,14 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Kind,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to insert k/v pair: %w", err)
+			return 0, fmt.Errorf("failed to insert k/v pair: %w", err)
 		}
 		if rsp != req.Response {
-			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+			return 0, fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
-
+		return round, nil
 	case GetKeyValueTx:
-		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
+		rsp, round, err := cli.sc.submitKeyValueRuntimeGetTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -282,14 +283,14 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Kind,
 		)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if rsp != req.Response {
-			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+			return 0, fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
-
+		return round, nil
 	case KeyExistsTx:
-		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
+		rsp, round, err := cli.sc.submitKeyValueRuntimeGetTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -300,14 +301,14 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Kind,
 		)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if len(rsp) == 0 {
-			return fmt.Errorf("response does not have non-zero value")
+			return 0, fmt.Errorf("response does not have non-zero value")
 		}
-
+		return round, nil
 	case RemoveKeyValueTx:
-		rsp, err := cli.sc.submitKeyValueRuntimeRemoveTx(
+		rsp, round, err := cli.sc.submitKeyValueRuntimeRemoveTx(
 			ctx,
 			KeyValueRuntimeID,
 			cli.sender,
@@ -318,12 +319,12 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Kind,
 		)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if rsp != req.Response {
-			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+			return 0, fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
-
+		return round, nil
 	case InsertMsg:
 		err := cli.sc.submitKeyValueRuntimeInsertMsg(
 			ctx,
@@ -337,32 +338,30 @@ func (cli *TestClient) submit(ctx context.Context, req any) error {
 			req.Kind,
 		)
 		if err != nil {
-			return err
+			return 0, err
 		}
-
+		return 0, nil
 	case GetRuntimeIDTx:
-		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender))
+		_, round, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender))
 		if err != nil {
-			return err
+			return 0, err
 		}
-
+		return round, nil
 	case ConsensusTransferTx:
-		err := cli.sc.submitConsensusTransferTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender), staking.Transfer{})
+		round, err := cli.sc.submitConsensusTransferTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender), staking.Transfer{})
 		if err != nil {
-			return err
+			return 0, err
 		}
-
+		return round, nil
 	case ConsensusAccountsTx:
-		err := cli.sc.submitConsensusAccountsTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender))
+		round, err := cli.sc.submitConsensusAccountsTx(ctx, KeyValueRuntimeID, cli.sender, cli.sc.Nonces.Next(cli.sender))
 		if err != nil {
-			return err
+			return 0, err
 		}
-
+		return round, nil
 	default:
-		return fmt.Errorf("invalid k/v runtime test client scenario command")
+		return 0, fmt.Errorf("invalid k/v runtime test client scenario command")
 	}
-
-	return nil
 }
 
 func (sc *Scenario) submitRuntimeTxAndDecode(
@@ -373,17 +372,17 @@ func (sc *Scenario) submitRuntimeTxAndDecode(
 	method string,
 	args any,
 	rsp any,
-) error {
-	rawRsp, err := sc.submitRuntimeTx(ctx, id, sender, nonce, method, args)
+) (uint64, error) {
+	rawRsp, round, err := sc.submitRuntimeTx(ctx, id, sender, nonce, method, args)
 	if err != nil {
-		return fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
+		return 0, fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
 	}
 
 	if err = cbor.Unmarshal(rawRsp, rsp); err != nil {
-		return fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
+		return 0, fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
 	}
 
-	return nil
+	return round, nil
 }
 
 func (sc *Scenario) submitRuntimeTxAndDecodeString(
@@ -393,12 +392,13 @@ func (sc *Scenario) submitRuntimeTxAndDecodeString(
 	nonce uint64,
 	method string,
 	args any,
-) (string, error) {
+) (string, uint64, error) {
 	var rsp string
-	if err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp); err != nil {
-		return "", err
+	round, err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp)
+	if err != nil {
+		return "", 0, err
 	}
-	return rsp, nil
+	return rsp, round, nil
 }
 
 func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
@@ -408,12 +408,13 @@ func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
 	nonce uint64,
 	method string,
 	args any,
-) ([]byte, error) {
+) ([]byte, uint64, error) {
 	var rsp []byte
-	if err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp); err != nil {
-		return nil, err
+	round, err := sc.submitRuntimeTxAndDecode(ctx, id, sender, nonce, method, args, &rsp)
+	if err != nil {
+		return nil, 0, err
 	}
-	return rsp, nil
+	return rsp, round, nil
 }
 
 func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
@@ -424,7 +425,7 @@ func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
 	epoch beacon.EpochTime,
 	keyPairID string,
 	plaintext []byte,
-) ([]byte, error) {
+) ([]byte, uint64, error) {
 	sc.Logger.Info("encrypting",
 		"epoch", epoch,
 		"key_pair_id", keyPairID,
@@ -448,7 +449,7 @@ func (sc *Scenario) submitKeyValueRuntimeDecryptTx(
 	epoch beacon.EpochTime,
 	keyPairID string,
 	ciphertext []byte,
-) ([]byte, error) {
+) ([]byte, uint64, error) {
 	sc.Logger.Info("decrypting",
 		"epoch", epoch,
 		"key_pair_id", keyPairID,
@@ -473,7 +474,7 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 	generation uint64,
 	churpID uint8,
 	kind uint,
-) (string, error) {
+) (string, uint64, error) {
 	sc.Logger.Info("inserting k/v pair",
 		"key", key,
 		"value", value,
@@ -511,7 +512,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 	generation uint64,
 	churpID uint8,
 	kind uint,
-) (string, error) {
+) (string, uint64, error) {
 	sc.Logger.Info("retrieving k/v pair",
 		"key", key,
 		"generation", generation,
@@ -547,7 +548,7 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 	generation uint64,
 	churpID uint8,
 	kind uint,
-) (string, error) {
+) (string, uint64, error) {
 	sc.Logger.Info("removing k/v pair",
 		"key", key,
 		"generation", generation,
@@ -579,15 +580,15 @@ func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
 	id common.Namespace,
 	sender string,
 	nonce uint64,
-) (string, error) {
+) (string, uint64, error) {
 	sc.Logger.Info("retrieving runtime ID")
 
-	rsp, err := sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, "get_runtime_id", nil)
+	rsp, round, err := sc.submitRuntimeTxAndDecodeString(ctx, id, sender, nonce, "get_runtime_id", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to query remote runtime ID: %w", err)
+		return "", 0, fmt.Errorf("failed to query remote runtime ID: %w", err)
 	}
 
-	return rsp, nil
+	return rsp, round, nil
 }
 
 func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
@@ -672,19 +673,19 @@ func (sc *Scenario) submitConsensusTransferTx(
 	sender string,
 	nonce uint64,
 	transfer staking.Transfer,
-) error {
+) (uint64, error) {
 	sc.Logger.Info("submitting consensus transfer",
 		"transfer", transfer,
 	)
 
-	_, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_transfer", TransferCall{
+	_, round, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_transfer", TransferCall{
 		Transfer: transfer,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to submit consensus transfer: %w", err)
+		return 0, fmt.Errorf("failed to submit consensus transfer: %w", err)
 	}
 
-	return nil
+	return round, nil
 }
 
 func (sc *Scenario) submitConsensusAccountsTx(
@@ -692,15 +693,15 @@ func (sc *Scenario) submitConsensusAccountsTx(
 	id common.Namespace,
 	sender string,
 	nonce uint64,
-) error {
+) (uint64, error) {
 	sc.Logger.Info("submitting consensus accounts query")
 
-	_, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_accounts", nil)
+	_, round, err := sc.submitRuntimeTx(ctx, id, sender, nonce, "consensus_accounts", nil)
 	if err != nil {
-		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)
+		return 0, fmt.Errorf("failed to submit consensus_accounts query: %w", err)
 	}
 	// TODO: The old test printed out the accounts and delegations, but
 	// it's not like it validated them or anything.
 
-	return nil
+	return round, nil
 }

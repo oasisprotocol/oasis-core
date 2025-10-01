@@ -103,7 +103,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 			"seq", i,
 		)
 		nonce := sc.Nonces.Next(sender)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, "checkpoint", fmt.Sprintf("my cp %d", i), 0, 0, plaintextTxKind); err != nil {
+		if _, _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, "checkpoint", fmt.Sprintf("my cp %d", i), 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}
@@ -181,7 +181,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 			"seq", i,
 		)
 		nonce := sc.Nonces.Next(sender)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, 0, 0, plaintextTxKind); err != nil {
+		if _, _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}

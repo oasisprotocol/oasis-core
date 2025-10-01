@@ -404,7 +404,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	keyPairID string,
 	plaintext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "encrypt", struct {
+	rawRsp, _, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "encrypt", struct {
 		Epoch     uint64 `json:"epoch"`
 		KeyPairID string `json:"key_pair_id"`
 		Plaintext []byte `json:"plaintext"`
@@ -433,7 +433,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	keyPairID string,
 	ciphertext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "decrypt", struct {
+	rawRsp, _, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "decrypt", struct {
 		Epoch      uint64 `json:"epoch"`
 		KeyPairID  string `json:"key_pair_id"`
 		Ciphertext []byte `json:"ciphertext"`

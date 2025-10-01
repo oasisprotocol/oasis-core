@@ -41,17 +41,17 @@ func (sc *Scenario) submitRuntimeTx(
 	nonce uint64,
 	method string,
 	args any,
-) (cbor.RawMessage, error) {
+) (cbor.RawMessage, uint64, error) {
 	// Submit a transaction and check the result.
-	metaResp, err := sc.submitRuntimeTxMeta(ctx, id, sender, nonce, method, args)
+	metaRsp, err := sc.submitRuntimeTxMeta(ctx, id, sender, nonce, method, args)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	rsp, err := unpackRawTxResp(metaResp.Output)
+	rsp, err := unpackRawTxResp(metaRsp.Output)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return rsp, nil
+	return rsp, metaRsp.Round, nil
 }
 
 func (sc *Scenario) submitRuntimeQuery(
