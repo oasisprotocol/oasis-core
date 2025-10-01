@@ -63,13 +63,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 
 	logger := baseLogger.With("path", fn)
 
-	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
-	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
-	opts = opts.WithSyncWrites(false)
-	opts = opts.WithCompression(options.Snappy)
-	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
-
-	db, err := badger.Open(opts)
+	db, err := OpenBadger(fn, logger)
 	if err != nil {
 		return nil, fmt.Errorf("cometbft/db/badger: failed to open database: %w", err)
 	}
@@ -84,6 +78,17 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	}
 
 	return impl, nil
+}
+
+// OpenBadger opens badgerDB instance used for constructing instance that implements
+// CometBFT DB interface.
+func OpenBadger(path string, logger *logging.Logger) (*badger.DB, error) {
+	opts := badger.DefaultOptions(path) // This may benefit from LSMOnlyOptions.
+	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
+	opts = opts.WithSyncWrites(false)
+	opts = opts.WithCompression(options.Snappy)
+	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
+	return badger.Open(opts)
 }
 
 func (d *badgerDBImpl) Get(key []byte) ([]byte, error) {
