@@ -7,11 +7,9 @@ import (
 	"sync"
 	"time"
 
-	dbm "github.com/cometbft/cometbft-db"
 	abcicli "github.com/cometbft/cometbft/abci/client"
 	cmtconfig "github.com/cometbft/cometbft/config"
 	cmtsync "github.com/cometbft/cometbft/libs/sync"
-	cmtnode "github.com/cometbft/cometbft/node"
 	cmtproxy "github.com/cometbft/cometbft/proxy"
 	cmtcore "github.com/cometbft/cometbft/rpc/core"
 	"github.com/cometbft/cometbft/state"
@@ -194,31 +192,27 @@ func NewArchive(ctx context.Context, cfg ArchiveConfig) (consensusAPI.Service, e
 	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
 	srv.abciClient = abcicli.NewLocalClient(new(cmtsync.Mutex), srv.mux.Mux())
 
-	dbProvider, err := db.GetProvider()
-	if err != nil {
-		return nil, err
-	}
 	cmtConfig := cmtconfig.DefaultConfig()
 	_ = viper.Unmarshal(&cmtConfig)
 	cmtConfig.SetRoot(filepath.Join(srv.dataDir, tmcommon.StateDir))
 
-	// NOTE: DBContext uses a full CometBFT config but the only thing that is actually used
-	// is the data dir field.
-	srv.blockStoreDB, err = dbProvider(&cmtnode.DBContext{ID: "blockstore", Config: cmtConfig})
+	dbProvider, err := db.Provider()
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain db provider: %w", err)
+	}
+
+	srv.blockStoreDB, err = db.OpenBlockstoreDB(dbProvider, cmtConfig)
 	if err != nil {
 		return nil, err
 	}
 	srv.blockStoreDB = db.WithCloser(srv.blockStoreDB, srv.dbCloser)
 
-	// NOTE: DBContext uses a full CometBFT config but the only thing that is actually used
-	// is the data dir field.
-	var stateDB dbm.DB
-	stateDB, err = dbProvider(&cmtnode.DBContext{ID: "state", Config: cmtConfig})
+	stateDB, err := db.OpenStateDB(dbProvider, cmtConfig)
 	if err != nil {
 		return nil, err
 	}
 	stateDB = db.WithCloser(stateDB, srv.dbCloser)
-	srv.stateStore = state.NewStore(stateDB, state.StoreOptions{})
+	srv.stateStore = db.OpenStateStore(stateDB)
 
 	srv.eb = cmttypes.NewEventBus()
 	// Setup minimal CometBFT environment needed to support consensus queries.

@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	cmtconfig "github.com/cometbft/cometbft/config"
+	cmtBlockstore "github.com/cometbft/cometbft/store"
 	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
 
@@ -20,12 +23,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
+	cmtDB "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
@@ -69,6 +75,13 @@ var (
 WARNING: Ensure you have at least as much of a free disk as your largest database.
 `,
 		RunE: doDBCompactions,
+	}
+
+	pruneCmd = &cobra.Command{
+		Use:   "prune-experimental",
+		Args:  cobra.NoArgs,
+		Short: "EXPERIMENTAL: trigger pruning for all consensus databases",
+		RunE:  doPrune,
 	}
 
 	logger = logging.GetLogger("cmd/storage")
@@ -419,6 +432,195 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 	return ndb, close, nil
 }
 
+func doPrune(_ *cobra.Command, args []string) error {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	if config.GlobalConfig.Consensus.Prune.Strategy == cmtConfig.PruneStrategyNone {
+		logger.Info("skipping consensus pruning since disabled in the config")
+		return nil
+	}
+
+	runtimes, err := registry.GetConfiguredRuntimeIDs()
+	if err != nil {
+		return fmt.Errorf("failed to get configured runtimes: %w", err)
+	}
+
+	logger.Info("Starting consensus databases pruning. This may take a while...")
+
+	if err := pruneConsensusDBs(
+		cmdCommon.DataDir(),
+		config.GlobalConfig.Consensus.Prune.NumKept,
+		runtimes,
+	); err != nil {
+		return fmt.Errorf("failed to prune consensus databases: %w", err)
+	}
+
+	return nil
+}
+
+func pruneConsensusDBs(dataDir string, numKept uint64, runtimes []common.Namespace) error {
+	ndb, close, err := openConsensusNodeDB(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to open NodeDB: %w", err)
+	}
+	defer close()
+
+	latest, ok := ndb.GetLatestVersion()
+	if !ok {
+		logger.Info("skipping pruning as state db is empty")
+		return nil
+	}
+
+	if latest < numKept {
+		logger.Info("skipping pruning as the latest version is smaller than the number of versions to keep")
+		return nil
+	}
+
+	// In case of configured runtimes, do not prune past the earliest reindexed
+	// consensus height, so that light history can be populated correctly.
+	minReindexed, err := minReindexedHeight(dataDir, runtimes)
+	if err != nil {
+		return fmt.Errorf("failed to fetch earliest reindexed consensus height: %w", err)
+	}
+
+	retainHeight := min(
+		latest-numKept, // underflow not possible due to if above.
+		uint64(minReindexed),
+	)
+
+	if err := pruneConsensusNodeDB(ndb, retainHeight); err != nil {
+		return fmt.Errorf("failed to prune application state: %w", err)
+	}
+
+	if err := pruneCometDBs(dataDir, int64(retainHeight)); err != nil {
+		return fmt.Errorf("failed to prune CometBFT managed databases: %w", err)
+	}
+
+	return nil
+}
+
+func pruneConsensusNodeDB(ndb db.NodeDB, retainHeight uint64) error {
+	startHeight := ndb.GetEarliestVersion()
+
+	if retainHeight <= startHeight {
+		logger.Info("consensus state already pruned", "retain_height", retainHeight, "start_height", startHeight)
+		return nil
+	}
+
+	logger.Info("pruning consensus state", "start_height", startHeight, "retain_height", retainHeight)
+	for h := startHeight; h < retainHeight; h++ {
+		if err := ndb.Prune(h); err != nil {
+			return fmt.Errorf("failed to prune version %d: %w", h, err)
+		}
+
+		if h%10_000 == 0 { // periodically sync to disk
+			if err := ndb.Sync(); err != nil {
+				return fmt.Errorf("failed to sync NodeDB: %w", err)
+			}
+			logger.Debug("forcing NodeDB disk sync during pruning", "version", h)
+		}
+	}
+
+	if err := ndb.Sync(); err != nil {
+		return fmt.Errorf("failed to sync NodeDB: %w", err)
+	}
+
+	return nil
+}
+
+// minReindexedHeight returns the smallest consensus height reindexed by any
+// of the configured runtimes.
+//
+// In case of no configured runtimes it returns max int64.
+func minReindexedHeight(dataDir string, runtimes []common.Namespace) (int64, error) {
+	fetchLastReindexedHeight := func(runtimeID common.Namespace) (int64, error) {
+		rtDir := runtimeConfig.GetRuntimeStateDir(dataDir, runtimeID)
+
+		history, err := history.New(runtimeID, rtDir, history.NewNonePrunerFactory(), true)
+		if err != nil {
+			return 0, fmt.Errorf("failed to open new light history: %w", err)
+		}
+		defer history.Close()
+
+		h, err := history.LastConsensusHeight()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get last consensus height: %w", err)
+		}
+
+		return h, nil
+	}
+
+	var minH int64 = math.MaxInt64
+	for _, rt := range runtimes {
+		h, err := fetchLastReindexedHeight(rt)
+		if err != nil {
+			return 0, fmt.Errorf("failed to fetch last reindexed height for %s: %w", rt, err)
+		}
+
+		if h < minH {
+			minH = h
+		}
+	}
+
+	return minH, nil
+}
+
+func pruneCometDBs(dataDir string, retainHeight int64) error {
+	cmtConfig := cmtconfig.DefaultConfig()
+	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
+
+	dbProvider, err := cmtDB.Provider()
+	if err != nil {
+		return fmt.Errorf("failed to obtain db provider: %w", err)
+	}
+
+	blockstoreDB, err := cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
+	if err != nil {
+		return fmt.Errorf("failed to open blockstore: %w", err)
+	}
+	blockstore := cmtBlockstore.NewBlockStore(blockstoreDB)
+	defer blockstore.Close()
+
+	// Mimic the upstream pruning logic from CometBFT
+	// (see https://github.com/oasisprotocol/cometbft/blob/653c9a0c95ac0f91a0c8c11efb9aa21c98407af6/state/execution.go#L655):
+	// 1. Get the base from the blockstore
+	// 2. Prune blockstore
+	// 3. Prune statestore
+	//
+	// This ordering is problematic: if the blockstore pruning succeeds (updating the base) but
+	// state DB pruning fails or is interrupted, a subsequent pruning run will skip already
+	// pruned blocks while leaving part of the state DB unpruned.
+	base := blockstore.Base()
+	if retainHeight <= base {
+		logger.Info("blockstore and state db already pruned")
+		return nil
+	}
+
+	logger.Info("pruning consensus blockstore", "base", base, "retain_height", retainHeight)
+	n, err := blockstore.PruneBlocks(retainHeight)
+	if err != nil {
+		return fmt.Errorf("failed to prune blocks (retain height: %d): %w", retainHeight, err)
+	}
+	logger.Info("blockstore pruning finished", "pruned", n)
+
+	stateDB, err := cmtDB.OpenStateDB(dbProvider, cmtConfig)
+	if err != nil {
+		return fmt.Errorf("failed to open state db: %w", err)
+	}
+	state := cmtDB.OpenStateStore(stateDB)
+	defer state.Close()
+
+	logger.Info("pruning consensus states", "base", base, "retain_height", retainHeight)
+	if err := state.PruneStates(base, retainHeight); err != nil {
+		return fmt.Errorf("failed to prune state db (start: %d, end: %d): %w", base, retainHeight, err)
+	}
+	logger.Info("state db pruning finished")
+
+	return nil
+}
+
 // Register registers the client sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	storageMigrateCmd.Flags().AddFlagSet(bundle.Flags)
@@ -427,5 +629,6 @@ func Register(parentCmd *cobra.Command) {
 	storageCmd.AddCommand(storageCheckCmd)
 	storageCmd.AddCommand(storageRenameNsCmd)
 	storageCmd.AddCommand(storageCompactCmd)
+	storageCmd.AddCommand(pruneCmd)
 	parentCmd.AddCommand(storageCmd)
 }
