@@ -737,6 +737,18 @@ func (d *badgerNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) (
 	}, nil
 }
 
+func (d *badgerNodeDB) Compact() error {
+	d.logger.Info("compacting")
+
+	if err := d.db.Flatten(1); err != nil {
+		return fmt.Errorf("failed to flatten db: %w", err)
+	}
+
+	d.logger.Info("compaction completed")
+
+	return nil
+}
+
 // Implements api.NodeDB.
 func (d *badgerNodeDB) Size() (int64, error) {
 	lsm, vlog := d.db.Size()

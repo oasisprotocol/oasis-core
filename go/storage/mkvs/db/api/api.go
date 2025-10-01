@@ -184,6 +184,12 @@ type NodeDB interface {
 	// Only the earliest version can be pruned, passing any other version will result in an error.
 	Prune(version uint64) error
 
+	// Compact triggers compaction of the NodeDB underlying storage engine.
+	//
+	// Warning: Depending on the NodeDB implementation this may be only safe to call when no
+	// writes are happening.
+	Compact() error
+
 	// Size returns the size of the database in bytes.
 	Size() (int64, error)
 
@@ -291,6 +297,10 @@ func (d *nopNodeDB) Finalize([]node.Root) error {
 }
 
 func (d *nopNodeDB) Prune(uint64) error {
+	return nil
+}
+
+func (d *nopNodeDB) Compact() error {
 	return nil
 }
 
