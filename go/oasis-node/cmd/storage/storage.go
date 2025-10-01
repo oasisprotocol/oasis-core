@@ -6,10 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	cmtState "github.com/cometbft/cometbft/state"
+	cmtBlockstore "github.com/cometbft/cometbft/store"
 
 	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
@@ -20,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -69,6 +74,13 @@ var (
 WARNING: Ensure you have at least as much of a free disk as your largest database.
 `,
 		RunE: doDBCompactions,
+	}
+
+	pruneCmd = &cobra.Command{
+		Use:   "prune-experimental",
+		Args:  cobra.NoArgs,
+		Short: "EXPERIMENTAL: trigger pruning for all consensus databases",
+		RunE:  doPrune,
 	}
 
 	logger = logging.GetLogger("cmd/storage")
@@ -406,7 +418,7 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 		},
 	)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("failed to initialize ABCI storage backend: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize ABCI storage backend: %w", err)
 	}
 
 	// Close and Cleanup both only close NodeDB. Still closing both explicitly,
@@ -419,6 +431,191 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 	return ndb, close, nil
 }
 
+func doPrune(_ *cobra.Command, args []string) error {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	if config.GlobalConfig.Consensus.Prune.Strategy == cmtConfig.PruneStrategyNone {
+		logger.Info("skipping consensus pruning since disabled in the config")
+		return nil
+	}
+
+	logger.Info("Starting consensus databases pruning. This may take a while...")
+
+	if err := pruneConsensusDBs(
+		cmdCommon.DataDir(),
+		config.GlobalConfig.Consensus.Prune.NumKept,
+		configuredRuntimes(),
+	); err != nil {
+		return fmt.Errorf("failed to prune consensus databases: %w", err)
+	}
+
+	return nil
+}
+
+func configuredRuntimes() []common.Namespace {
+	// TODO handle path based configuration
+	var runtimes []common.Namespace
+	for _, rt := range config.GlobalConfig.Runtime.Runtimes {
+		runtimes = append(runtimes, rt.ID)
+	}
+	return runtimes
+}
+
+func pruneConsensusDBs(dataDir string, numKept uint64, runtimes []common.Namespace) error {
+	ndb, close, err := openConsensusNodeDB(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to open NodeDB: %w", err)
+	}
+	defer close()
+
+	latest, ok := ndb.GetLatestVersion()
+	if !ok {
+		logger.Info("skipping pruning as state db is empty")
+		return nil
+	}
+
+	if latest < numKept {
+		logger.Info("skipping pruning as the latest version is smaller than the number of versions to keep")
+		return nil
+	}
+
+	// In case of configured runtimes, do not prune past the earliest reindexed
+	// consensus height, so that light history can be populated correctly.
+	minReindexed, err := minReindexedHeight(dataDir, runtimes)
+	if err != nil {
+		return fmt.Errorf("failed to fetch earliest reindexed consensus height: %w", err)
+	}
+
+	retainHeight := min(
+		latest-numKept, // underflow not possible due to if above.
+		uint64(minReindexed),
+	)
+
+	if err := pruneConsensusNodeDB(ndb, retainHeight); err != nil {
+		return fmt.Errorf("failed to prune application state: %w", err)
+	}
+
+	if err := pruneCometDBs(dataDir, int64(retainHeight)); err != nil {
+		return fmt.Errorf("failed to prune CometBFT managed databases: %w", err)
+	}
+
+	return nil
+}
+
+func pruneConsensusNodeDB(ndb db.NodeDB, retainHeight uint64) error {
+	startHeight := ndb.GetEarliestVersion()
+
+	if retainHeight <= startHeight {
+		logger.Info("consensus state already pruned", "retain_height", retainHeight, "start_height", startHeight)
+		return nil
+	}
+
+	logger.Info("pruning consensus state", "start_height", startHeight, "retain_height", retainHeight)
+	for h := startHeight; h < retainHeight; h++ {
+		if err := ndb.Prune(h); err != nil {
+			return fmt.Errorf("failed to prune version %d: %w", h, err)
+		}
+
+		if h%10_000 == 0 { // periodically sync to disk
+			if err := ndb.Sync(); err != nil {
+				return fmt.Errorf("failed to sync NodeDB: %w", err)
+			}
+			logger.Debug("forcing NodeDB disk sync during pruning", "version", h)
+		}
+	}
+
+	if err := ndb.Sync(); err != nil {
+		return fmt.Errorf("failed to sync NodeDB: %w", err)
+	}
+
+	return nil
+}
+
+// minReindexedHeight returns the smallest consensus height reindexed by any
+// of the configured runtimes.
+//
+// In case of no configured runtimes it returns max int64.
+func minReindexedHeight(dataDir string, runtimes []common.Namespace) (int64, error) {
+	fetchLastReindexedHeight := func(runtimeID common.Namespace) (int64, error) {
+		rtDir := runtimeConfig.GetRuntimeStateDir(dataDir, runtimeID)
+
+		history, err := history.New(runtimeID, rtDir, history.NewNonePrunerFactory(), true)
+		if err != nil {
+			return 0, fmt.Errorf("failed to open new light history: %w", err)
+		}
+		defer history.Close()
+
+		h, err := history.LastConsensusHeight()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get last consensus height: %w", err)
+		}
+
+		return h, nil
+	}
+
+	var minH int64 = math.MaxInt64
+	for _, rt := range runtimes {
+		h, err := fetchLastReindexedHeight(rt)
+		if err != nil {
+			return 0, fmt.Errorf("failed to fetch last reindexed height for %s: %w", rt, err)
+		}
+
+		if h < minH {
+			minH = h
+		}
+	}
+
+	return minH, nil
+}
+
+func pruneCometDBs(dataDir string, retainHeight int64) error {
+	// Hardcoding the path is not ideal.
+	blockstorePath := fmt.Sprintf("%s/consensus/data/blockstore.badger.db", dataDir)
+	statePath := fmt.Sprintf("%s/consensus/data/state.badger.db", dataDir)
+
+	blockDB, err := cmtDBProvider.New(blockstorePath, false)
+	if err != nil {
+		return fmt.Errorf("failed to open blockstore: %w", err)
+	}
+	blockstore := cmtBlockstore.NewBlockStore(blockDB)
+	defer blockstore.Close()
+
+	// First store the base, then prune blockstore and finally state db.
+	// This is not ideal since it could happen that we only prune blockstore, internally
+	// updating the base. Repeating the pruning would left part of the state db not pruned.
+	// Upstream CometBFT implementation suffer from the same issue:
+	//     - https://github.com/oasisprotocol/cometbft/blob/653c9a0c95ac0f91a0c8c11efb9aa21c98407af6/state/execution.go#L655
+	base := blockstore.Base()
+	if retainHeight <= base {
+		logger.Info("blockstore and state db already pruned")
+		return nil
+	}
+
+	logger.Info("pruning consensus blockstore", "base", base, "retain_height", retainHeight)
+	n, err := blockstore.PruneBlocks(retainHeight)
+	if err != nil {
+		return fmt.Errorf("failed to prune blocks (retain height: %d): %w", retainHeight, err)
+	}
+	logger.Info("blockstore pruning finished", "pruned", n)
+
+	stateDB, err := cmtDBProvider.New(statePath, false)
+	if err != nil {
+		return fmt.Errorf("failed to open state db: %w", err)
+	}
+	state := cmtState.NewStore(stateDB, cmtState.StoreOptions{})
+	defer state.Close()
+
+	logger.Info("pruning consensus states", "base", base, "retain_height", retainHeight)
+	if err := state.PruneStates(base, retainHeight); err != nil {
+		return fmt.Errorf("failed to prune state db (start: %d, end: %d)", base, retainHeight)
+	}
+	logger.Info("state db pruning finished")
+
+	return nil
+}
+
 // Register registers the client sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	storageMigrateCmd.Flags().AddFlagSet(bundle.Flags)
@@ -427,5 +624,6 @@ func Register(parentCmd *cobra.Command) {
 	storageCmd.AddCommand(storageCheckCmd)
 	storageCmd.AddCommand(storageRenameNsCmd)
 	storageCmd.AddCommand(storageCompactCmd)
+	storageCmd.AddCommand(pruneCmd)
 	parentCmd.AddCommand(storageCmd)
 }
