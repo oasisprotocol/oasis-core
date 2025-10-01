@@ -101,6 +101,17 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	db.gc = cmnBadger.NewGCWorker(db.logger, db.db)
 	db.gc.Start()
 
+	// Setting a discard timestamp of the BadgerDB is not persistent and is currently
+	// only done during the prune operation.
+	//
+	// Imagine a scenario where during the previous boot of the BadgerDB, data was successfully pruned,
+	// but not yet compacted. Then the NodeDB is restarted, only this time with pruning disabled.
+	// Unless setting discard timestamp to the earliest version manually, the data stored for the
+	// already pruned versions may never be compacted, resulting in redundant disk usage.
+	if discardTs := versionToTs(db.GetEarliestVersion()) - 1; discardTs > tsMetadata {
+		db.db.SetDiscardTs(discardTs)
+	}
+
 	return db, nil
 }
 
