@@ -46,7 +46,7 @@ type GetDiffResponse struct {
 func init() {
 	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
 		ProtocolsFn: func(n *node.Node, chainContext string) []core.ProtocolID {
-			if !n.HasRoles(node.RoleComputeWorker | node.RoleStorageRPC) {
+			if !n.HasRoles(node.RoleComputeWorker | node.RoleObserver | node.RoleStorageRPC) {
 				return []core.ProtocolID{}
 			}
 
