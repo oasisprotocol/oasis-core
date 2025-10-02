@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -76,8 +75,6 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 }
 
 func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.Env) error {
-	var nextEpoch beacon.EpochTime
-
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
@@ -87,10 +84,10 @@ func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.
 		return err
 	}
 
-	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
+	if err != nil {
 		return err
 	}
-	nextEpoch++
 
 	// Wait for the client to exit.
 	if err = sc.WaitTestClient(); err != nil {
@@ -106,23 +103,13 @@ func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.
 
 	sc.Logger.Info("waiting for compute worker 0 to de-register")
 
-	// Do three epoch transitions so that the node de-registers.
-	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
+	// Do four epoch transitions so that the node de-registers.
+	for range 4 {
+		if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
+			return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
+		}
+		nextEpoch++
 	}
-	nextEpoch++
-	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
-	}
-	nextEpoch++
-	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
-	}
-	nextEpoch++
-	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
-	}
-	nextEpoch++
 
 	sc.Logger.Info("ensuring no registered compute workers")
 	// Ensure there is no registered compute workers.

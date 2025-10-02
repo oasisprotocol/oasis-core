@@ -168,8 +168,9 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	return f, nil
 }
 
-func (sc *governanceConsensusUpgradeImpl) nextEpoch(ctx context.Context) error {
+func (sc *governanceConsensusUpgradeImpl) nextEpoch(ctx context.Context) {
 	sc.currentEpoch++
+	sc.Logger.Info("transitioning to epoch", "epoch", sc.currentEpoch)
 	if err := sc.Net.Controller().SetEpoch(ctx, sc.currentEpoch); err != nil {
 		// Errors can happen because an upgrade happens exactly during an epoch transition. So
 		// make sure to ignore them.
@@ -178,7 +179,6 @@ func (sc *governanceConsensusUpgradeImpl) nextEpoch(ctx context.Context) error {
 			"err", err,
 		)
 	}
-	return nil
 }
 
 // Submits a proposal, votes for it and ensures the proposal is finalized.
@@ -247,11 +247,8 @@ func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(ctx context.Co
 	}
 
 	// Transition to the epoch when proposal finalizes.
-	for ep := sc.currentEpoch + 1; ep < aps[0].ClosesAt+1; ep++ {
-		sc.Logger.Info("transitioning to epoch", "epoch", ep)
-		if err = sc.nextEpoch(ctx); err != nil {
-			return nil, err
-		}
+	for ep := sc.currentEpoch; ep < aps[0].ClosesAt; ep++ {
+		sc.nextEpoch(ctx)
 	}
 
 	p, err := sc.Net.Controller().Governance.Proposal(ctx,
@@ -311,9 +308,11 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	}
 
 	// Wait for the nodes.
-	if sc.currentEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
+	if err != nil {
 		return err
 	}
+	sc.currentEpoch = nextEpoch - 1
 
 	// Wait for the client to exit.
 	if err = sc.WaitTestClient(); err != nil {
@@ -404,12 +403,8 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	}
 
 	// Transition to upgrade epoch.
-	for ep := sc.currentEpoch + 1; ep <= upgradeEpoch; ep++ {
-		sc.Logger.Info("transitioning to epoch", "epoch", ep)
-
-		if err = sc.nextEpoch(ctx); err != nil {
-			return err
-		}
+	for ep := sc.currentEpoch; ep < upgradeEpoch; ep++ {
+		sc.nextEpoch(ctx)
 	}
 
 	if !sc.shouldCancelUpgrade {
@@ -459,10 +454,8 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 		}
 	}
 
-	sc.Logger.Info("final epoch transition")
-	if err = sc.nextEpoch(ctx); err != nil {
-		return err
-	}
+	// Final epoch transition.
+	sc.nextEpoch(ctx)
 
 	// Check that runtime still works after the upgrade.
 	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveScenario)

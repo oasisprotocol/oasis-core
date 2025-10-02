@@ -14,19 +14,19 @@ func (sc *Scenario) initialEpochTransitions(ctx context.Context, fixture *oasis.
 }
 
 func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
-	epoch := baseEpoch + 1
+	nextEpoch := baseEpoch + 1
 	advanceEpoch := func() error {
 		sc.Logger.Info("triggering epoch transition",
-			"epoch", epoch,
+			"epoch", nextEpoch,
 		)
-		if err := sc.Net.Controller().SetEpoch(ctx, epoch); err != nil {
+		if err := sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
 			return fmt.Errorf("failed to set epoch: %w", err)
 		}
 		sc.Logger.Info("epoch transition done",
-			"epoch", epoch,
+			"epoch", nextEpoch,
 		)
 
-		epoch++
+		nextEpoch++
 
 		return nil
 	}
@@ -43,7 +43,7 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 				continue
 			}
 			if err := n.WaitReady(ctx); err != nil {
-				return epoch, fmt.Errorf("failed to wait for a validator: %w", err)
+				return 0, fmt.Errorf("failed to wait for a validator: %w", err)
 			}
 		}
 		sc.Logger.Info("waiting for key managers to initialize",
@@ -55,13 +55,13 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 				continue
 			}
 			if err := n.WaitReady(ctx); err != nil {
-				return epoch, fmt.Errorf("failed to wait for a key manager: %w", err)
+				return 0, fmt.Errorf("failed to wait for a key manager: %w", err)
 			}
 		}
 	}
 
 	if err := advanceEpoch(); err != nil { // Epoch 1
-		return epoch, err
+		return 0, err
 	}
 
 	// Wait for compute workers to become ready.
@@ -74,7 +74,7 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 			continue
 		}
 		if err := n.WaitReady(ctx); err != nil {
-			return epoch, fmt.Errorf("failed to wait for a compute worker: %w", err)
+			return 0, fmt.Errorf("failed to wait for a compute worker: %w", err)
 		}
 	}
 
@@ -85,13 +85,13 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 			"num_nodes", sc.Net.NumRegisterNodes(),
 		)
 		if err := sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
-			return epoch, fmt.Errorf("failed to wait for nodes: %w", err)
+			return 0, fmt.Errorf("failed to wait for nodes: %w", err)
 		}
 	}
 
 	// Then perform epoch transition(s) to elect the committees.
 	if err := advanceEpoch(); err != nil { // Epoch 2
-		return epoch, err
+		return 0, err
 	}
 	switch sc.Net.Config().Beacon.Backend {
 	case "", beacon.BackendVRF:
@@ -103,12 +103,12 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 		if !sc.debugWeakAlphaOk {
 			// Committee elections won't happen the first round.
 			if err := advanceEpoch(); err != nil { // Epoch 3
-				return epoch, err
+				return 0, err
 			}
 			// And nodes are ineligible to be elected till their registration
 			// epoch + 2.
 			if err := advanceEpoch(); err != nil { // Epoch 4 (or 3 if byzantine test)
-				return epoch, err
+				return 0, err
 			}
 		}
 		if !sc.debugNoRandomInitialEpoch {
@@ -125,11 +125,11 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 			)
 			for i := 0; i < numSkips; i++ {
 				if err := advanceEpoch(); err != nil {
-					return epoch, err
+					return 0, err
 				}
 			}
 		}
 	}
 
-	return epoch, nil
+	return nextEpoch, nil
 }

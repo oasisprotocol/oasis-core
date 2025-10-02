@@ -578,7 +578,7 @@ func (sc *byzantineImpl) Run(ctx context.Context, _ *env.Env) error {
 	}
 	defer blkSub.Close()
 
-	epoch, err := sc.initialEpochTransitions(ctx, fixture)
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
 	if err != nil {
 		return err
 	}
@@ -619,11 +619,12 @@ WatchBlocksLoop:
 
 	// Advance epoch to trigger any liveness slashing/suspension.
 	sc.Logger.Info("triggering epoch transition")
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch+1); err != nil {
+	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
+	nextEpoch++
 	sc.Logger.Info("triggering epoch transition")
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch+2); err != nil {
+	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
 

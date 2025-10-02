@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -53,8 +52,8 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 		return err
 	}
 
-	var epoch beacon.EpochTime
-	if epoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
+	if err != nil {
 		return err
 	}
 
@@ -81,7 +80,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	}
 
 	sc.Logger.Debug("transaction successful",
-		"epoch", epoch,
+		"epoch", nextEpoch-1,
 		"round", txMetaResponse.Round,
 	)
 	latestRound := txMetaResponse.Round
