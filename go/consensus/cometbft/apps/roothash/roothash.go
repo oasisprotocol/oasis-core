@@ -20,11 +20,13 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // Application is a roothash application.
@@ -228,10 +230,19 @@ func (app *Application) onRuntimeCommitteeChanged(
 			"committee", committee,
 		)
 
-		// Emit an empty block signaling epoch transition. This is required so that
-		// the clients can be sure what state is final when an epoch transition occurs.
-		if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
-			return fmt.Errorf("failed to emit empty block: %w", err)
+		// Check if we need to emit epoch transition block on epoch changes
+		// for deprecated election logic.
+		isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+		if err != nil {
+			logger.Error("failed to get feature version", "err", err)
+			return err
+		}
+		if !isFeatureVersion242 {
+			// Emit an empty block signaling epoch transition. This is required so that
+			// the clients can be sure what state is final when an epoch transition occurs.
+			if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
+				return fmt.Errorf("failed to emit empty block: %w", err)
+			}
 		}
 
 		// Warning: Non-suspended runtimes can still have a nil committee.
