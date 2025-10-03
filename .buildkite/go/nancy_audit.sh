@@ -5,40 +5,29 @@
 # reported security vulnerabilities.
 #
 # Usage:
-# nancy_audit.sh [path_to_sonatype_oss_index_username] [path_to_sonatype_oss_index_token]
+# nancy_audit.sh
 #
-# path_to_sonatype_oss_index_username - Absolute or relative
-#     path to a file that contains the Sonatype OSS Index
-#     account username. Defaults to "~/.sonatype/oss_index_username".
-# path_to_sonatype_oss_index_token - Absolute or relative
-#     path to a file that contains the Sonatype OSS Index
-#     API token. Defaults to "~/.sonatype/oss_index_token".
+# Expects Sonatype OSS Index account username and API token in
+# "~/.sonatype/oss_index_username" and "~/.sonatype/oss_index_token".
 ############################################################
 
 # Helpful tips on writing build scripts:
 # https://buildkite.com/docs/pipelines/writing-build-scripts
 set -euxo pipefail
 
-###############
-# Optional args
-###############
-path_to_sonatype_oss_index_username=${1:-~/.sonatype/oss_index_username}
-path_to_sonatype_oss_index_token=${2:-~/.sonatype/oss_index_token}
-
-############
-# Local vars
-############
+#######################
+# Environment variables
+#######################
 set +x
-sonatype_oss_index_username=$(cat ${path_to_sonatype_oss_index_username})
-sonatype_oss_index_token=$(cat ${path_to_sonatype_oss_index_token})
+OSSI_USERNAME=$(cat ~/.sonatype/oss_index_username)
+OSSI_TOKEN=$(cat ~/.sonatype/oss_index_token)
+export OSSI_USERNAME
+export OSSI_TOKEN
 set -x
 
 ########################################
 # Check dependencies for vulnerabilities
 ########################################
 pushd go/oasis-node
-    go list -json -deps | nancy sleuth \
-        --username ${sonatype_oss_index_username} \
-        --token ${sonatype_oss_index_token} \
-        -x ../.nancy-ignore
+    go list -json -deps | nancy sleuth -x ../.nancy-ignore
 popd
