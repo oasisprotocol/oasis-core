@@ -481,15 +481,12 @@ func (s *Server) Start() error {
 
 		s.startedListeners = append(s.startedListeners, ln)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			if err := server.Serve(ln); err != nil {
 				server.Stop() // Force stop in case of errors so all other listeners stop.
 				s.errCh <- err
 			}
-		}()
+		})
 	}
 
 	// Wait for all of the listeners to stop.

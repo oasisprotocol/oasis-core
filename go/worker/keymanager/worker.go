@@ -487,46 +487,37 @@ func (w *Worker) worker() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(6)
-
 	// Start the runtime host notifier and other services.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := w.services.Serve(w.ctx); err != nil {
 			w.logger.Error("service group stopped", "err", err)
 		}
-	}()
+	})
 
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.kmNodeWatcher.watch(w.ctx)
-	}()
+	})
 
 	// Watch runtime registrations in order to know which runtimes are using
 	// us as a key manager.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.kmRuntimeWatcher.watch(w.ctx)
-	}()
+	})
 
 	// Serve master and ephemeral secrets.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.secretsWorker.work(w.ctx, hrt)
-	}()
+	})
 
 	// Serve CHURP secrets.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.churpWorker.work(w.ctx, hrt)
-	}()
+	})
 
 	// Watch runtime updates and register with new capabilities on restarts.
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		for {
 			select {
 			case ev := <-hrtEventCh:
@@ -535,7 +526,7 @@ func (w *Worker) worker() {
 				return
 			}
 		}
-	}()
+	})
 
 	// Wait for all workers to initialize.
 	select {

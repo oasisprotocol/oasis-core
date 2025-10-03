@@ -748,13 +748,11 @@ func (n *Node) worker() {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := n.services.Serve(ctx); err != nil {
 			n.logger.Error("service group stopped", "err", err)
 		}
-	}()
+	})
 
 	// Enter the main processing loop.
 	for {

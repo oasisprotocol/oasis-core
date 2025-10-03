@@ -123,9 +123,7 @@ func (n *RuntimeHostNotifier) Serve(ctx context.Context) error {
 				dispatcher = newNotificationDispatcher(qid.comp, qid.queue, comp)
 				dispatchers[qid] = dispatcher
 
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					if err := dispatcher.Serve(ctx); err != nil {
 						n.logger.Error("dispatcher stopped",
 							"component_id", qid.comp,
@@ -133,7 +131,7 @@ func (n *RuntimeHostNotifier) Serve(ctx context.Context) error {
 							"err", err,
 						)
 					}
-				}()
+				})
 			}
 
 			dispatcher.Queue(nf.notify)

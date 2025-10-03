@@ -219,10 +219,7 @@ func (bi *BlockIndexer) reindex(ctx context.Context, blkCh <-chan *roothash.Anno
 	reindexDoneCh := make(chan int64, 1)
 
 	// Start a goroutine to handle reindex requests.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		retry := time.Duration(math.MaxInt64)
 		boff := cmnBackoff.NewExponentialBackOff()
 		boff.Reset()
@@ -249,7 +246,7 @@ func (bi *BlockIndexer) reindex(ctx context.Context, blkCh <-chan *roothash.Anno
 			// Notify that reindex has been completed.
 			sendToChannel(reindexDoneCh, height)
 		}
-	}()
+	})
 
 	// Reindex blocks up to the latest block.
 	var blk *roothash.AnnotatedBlock

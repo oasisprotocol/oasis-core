@@ -82,11 +82,9 @@ func New(
 	}
 
 	if w.vrf, err = newVRF(w); err == nil {
-		w.allQuitWg.Add(1)
-		go func() {
-			defer w.allQuitWg.Done()
+		w.allQuitWg.Go(func() {
 			<-w.vrf.Quit()
-		}()
+		})
 
 		created = true
 	} else {

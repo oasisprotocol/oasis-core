@@ -158,13 +158,11 @@ func (s *PeerstoreBackupTestSuite) TestStartStop() {
 		var wg sync.WaitGroup
 		defer wg.Wait()
 
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				s.backup.start()
 				s.backup.stop()
-			}()
+			})
 		}
 	})
 }
