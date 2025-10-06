@@ -12,6 +12,7 @@ docker_plugin_default_config: &docker_plugin_default_config
   volumes:
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
+    - /var/lib/buildkite-agent/.sonatype:/root/.sonatype
     # IAS Development API keys.
     - /var/lib/buildkite-agent/.oasis-ias:/root/.oasis-ias
     # Intel SGX Application Enclave Services Manager (AESM) daemon running on
