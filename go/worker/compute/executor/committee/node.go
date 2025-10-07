@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
@@ -351,16 +352,21 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		)
 		return
 	}
-	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, height)
+	params, err := n.commonNode.Consensus.Core().GetParameters(ctx, height)
 	if err != nil {
-		n.logger.Error("failed to fetch future epoch state",
-			"err", err,
-		)
+		n.logger.Error("failed to get consensus parameters", "err", err)
 		return
 	}
-	if epochState != nil && epochState.Height == height+1 {
-		n.logger.Debug("not scheduling, next consensus block is an epoch transition")
-		return
+	if !params.Parameters.IsFeatureVersion(migrations.Version242) {
+		epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, height)
+		if err != nil {
+			n.logger.Error("failed to fetch future epoch state", "err", err)
+			return
+		}
+		if epochState != nil && epochState.Height == height+1 {
+			n.logger.Debug("not scheduling, next consensus block is an epoch transition")
+			return
+		}
 	}
 
 	// Check what the runtime supports.
