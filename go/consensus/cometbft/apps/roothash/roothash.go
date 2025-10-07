@@ -218,8 +218,9 @@ func (app *Application) onRuntimeCommitteeChanged(
 		}
 
 		// Emit an empty block signalling that the runtime was suspended.
-		if err = app.finalizeBlock(ctx, rtState, block.Suspended, nil); err != nil {
-			return fmt.Errorf("failed to emit empty block: %w", err)
+		app.finalizeBlock(ctx, rtState, block.Suspended, nil)
+		if err = resetCommitments(ctx, rtState, true); err != nil {
+			return fmt.Errorf("failed to reset commitments: %w", err)
 		}
 
 		rtState.Suspended = true
@@ -240,9 +241,10 @@ func (app *Application) onRuntimeCommitteeChanged(
 		if !isFeatureVersion242 {
 			// Emit an empty block signaling epoch transition. This is required so that
 			// the clients can be sure what state is final when an epoch transition occurs.
-			if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
-				return fmt.Errorf("failed to emit empty block: %w", err)
-			}
+			app.finalizeBlock(ctx, rtState, block.EpochTransition, nil)
+		}
+		if err := resetCommitments(ctx, rtState, false); err != nil {
+			return fmt.Errorf("failed to reset commitments: %w", err)
 		}
 
 		// Warning: Non-suspended runtimes can still have a nil committee.
