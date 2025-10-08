@@ -83,7 +83,7 @@ type P2PConfig struct {
 	// Disable CometBFT's peer-exchange reactor.
 	DisablePeerExchange bool `yaml:"disable_peer_exchange"`
 	// CometBFT max timeout when redialing a persistent peer (default: unlimited).
-	PersistenPeersMaxDialPeriod time.Duration `yaml:"persistent_peers_max_dial_period"`
+	PersistentPeersMaxDialPeriod time.Duration `yaml:"persistent_peers_max_dial_period"`
 }
 
 // SubmissionConfig is the transaction submission configuration.
@@ -109,8 +109,6 @@ type PruneConfig struct {
 	NumKept uint64 `yaml:"num_kept"`
 	// ABCI state pruning interval.
 	Interval time.Duration `yaml:"interval"`
-	// Light blocks kept in trusted store.
-	NumLightBlocksKept uint16 `yaml:"num_light_blocks_kept"`
 }
 
 // CheckpointerConfig is the CometBFT ABCI state pruning configuration structure.
@@ -228,14 +226,14 @@ func DefaultConfig() Config {
 		ExternalAddress: "",
 		ListenAddress:   "tcp://0.0.0.0:26656",
 		P2P: P2PConfig{
-			MaxNumInboundPeers:          100,
-			MaxNumOutboundPeers:         20,
-			SendRate:                    5120000,
-			RecvRate:                    5120000,
-			PersistentPeer:              []string{},
-			UnconditionalPeer:           []string{},
-			DisablePeerExchange:         false,
-			PersistenPeersMaxDialPeriod: 0 * time.Second,
+			MaxNumInboundPeers:           100,
+			MaxNumOutboundPeers:          20,
+			SendRate:                     5120000,
+			RecvRate:                     5120000,
+			PersistentPeer:               []string{},
+			UnconditionalPeer:            []string{},
+			DisablePeerExchange:          false,
+			PersistentPeersMaxDialPeriod: 0,
 		},
 		SentryUpstreamAddresses: []string{},
 		MinGasPrice:             0,
@@ -245,16 +243,15 @@ func DefaultConfig() Config {
 		},
 		HaltEpoch:        0,
 		HaltHeight:       0,
-		UpgradeStopDelay: 60 * time.Second,
+		UpgradeStopDelay: time.Minute,
 		Prune: PruneConfig{
-			Strategy:           PruneStrategyNone,
-			NumKept:            3600,
-			Interval:           2 * time.Minute,
-			NumLightBlocksKept: 10000,
+			Strategy: PruneStrategyNone,
+			NumKept:  3600,
+			Interval: 2 * time.Minute,
 		},
 		Checkpointer: CheckpointerConfig{
 			Disabled:        false,
-			CheckInterval:   1 * time.Minute,
+			CheckInterval:   time.Minute,
 			ParallelChunker: false,
 		},
 		StateSync: StateSyncConfig{
