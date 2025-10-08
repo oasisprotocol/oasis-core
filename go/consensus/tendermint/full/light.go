@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -14,33 +15,27 @@ import (
 )
 
 // Implements LightClientBackend.
-func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.LightBlock, error) {
-	if err := t.ensureStarted(ctx); err != nil {
+func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.LightBlock, error) {
+	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
 
-	tmHeight, err := t.heightToTendermintHeight(height)
+	tmHeight, err := n.heightToTendermintHeight(height)
 	if err != nil {
 		return nil, err
 	}
-	commit, err := t.client.Commit(ctx, &tmHeight)
-	if err != nil {
-		return nil, fmt.Errorf("%w: tendermint: header query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
-	}
 
-	if commit.Header == nil {
-		return nil, fmt.Errorf("tendermint: header is nil")
-	}
+	var lb tmtypes.LightBlock
 
 	// Don't use the client as that imposes stupid pagination. Access the state database directly.
-	vals, err := t.stateStore.LoadValidators(tmHeight)
+	lb.ValidatorSet, err = n.stateStore.LoadValidators(tmHeight)
 	if err != nil {
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	lb := tmtypes.LightBlock{
-		SignedHeader: &commit.SignedHeader,
-		ValidatorSet: vals,
+	if commit, cerr := tmcore.Commit(n.rpcCtx, &tmHeight); cerr == nil && commit.Header != nil {
+		lb.SignedHeader = &commit.SignedHeader
+		tmHeight = commit.Header.Height
 	}
 	protoLb, err := lb.ToProto()
 	if err != nil {
@@ -52,31 +47,30 @@ func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consens
 	}
 
 	return &consensusAPI.LightBlock{
-		Height: commit.Header.Height,
+		Height: tmHeight,
 		Meta:   meta,
 	}, nil
 }
 
 // Implements LightClientBackend.
-func (t *fullService) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
-	if err := t.ensureStarted(ctx); err != nil {
-		return nil, err
-	}
-
-	tmHeight, err := t.heightToTendermintHeight(height)
+func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
+	tmHeight, err := n.heightToTendermintHeight(height)
 	if err != nil {
 		return nil, err
 	}
-	params, err := t.client.ConsensusParams(ctx, &tmHeight)
+	// Query consensus parameters directly from the state store, as fetching
+	// via tmcore.ConsensusParameters also tries fetching latest uncommitted
+	// block which wont work with the archive node setup.
+	consensusParams, err := n.stateStore.LoadConsensusParams(tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("%w: tendermint: consensus params query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
 	}
-	meta, err := params.ConsensusParams.Marshal()
+	meta, err := consensusParams.Marshal()
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to marshal consensus params: %w", err)
 	}
 
-	cs, err := coreState.NewImmutableState(ctx, t.mux.State(), height)
+	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), height)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to initialize core consensus state: %w", err)
 	}
@@ -86,18 +80,23 @@ func (t *fullService) GetParameters(ctx context.Context, height int64) (*consens
 	}
 
 	return &consensusAPI.Parameters{
-		Height:     params.BlockHeight,
+		Height:     tmHeight,
 		Parameters: *cp,
 		Meta:       meta,
 	}, nil
 }
 
 // Implements LightClientBackend.
-func (t *fullService) State() syncer.ReadSyncer {
-	return t.mux.State().Storage()
+func (n *commonNode) State() syncer.ReadSyncer {
+	return n.mux.State().Storage()
 }
 
 // Implements LightClientBackend.
 func (t *fullService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return t.broadcastTxRaw(cbor.Marshal(tx))
+}
+
+// Implements LightClientBackend.
+func (srv *archiveService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+	return consensusAPI.ErrUnsupported
 }

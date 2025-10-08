@@ -292,7 +292,7 @@ func (u *upgradeManager) Close() {
 // New constructs and returns a new upgrade manager. It also checks for and loads any
 // pending upgrade descriptors; if this node is not the one intended to be run according
 // to the loaded descriptor, New will return an error.
-func New(store *persistent.CommonStore, dataDir string) (api.Backend, error) {
+func New(store *persistent.CommonStore, dataDir string, checkStatus bool) (api.Backend, error) {
 	svcStore, err := store.GetServiceStore(api.ModuleName)
 	if err != nil {
 		return nil, err
@@ -303,8 +303,10 @@ func New(store *persistent.CommonStore, dataDir string) (api.Backend, error) {
 		logger:  logging.GetLogger(api.ModuleName),
 	}
 
-	if err := upgrader.checkStatus(); err != nil {
-		return nil, err
+	if checkStatus {
+		if err := upgrader.checkStatus(dataDir); err != nil {
+			return nil, err
+		}
 	}
 
 	return upgrader, nil
