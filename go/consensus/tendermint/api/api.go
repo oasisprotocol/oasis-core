@@ -200,7 +200,7 @@ type Backend interface {
 
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
-	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error)
 
 	// GetLastRetainedVersion returns the earliest retained version the ABCI
 	// state.
@@ -309,8 +309,7 @@ type ServiceClient interface {
 
 // BaseServiceClient is a default ServiceClient implementation that provides noop implementations of
 // all the delivery methods. Implementations should override them as needed.
-type BaseServiceClient struct {
-}
+type BaseServiceClient struct{}
 
 // Implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverBlock(ctx context.Context, height int64) error {

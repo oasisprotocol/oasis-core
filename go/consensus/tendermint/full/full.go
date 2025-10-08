@@ -24,53 +24,33 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmstate "github.com/tendermint/tendermint/state"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 	tmstatesync "github.com/tendermint/tendermint/statesync"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 
-	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
-	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
-	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/governance"
-	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
-	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
-	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
-	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/scheduler"
-	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/staking"
+	epochtimeAPI "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
-	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasisprotocol/oasis-core/go/registry"
-	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash"
-	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -148,51 +128,26 @@ var (
 // fullService implements a full Tendermint node.
 type fullService struct { // nolint: maligned
 	sync.Mutex
-	cmservice.BaseBackgroundService
+	commonNode
 
-	ctx           context.Context
-	svcMgr        *cmbackground.ServiceManager
 	upgrader      upgradeAPI.Backend
-	mux           *abci.ApplicationServer
 	node          *tmnode.Node
 	client        *tmcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
-	stateStore tmstate.Store
-
-	beacon        beaconAPI.Backend
-	governance    governanceAPI.Backend
-	keymanager    keymanagerAPI.Backend
-	registry      registryAPI.Backend
-	roothash      roothashAPI.Backend
-	scheduler     schedulerAPI.Backend
-	staking       stakingAPI.Backend
 	submissionMgr consensusAPI.SubmissionManager
 
-	serviceClients   []api.ServiceClient
-	serviceClientsWg sync.WaitGroup
-
-	genesis                  *genesisAPI.Document
-	genesisProvider          genesisAPI.Provider
-	identity                 *identity.Identity
-	dataDir                  string
-	isInitialized, isStarted bool
-	startedCh                chan struct{}
-	syncedCh                 chan struct{}
-	quitCh                   chan struct{}
+	genesisProvider genesisAPI.Provider
+	isStarted       bool
+	startedCh       chan struct{}
+	syncedCh        chan struct{}
+	quitCh          chan struct{}
 
 	startFn  func() error
 	stopOnce sync.Once
 
 	nextSubscriberID uint64
-}
-
-func (t *fullService) initialized() bool {
-	t.Lock()
-	defer t.Unlock()
-
-	return t.isInitialized
 }
 
 func (t *fullService) started() bool {
@@ -210,7 +165,7 @@ func (t *fullService) Start() error {
 
 	switch t.initialized() {
 	case true:
-		if err := t.mux.Start(); err != nil {
+		if err := t.commonNode.Start(); err != nil {
 			return err
 		}
 		if err := t.startFn(); err != nil {
@@ -265,12 +220,6 @@ func (t *fullService) Quit() <-chan struct{} {
 }
 
 // Implements service.BackgroundService.
-func (t *fullService) Cleanup() {
-	t.serviceClientsWg.Wait()
-	t.svcMgr.Cleanup()
-}
-
-// Implements service.BackgroundService.
 func (t *fullService) Stop() {
 	if !t.initialized() || !t.started() {
 		return
@@ -281,9 +230,7 @@ func (t *fullService) Stop() {
 		if err := t.node.Stop(); err != nil {
 			t.Logger.Error("Error on stopping node", err)
 		}
-
-		t.svcMgr.Stop()
-		t.mux.Stop()
+		t.commonNode.Stop()
 	})
 }
 
@@ -291,146 +238,8 @@ func (t *fullService) Started() <-chan struct{} {
 	return t.startedCh
 }
 
-func (t *fullService) SupportedFeatures() consensusAPI.FeatureMask {
-	return consensusAPI.FeatureServices | consensusAPI.FeatureFullNode
-}
-
 func (t *fullService) Synced() <-chan struct{} {
 	return t.syncedCh
-}
-
-func (t *fullService) GetAddresses() ([]node.ConsensusAddress, error) {
-	u, err := tmcommon.GetExternalAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	var addr node.ConsensusAddress
-	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
-		return nil, fmt.Errorf("tendermint: failed to parse external address host: %w", err)
-	}
-	addr.ID = t.identity.P2PSigner.Public()
-
-	return []node.ConsensusAddress{addr}, nil
-}
-
-func (t *fullService) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
-	blk, err := t.GetTendermintBlock(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("failed to get tendermint block",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-	if blk == nil {
-		return nil, consensusAPI.ErrNoCommittedBlocks
-	}
-	blockHeight = blk.Header.Height
-
-	// Get initial genesis doc.
-	genesisDoc, err := t.GetGenesisDocument(ctx)
-	if err != nil {
-		t.Logger.Error("failed getting genesis document",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	// Call StateToGenesis on all backends and merge the results together.
-	beaconGenesis, err := t.beacon.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("beacon StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	registryGenesis, err := t.registry.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("registry StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	roothashGenesis, err := t.roothash.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("roothash StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	stakingGenesis, err := t.staking.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("staking StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	keymanagerGenesis, err := t.keymanager.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("keymanager StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	schedulerGenesis, err := t.scheduler.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("scheduler StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	governanceGenesis, err := t.governance.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		t.Logger.Error("governance StateToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	return &genesisAPI.Document{
-		Height:     blockHeight,
-		ChainID:    genesisDoc.ChainID,
-		HaltEpoch:  genesisDoc.HaltEpoch,
-		Time:       blk.Header.Time,
-		Beacon:     *beaconGenesis,
-		Registry:   *registryGenesis,
-		RootHash:   *roothashGenesis,
-		Staking:    *stakingGenesis,
-		Governance: *governanceGenesis,
-		KeyManager: *keymanagerGenesis,
-		Scheduler:  *schedulerGenesis,
-		Consensus:  genesisDoc.Consensus,
-	}, nil
-}
-
-func (t *fullService) GetGenesisDocument(ctx context.Context) (*genesisAPI.Document, error) {
-	return t.genesis, nil
-}
-
-func (t *fullService) GetChainContext(ctx context.Context) (string, error) {
-	return t.genesis.ChainContext(), nil
-}
-
-func (t *fullService) RegisterHaltHook(hook consensusAPI.HaltHook) {
-	if !t.initialized() {
-		return
-	}
-
-	t.mux.RegisterHaltHook(hook)
 }
 
 func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
@@ -540,10 +349,6 @@ func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI
 	return nil
 }
 
-func (t *fullService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
-	return t.mux.EstimateGas(req.Signer, req.Transaction)
-}
-
 func (t *fullService) subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
@@ -590,18 +395,6 @@ func (t *fullService) unsubscribe(subscriber string, query tmpubsub.Query) error
 	}
 
 	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
-}
-
-func (t *fullService) RegisterApplication(app api.Application) error {
-	return t.mux.Register(app)
-}
-
-func (t *fullService) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
-	return t.mux.SetTransactionAuthHandler(handler)
-}
-
-func (t *fullService) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
-	return t.mux.TransactionAuthHandler()
 }
 
 func (t *fullService) SubmissionManager() consensusAPI.SubmissionManager {
@@ -762,6 +555,10 @@ func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte,
 	return txs, nil
 }
 
+func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
+	ch, sub, err := t.WatchTendermintBlocks()
+	if err != nil {
+		return nil, nil, err
 func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
 		Version:  version.ConsensusProtocol,
@@ -842,12 +639,6 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
 		status.IsValidator = vals.HasAddress(consensusAddr)
 	}
-
-	return status, nil
-}
-
-func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
-	ch, sub := t.WatchTendermintBlocks()
 	mapCh := make(chan *consensusAPI.Block)
 	go func() {
 		defer close(mapCh)
@@ -867,6 +658,26 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 	}()
 
 	return mapCh, sub, nil
+}
+
+func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
+	status, err := t.commonNode.GetStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if t.started() {
+		// List of consensus peers.
+		tmpeers := t.node.Switch().Peers().List()
+		peers := make([]string, 0, len(tmpeers))
+		for _, tmpeer := range tmpeers {
+			p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
+			peers = append(peers, p)
+		}
+		status.NodePeers = peers
+	}
+
+	return status, nil
 }
 
 func (t *fullService) ensureStarted(ctx context.Context) error {
@@ -1069,19 +880,16 @@ func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmrpc
 }
 
 func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
+func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
-}
-
-func (t *fullService) ConsensusKey() signature.PublicKey {
-	return t.identity.ConsensusSigner.Public()
+	return typedCh, sub, nil
 }
 
 func (t *fullService) lazyInit() error {
-	if t.isInitialized {
+	if t.initialized() {
 		return nil
 	}
 
@@ -1226,7 +1034,9 @@ func (t *fullService) lazyInit() error {
 		switch dbCtx.ID {
 		case "state":
 			// Tendermint state database.
-			t.stateStore = tmstate.NewStore(db)
+			t.stateStore = db
+		case "blockstore":
+			t.blockStoreDB = db
 		default:
 		}
 
@@ -1343,8 +1153,6 @@ func (t *fullService) lazyInit() error {
 		return nil
 	}
 
-	t.isInitialized = true
-
 	return nil
 }
 
@@ -1428,7 +1236,13 @@ func (t *fullService) blockNotifierWorker() {
 
 // metrics updates oasis_consensus metrics by checking last accepted block info.
 func (t *fullService) metrics() {
-	ch, sub := t.WatchTendermintBlocks()
+	ch, sub, err := t.WatchTendermintBlocks()
+	if err != nil {
+		t.Logger.Error("failed to watch tendermint blocks",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	// Tendermint uses specific public key encoding.
@@ -1488,18 +1302,22 @@ func New(
 	}
 
 	t := &fullService{
-		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
-		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
-		upgrader:              upgrader,
-		blockNotifier:         pubsub.NewBroker(false),
-		identity:              identity,
-		genesis:               genesisDoc,
-		genesisProvider:       genesisProvider,
-		ctx:                   ctx,
-		dataDir:               dataDir,
-		startedCh:             make(chan struct{}),
-		syncedCh:              make(chan struct{}),
-		quitCh:                make(chan struct{}),
+		commonNode: commonNode{
+			BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
+			ctx:                   ctx,
+			identity:              identity,
+			rpcCtx:                &tmrpctypes.Context{},
+			genesis:               genesisDoc,
+			dataDir:               dataDir,
+			svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
+			startedCh:             make(chan struct{}),
+		},
+		upgrader:        upgrader,
+		blockNotifier:   pubsub.NewBroker(false),
+		genesisProvider: genesisProvider,
+		startedCh:       make(chan struct{}),
+		syncedCh:        make(chan struct{}),
+		quitCh:          make(chan struct{}),
 	}
 
 	t.Logger.Info("starting a full consensus node")
@@ -1510,6 +1328,10 @@ func New(
 		return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
 	}
 	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(tmcommon.CfgSubmissionMaxFee))
+
+	if err := t.lazyInit(); err != nil {
+		return nil, fmt.Errorf("lazy init: %w", err)
+	}
 
 	return t, t.initialize()
 }

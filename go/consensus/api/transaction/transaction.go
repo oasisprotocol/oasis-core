@@ -27,6 +27,9 @@ var (
 	// cannot be processed right now. The submitter should retry the transaction in this case.
 	ErrUpgradePending = errors.New(moduleName, 4, "transaction: upgrade pending")
 
+	// ErrMethodNotSupported is the error returned if transaction method is not supported.
+	ErrMethodNotSupported = errors.New(moduleName, 5, "transaction: method not supported")
+
 	// SignatureContext is the context used for signing transactions.
 	SignatureContext = signature.NewContext("oasis-core/consensus: tx", signature.WithChainSeparation())
 
