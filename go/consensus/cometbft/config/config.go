@@ -222,27 +222,16 @@ func (c *Config) Validate() error {
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		Validator:       false,
-		ExternalAddress: "",
-		ListenAddress:   "tcp://0.0.0.0:26656",
+		ListenAddress: "tcp://0.0.0.0:26656",
 		P2P: P2PConfig{
-			MaxNumInboundPeers:           100,
-			MaxNumOutboundPeers:          20,
-			SendRate:                     5120000,
-			RecvRate:                     5120000,
-			PersistentPeer:               []string{},
-			UnconditionalPeer:            []string{},
-			DisablePeerExchange:          false,
-			PersistentPeersMaxDialPeriod: 0,
+			MaxNumInboundPeers:  100,
+			MaxNumOutboundPeers: 20,
+			SendRate:            5120000,
+			RecvRate:            5120000,
 		},
-		SentryUpstreamAddresses: []string{},
-		MinGasPrice:             0,
 		Submission: SubmissionConfig{
-			GasPrice: 0,
-			MaxFee:   10_000_000_000,
+			MaxFee: 10_000_000_000,
 		},
-		HaltEpoch:        0,
-		HaltHeight:       0,
 		UpgradeStopDelay: time.Minute,
 		Prune: PruneConfig{
 			Strategy: PruneStrategyNone,
@@ -250,12 +239,7 @@ func DefaultConfig() Config {
 			Interval: 2 * time.Minute,
 		},
 		Checkpointer: CheckpointerConfig{
-			Disabled:        false,
-			CheckInterval:   time.Minute,
-			ParallelChunker: false,
-		},
-		StateSync: StateSyncConfig{
-			Enabled: false,
+			CheckInterval: time.Minute,
 		},
 		LightClient: LightClientConfig{
 			Trust: TrustConfig{
@@ -263,15 +247,7 @@ func DefaultConfig() Config {
 			},
 		},
 		SupplementarySanity: SupplementarySanityConfig{
-			Enabled:  false,
 			Interval: 10,
-		},
-		LogDebug: false,
-		Debug: DebugConfig{
-			P2PAddrBookLenient:              false,
-			P2PAllowDuplicateIP:             false,
-			UnsafeReplayRecoverCorruptedWAL: false,
-			DisableAddrBookFromGenesis:      false,
 		},
 	}
 }
