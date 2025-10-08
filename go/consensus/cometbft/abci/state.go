@@ -655,7 +655,7 @@ func InitStateStorage(cfg *ApplicationConfig) (storage.LocalBackend, storage.Nod
 	db, err := storageDB.New(&storage.Config{
 		Backend:          cfg.StorageBackend,
 		DB:               filepath.Join(baseDir, storageDB.DefaultFileName(cfg.StorageBackend)),
-		MaxCacheSize:     64 * 1024 * 1024, // TODO: Make this configurable.
+		MaxCacheSize:     256 * 1024 * 1024, // TODO: Make this configurable.
 		DiscardWriteLogs: true,
 		NoFsync:          true, // This is safe as CometBFT will replay on crash.
 		MemoryOnly:       cfg.MemoryOnlyStorage,

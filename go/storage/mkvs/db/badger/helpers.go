@@ -33,7 +33,7 @@ func commonConfigToBadgerOptions(cfg *api.Config, db *badgerNodeDB) badger.Optio
 	opts = opts.WithSyncWrites(!cfg.NoFsync)
 	opts = opts.WithCompression(options.Snappy)
 	if cfg.MaxCacheSize == 0 {
-		opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
+		opts = opts.WithBlockCacheSize(256 * 1024 * 1024)
 	} else {
 		opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)
 	}
