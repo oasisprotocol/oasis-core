@@ -626,7 +626,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	cometConfig.P2P.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
 	cometConfig.P2P.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
 	cometConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
-	cometConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistenPeersMaxDialPeriod
+	cometConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistentPeersMaxDialPeriod
 	cometConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
 	cometConfig.P2P.Seeds = strings.Join(seeds, ",")
 	cometConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())

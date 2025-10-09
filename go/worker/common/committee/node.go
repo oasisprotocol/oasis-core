@@ -459,8 +459,10 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	}
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
+func (n *Node) handleNewBlock(blk *block.Block, height int64) {
+	n.CrossNode.Lock()
+	defer n.CrossNode.Unlock()
+
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
 	header := blk.Header
@@ -584,8 +586,10 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	}
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleRuntimeHostEventLocked(ev *host.Event) {
+func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+	n.CrossNode.Lock()
+	defer n.CrossNode.Unlock()
+
 	n.logger.Debug("got runtime event", "ev", ev)
 
 	switch {
@@ -760,18 +764,10 @@ func (n *Node) worker() {
 			return
 		case blk := <-blkCh:
 			// Received a block (annotated).
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.handleNewBlockLocked(blk.Block, blk.Height)
-			}()
+			n.handleNewBlock(blk.Block, blk.Height)
 		case ev := <-hrtEventCh:
 			// Received a hosted runtime event.
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.handleRuntimeHostEventLocked(ev)
-			}()
+			n.handleRuntimeHostEvent(ev)
 		case compNotify := <-compCh:
 			switch {
 			case compNotify.Added != nil:
