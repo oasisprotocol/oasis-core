@@ -32,6 +32,9 @@ type History interface {
 	roothash.BlockHistory
 	consensus.StatePruneHandler
 
+	// DeleteBlock deletes a block at a specified round if for the earliest round.
+	DeleteBlock(round uint64) error
+
 	// Pruner returns the history pruner.
 	Pruner() Pruner
 
@@ -302,6 +305,13 @@ func (h *runtimeHistory) CanPruneConsensus(height int64) error {
 		return fmt.Errorf("height %d not yet indexed for %s", height, h.RuntimeID())
 	}
 
+	return nil
+}
+
+func (h *runtimeHistory) DeleteBlock(round uint64) error {
+	if err := h.db.deleteBlock(round); err != nil {
+		return fmt.Errorf("failed to delete block for round %d: %w", round, err)
+	}
 	return nil
 }
 

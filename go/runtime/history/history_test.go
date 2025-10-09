@@ -558,3 +558,5 @@ func createBlocks(runtimeID common.Namespace) []*roothash.AnnotatedBlock {
 	}
 	return blks
 }
+
+// TODO write for DeleteBlock
