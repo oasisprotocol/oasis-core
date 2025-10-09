@@ -619,8 +619,25 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	commit, err := cmtcore.Commit(n.rpcCtx, &tmHeight)
-	if err == nil && commit != nil && commit.Header != nil {
+	// For future heights, leave the signed header empty and return only
+	// the validator set.
+	lastTmHeight, err := n.heightToCometBFTHeight(consensusAPI.HeightLatest)
+	if err != nil {
+		return nil, err
+	}
+
+	if tmHeight <= lastTmHeight {
+		commit, err := cmtcore.Commit(n.rpcCtx, &tmHeight)
+		if err != nil {
+			return nil, fmt.Errorf("cometbft: failed to find block commit: %w", err)
+		}
+		if commit == nil {
+			return nil, fmt.Errorf("cometbft: block commit not found")
+		}
+		if commit.Header == nil {
+			return nil, fmt.Errorf("cometbft: block commit has no header")
+		}
+
 		lb.SignedHeader = &commit.SignedHeader
 		tmHeight = commit.Header.Height
 	}
