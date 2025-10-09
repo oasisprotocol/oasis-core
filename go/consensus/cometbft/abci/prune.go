@@ -146,7 +146,7 @@ PruneLoop:
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
 		for _, ph := range p.handlers {
-			if err := ph.Prune(int64(i)); err != nil {
+			if err := ph.CanPruneConsensus(int64(i)); err != nil {
 				p.logger.Debug("prune handler blocked pruning version",
 					"err", err,
 					"latest_version", latestVersion,
