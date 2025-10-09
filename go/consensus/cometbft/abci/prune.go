@@ -136,25 +136,20 @@ func (p *genericPruner) Prune(latestVersion uint64) error {
 	)
 
 	preserveFrom := latestVersion - p.keepN
-PruneLoop:
 	for i := p.earliestVersion; i <= latestVersion; i++ {
 		if i >= preserveFrom {
 			p.earliestVersion = i
 			break
 		}
 
-		// Before pruning anything, run all prune handlers. If any of them
-		// fails we abort the prune.
-		for _, ph := range p.handlers {
-			if err := ph.CanPruneConsensus(int64(i)); err != nil {
-				p.logger.Debug("prune handler blocked pruning version",
-					"err", err,
-					"latest_version", latestVersion,
-					"version", i,
-				)
-				p.earliestVersion = i
-				break PruneLoop
-			}
+		if err := p.canPrune(int64(i)); err != nil {
+			p.logger.Debug("prune handler blocked pruning version",
+				"err", err,
+				"latest_version", latestVersion,
+				"version", i,
+			)
+			p.earliestVersion = i
+			break
 		}
 
 		p.logger.Debug("Prune: Delete",
@@ -192,6 +187,16 @@ PruneLoop:
 		"eldest_version", p.earliestVersion,
 	)
 
+	return nil
+}
+
+// canPrune checks if all prune handlers allow pruning the given version.
+func (p *genericPruner) canPrune(v int64) error {
+	for _, ph := range p.handlers {
+		if err := ph.CanPruneConsensus(v); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
