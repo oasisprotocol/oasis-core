@@ -372,7 +372,7 @@ type testPruneHandler struct {
 	batches      []int
 }
 
-func (h *testPruneHandler) Prune(rounds []uint64) error {
+func (h *testPruneHandler) CanPruneRuntime(rounds []uint64) error {
 	// NOTE: Users must ensure that accessing prunedRounds is safe (e.g., that
 	//       no more pruning happens using this handler before prunedRounds is
 	//       accessed from a different goroutine).
@@ -486,7 +486,7 @@ func TestHistoryPrune(t *testing.T) {
 
 type testPruneFailingHandler struct{}
 
-func (h *testPruneFailingHandler) Prune([]uint64) error {
+func (h *testPruneFailingHandler) CanPruneRuntime([]uint64) error {
 	return fmt.Errorf("thou shall not pass")
 }
 

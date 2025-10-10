@@ -13,14 +13,18 @@ type pruneHandler struct {
 	commonNode *committee.Node
 }
 
-func (p *pruneHandler) Prune(rounds []uint64) error {
+// CanPruneRuntime returns no error when pruning would not go past last normal round.
+//
+// This is important as some runtimes will do historic queries for things that are not available
+// in the last consensus state (e.g. delegation/undelegation events that happened while the runtime
+// was suspended or not producing blocks).
+//
+// Implements runtime.history.PruneHandler.
+func (p *pruneHandler) CanPruneRuntime(rounds []uint64) error {
 	p.commonNode.CrossNode.Lock()
 	height := p.commonNode.CurrentBlockHeight
 	p.commonNode.CrossNode.Unlock()
 
-	// Make sure we never prune past the last normal round, as some runtimes will do historic queries
-	// for things that are not available in the last consensus state (e.g. delegation/undelegation
-	// events that happened while the runtime was suspended or not producing blocks).
 	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(context.Background(), &roothash.RuntimeRequest{
 		RuntimeID: p.commonNode.Runtime.ID(),
 		Height:    height,
