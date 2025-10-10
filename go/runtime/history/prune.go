@@ -24,18 +24,15 @@ const (
 // PrunerFactory is the runtime history pruner factory interface.
 type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
-// PruneHandler is a handler that is called when rounds are pruned
+// PruneHandler is a handler that is called before rounds are pruned
 // from history.
 type PruneHandler interface {
-	// Prune is called before the specified rounds are pruned.
-	//
-	// If an error is returned, pruning is aborted and the rounds are
-	// not pruned from history.
+	// CanPruneRuntime is called before to check if the specified round can be pruned.
 	//
 	// Note that this can be called for the same round multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(rounds []uint64) error
+	CanPruneRuntime(rounds []uint64) error
 }
 
 // Pruner is the runtime history pruner interface.
@@ -142,7 +139,7 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 		defer p.mu.RUnlock()
 
 		for _, ph := range p.handlers {
-			if err := ph.Prune(pruned); err != nil {
+			if err := ph.CanPruneRuntime(pruned); err != nil {
 				p.logger.Debug("prune handler failed, aborting prune",
 					"err", err,
 					"round_count", len(pruned),

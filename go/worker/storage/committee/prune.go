@@ -15,8 +15,10 @@ type pruneHandler struct {
 	worker *Worker
 }
 
-func (p *pruneHandler) Prune(rounds []uint64) error {
-	// Make sure we never prune past what was synced.
+// CanPruneRuntime returns no error when pruning would not go past last synced round.
+//
+// Implements runtime.history.PruneHandler.
+func (p *pruneHandler) CanPruneRuntime(rounds []uint64) error {
 	lastSycnedRound, _, _ := p.worker.GetLastSynced()
 
 	for _, round := range rounds {
