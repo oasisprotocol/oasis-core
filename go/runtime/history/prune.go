@@ -143,7 +143,7 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 
 		for _, ph := range p.handlers {
 			if err := ph.Prune(pruned); err != nil {
-				p.logger.Error("prune handler failed, aborting prune",
+				p.logger.Debug("prune handler failed, aborting prune",
 					"err", err,
 					"round_count", len(pruned),
 					"round_min", pruned[0],
