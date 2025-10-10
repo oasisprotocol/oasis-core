@@ -273,15 +273,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 		return err
 	}
 
-	// Initialize the nonce DRBG.
-	rng, err := drbgFromSeed(
-		[]byte("oasis-core/oasis-test-runner/e2e/runtime/keymanager-ephemeral-keys"),
-		[]byte("keymanager-ephemeral-keys"),
-	)
-	if err != nil {
-		return err
-	}
-
 	// Data needed for encryption and decryption.
 	keyPairID := "key pair id"
 	plaintext := []byte("The quick brown fox jumps over the lazy dog")
@@ -295,9 +286,11 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	// Successful encryption indicates that the key manager generated
 	// an ephemeral public key.
 	sc.Logger.Info("encrypting plaintext")
+	sender := "sender"
 	ciphertext, err := sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch,
 		keyPairID,
 		plaintext,
@@ -312,7 +305,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext")
 	decrypted, err := sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch,
 		keyPairID,
 		ciphertext,
@@ -330,7 +324,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with wrong epoch")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch-1,
 		keyPairID,
 		ciphertext,
@@ -345,7 +340,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with wrong key pair id")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch,
 		"wrong key pair id",
 		ciphertext,
@@ -365,7 +361,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("encrypting plaintext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch,
 		keyPairID,
 		plaintext,
@@ -380,7 +377,8 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	sc.Logger.Info("decrypting ciphertext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		rng.Uint64(),
+		sender,
+		sc.Nonces.Next(sender),
 		epoch,
 		keyPairID,
 		ciphertext,
@@ -400,12 +398,13 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	ctx context.Context,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
 	plaintext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "encrypt", struct {
+	rawRsp, _, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "encrypt", struct {
 		Epoch     uint64 `json:"epoch"`
 		KeyPairID string `json:"key_pair_id"`
 		Plaintext []byte `json:"plaintext"`
@@ -428,12 +427,13 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	ctx context.Context,
+	sender string,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
 	ciphertext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "decrypt", struct {
+	rawRsp, _, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, sender, nonce, "decrypt", struct {
 		Epoch      uint64 `json:"epoch"`
 		KeyPairID  string `json:"key_pair_id"`
 		Ciphertext []byte `json:"ciphertext"`

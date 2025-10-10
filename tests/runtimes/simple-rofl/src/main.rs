@@ -90,19 +90,22 @@ impl App {
         // Submit the result as an on-chain transaction.
         let key = "rofl_http".to_owned();
         let value = format!("{} -> {:?}", result.len(), &result[..10]);
-        App::insert(key, value, host).await
+        Self::insert(key, value, host).await;
+
+        Ok(())
     }
 
-    async fn update_version(version: Version, host: &Arc<dyn host::Host>) -> Result<()> {
+    async fn update_version(version: Version, host: &Arc<dyn host::Host>) {
         // Submit the version as an on-chain transaction.
         let key = "rofl_version".to_owned();
         let value = format!("{}.{}.{}", version.major, version.minor, version.patch);
-        App::insert(key, value, host).await
+        Self::insert(key, value, host).await;
     }
 
-    async fn insert(key: String, value: String, host: &Arc<dyn host::Host>) -> Result<()> {
+    async fn insert(key: String, value: String, host: &Arc<dyn host::Host>) {
         #[derive(cbor::Encode)]
         struct Call {
+            sender: Vec<u8>,
             nonce: u64,
             method: String,
             args: cbor::Value,
@@ -116,7 +119,8 @@ impl App {
         }
 
         let tx = cbor::to_vec(Call {
-            nonce: OsRng.gen(),
+            sender: format!("sender-{}", OsRng.gen::<u64>()).into(),
+            nonce: 0,
             method: "insert".to_owned(),
             args: cbor::to_value(KeyValue {
                 key,
@@ -138,7 +142,6 @@ impl App {
 
         // NOTE: This is not verified.
         println!("Received result: {:?}", result);
-        Ok(())
     }
 }
 

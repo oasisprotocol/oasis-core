@@ -16,7 +16,6 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
@@ -103,7 +102,7 @@ func testQueueTx(
 	// Include a timestamp so each test invocation uses a unique transaction.
 	testTx := []byte("hello world at: " + time.Now().String())
 	// Submit a test transaction.
-	result, err := commonNode.TxPool.SubmitTx(ctx, testTx, &txpool.TransactionMeta{Local: false})
+	result, err := commonNode.TxPool.SubmitTx(ctx, testTx, false, false)
 	require.NoError(t, err, "transaction should be accepted")
 	require.True(t, result.IsSuccess(), "transaction should pass checks")
 
@@ -142,7 +141,7 @@ func testQueueTx(
 	require.EqualValues(t, stateRoot, blk.Block.Header.StateRoot)
 
 	// Submitting the same transaction should not result in a new block.
-	_, err = commonNode.TxPool.SubmitTx(ctx, testTx, &txpool.TransactionMeta{Local: false})
+	_, err = commonNode.TxPool.SubmitTx(ctx, testTx, false, false)
 	require.Error(t, err, "duplicate transaction should be rejected")
 
 	// Fetch the first non-empty block.

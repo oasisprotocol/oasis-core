@@ -94,16 +94,16 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
-	drbg, _ := drbgFromSeed([]byte("storage-sync/seq"), []byte("plant_your_seeds"))
-
 	// Generate some more rounds to trigger checkpointing. Up to this point there have been ~9
 	// rounds, we create 15 more rounds to bring this up to ~24. Checkpoints are every 10 rounds so
 	// this leaves some space for any unintended epoch transitions.
+	sender := "sender"
 	for i := 0; i < 15; i++ {
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), 0, 0, plaintextTxKind); err != nil {
+		nonce := sc.Nonces.Next(sender)
+		if _, _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, "checkpoint", fmt.Sprintf("my cp %d", i), 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}
@@ -180,7 +180,8 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		sc.Logger.Info("submitting large transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, 0, 0, plaintextTxKind); err != nil {
+		nonce := sc.Nonces.Next(sender)
+		if _, _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, sender, nonce, fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}

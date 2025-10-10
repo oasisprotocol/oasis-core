@@ -70,17 +70,41 @@ impl Methods {
         Ok((result, delegations))
     }
 
-    pub fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
-        let nonce_key = NonceKeyFormat { nonce }.encode();
-        match ctx.parent.core.runtime_state.get(&nonce_key) {
-            Some(_) => Err(format!("Duplicate nonce: {nonce}")),
-            None => {
-                if !ctx.is_check_only() {
-                    ctx.parent.core.runtime_state.insert(&nonce_key, &[0x1]);
-                }
-                Ok(())
-            }
+    pub fn get_nonce(ctx: &TxContext, sender: Vec<u8>) -> u64 {
+        let nonce_key = NonceKeyFormat { sender }.encode();
+        ctx.parent
+            .core
+            .runtime_state
+            .get(&nonce_key)
+            .map(|nonce: Vec<u8>| u64::from_be_bytes(nonce.try_into().unwrap()))
+            .unwrap_or_default()
+    }
+
+    pub fn set_nonce(ctx: &mut TxContext, sender: Vec<u8>, nonce: u64) {
+        let nonce_key = NonceKeyFormat { sender }.encode();
+        ctx.parent
+            .core
+            .runtime_state
+            .insert(&nonce_key, &nonce.to_be_bytes());
+    }
+
+    pub fn check_nonce(ctx: &mut TxContext, sender: Vec<u8>, nonce: u64) -> Result<(), String> {
+        let next_nonce = Methods::get_nonce(ctx, sender.clone());
+        if nonce < next_nonce {
+            return Err(format!("Invalid nonce: {:?}", nonce));
         }
+
+        if ctx.is_check_only() {
+            return Ok(());
+        }
+
+        if nonce != next_nonce {
+            return Err(format!("Invalid nonce: {:?}", nonce));
+        }
+
+        Methods::set_nonce(ctx, sender, nonce + 1);
+
+        Ok(())
     }
 
     fn check_max_messages(ctx: &mut TxContext) -> Result<(), String> {

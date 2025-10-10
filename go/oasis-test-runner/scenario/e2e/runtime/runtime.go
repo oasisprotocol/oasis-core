@@ -16,6 +16,8 @@ import (
 
 // TxnCall is a transaction call in the test runtime.
 type TxnCall struct {
+	// Sender is the sender.
+	Sender []byte `json:"sender"`
 	// Nonce is a nonce.
 	Nonce uint64 `json:"nonce"`
 	// Method is the called method name.
@@ -35,20 +37,21 @@ type TxnOutput struct {
 func (sc *Scenario) submitRuntimeTx(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	method string,
 	args any,
-) (cbor.RawMessage, error) {
+) (cbor.RawMessage, uint64, error) {
 	// Submit a transaction and check the result.
-	metaResp, err := sc.submitRuntimeTxMeta(ctx, id, nonce, method, args)
+	metaRsp, err := sc.submitRuntimeTxMeta(ctx, id, sender, nonce, method, args)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	rsp, err := unpackRawTxResp(metaResp.Output)
+	rsp, err := unpackRawTxResp(metaRsp.Output)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return rsp, nil
+	return rsp, metaRsp.Round, nil
 }
 
 func (sc *Scenario) submitRuntimeQuery(
@@ -74,6 +77,7 @@ func (sc *Scenario) submitRuntimeQuery(
 func (sc *Scenario) submitRuntimeTxMeta(
 	ctx context.Context,
 	id common.Namespace,
+	sender string,
 	nonce uint64,
 	method string,
 	args any,
@@ -87,6 +91,7 @@ func (sc *Scenario) submitRuntimeTxMeta(
 	resp, err := c.SubmitTxMeta(ctx, &runtimeClient.SubmitTxRequest{
 		RuntimeID: id,
 		Data: cbor.Marshal(&TxnCall{
+			Sender: []byte(sender),
 			Nonce:  nonce,
 			Method: method,
 			Args:   args,
@@ -116,16 +121,17 @@ func unpackRawTxResp(rawRsp []byte) (cbor.RawMessage, error) {
 func (sc *Scenario) submitConsensusXferTxMeta(
 	ctx context.Context,
 	xfer staking.Transfer,
+	sender string,
 	nonce uint64,
 ) (*runtimeClient.SubmitTxMetaResponse, error) {
-	return sc.submitRuntimeTxMeta(ctx, KeyValueRuntimeID, nonce, "consensus_transfer", struct {
+	return sc.submitRuntimeTxMeta(ctx, KeyValueRuntimeID, sender, nonce, "consensus_transfer", struct {
 		Transfer staking.Transfer `json:"transfer"`
 	}{
 		Transfer: xfer,
 	})
 }
 
-func (sc *Scenario) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args any) error {
+func (sc *Scenario) submitRuntimeInMsg(ctx context.Context, id common.Namespace, sender string, nonce uint64, method string, args any) error {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
 		return fmt.Errorf("client controller not available")
@@ -136,6 +142,7 @@ func (sc *Scenario) submitRuntimeInMsg(ctx context.Context, id common.Namespace,
 		ID:  id,
 		Tag: 42,
 		Data: cbor.Marshal(&TxnCall{
+			Sender: []byte(sender),
 			Nonce:  nonce,
 			Method: method,
 			Args:   args,

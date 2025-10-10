@@ -63,6 +63,8 @@ type Scenario struct {
 
 	TestClient *TestClient
 
+	Nonces *NonceRegistry
+
 	// This disables the random initial epoch for tests that are extremely
 	// sensitive to the initial epoch.  Ideally this shouldn't be set for
 	// any of our tests, but I'm sick and tired of trying to debug poorly
@@ -91,6 +93,7 @@ func NewScenario(name string, testClient *TestClient) *Scenario {
 	sc := &Scenario{
 		Scenario:   *e2e.NewScenario(fullName),
 		TestClient: testClient,
+		Nonces:     NewNonceRegistry(),
 	}
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
@@ -113,6 +116,7 @@ func (sc *Scenario) Clone() scenario.Scenario {
 	return &Scenario{
 		Scenario:                  *sc.Scenario.Clone().(*e2e.Scenario),
 		TestClient:                testClient,
+		Nonces:                    sc.Nonces,
 		debugNoRandomInitialEpoch: sc.debugNoRandomInitialEpoch,
 		debugWeakAlphaOk:          sc.debugWeakAlphaOk,
 	}
@@ -322,6 +326,7 @@ func RegisterScenarios() error {
 		RuntimeEncryption,
 		RuntimeGovernance,
 		RuntimeMessage,
+		RuntimeTxs,
 		// Byzantine executor node.
 		ByzantineExecutorHonest,
 		ByzantineExecutorSchedulerHonest,

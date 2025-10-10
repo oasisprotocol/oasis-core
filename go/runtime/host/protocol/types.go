@@ -331,11 +331,6 @@ type CheckTxMetadata struct {
 	// SenderStateSeq is the current sequence number of the sender stored in runtime state. This
 	// sequence number must be lower than or equal to SenderSeq.
 	SenderStateSeq uint64 `json:"sender_state_seq,omitempty"`
-
-	// Fields below are deprecated to avoid breaking protocol changes. They may be removed once
-	// all runtimes stop sending those fields.
-
-	Deprecated1 cbor.RawMessage `json:"weights,omitempty"`
 }
 
 // IsSuccess returns true if transaction execution was successful.

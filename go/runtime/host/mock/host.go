@@ -27,6 +27,8 @@ type mockHost struct {
 	runtimeID common.Namespace
 
 	notifier *pubsub.Broker
+
+	senderSeq uint64
 }
 
 // Implements host.Runtime.
@@ -133,6 +135,7 @@ func (h *mockHost) Call(ctx context.Context, body *protocol.Body) (*protocol.Bod
 		}}, nil
 	case body.RuntimeCheckTxBatchRequest != nil:
 		rq := body.RuntimeCheckTxBatchRequest
+		senderStateSeq := h.senderSeq
 
 		var results []protocol.CheckTxResult
 		for _, input := range rq.Inputs {
@@ -149,7 +152,12 @@ func (h *mockHost) Call(ctx context.Context, body *protocol.Body) (*protocol.Bod
 					Error: protocol.Error{
 						Code: errors.CodeNoError,
 					},
+					Meta: &protocol.CheckTxMetadata{
+						SenderSeq:      h.senderSeq,
+						SenderStateSeq: senderStateSeq,
+					},
 				})
+				h.senderSeq++
 			}
 		}
 
