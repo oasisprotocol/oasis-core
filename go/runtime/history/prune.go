@@ -21,6 +21,19 @@ const (
 	maxBatchSize = 64
 )
 
+// TODO:
+// If whenever we (re)indexed the runtime light history we also have a runtime
+// state, then we should consider moving this pruner to go/worker/storage
+// and handle state and light history pruning in the same place.
+//
+// This would also solve the problem mentioned in one of the previous commits
+// where state pruning not so robustly relies on the earliest light history block.
+//
+// Finally, by moving this there we could get rid of pruning factories and no-op
+// pruner. Both are anti-patterns. The former is breaking simplicity and clarity,
+// the later is responsible for confusing logs in case of no-op pruner where one
+// would expect none.
+
 // PrunerFactory is the runtime history pruner factory interface.
 type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
