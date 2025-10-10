@@ -334,14 +334,10 @@ func (h *runtimeHistory) pruneWorker() {
 				return
 			}
 
-			h.logger.Debug("pruning runtime history",
-				"round", round.(uint64),
-			)
+			h.logger.Debug("pruning runtime history", "round", round.(uint64))
 
 			if err := h.pruner.Prune(round.(uint64)); err != nil {
-				h.logger.Error("failed to prune",
-					"err", err,
-				)
+				h.logger.Debug("failed to prune", "err", err)
 				continue
 			}
 		case <-h.stopCh:
