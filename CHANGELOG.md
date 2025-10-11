@@ -12,6 +12,75 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.6 (2025-10-11)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Removals and Breaking Changes
+
+- go/consensus/cometbft/apps/keymanager: Apply policy at epoch boundary
+  ([#6300](https://github.com/oasisprotocol/oasis-core/issues/6300))
+
+### Configuration Changes
+
+- go/consensus/cometbft/config: Remove unused light block limit config
+  ([#6354](https://github.com/oasisprotocol/oasis-core/issues/6354))
+
+  The unused configuration option `num_light_blocks_kept` has been removed
+  from the prune configuration.
+
+### Features
+
+- go/runtime/txpool: Add support for multiple transactions per sender
+  ([#6280](https://github.com/oasisprotocol/oasis-core/issues/6280))
+
+- runtime/rhp: Bump maximum message size to 32 MiB
+  ([#6326](https://github.com/oasisprotocol/oasis-core/issues/6326))
+
+- go/NodeDB: Bump default BadgerDB block cache size to 256 MiB
+  ([#6339](https://github.com/oasisprotocol/oasis-core/issues/6339))
+
+  Previously default value for NodeDB instances was 64 MiB. By bumping it
+  we speed-up pruning of runtime state quite significantly.
+
+- go/p2p: Add observer nodes to the target set of registered nodes to track
+  ([#6342](https://github.com/oasisprotocol/oasis-core/issues/6342))
+
+### Bug Fixes
+
+- Bump CometBFT to 0.37.15-oasis2
+  ([#6319](https://github.com/oasisprotocol/oasis-core/issues/6319))
+
+  Fixes consensus blockstore not being pruned during initial block sync.
+
+- runtime/protocol: Propagate write failures
+  ([#6327](https://github.com/oasisprotocol/oasis-core/issues/6327))
+
+- go/consensus/cometbft/full: Error if light block cannot be constructed
+  ([#6351](https://github.com/oasisprotocol/oasis-core/issues/6351))
+
+  Returning an error instead of an empty light block when block results
+  for the requested height are unavailable will cause the runtime host
+  handler to fetch the light block from other nodes in the network.
+
+### Internal Changes
+
+- go: Bump Go to 1.25
+  ([#6295](https://github.com/oasisprotocol/oasis-core/issues/6295))
+
+- Configure custom range for Codecov coverage reporting
+  ([#6296](https://github.com/oasisprotocol/oasis-core/issues/6296))
+
+  Coverage reporting now considers below 60% as red, between 60% and 80% as
+  yellow and above 80% as green.
+
+- CODEOWNERS: Add @matevz for /docs/
+  ([#6325](https://github.com/oasisprotocol/oasis-core/issues/6325))
+
 ## 25.5 (2025-08-08)
 
 | Protocol          | Version   |
