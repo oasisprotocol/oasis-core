@@ -331,3 +331,36 @@ response:
 ```
 oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7
 ```
+
+## storage
+
+### compact-experimental
+
+Run
+
+```sh
+oasis-node storage compact-experimental --config /path/to/config/file
+```
+
+to trigger manual compaction of consensus database instances:
+
+```sh
+{"caller":"storage.go:310","level":"info","module":"cmd/storage", \
+"msg":"Starting database compactions. This may take a while...", \
+"ts":"2025-10-08T09:18:22.185451554Z"}
+```
+
+If pruning was not enabled from the start or was recently increased, then even
+after successful pruning, the disk usage may stay the same.
+
+This is due to the LSM-tree storage design that BadgerDB uses. Concretely,
+deleting a key only marks it as ready to be deleted (a tombstone entry). The
+actual removal of the stale data happens later during the compaction.
+
+During normal operation, compaction happens in the background. However, BadgerDB
+is intentionally lazy, trading write throughput for disk space among other
+things. Therefore it is expected that in case of late pruning, the disk space
+may stay constant or not be reclaimed for a very long time.
+
+This command gives operators manual control to release disk space during
+maintenance periods.
