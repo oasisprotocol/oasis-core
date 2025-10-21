@@ -97,8 +97,8 @@ func (impl *backendVRF) OnBeginBlock(
 			return fmt.Errorf("beacon: timekeeping broken")
 		}
 
-		var pendingMockEpoch *beacon.EpochTime
-		if pendingMockEpoch, err = state.PendingMockEpoch(ctx); err != nil {
+		pendingMockEpoch, err := state.PendingMockEpoch(ctx)
+		if err != nil {
 			return fmt.Errorf("beacon: failed to query mock epoch state: %w", err)
 		}
 		if pendingMockEpoch == nil {

@@ -173,7 +173,7 @@ func (r *registration) Run( // nolint: gocyclo
 	// Initialize base workload.
 	r.BaseWorkload.Init(consensus, sm, fundingAccount)
 
-	beacon := beacon.NewClient(conn)
+	beaconClient := beacon.NewClient(conn)
 	ctx := context.Background()
 	var err error
 
@@ -288,7 +288,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// XXX: currently only a single runtime is used throughout the test, could use more.
 		if i == 0 {
 			// Current epoch.
-			epoch, err := beacon.GetEpoch(ctx, consensusAPI.HeightLatest)
+			epoch, err := beaconClient.GetEpoch(ctx, consensusAPI.HeightLatest)
 			if err != nil {
 				return fmt.Errorf("failed to get current epoch: %w", err)
 			}
@@ -325,7 +325,7 @@ func (r *registration) Run( // nolint: gocyclo
 		selectedNode := selectedAcc.nodeIdentities[rng.Intn(registryNumNodesPerEntity)]
 
 		// Current epoch.
-		epoch, err := beacon.GetEpoch(loopCtx, consensusAPI.HeightLatest)
+		epoch, err := beaconClient.GetEpoch(loopCtx, consensusAPI.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch: %w", err)
 		}
@@ -333,7 +333,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// Randomized expiration.
 		// We should update for at minimum 2 epochs, as the epoch could change between querying it
 		// and actually performing the registration.
-		selectedNode.nodeDesc.Expiration = uint64(epoch) + 2 + uint64(rng.Intn(registryNodeMaxEpochUpdate-1))
+		selectedNode.nodeDesc.Expiration = epoch + 2 + beacon.EpochTime(rng.Intn(registryNodeMaxEpochUpdate-1))
 		sigNode, err := signNode(selectedNode.id, selectedNode.nodeDesc)
 		if err != nil {
 			return fmt.Errorf("failed to sign node: %w", err)

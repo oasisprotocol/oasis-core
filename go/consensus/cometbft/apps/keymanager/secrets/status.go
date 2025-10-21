@@ -75,7 +75,7 @@ func generateStatus( // nolint: gocyclo
 	// to the key manager status fields.
 nextNode:
 	for _, n := range nodes {
-		if n.IsExpired(uint64(epoch)) {
+		if n.IsExpired(epoch) {
 			continue
 		}
 		if !n.HasRoles(node.RoleKeyManager) {

@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -87,12 +88,19 @@ func TestElectCommittee(t *testing.T) {
 	require := require.New(t)
 
 	appState := api.NewMockApplicationState(&api.MockApplicationStateConfig{})
+
+	// Initialize staking state.
+	func() {
+		ctx := appState.NewContext(api.ContextEndBlock)
+		defer ctx.Close()
+
+		stakingState := stakingState.NewMutableState(ctx.State())
+		err := stakingState.SetConsensusParameters(ctx, &staking.ConsensusParameters{})
+		require.NoError(err, "setting staking consensus parameters should succeed")
+	}()
+
 	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
-
-	app := &Application{
-		state: appState,
-	}
 
 	schedulerParameters := &scheduler.ConsensusParameters{}
 
@@ -124,7 +132,7 @@ func TestElectCommittee(t *testing.T) {
 		kind              scheduler.CommitteeKind
 		nodes             []*node.Node
 		nodeStatuses      map[signature.PublicKey]*registry.NodeStatus
-		validatorEntities map[staking.Address]bool
+		validatorEntities map[staking.Address]struct{}
 		rt                registry.Runtime
 		shouldElect       bool
 	}{
@@ -133,7 +141,7 @@ func TestElectCommittee(t *testing.T) {
 			scheduler.KindComputeExecutor,
 			[]*node.Node{},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{},
 			false,
 		},
@@ -162,7 +170,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -187,7 +195,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -226,7 +234,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -265,7 +273,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -304,7 +312,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -352,7 +360,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -400,7 +408,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -449,9 +457,9 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{
-				staking.NewAddress(entityID1): true,
-				staking.NewAddress(entityID2): true,
+			map[staking.Address]struct{}{
+				staking.NewAddress(entityID1): {},
+				staking.NewAddress(entityID2): {},
 			},
 			registry.Runtime{
 				ID:   rtID1,
@@ -501,7 +509,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -552,7 +560,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -607,7 +615,7 @@ func TestElectCommittee(t *testing.T) {
 					FreezeEndTime: 42, // Frozen.
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -657,7 +665,7 @@ func TestElectCommittee(t *testing.T) {
 					},
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -707,7 +715,7 @@ func TestElectCommittee(t *testing.T) {
 					},
 				},
 			},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -760,7 +768,7 @@ func TestElectCommittee(t *testing.T) {
 				},
 			},
 			map[signature.PublicKey]*registry.NodeStatus{},
-			map[staking.Address]bool{},
+			map[staking.Address]struct{}{},
 			registry.Runtime{
 				ID:   rtID1,
 				Kind: registry.KindCompute,
@@ -791,19 +799,28 @@ func TestElectCommittee(t *testing.T) {
 			nodes = append(nodes, &nodeWithStatus{node, status})
 		}
 
-		err := app.electCommittee(
+		stakeAcc, err := stakingState.NewStakeAccumulatorCache(ctx)
+		require.NoError(err, "creating stake accumulator cache should not fail")
+
+		rewardableEntities := make(map[staking.Address]struct{})
+
+		entropy, err := beaconState.Beacon(ctx)
+		require.NoError(err, "Beacon")
+
+		err = electCommittee(
 			ctx,
 			epoch,
 			schedulerParameters,
-			beaconState,
 			beaconParameters,
 			registryParameters,
-			nil,
-			nil,
+			stakeAcc,
+			rewardableEntities,
 			tc.validatorEntities,
 			&tc.rt,
 			nodes,
 			tc.kind,
+			entropy,
+			nil,
 		)
 		require.NoError(err, "committee election should not fail")
 

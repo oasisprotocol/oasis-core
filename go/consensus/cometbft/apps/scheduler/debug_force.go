@@ -17,13 +17,13 @@ type debugForceElectState struct {
 	elected map[signature.PublicKey]bool
 }
 
-func (app *Application) debugForceElect(
+func debugForceElect(
 	ctx *api.Context,
 	schedulerParameters *scheduler.ConsensusParameters,
 	rt *registry.Runtime,
 	kind scheduler.CommitteeKind,
 	role scheduler.Role,
-	nodeList []*node.Node,
+	nodes []*node.Node,
 	wantedNodes int,
 ) (bool, []*scheduler.CommitteeNode, *debugForceElectState) {
 	elected := make([]*scheduler.CommitteeNode, 0, wantedNodes)
@@ -61,12 +61,12 @@ forceLoop:
 		}
 
 		// Ensure the node is currently registered and eligible.
-		for _, v := range nodeList {
+		for _, n := range nodes {
 			ctx.Logger().Debug("checking to see if this is the force elected node",
-				"iter_id", v.ID,
+				"iter_id", n.ID,
 				"node", nodeID,
 			)
-			if v.ID.Equal(nodeID) {
+			if n.ID.Equal(nodeID) {
 				// And force it into the committee.
 				elected = append(elected, &scheduler.CommitteeNode{
 					Role:      role,
@@ -86,7 +86,7 @@ forceLoop:
 		ctx.Logger().Error("available nodes can't fulfill forced committee members",
 			"kind", kind,
 			"runtime_id", rt.ID,
-			"nr_nodes", len(nodeList),
+			"nr_nodes", len(nodes),
 			"mandatory_nodes", len(toForce),
 		)
 		return false, nil, nil
@@ -95,7 +95,7 @@ forceLoop:
 	return true, elected, state
 }
 
-func (app *Application) debugForceRoles(
+func debugForceRoles(
 	ctx *api.Context,
 	state *debugForceElectState,
 	elected []*scheduler.CommitteeNode,

@@ -135,70 +135,70 @@ func TestGenerateStatus(t *testing.T) {
 		// Validator node.
 		{
 			ID:         memorySigner.NewTestSigner("node 0").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleValidator,
 			Runtimes:   nodeRuntimes[0:1],
 		},
 		// Expired.
 		{
 			ID:         memorySigner.NewTestSigner("node 1").Public(),
-			Expiration: uint64(epoch) - 1,
+			Expiration: epoch - 1,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[0:1],
 		},
 		// No runtimes.
 		{
 			ID:         memorySigner.NewTestSigner("node 2").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   []*node.Runtime{},
 		},
 		// Compute runtime.
 		{
 			ID:         memorySigner.NewTestSigner("node 3").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[6:7],
 		},
 		// The second key manager.
 		{
 			ID:         memorySigner.NewTestSigner("node 4").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[4:6],
 		},
 		// One key manager, incompatible versions.
 		{
 			ID:         memorySigner.NewTestSigner("node 5").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[0:4],
 		},
 		// One key manager, one version (secure = false).
 		{
 			ID:         memorySigner.NewTestSigner("node 6").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[0:1],
 		},
 		// One key manager, two versions (secure = true).
 		{
 			ID:         memorySigner.NewTestSigner("node 7").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[1:2],
 		},
 		// One key manager, two versions (secure = true).
 		{
 			ID:         memorySigner.NewTestSigner("node 8").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[2:4],
 		},
 		// Two key managers, two versions.
 		{
 			ID:         memorySigner.NewTestSigner("node 9").Public(),
-			Expiration: uint64(epoch),
+			Expiration: epoch,
 			Roles:      node.RoleKeyManager,
 			Runtimes:   nodeRuntimes[2:6],
 		},

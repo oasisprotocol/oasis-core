@@ -351,7 +351,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			DebugAllowUnroutableAddresses: viper.GetBool(CfgRegistryDebugAllowUnroutableAddresses),
 			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
-			MaxNodeExpiration:             viper.GetUint64(CfgRegistryMaxNodeExpiration),
+			MaxNodeExpiration:             beacon.EpochTime(viper.GetUint64(CfgRegistryMaxNodeExpiration)),
 			DisableRuntimeRegistration:    viper.GetBool(CfgRegistryDisableRuntimeRegistration),
 			EnableRuntimeGovernanceModels: make(map[registry.RuntimeGovernanceModel]bool),
 		},

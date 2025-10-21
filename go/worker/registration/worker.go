@@ -841,7 +841,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         identityPublic,
 		EntityID:   w.entityID,
-		Expiration: uint64(epoch) + 2,
+		Expiration: epoch + 2,
 		TLS: node.TLSInfo{
 			PubKey: w.identity.TLSSigner.Public(),
 		},
@@ -874,7 +874,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 			w.status.LastAttemptErrorMessage = err.Error()
 			w.status.LastAttempt = time.Now()
 			if w.status.Descriptor != nil {
-				if w.status.Descriptor.Expiration < uint64(epoch) {
+				if w.status.Descriptor.Expiration < epoch {
 					w.status.Descriptor = nil
 				}
 			}

@@ -266,7 +266,7 @@ func verifyNodeCountWithRoleForRuntime(
 
 	var curNodes int
 	for _, n := range nodes {
-		if n.ID.Equal(newNode.ID) || n.IsExpired(uint64(epoch)) || !n.HasRuntime(rt.ID) {
+		if n.ID.Equal(newNode.ID) || n.IsExpired(epoch) || !n.HasRuntime(rt.ID) {
 			// Skip existing node when re-registering.  Also skip
 			// expired nodes and nodes that haven't registered
 			// for the same runtime.

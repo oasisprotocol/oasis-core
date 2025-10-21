@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -30,7 +31,7 @@ func TestChangeParameters(t *testing.T) {
 	require.NoError(t, err, "setting consensus parameters should succeed")
 
 	// Prepare proposal.
-	maxNodeExpiration := uint64(20)
+	maxNodeExpiration := beacon.EpochTime(20)
 	changes := registry.ConsensusParameterChanges{
 		MaxNodeExpiration: &maxNodeExpiration,
 	}
@@ -90,7 +91,7 @@ func TestChangeParameters(t *testing.T) {
 	t.Run("invalid changes", func(t *testing.T) {
 		require := require.New(t)
 
-		var maxNodeExpiration uint64
+		var maxNodeExpiration beacon.EpochTime
 		changes := registry.ConsensusParameterChanges{
 			MaxNodeExpiration: &maxNodeExpiration,
 		}

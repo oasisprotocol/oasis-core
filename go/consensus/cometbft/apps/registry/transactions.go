@@ -266,7 +266,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 	// immediately expire.
 	//
 	// Yes, this is duplicated.  Blame the sanity checker.
-	if !ctx.IsInitChain() && newNode.Expiration <= uint64(epoch) {
+	if !ctx.IsInitChain() && newNode.Expiration <= epoch {
 		ctx.Logger().Debug("RegisterNode: node descriptor is expired",
 			"new_node", newNode,
 			"epoch", epoch,
@@ -274,15 +274,15 @@ func (app *Application) registerNode( // nolint: gocyclo
 		return registry.ErrNodeExpired
 	}
 
-	var additionalEpochs uint64
-	if newNode.Expiration > uint64(epoch) {
-		additionalEpochs = newNode.Expiration - uint64(epoch)
+	var additionalEpochs beacon.EpochTime
+	if newNode.Expiration > epoch {
+		additionalEpochs = newNode.Expiration - epoch
 	}
 
 	// Check if node exists.
 	existingNode, err := state.Node(ctx, newNode.ID)
 	isNewNode := err == registry.ErrNoSuchNode
-	isExpiredNode := err == nil && existingNode.IsExpired(uint64(epoch))
+	isExpiredNode := err == nil && existingNode.IsExpired(epoch)
 	if !isNewNode && err != nil {
 		// Something went horribly wrong, and we failed to query the node.
 		ctx.Logger().Error("RegisterNode: failed to query node",
@@ -300,7 +300,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		// Remaining epochs are credited so the node doesn't end up paying twice.
 		// NOTE: This assumes that changing runtimes is not allowed as otherwise we
 		//       would need to account this per-runtime.
-		remainingEpochs := existingNode.Expiration - uint64(epoch)
+		remainingEpochs := existingNode.Expiration - epoch
 		if additionalEpochs > remainingEpochs {
 			additionalEpochs = additionalEpochs - remainingEpochs
 		} else {

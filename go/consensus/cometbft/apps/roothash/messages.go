@@ -12,10 +12,12 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func fetchRuntimeMessages(
@@ -170,6 +172,23 @@ func (app *Application) processRuntimeMessages(
 
 func (app *Application) doBeforeSchedule(ctx *tmapi.Context, msg any) (any, error) {
 	epoch := msg.(beacon.EpochTime)
+
+	ok, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ctx.Logger().Debug("finalizing rounds before scheduling",
+			"epoch", epoch,
+		)
+
+		if err := app.tryFinalizeRounds(ctx); err != nil {
+			return nil, err
+		}
+		if err := app.processRoundTimeouts(ctx); err != nil {
+			return nil, err
+		}
+	}
 
 	ctx.Logger().Debug("processing liveness statistics before scheduling",
 		"epoch", epoch,

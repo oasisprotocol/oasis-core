@@ -88,9 +88,9 @@ func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtSta
 			if fault.Failures >= maxFailures {
 				// Make sure to freeze forever if this would otherwise overflow.
 				if epoch > registry.FreezeForever-slashParams.FreezeInterval {
-					status.FreezeEndTime = registry.FreezeForever
+					status.Freeze(registry.FreezeForever)
 				} else {
-					status.FreezeEndTime = epoch + slashParams.FreezeInterval
+					status.Freeze(epoch + slashParams.FreezeInterval)
 				}
 
 				// Slash if configured.

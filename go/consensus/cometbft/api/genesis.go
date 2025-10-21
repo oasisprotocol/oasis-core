@@ -129,7 +129,7 @@ func convertValidators(d *genesis.Document) ([]cmttypes.GenesisValidator, error)
 		}
 
 		// Skip expired nodes.
-		if openedNode.IsExpired(uint64(d.Beacon.Base)) {
+		if openedNode.IsExpired(d.Beacon.Base) {
 			continue
 		}
 

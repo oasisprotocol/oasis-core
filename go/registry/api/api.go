@@ -557,7 +557,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	// the consensus state.
 
 	// Ensure valid expiration.
-	maxExpiration := uint64(epoch) + params.MaxNodeExpiration
+	maxExpiration := epoch + params.MaxNodeExpiration
 	if params.MaxNodeExpiration > 0 && n.Expiration > maxExpiration {
 		logger.Error("RegisterNode: node expiration greater than max allowed expiration",
 			"node", n,
@@ -1063,7 +1063,7 @@ func VerifyNodeUpdate(
 	}
 
 	// Following checks are only done for active nodes.
-	if currentNode.IsExpired(uint64(epoch)) {
+	if currentNode.IsExpired(epoch) {
 		return nil
 	}
 
@@ -1406,7 +1406,7 @@ type ConsensusParameters struct {
 
 	// MaxNodeExpiration is the maximum number of epochs relative to the epoch
 	// at registration time that a single node registration is valid for.
-	MaxNodeExpiration uint64 `json:"max_node_expiration,omitempty"`
+	MaxNodeExpiration beacon.EpochTime `json:"max_node_expiration,omitempty"`
 
 	// EnableRuntimeGovernanceModels is a set of enabled runtime governance models.
 	EnableRuntimeGovernanceModels map[RuntimeGovernanceModel]bool `json:"enable_runtime_governance_models,omitempty"`
@@ -1430,7 +1430,7 @@ type ConsensusParameterChanges struct {
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 
 	// MaxNodeExpiration is the maximum node expiration.
-	MaxNodeExpiration *uint64 `json:"max_node_expiration,omitempty"`
+	MaxNodeExpiration *beacon.EpochTime `json:"max_node_expiration,omitempty"`
 
 	// EnableRuntimeGovernanceModels are the new enabled runtime governance models.
 	EnableRuntimeGovernanceModels map[RuntimeGovernanceModel]bool `json:"enable_runtime_governance_models,omitempty"`
