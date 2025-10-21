@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
@@ -121,12 +122,7 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures) error {
 // ContainsEnclave returns true iff the allowed enclave list in SGX constraints contain the given
 // enclave identity.
 func (sc *SGXConstraints) ContainsEnclave(eid sgx.EnclaveIdentity) bool {
-	for _, e := range sc.Enclaves {
-		if eid == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(sc.Enclaves, eid)
 }
 
 const (
