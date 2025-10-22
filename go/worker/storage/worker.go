@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -109,6 +110,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
 			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
 		},
+		max(config.GlobalConfig.Runtime.Prune.Interval, time.Second),
 	)
 	if err != nil {
 		return err

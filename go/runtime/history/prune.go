@@ -21,21 +21,31 @@ const (
 	maxBatchSize = 64
 )
 
+// TODO:
+// If whenever we (re)indexed the runtime light history we also have a runtime
+// state, then we should consider moving this pruner to go/worker/storage
+// and handle state and light history pruning in the same place.
+//
+// This would also solve the problem mentioned in one of the previous commits
+// where state pruning not so robustly relies on the earliest light history block.
+//
+// Finally, by moving this there we could get rid of pruning factories and no-op
+// pruner. Both are anti-patterns. The former is breaking simplicity and clarity,
+// the later is responsible for confusing logs in case of no-op pruner where one
+// would expect none.
+
 // PrunerFactory is the runtime history pruner factory interface.
 type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
-// PruneHandler is a handler that is called when rounds are pruned
+// PruneHandler is a handler that is called before rounds are pruned
 // from history.
 type PruneHandler interface {
-	// Prune is called before the specified rounds are pruned.
-	//
-	// If an error is returned, pruning is aborted and the rounds are
-	// not pruned from history.
+	// CanPruneRuntime is called before to check if the specified round can be pruned.
 	//
 	// Note that this can be called for the same round multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(rounds []uint64) error
+	CanPruneRuntime(rounds []uint64) error
 }
 
 // Pruner is the runtime history pruner interface.
@@ -142,8 +152,8 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 		defer p.mu.RUnlock()
 
 		for _, ph := range p.handlers {
-			if err := ph.Prune(pruned); err != nil {
-				p.logger.Error("prune handler failed, aborting prune",
+			if err := ph.CanPruneRuntime(pruned); err != nil {
+				p.logger.Debug("prune handler failed, aborting prune",
 					"err", err,
 					"round_count", len(pruned),
 					"round_min", pruned[0],
