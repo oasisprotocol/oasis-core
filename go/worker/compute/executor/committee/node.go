@@ -343,11 +343,13 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		return
 	}
 
+	// TEMPORARY: Enable backup workers.
+	//
 	// Only executor workers are permitted to schedule batches.
-	if !n.epoch.IsExecutorWorker() {
-		n.logger.Debug("not scheduling, not an executor")
-		return
-	}
+	// if !n.epoch.IsExecutorWorker() {
+	// 	n.logger.Debug("not scheduling, not an executor")
+	// 	return
+	// }
 
 	// If the next block will be an epoch transition block, do not propose anything as it will be
 	// reverted anyway (since the committee will change).
@@ -360,22 +362,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	}
 	if epochState != nil && epochState.Height == n.blockInfo.ConsensusBlock.Height+1 {
 		n.logger.Debug("not scheduling, next consensus block is an epoch transition")
-		return
-	}
-
-	// Fetch incoming message queue metadata to see if there's any queued messages.
-	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(ctx, &roothash.RuntimeRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		// We make the check at the latest height even though we will later only look at the last
-		// height. This will make sure that any messages eventually get processed even if there are
-		// no other runtime transactions being sent. In the worst case this will result in an empty
-		// block being generated.
-		Height: consensus.HeightLatest,
-	})
-	if err != nil {
-		n.logger.Error("failed to fetch incoming runtime message queue metadata",
-			"err", err,
-		)
 		return
 	}
 
@@ -394,24 +380,10 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 
 	// Ask the transaction pool to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
-	batch := n.commonNode.TxPool.GetSchedulingSuggestion(int(rtInfo.Features.ScheduleControl.InitialBatchSize))
-	switch {
-	case force:
-		// Batch flush timeout expired, schedule empty batch.
-	case len(batch) > 0:
-		// We have some transactions, schedule batch.
-	case len(n.roundResults.Messages) > 0:
-		// We have runtime message results (and batch timeout expired), schedule batch.
-	case inMsgMeta.Size > 0:
-		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
-	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
-		// This is the runtime genesis, schedule batch.
-	case n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
-		// No block in this epoch processed by runtime yet, schedule batch.
-	default:
+	batch := n.commonNode.TxPool.All()
+	if len(batch) == 0 {
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
-		n.commonNode.TxPool.FinishScheduling()
 		return
 	}
 
@@ -428,11 +400,9 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 
 	// Request the worker host to schedule a batch. This is done in a separate
 	// goroutine so that the runtime worker can continue processing events.
-	go func() {
-		defer close(done)
-		n.startSchedulingBatch(ctx, batch)
-		n.commonNode.TxPool.FinishScheduling()
-	}()
+
+	defer close(done)
+	n.startSchedulingBatch(ctx, batch)
 }
 
 func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposal) error {
@@ -455,63 +425,58 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 	return nil
 }
 
-func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueueMeta) {
-	// This method runs within its own goroutine and is always stopped before the runtime
-	// worker finishes. Therefore, it is safe to read local round variables (block info, ...).
-	n.logger.Debug("scheduling batch",
-		"batch_size", len(batch),
+func (n *Node) startSchedulingBatch(ctx context.Context, batch [][]byte) {
+	n.logger.Debug("scheduling txs",
+		"total", len(batch),
 	)
 
-	initialBatch := make([][]byte, 0, len(batch))
-	for _, tx := range batch {
-		initialBatch = append(initialBatch, tx.Raw())
-	}
-
-	// Ask the runtime to execute the batch.
-	rsp, err := n.runtimeExecuteTxBatch(
-		ctx,
-		n.rt,
-		protocol.ExecutionModeSchedule,
-		n.blockInfo.Epoch,
-		n.blockInfo.ConsensusBlock,
-		n.blockInfo.RuntimeBlock,
-		n.rtState,
-		n.roundResults,
-		hash.Hash{}, // IORoot is ignored as it is yet to be determined.
-		initialBatch,
-	)
-	if err != nil {
-		n.logger.Error("runtime batch execution failed",
-			"err", err,
+	for i, tx := range batch {
+		n.logger.Debug("scheduling txs",
+			"index", i,
+			"hash", hash.NewFromBytes(tx),
 		)
-		// Notify the round worker that the execution failed.
-		n.processedBatchCh <- nil
-		return
 	}
 
-	// Remove any rejected transactions.
-	n.commonNode.TxPool.RejectTxs(rsp.TxRejectHashes)
-	// Mark any proposed transactions.
-	_, _ = n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
+	for i, tx := range batch {
+		n.logger.Debug("scheduling tx",
+			"total", len(batch),
+			"index", i,
+			"hash", hash.NewFromBytes(tx),
+		)
 
-	// Create new proposal.
-	proposal := commitment.Proposal{
-		NodeID: n.commonNode.Identity.NodeSigner.Public(),
-		Header: commitment.ProposalHeader{
-			Round:        n.blockInfo.RuntimeBlock.Header.Round + 1,
-			PreviousHash: n.blockInfo.RuntimeBlock.Header.EncodedHash(),
-			BatchHash:    rsp.TxInputRoot,
-		},
-		Batch: rsp.TxHashes,
+		initialBatch := [][]byte{tx}
+
+		// Ask the runtime to execute the batch.
+		_, err := n.runtimeExecuteTxBatch(
+			ctx,
+			n.rt,
+			protocol.ExecutionModeSchedule,
+			n.blockInfo.Epoch,
+			n.blockInfo.ConsensusBlock,
+			n.blockInfo.RuntimeBlock,
+			n.rtState,
+			n.roundResults,
+			hash.Hash{}, // IORoot is ignored as it is yet to be determined.
+			initialBatch,
+		)
+		if err != nil {
+			n.logger.Error("runtime batch execution failed",
+				"err", err,
+			)
+			// Notify the round worker that the execution failed.
+			n.processedBatchCh <- nil
+
+			n.logger.Debug("scheduling txs errored")
+			return
+		}
+		n.logger.Debug("runtime batch execution succeeded")
 	}
 
-	// Submit response to the round worker.
-	n.processedBatchCh <- &processedBatch{
-		proposal:        &proposal,
-		rank:            n.rank,
-		computed:        &rsp.Batch,
-		txInputWriteLog: rsp.TxInputWriteLog,
-	}
+	n.logger.Debug("scheduling tx finished",
+		"total", len(batch),
+	)
+
+	n.transitionState(StateWaitingForBatch{})
 }
 
 func (n *Node) runtimeExecuteTxBatch(
@@ -1407,12 +1372,14 @@ func (n *Node) roundWorker(ctx context.Context) {
 		)
 		return
 	}
-	if !n.epoch.IsExecutorMember() {
-		n.logger.Debug("skipping round, not an executor member",
-			"round", round,
-		)
-		return
-	}
+	// TEMPORARY: Enable backup workers.
+	//
+	// if !n.epoch.IsExecutorMember() {
+	// 	n.logger.Debug("skipping round, not an executor member",
+	// 		"round", round,
+	// 	)
+	// 	return
+	// }
 
 	// This should never fail as we only register to be an executor worker
 	// once the hosted runtime is ready.
@@ -1445,6 +1412,9 @@ func (n *Node) roundWorker(ctx context.Context) {
 	if rank, ok := n.committee.SchedulerRank(round, id); ok {
 		n.rank = rank
 	}
+
+	// TEMPORARY: Disable rank-based scheduling.
+	n.rank = 0
 
 	n.logger.Debug("node is an executor member",
 		"round", round,
