@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
@@ -51,6 +52,7 @@ type runtimeHostHandler struct {
 	env       RuntimeHostHandlerEnvironment
 	runtime   Runtime
 	consensus consensus.Service
+	logger    *logging.Logger
 }
 
 // NewRuntimeHostHandler returns a protocol handler that provides the required host methods for the
@@ -66,6 +68,7 @@ func NewRuntimeHostHandler(
 		env:       env,
 		runtime:   runtime,
 		consensus: consensus,
+		logger:    logging.GetLogger("rhp handler"),
 	}
 }
 
@@ -79,39 +82,51 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	switch {
 	case rq.HostRPCCallRequest != nil:
 		// RPC.
+		h.logger.Debug("handling host RPC call")
 		rsp.HostRPCCallResponse, err = h.handleHostRPCCall(ctx, rq.HostRPCCallRequest)
 	case rq.HostSubmitPeerFeedbackRequest != nil:
 		// Peer feedback.
+		h.logger.Debug("handling host submit peer feedback")
 		rsp.HostSubmitPeerFeedbackResponse, err = h.handleHostSubmitPeerFeedback(rq.HostSubmitPeerFeedbackRequest)
 	case rq.HostStorageSyncRequest != nil:
 		// Storage sync.
+		h.logger.Debug("handling host storage sync")
 		rsp.HostStorageSyncResponse, err = h.handleHostStorageSync(ctx, rq.HostStorageSyncRequest)
 	case rq.HostLocalStorageGetRequest != nil:
 		// Local storage get.
+		h.logger.Debug("handling host local storage get")
 		rsp.HostLocalStorageGetResponse, err = h.handleHostLocalStorageGet(rq.HostLocalStorageGetRequest)
 	case rq.HostLocalStorageSetRequest != nil:
 		// Local storage set.
+		h.logger.Debug("handling host local storage set")
 		rsp.HostLocalStorageSetResponse, err = h.handleHostLocalStorageSet(rq.HostLocalStorageSetRequest)
 	case rq.HostFetchConsensusBlockRequest != nil:
 		// Consensus light client.
+		h.logger.Debug("handling host fetch consensus block")
 		rsp.HostFetchConsensusBlockResponse, err = h.handleHostFetchConsensusBlock(ctx, rq.HostFetchConsensusBlockRequest)
 	case rq.HostFetchConsensusEventsRequest != nil:
 		// Consensus events.
+		h.logger.Debug("handling host fetch consensus events")
 		rsp.HostFetchConsensusEventsResponse, err = h.handleHostFetchConsensusEvents(ctx, rq.HostFetchConsensusEventsRequest)
 	case rq.HostFetchGenesisHeightRequest != nil:
 		// Consensus genesis height.
+		h.logger.Debug("handling host fetch genesis height")
 		rsp.HostFetchGenesisHeightResponse, err = h.handleHostFetchGenesisHeight(ctx)
 	case rq.HostFetchTxBatchRequest != nil:
 		// Transaction pool.
+		h.logger.Debug("handling host fetch tx batch")
 		rsp.HostFetchTxBatchResponse, err = h.handleHostFetchTxBatch(rq.HostFetchTxBatchRequest)
 	case rq.HostFetchBlockMetadataTxRequest != nil:
 		// Block metadata.
+		h.logger.Debug("handling host fetch block metadata tx")
 		rsp.HostFetchBlockMetadataTxResponse, err = h.handleHostFetchBlockMetadataTx(ctx, rq.HostFetchBlockMetadataTxRequest)
 	case rq.HostProveFreshnessRequest != nil:
 		// Prove freshness.
+		h.logger.Debug("handling host prove freshness")
 		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)
 	case rq.HostIdentityRequest != nil:
 		// Host identity.
+		h.logger.Debug("handling host identity")
 		rsp.HostIdentityResponse, err = h.handleHostIdentity()
 	default:
 		err = fmt.Errorf("method not supported")
