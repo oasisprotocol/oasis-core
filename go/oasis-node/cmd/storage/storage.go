@@ -26,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -385,6 +386,16 @@ func flattenBadgerDB(db *badgerDB.DB, logger *logging.Logger) error {
 }
 
 func compactConsensusNodeDB(dataDir string) error {
+	ndb, close, err := openConsensusNodeDB(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to open consensus NodeDB: %w", err)
+	}
+	defer close()
+
+	return ndb.Compact()
+}
+
+func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 	ldb, ndb, _, err := abci.InitStateStorage(
 		&abci.ApplicationConfig{
 			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
@@ -395,15 +406,17 @@ func compactConsensusNodeDB(dataDir string) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize ABCI storage backend: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize ABCI storage backend: %w", err)
 	}
 
-	// Close the resources. Both Close and Cleanup only close NodeDB.
-	// Closing both here, to prevent resource leaks if things change in the future.
-	defer ndb.Close()
-	defer ldb.Cleanup()
+	// Close and Cleanup both only close NodeDB. Still closing both explicitly,
+	// to prevent resource leaks if things change in the future.
+	close := func() {
+		ndb.Close()
+		ldb.Cleanup()
+	}
 
-	return ndb.Compact()
+	return ndb, close, nil
 }
 
 // Register registers the client sub-command and all of its children.
