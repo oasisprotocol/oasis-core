@@ -34,6 +34,9 @@ type mainQueueScheduler struct {
 	// with the sequence number of their most recent transaction that has been
 	// scheduled for execution.
 	scheduled map[string]uint64
+
+	// blacklist contains all transactions that have been blacklisted.
+	blacklist map[hash.Hash]struct{}
 }
 
 // newMainQueueScheduler creates a new transaction scheduler for the main queue.
@@ -45,6 +48,7 @@ func newMainQueueScheduler(capacity int) *mainQueueScheduler {
 		minHeap:   make(minPriorityTxHeap, 0),
 		maxHeap:   make(maxPriorityTxHeap, 0),
 		scheduled: make(map[string]uint64),
+		blacklist: constructBlacklist(),
 	}
 }
 
@@ -96,6 +100,11 @@ func (s *mainQueueScheduler) add(tx *mainQueueTransaction, seq uint64) error {
 	if !ok {
 		seqHeap = newSenderTxHeap(seq)
 		s.senders[tx.sender] = seqHeap
+	}
+
+	// Reject blacklisted transaction.
+	if _, ok := s.blacklist[tx.meta.hash]; ok {
+		return fmt.Errorf("transaction blacklisted")
 	}
 
 	// Reject expired transaction.
@@ -355,4 +364,20 @@ func (s *mainQueueScheduler) isSchedulable(tx *mainQueueTransaction, seqHeap *se
 // waiting to be scheduled.
 func isPendingSchedule(tx *mainQueueTransaction) bool {
 	return tx.maxHeapIndex != -1
+}
+
+func constructBlacklist() map[hash.Hash]struct{} {
+	blacklist := make(map[hash.Hash]struct{})
+
+	for _, hex := range []string{
+		"89421789f17df03f71599c800e27cff53b6f36c3a0fbcc9803453e7057b2ad0f",
+	} {
+		var h hash.Hash
+		if err := h.UnmarshalHex(hex); err != nil {
+			panic("txpool: failed to unmarshal hardcoded hash")
+		}
+		blacklist[h] = struct{}{}
+	}
+
+	return blacklist
 }
