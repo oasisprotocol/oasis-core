@@ -2,6 +2,7 @@ package committee
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -461,6 +462,13 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 	n.logger.Debug("scheduling batch",
 		"batch_size", len(batch),
 	)
+	for i, meta := range batch {
+		n.logger.Debug("scheduling batch tx",
+			"position", i,
+			"hash", meta.Hash(),
+			"raw", base64.StdEncoding.EncodeToString(meta.Raw()),
+		)
+	}
 
 	initialBatch := make([][]byte, 0, len(batch))
 	for _, tx := range batch {
