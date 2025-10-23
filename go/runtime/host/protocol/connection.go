@@ -337,6 +337,7 @@ func (c *connection) workerOutgoing() {
 				)
 			}
 			// Outgoing message, send it.
+			c.logger.Debug("outgoing RHP message", "message", msg)
 			if err := c.codec.Write(msg); err != nil {
 				c.logger.Error("error while sending message",
 					"err", err,
@@ -441,6 +442,7 @@ func (c *connection) workerIncoming() {
 			)
 			break
 		}
+		c.logger.Debug("incoming RHP message", "message", message)
 
 		// Handle message in a separate goroutine.
 		wg.Add(1)
