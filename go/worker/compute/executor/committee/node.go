@@ -394,7 +394,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 
 	// Ask the transaction pool to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
-	batch := n.commonNode.TxPool.GetSchedulingSuggestion(int(rtInfo.Features.ScheduleControl.InitialBatchSize))
+	batch := n.commonNode.TxPool.GetSchedulingSuggestion(2)
 	switch {
 	case force:
 		// Batch flush timeout expired, schedule empty batch.
