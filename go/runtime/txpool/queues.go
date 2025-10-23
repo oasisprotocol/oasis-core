@@ -16,6 +16,7 @@ type TxQueueMeta struct {
 	// receiving from txSync) leave this in its default value. Transactions from those sources, however, only move
 	// through a limited area in the tx pool.
 	firstSeen time.Time
+	sender    string
 }
 
 // Raw returns the raw transaction data.
