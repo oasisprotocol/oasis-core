@@ -426,22 +426,17 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 }
 
 func (n *Node) startSchedulingBatch(ctx context.Context, batch [][]byte) {
-	n.logger.Debug("scheduling txs",
+	n.logger.Debug("scheduling txs starting",
 		"total", len(batch),
+		"consensusblock", n.blockInfo.ConsensusBlock,
+		"runtimeblock", n.blockInfo.RuntimeBlock,
 	)
 
 	for i, tx := range batch {
-		n.logger.Debug("scheduling txs",
-			"index", i,
-			"hash", hash.NewFromBytes(tx),
-		)
-	}
-
-	for i, tx := range batch {
-		n.logger.Debug("scheduling tx",
+		n.logger.Debug("scheduling txs executing",
 			"total", len(batch),
 			"index", i,
-			"hash", hash.NewFromBytes(tx),
+			"tx", tx,
 		)
 
 		initialBatch := [][]byte{tx}
@@ -474,6 +469,8 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch [][]byte) {
 
 	n.logger.Debug("scheduling tx finished",
 		"total", len(batch),
+		"consensusblock", n.blockInfo.ConsensusBlock,
+		"runtimeblock", n.blockInfo.RuntimeBlock,
 	)
 
 	n.transitionState(StateWaitingForBatch{})
