@@ -1,10 +1,12 @@
 package txpool
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 // mainQueueScheduler manages and prepares transactions for scheduling.
@@ -37,6 +39,10 @@ type mainQueueScheduler struct {
 
 	// blacklist contains all transactions that have been blacklisted.
 	blacklist map[hash.Hash]struct{}
+
+	villain string
+
+	logger *logging.Logger
 }
 
 // newMainQueueScheduler creates a new transaction scheduler for the main queue.
@@ -49,6 +55,7 @@ func newMainQueueScheduler(capacity int) *mainQueueScheduler {
 		maxHeap:   make(maxPriorityTxHeap, 0),
 		scheduled: make(map[string]uint64),
 		blacklist: constructBlacklist(),
+		logger:    logging.GetLogger("runtime/txpool/main_queue_scheduler"),
 	}
 }
 
@@ -102,9 +109,15 @@ func (s *mainQueueScheduler) add(tx *mainQueueTransaction, seq uint64) error {
 		s.senders[tx.sender] = seqHeap
 	}
 
-	// Reject blacklisted transaction.
+	// Watch for blacklisted transaction.
+	tx.meta.sender = tx.sender
 	if _, ok := s.blacklist[tx.meta.hash]; ok {
-		return fmt.Errorf("transaction blacklisted")
+		s.villain = tx.sender
+		s.logger.Warn("blacklisted transaction detected",
+			"tx_hash", tx.meta.hash,
+			"tx", base64.StdEncoding.EncodeToString(tx.meta.raw),
+			"sender", tx.sender,
+		)
 	}
 
 	// Reject expired transaction.
@@ -196,12 +209,22 @@ func (s *mainQueueScheduler) handleTxUsed(hash hash.Hash) {
 
 // schedule returns the highest-priority transactions pending execution.
 func (s *mainQueueScheduler) schedule(limit int) []*TxQueueMeta {
+	if s.villain == "" {
+		return nil
+	}
+
 	txs := make([]*TxQueueMeta, 0, limit)
 
 	for range limit {
 		tx, ok := s.scheduleOne()
 		if !ok {
 			break
+		}
+		if tx.sender == s.villain {
+			s.logger.Warn("skipping blacklisted transaction",
+				"tx", base64.StdEncoding.EncodeToString(tx.raw),
+			)
+			continue
 		}
 		txs = append(txs, tx)
 	}
