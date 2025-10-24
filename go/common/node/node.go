@@ -573,7 +573,7 @@ func HashRAK(rak signature.PublicKey) hash.Hash {
 }
 
 // Verify verifies the node's TEE capabilities, at the provided timestamp and height.
-func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey) error {
+func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey, isFeatureVersion242 bool) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		// Parse SGX remote attestation.
@@ -590,7 +590,7 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 		if err := cbor.Unmarshal(constraints, &sc); err != nil {
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
-		if err := sc.ValidateBasic(teeCfg); err != nil {
+		if err := sc.ValidateBasic(teeCfg, isFeatureVersion242); err != nil {
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
 
