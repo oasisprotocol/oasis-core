@@ -1,10 +1,12 @@
 package txpool
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 // mainQueueScheduler manages and prepares transactions for scheduling.
@@ -34,6 +36,8 @@ type mainQueueScheduler struct {
 	// with the sequence number of their most recent transaction that has been
 	// scheduled for execution.
 	scheduled map[string]uint64
+
+	logger *logging.Logger
 }
 
 // newMainQueueScheduler creates a new transaction scheduler for the main queue.
@@ -45,6 +49,7 @@ func newMainQueueScheduler(capacity int) *mainQueueScheduler {
 		minHeap:   make(minPriorityTxHeap, 0),
 		maxHeap:   make(maxPriorityTxHeap, 0),
 		scheduled: make(map[string]uint64),
+		logger:    logging.GetLogger("txpool/main_queue_scheduler"),
 	}
 }
 
@@ -92,10 +97,28 @@ func (s *mainQueueScheduler) drain() []*TxQueueMeta {
 
 // add adds the given transaction to the scheduler.
 func (s *mainQueueScheduler) add(tx *mainQueueTransaction, seq uint64) error {
+	sender := hex.EncodeToString([]byte(tx.sender))
+
+	s.logger.Debug("transaction received",
+		"tx", tx.meta.hash,
+		"sender", sender,
+		"seq", tx.seq,
+	)
+
 	seqHeap, ok := s.senders[tx.sender]
 	if !ok {
 		seqHeap = newSenderTxHeap(seq)
 		s.senders[tx.sender] = seqHeap
+	}
+
+	// Reject blocked senders.
+	if sender == "00fc015589caca7446aa5ca022084698c8269ec2a4" {
+		s.logger.Warn("transaction sender blocked",
+			"tx", tx.meta.hash,
+			"sender", sender,
+			"seq", tx.seq,
+		)
+		return fmt.Errorf("transaction sender blocked")
 	}
 
 	// Reject expired transaction.
