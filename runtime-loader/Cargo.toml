@@ -12,7 +12,7 @@ tokio = { version = "1.44", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aesm-client = { version = "0.6.0", features = ["sgxs"] }
-enclave-runner = "0.7.0"
+enclave-runner = "0.7.2"
 sgxs-loaders = "0.5.0"
 
 [[bin]]
