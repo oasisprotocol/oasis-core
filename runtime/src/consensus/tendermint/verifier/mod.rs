@@ -747,7 +747,7 @@ impl Verifier {
                             &mut cache,
                             &mut instance,
                             consensus_block,
-                            runtime_header,
+                            *runtime_header,
                             epoch,
                         ))
                         .map_err(|_| Error::Internal)?;
@@ -758,7 +758,7 @@ impl Verifier {
                             &mut cache,
                             &mut instance,
                             consensus_block,
-                            runtime_header,
+                            *runtime_header,
                             epoch,
                         ))
                         .map_err(|_| Error::Internal)?;
