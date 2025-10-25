@@ -211,7 +211,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Registry(Versioned::new(
             0,
-            RegistryMessage::UpdateRuntime(args.update_runtime),
+            RegistryMessage::UpdateRuntime(Box::new(args.update_runtime)),
         )));
 
         ctx.parent.core.runtime_state.insert(

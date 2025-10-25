@@ -927,6 +927,18 @@ impl Runtime {
     }
 }
 
+impl cbor::Encode for Box<Runtime> {
+    fn into_cbor_value(self) -> cbor::Value {
+        (*self).into_cbor_value()
+    }
+}
+
+impl cbor::Decode for Box<Runtime> {
+    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
+        Runtime::try_from_cbor_value(value).map(Box::new)
+    }
+}
+
 /// Runtime genesis information that is used to initialize runtime state in the first block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct RuntimeGenesis {
