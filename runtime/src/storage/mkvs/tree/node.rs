@@ -17,6 +17,7 @@ pub trait Node {
     /// Recompute the node's hash.
     fn update_hash(&mut self);
     /// Duplicate the node but include only hash references.
+    #[allow(dead_code)]
     fn extract(&self) -> NodeRef;
 }
 
@@ -181,6 +182,7 @@ impl NodePointer {
     // Make deep copy of the Pointer to LeafNode excluding LRU and DBInternal.
     //
     // Panics, if it's called on non-leaf node pointer.
+    #[allow(dead_code)]
     fn copy_leaf_ptr(&self) -> NodePtrRef {
         if !self.has_node() {
             return NodePointer::null_ptr();
@@ -368,7 +370,7 @@ pub trait DepthTrait {
 impl DepthTrait for Depth {
     fn to_bytes(&self) -> usize {
         let size = self / 8;
-        if self % 8 != 0 {
+        if !self.is_multiple_of(8) {
             (size + 1) as usize
         } else {
             size as usize
@@ -419,7 +421,7 @@ impl KeyTrait for Key {
         prefix.clone_from_slice(&self[0..split_point.to_bytes()]);
 
         // Clean the remainder of the byte.
-        if split_point % 8 != 0 {
+        if !split_point.is_multiple_of(8) {
             prefix[prefix_len - 1] &= 0xff << (8 - split_point % 8)
         }
 
@@ -427,7 +429,7 @@ impl KeyTrait for Key {
             // First set the left chunk of the byte
             suffix[i] = self[i + split_point as usize / 8] << (split_point % 8);
             // ...and the right chunk, if we haven't reached the end of k yet.
-            if split_point % 8 != 0 && i + split_point as usize / 8 + 1 != self.len() {
+            if !split_point.is_multiple_of(8) && i + split_point as usize / 8 + 1 != self.len() {
                 suffix[i] |=
                     self[i + split_point as usize / 8 + 1] >> (8 - split_point as usize % 8);
             }
@@ -438,7 +440,7 @@ impl KeyTrait for Key {
 
     fn merge(&self, key_len: Depth, k2: &Key, k2_len: Depth) -> Key {
         let mut key_len_bytes = (key_len as usize) / 8;
-        if key_len % 8 != 0 {
+        if !key_len.is_multiple_of(8) {
             key_len_bytes += 1;
         }
 
@@ -447,7 +449,7 @@ impl KeyTrait for Key {
 
         for i in 0..k2.len() {
             // First set the right chunk of the previous byte
-            if key_len % 8 != 0 && key_len_bytes > 0 {
+            if !key_len.is_multiple_of(8) && key_len_bytes > 0 {
                 new_key[key_len_bytes + i - 1] |= k2[i] >> (key_len % 8);
             }
             // ...and the next left chunk, if we haven't reached the end of newKey

@@ -80,7 +80,7 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     }
 
     /// Return an iterator over the tree.
-    pub fn iter(&self) -> OverlayTreeIterator<T> {
+    pub fn iter(&self) -> OverlayTreeIterator<'_, T> {
         OverlayTreeIterator::new(self)
     }
 

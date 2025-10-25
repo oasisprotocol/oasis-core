@@ -717,7 +717,7 @@ impl Verifier {
         let verified_block = self.verify_to_target(HEIGHT_LATEST, &mut cache, &mut instance)?;
 
         self.trusted_state_store
-            .save(self.runtime_version, &instance.state.light_store);
+            .save(self.runtime_version, &*instance.state.light_store);
 
         let mut last_saved_verified_block_height =
             verified_block.signed_header.header.height.value();
@@ -790,7 +790,7 @@ impl Verifier {
                 let last_height = last_verified_block.signed_header.header.height.into();
                 if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
                     self.trusted_state_store
-                        .save(self.runtime_version, &instance.state.light_store);
+                        .save(self.runtime_version, &*instance.state.light_store);
                     last_saved_verified_block_height = last_height;
                 }
             }

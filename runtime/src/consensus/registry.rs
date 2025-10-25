@@ -304,7 +304,7 @@ impl RolesMask {
 
     // Bits of the Oasis node roles bitmask that are reserved and must not be used.
     pub const ROLES_RESERVED: RolesMask =
-        RolesMask(u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_3.0);
+        RolesMask(!((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_3.0);
 
     /// Whether the roles mask contains any of the specified roles.
     pub fn contains(&self, role: RolesMask) -> bool {

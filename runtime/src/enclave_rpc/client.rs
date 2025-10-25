@@ -210,7 +210,7 @@ impl RpcClient {
         method: &'static str,
         args: C,
         nodes: Vec<signature::PublicKey>,
-    ) -> Response<O>
+    ) -> Response<'_, O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -225,7 +225,7 @@ impl RpcClient {
         method: &'static str,
         args: C,
         nodes: Vec<signature::PublicKey>,
-    ) -> Response<O>
+    ) -> Response<'_, O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -240,7 +240,7 @@ impl RpcClient {
         args: C,
         kind: types::Kind,
         nodes: Vec<signature::PublicKey>,
-    ) -> Response<O>
+    ) -> Response<'_, O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,

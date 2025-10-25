@@ -1,7 +1,7 @@
 //! SGX runtime loader.
 use std::{
     future::Future,
-    io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
+    io::{Error as IoError, Result as IoResult},
     pin::Pin,
 };
 
@@ -55,7 +55,7 @@ impl UsercallExtension for HostService {
                 }
                 _ => {
                     // Unknown destination and network access is not allowed, reject.
-                    Err(IoError::new(IoErrorKind::Other, "invalid destination"))
+                    Err(IoError::other("invalid destination"))
                 }
             }
         }

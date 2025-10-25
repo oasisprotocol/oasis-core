@@ -52,7 +52,7 @@ impl TCBBundle {
 }
 
 #[inline]
-fn encode_raw_value(value: &Box<RawValue>) -> Vec<u8> {
+fn encode_raw_value(value: &RawValue) -> Vec<u8> {
     value.get().as_bytes().to_owned()
 }
 
@@ -99,7 +99,7 @@ fn open_signed_tcb<'a, T: serde::Deserialize<'a>>(
         .map_err(|_| Error::TCBVerificationFailed)?;
 
     // Convert IEEE P1363 ECDSA signature to RFC5480 ASN.1 representation.
-    if sig.len() % 2 != 0 {
+    if !sig.len().is_multiple_of(2) {
         return Err(Error::TCBVerificationFailed);
     }
 
@@ -138,8 +138,10 @@ impl SignedTCBInfo {
 /// TCB info identifier.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
 pub enum TCBInfoID {
-    SGX,
-    TDX,
+    #[serde(rename = "SGX")]
+    Sgx,
+    #[serde(rename = "TDX")]
+    Tdx,
     #[serde(other)]
     #[default]
     Invalid,
@@ -191,8 +193,8 @@ impl TCBInfo {
         policy: &QuotePolicy,
     ) -> Result<(), Error> {
         match (self.id, tee_type) {
-            (TCBInfoID::SGX, TeeType::SGX) => {}
-            (TCBInfoID::TDX, TeeType::TDX) => {}
+            (TCBInfoID::Sgx, TeeType::Sgx) => {}
+            (TCBInfoID::Tdx, TeeType::Tdx) => {}
             _ => {
                 return Err(Error::TCBParseError(anyhow::anyhow!(
                     "unexpected TCB info identifier"
@@ -264,7 +266,7 @@ impl TCBInfo {
             .ok_or(Error::TCBOutOfDate)?
             .clone();
 
-        if self.id == TCBInfoID::TDX {
+        if self.id == TCBInfoID::Tdx {
             // Perform additional TCB status evaluation for TDX module in case TEE TCB SVN at index
             // 1 is greater or equal to 1, otherwise finish the comparison logic.
             let tdx_comp_svn = tdx_comp_svn.ok_or(Error::TCBMismatch)?;
@@ -274,7 +276,7 @@ impl TCBInfo {
                 // Identity (in tdxModuleIdentities array of TCB Info) with its id set to
                 // "TDX_<version>" where <version> matches the value of TEE TCB SVN at index 1. If a
                 // matching TDX Module Identity cannot be found, fail.
-                let tdx_module_id = format!("TDX_{:02}", tdx_module_version);
+                let tdx_module_id = format!("TDX_{tdx_module_version:02}");
                 let tdx_module = self
                     .tdx_module_identities
                     .iter()
@@ -538,8 +540,8 @@ impl QEIdentity {
         policy: &QuotePolicy,
     ) -> Result<(), Error> {
         match (self.id, tee_type) {
-            (QEIdentityID::QE, TeeType::SGX) => {}
-            (QEIdentityID::TD_QE, TeeType::TDX) => {}
+            (QEIdentityID::QE, TeeType::Sgx) => {}
+            (QEIdentityID::TD_QE, TeeType::Tdx) => {}
             _ => return Err(Error::TCBParseError(anyhow::anyhow!("unexpected QE ID"))),
         }
 

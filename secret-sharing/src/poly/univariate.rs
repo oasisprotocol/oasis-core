@@ -116,7 +116,7 @@ where
         // Short-circuit on the length of the slice, not its contents.
         let coefficient_size = Self::coefficient_byte_size();
 
-        if bytes.is_empty() || bytes.len() % coefficient_size != 0 {
+        if bytes.is_empty() || !bytes.len().is_multiple_of(coefficient_size) {
             return None;
         }
 

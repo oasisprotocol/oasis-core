@@ -279,7 +279,7 @@ impl Session {
     }
 
     /// Whether the session is connected to one of the given nodes.
-    pub fn is_connected_to(&self, nodes: &Vec<signature::PublicKey>) -> bool {
+    pub fn is_connected_to(&self, nodes: &[signature::PublicKey]) -> bool {
         nodes.iter().any(|&node| Some(node) == self.remote_node)
     }
 

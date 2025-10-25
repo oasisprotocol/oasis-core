@@ -915,7 +915,7 @@ impl Kdf {
     /// to the key manager's runtime ID, using master secret generations as the KMAC keys
     /// at each step. The checksum calculation for the n-th generation can be expressed by
     /// the formula: KMAC(gen_n, ... KMAC(gen_2, KMAC(gen_1, KMAC(gen_0, runtime_id)))).
-    pub fn checksum_master_secret(secret: &Secret, last_checksum: &Vec<u8>) -> Vec<u8> {
+    pub fn checksum_master_secret(secret: &Secret, last_checksum: &[u8]) -> Vec<u8> {
         let mut k = [0u8; 32];
 
         // KMAC256(master_secret, last_checksum, 32, "ekiden-checksum-master-secret")

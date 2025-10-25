@@ -1168,7 +1168,7 @@ impl<S: Suite> Instance<S> {
     }
 
     /// Computes the checksum of the verification matrix bytes.
-    fn checksum_verification_matrix_bytes(&self, bytes: &Vec<u8>, epoch: EpochTime) -> Hash {
+    fn checksum_verification_matrix_bytes(&self, bytes: &[u8], epoch: EpochTime) -> Hash {
         let mut checksum = [0u8; 32];
         let mut f = KMac::new_kmac256(bytes, CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
         f.update(&self.runtime_id.0);
