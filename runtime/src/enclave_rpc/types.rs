@@ -33,7 +33,6 @@ pub enum Kind {
     LocalQuery = 2,
 }
 
-
 /// Frame.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Frame {

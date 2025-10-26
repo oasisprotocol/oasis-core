@@ -431,7 +431,6 @@ pub enum ExecutionMode {
     Schedule = 1,
 }
 
-
 /// Result of a CheckTx operation.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct CheckTxResult {
@@ -505,7 +504,6 @@ pub enum MessageType {
     /// Response.
     Response = 2,
 }
-
 
 /// Runtime protocol message.
 #[derive(Debug, Default, cbor::Encode, cbor::Decode)]
