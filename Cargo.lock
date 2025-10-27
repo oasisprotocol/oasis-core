@@ -994,9 +994,9 @@ dependencies = [
 
 [[package]]
 name = "enclave-runner"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b034cf4ceb685674b61bafb7065420b3accb008f0eff5dc5623f064e4afcc385"
+checksum = "fd13bc3f6574aa64bcc081c5cd884681cad9057bb795725a924bd51eab66fa11"
 dependencies = [
  "anyhow",
  "crossbeam",
@@ -1101,9 +1101,9 @@ dependencies = [
 
 [[package]]
 name = "fortanix-sgx-abi"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23384eec6bf7f021d76ebac28f716647c1ae92138219c4fe93b44f9b82eb393"
+checksum = "5efc85edd5b83e8394f4371dd0da6859dff63dd387dab8568fece6af4cde6f84"
 
 [[package]]
 name = "futures"

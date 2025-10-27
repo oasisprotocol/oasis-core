@@ -416,9 +416,11 @@ pub struct RuntimeInfoResponse {
 /// Batch execution mode.
 #[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 #[cbor(with_default)]
+#[derive(Default)]
 pub enum ExecutionMode {
     /// Execution mode where the batch of transactions is executed as-is without the ability to
     /// perform and modifications to the batch.
+    #[default]
     Execute = 0,
     /// Execution mode where the runtime is in control of scheduling and may arbitrarily modify the
     /// batch during execution.
@@ -427,12 +429,6 @@ pub enum ExecutionMode {
     /// control feature. In this case the call will only contain up to InitialBatchSize transactions
     /// and the runtime will need to request more if it needs more.
     Schedule = 1,
-}
-
-impl Default for ExecutionMode {
-    fn default() -> Self {
-        Self::Execute
-    }
 }
 
 /// Result of a CheckTx operation.
@@ -498,19 +494,15 @@ pub struct RuntimeNotifyEvent {
 
 #[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum MessageType {
     /// Invalid message (should never be seen on the wire).
+    #[default]
     Invalid = 0,
     /// Request.
     Request = 1,
     /// Response.
     Response = 2,
-}
-
-impl Default for MessageType {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 /// Runtime protocol message.

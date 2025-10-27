@@ -45,7 +45,7 @@ impl verifier::Verifier for Handle {
         self.command_sender
             .send(Command::Verify(
                 consensus_block,
-                runtime_header,
+                Box::new(runtime_header),
                 epoch,
                 sender,
                 false,
@@ -65,7 +65,7 @@ impl verifier::Verifier for Handle {
         self.command_sender
             .send(Command::Verify(
                 consensus_block,
-                runtime_header,
+                Box::new(runtime_header),
                 epoch,
                 sender,
                 true,

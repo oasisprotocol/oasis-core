@@ -141,7 +141,7 @@ impl App {
             .await;
 
         // NOTE: This is not verified.
-        println!("Received result: {:?}", result);
+        println!("Received result: {result:?}");
     }
 }
 

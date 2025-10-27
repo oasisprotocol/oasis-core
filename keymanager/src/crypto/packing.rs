@@ -112,14 +112,14 @@ pub fn unpack_runtime_id_generation_epoch(data: Vec<u8>) -> Option<(Namespace, u
 }
 
 /// Concatenate ciphertext and nonce (ciphertext || nonce) into a byte vector.
-pub fn pack_ciphertext_nonce(ciphertext: &Vec<u8>, nonce: &Nonce) -> Vec<u8> {
-    let mut data = ciphertext.clone();
+pub fn pack_ciphertext_nonce(ciphertext: &[u8], nonce: &Nonce) -> Vec<u8> {
+    let mut data = ciphertext.to_owned();
     data.extend_from_slice(&nonce.to_vec());
     data
 }
 
 /// Unpack the concatenation of encrypted secret and nonce (ciphertext || nonce).
-pub fn unpack_encrypted_secret_nonce(data: &Vec<u8>) -> Option<(Vec<u8>, [u8; NONCE_SIZE])> {
+pub fn unpack_encrypted_secret_nonce(data: &[u8]) -> Option<(Vec<u8>, [u8; NONCE_SIZE])> {
     if data.len() != SECRET_STORAGE_SIZE {
         return None;
     }

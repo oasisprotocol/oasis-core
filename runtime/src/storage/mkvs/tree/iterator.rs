@@ -340,7 +340,7 @@ impl mkvs::Iterator for TreeIterator<'_> {
 
 impl Tree {
     /// Return an iterator over the tree.
-    pub fn iter(&self) -> TreeIterator {
+    pub fn iter(&self) -> TreeIterator<'_> {
         TreeIterator::new(self)
     }
 }

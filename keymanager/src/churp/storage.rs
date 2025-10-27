@@ -191,7 +191,7 @@ impl Storage {
     /// Decrypts and authenticates encrypted bivariate polynomial
     /// using the provided ID and handoff epoch as additional data.
     fn decrypt_bivariate_polynomial<F: PrimeField>(
-        ciphertext: &mut Vec<u8>,
+        ciphertext: &mut [u8],
         churp_id: u8,
         epoch: EpochTime,
     ) -> Result<BivariatePolynomial<F>> {
@@ -254,7 +254,7 @@ impl Storage {
     /// Decrypts and authenticates encrypted polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
     fn decrypt_secret_share<G>(
-        ciphertext: &mut Vec<u8>,
+        ciphertext: &mut [u8],
         churp_id: u8,
         epoch: EpochTime,
     ) -> Result<VerifiableSecretShare<G>>
@@ -631,20 +631,20 @@ mod tests {
 
         // Happy path.
         let mut ciphertext = Storage::encrypt_secret_share(&verifiable_share, churp_id, epoch);
-        Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch)
+        Storage::decrypt_secret_share::<Group>(&mut ciphertext[..], churp_id, epoch)
             .expect("decryption of secret share should succeed");
 
         // Invalid ID, decryption should fail.
-        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id + 1, epoch);
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext[..], churp_id + 1, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Invalid epoch, decryption should fail.
-        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch + 1);
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext[..], churp_id, epoch + 1);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Corrupted ciphertext, decryption should fail.
         (ciphertext[0], _) = ciphertext[0].overflowing_add(1);
-        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch);
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext[..], churp_id, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
     }
 }

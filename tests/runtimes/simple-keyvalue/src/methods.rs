@@ -91,7 +91,7 @@ impl Methods {
     pub fn check_nonce(ctx: &mut TxContext, sender: Vec<u8>, nonce: u64) -> Result<(), String> {
         let next_nonce = Methods::get_nonce(ctx, sender.clone());
         if nonce < next_nonce {
-            return Err(format!("Invalid nonce: {:?}", nonce));
+            return Err(format!("Invalid nonce: {nonce:?}"));
         }
 
         if ctx.is_check_only() {
@@ -99,7 +99,7 @@ impl Methods {
         }
 
         if nonce != next_nonce {
-            return Err(format!("Invalid nonce: {:?}", nonce));
+            return Err(format!("Invalid nonce: {nonce:?}"));
         }
 
         Methods::set_nonce(ctx, sender, nonce + 1);
@@ -211,7 +211,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Registry(Versioned::new(
             0,
-            RegistryMessage::UpdateRuntime(args.update_runtime),
+            RegistryMessage::UpdateRuntime(Box::new(args.update_runtime)),
         )));
 
         ctx.parent.core.runtime_state.insert(

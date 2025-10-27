@@ -52,9 +52,9 @@ impl QuoteBundle {
 
         // Ensure given TEE type is allowed by the policy.
         match (tee_type, &policy.tdx) {
-            (TeeType::SGX, _) => { /* Ok. */ }
-            (TeeType::TDX, &None) => return Err(Error::TeeTypeNotAllowed),
-            (TeeType::TDX, &Some(_)) => { /* Ok. */ }
+            (TeeType::Sgx, _) => { /* Ok. */ }
+            (TeeType::Tdx, &None) => return Err(Error::TeeTypeNotAllowed),
+            (TeeType::Tdx, &Some(_)) => { /* Ok. */ }
         }
 
         // Ensure correct QE vendor.
@@ -162,7 +162,7 @@ impl<'a> Quote<'a> {
                 let qe_vendor_id = quote.take_prefix(QE_VENDOR_ID_LEN)?;
                 let user_data = quote.take_prefix(QE_USER_DATA_LEN)?;
                 let report_body = quote.take_prefix(SGX_REPORT_BODY_LEN)?;
-                let report_body = ReportBody::parse(TeeType::SGX, &report_body)?;
+                let report_body = ReportBody::parse(TeeType::Sgx, &report_body)?;
 
                 if attestation_key_type != AttestationKeyType::EcdsaP256 {
                     return Err(Error::UnsupportedAttestationKeyType);
@@ -233,8 +233,7 @@ impl<'a> Quote<'a> {
                 })
             }
             _ => Err(Error::QuoteParseError(format!(
-                "unsupported quote version: {}",
-                version
+                "unsupported quote version: {version}"
             ))),
         }
     }
@@ -311,7 +310,7 @@ impl Header<'_> {
     /// TEE type the quote is for.
     pub fn tee_type(&self) -> TeeType {
         match self {
-            Self::V3 { .. } => TeeType::SGX,
+            Self::V3 { .. } => TeeType::Sgx,
             Self::V4 { tee_type, .. } => *tee_type,
         }
     }
@@ -327,8 +326,8 @@ impl Header<'_> {
     /// Length of the report body field.
     pub fn report_body_len(&self) -> usize {
         match self.tee_type() {
-            TeeType::SGX => SGX_REPORT_BODY_LEN,
-            TeeType::TDX => TDX_REPORT_BODY_LEN,
+            TeeType::Sgx => SGX_REPORT_BODY_LEN,
+            TeeType::Tdx => TDX_REPORT_BODY_LEN,
         }
     }
 }
@@ -337,8 +336,8 @@ impl Header<'_> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum TeeType {
-    SGX = 0x00000000,
-    TDX = 0x00000081,
+    Sgx = 0x00000000,
+    Tdx = 0x00000081,
 }
 
 /// Attestation key type.
@@ -359,7 +358,7 @@ impl ReportBody {
     /// Parse the report body.
     pub fn parse(tee_type: TeeType, raw: &[u8]) -> Result<Self, Error> {
         match tee_type {
-            TeeType::SGX => {
+            TeeType::Sgx => {
                 // Parse SGX report body.
                 let mut report_body = Vec::with_capacity(SgxReport::UNPADDED_SIZE);
                 report_body.extend(raw);
@@ -369,7 +368,7 @@ impl ReportBody {
 
                 Ok(Self::Sgx(report))
             }
-            TeeType::TDX => {
+            TeeType::Tdx => {
                 // Parse TDX TD report body.
                 let report = TdReport::parse(raw)?;
 
@@ -459,7 +458,7 @@ impl<'a> QuoteSignature<'a> for QuoteSignatureEcdsaP256<'a> {
                 .map(|v| LittleEndian::read_u16(&v))?;
             let certification_data_type =
                 CertificationDataType::from_u16(cd_type).ok_or_else(|| {
-                    Error::QuoteParseError(format!("unknown certification data type: {}", cd_type))
+                    Error::QuoteParseError(format!("unknown certification data type: {cd_type}"))
                 })?;
             let certdata_len = data
                 .take_prefix(mem::size_of::<u32>())
@@ -520,7 +519,7 @@ impl<'a> QuoteSignatureEcdsaP256<'a> {
 
 /// Convert IEEE P1363 ECDSA signature to RFC5480 ASN.1 representation.
 fn raw_ecdsa_sig_to_der(sig: &[u8]) -> Result<Vec<u8>, Error> {
-    if sig.len() % 2 != 0 {
+    if !sig.len().is_multiple_of(2) {
         return Err(Error::QuoteParseError(
             "malformed ECDSA signature".to_string(),
         ));
@@ -605,6 +604,7 @@ pub trait CertificationData<'a>: Sized {
 
 /// PPID certification data.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct CertificationDataPpid<'a> {
     pub ppid: Cow<'a, [u8]>,
     pub cpusvn: Cow<'a, [u8]>,
@@ -699,7 +699,7 @@ impl<'a> CertificationDataQeReport<'a> {
             .map(|v| LittleEndian::read_u16(&v))?;
         let certification_data_type =
             CertificationDataType::from_u16(cd_type).ok_or_else(|| {
-                Error::QuoteParseError(format!("unknown certification data type: {}", cd_type))
+                Error::QuoteParseError(format!("unknown certification data type: {cd_type}"))
             })?;
         let certdata_len = data
             .take_prefix(mem::size_of::<u32>())

@@ -555,7 +555,7 @@ mod tests {
             }),
             Message::Registry(Versioned {
                 version: 0,
-                inner: RegistryMessage::UpdateRuntime(Runtime::default()),
+                inner: RegistryMessage::UpdateRuntime(Box::new(Runtime::default())),
             }),
         ];
         let msg_hash = Message::messages_hash(&ec_with_msgs.messages);

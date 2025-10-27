@@ -19,7 +19,7 @@ pub enum Command {
     Synchronize(u64, oneshot::Sender<Result<(), Error>>),
     Verify(
         LightBlock,
-        Header,
+        Box<Header>,
         EpochTime,
         oneshot::Sender<Result<ConsensusState, Error>>,
         bool,

@@ -142,6 +142,7 @@ pub struct QuotePolicy {
 
 /// Decoded quote body.
 #[derive(Default, Debug)]
+#[allow(dead_code)]
 struct QuoteBody {
     version: u16,
     signature_type: u16,
@@ -157,16 +158,18 @@ impl QuoteBody {
     /// Decode quote body.
     fn decode(quote_body: &[u8]) -> Result<QuoteBody> {
         let mut reader = Cursor::new(quote_body);
-        let mut quote_body: QuoteBody = QuoteBody::default();
 
         // TODO: Should we ensure that reserved bytes are all zero?
 
-        // Quote body.
-        quote_body.version = reader.read_u16::<LittleEndian>()?;
-        quote_body.signature_type = reader.read_u16::<LittleEndian>()?;
-        quote_body.gid = reader.read_u32::<LittleEndian>()?;
-        quote_body.isv_svn_qe = reader.read_u16::<LittleEndian>()?;
-        quote_body.isv_svn_pce = reader.read_u16::<LittleEndian>()?;
+        let mut quote_body = QuoteBody {
+            version: reader.read_u16::<LittleEndian>()?,
+            signature_type: reader.read_u16::<LittleEndian>()?,
+            gid: reader.read_u32::<LittleEndian>()?,
+            isv_svn_qe: reader.read_u16::<LittleEndian>()?,
+            isv_svn_pce: reader.read_u16::<LittleEndian>()?,
+            ..Default::default()
+        };
+
         reader.seek(SeekFrom::Current(4))?; // 4 reserved bytes.
         reader.read_exact(&mut quote_body.basename)?;
 

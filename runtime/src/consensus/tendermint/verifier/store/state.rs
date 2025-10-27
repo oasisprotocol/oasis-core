@@ -94,7 +94,7 @@ impl TrustedStateStore {
     ///
     /// Panics in case the light store does not have any blocks or if insertion to the underlying
     /// runtime's untrusted local store fails.
-    pub fn save(&self, runtime_version: Version, store: &Box<dyn LightStore>) {
+    pub fn save(&self, runtime_version: Version, store: &dyn LightStore) {
         if BUILD_INFO.tee_type == TeeType::Tdx {
             // TODO: Currently TDX does not have sealing capabilities, so we just do not persist
             //       anything as we can't seal secrets until we have CPU-bound key derivation.
