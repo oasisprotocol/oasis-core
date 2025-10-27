@@ -296,14 +296,12 @@ func (m *PeerManager) run(ctx context.Context) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := m.backup.restore(ctx); err != nil {
 			return
 		}
 		m.connectRestoredPeers(ctx)
-	}()
+	})
 
 	// Main loop.
 	monitorTicker := time.NewTicker(monitorInterval)
@@ -333,9 +331,7 @@ func (m *PeerManager) connectRestoredPeers(ctx context.Context) {
 
 	peerCh := make(chan peer.AddrInfo)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(peerCh)
 
 		store := m.host.Peerstore()
@@ -347,7 +343,7 @@ func (m *PeerManager) connectRestoredPeers(ctx context.Context) {
 				return
 			}
 		}
-	}()
+	})
 
 	m.connector.connectMany(ctx, peerCh, maxRestoredPeers)
 }
@@ -373,11 +369,9 @@ func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
 	defer wg.Wait()
 
 	connectPeers := func(peerCh <-chan peer.AddrInfo, limit int) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			m.connector.connectMany(ctx, peerCh, limit)
-		}()
+		})
 	}
 
 	m.mu.Lock()

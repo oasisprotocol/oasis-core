@@ -443,16 +443,13 @@ func (c *connection) workerIncoming() {
 		}
 
 		// Handle message in a separate goroutine.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Ensure each message has its own context which is canceled at the end.
 			localCtx, localCancel := context.WithCancel(ctx)
 			defer localCancel()
 
 			c.handleMessage(localCtx, &message)
-		}()
+		})
 	}
 }
 
@@ -467,15 +464,8 @@ func (c *connection) initConn(conn net.Conn) {
 	c.conn = conn
 	c.codec = cbor.NewMessageCodec(conn, moduleName)
 
-	c.quitWg.Add(2)
-	go func() {
-		defer c.quitWg.Done()
-		c.workerIncoming()
-	}()
-	go func() {
-		defer c.quitWg.Done()
-		c.workerOutgoing()
-	}()
+	c.quitWg.Go(c.workerIncoming)
+	c.quitWg.Go(c.workerOutgoing)
 
 	// Change protocol state to Initializing so that some of the requests are allowed.
 	c.setStateLocked(stateInitializing)

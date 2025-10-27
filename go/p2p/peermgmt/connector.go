@@ -73,13 +73,14 @@ func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.Add
 		ticketCh <- false
 	}
 
-	var (
-		ok        bool
-		connected bool
-		info      peer.AddrInfo
-	)
+	var connected bool
 
 	for {
+		var (
+			ok   bool
+			info peer.AddrInfo
+		)
+
 		select {
 		case info, ok = <-peersCh:
 		case <-ctx.Done():
@@ -111,11 +112,9 @@ func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.Add
 		}
 
 		// Connect in the background.
-		wg.Add(1)
-		go func(info peer.AddrInfo) {
-			defer wg.Done()
+		wg.Go(func() {
 			ticketCh <- c.connectOne(ctx, info)
-		}(info)
+		})
 	}
 }
 

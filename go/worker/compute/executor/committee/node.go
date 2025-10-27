@@ -1354,12 +1354,10 @@ func (n *Node) worker() {
 			ctx, cancel := context.WithCancelCause(n.ctx)
 			defer cancel(errors.New("round finished"))
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				n.roundWorker(ctx)
 				n.drainChannels(ctx)
-			}()
+			})
 
 			select {
 			case <-n.stopCh:

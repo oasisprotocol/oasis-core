@@ -207,11 +207,9 @@ func (w *kmRuntimeWatcher) watch(ctx context.Context) {
 
 		rnw := newRtNodeWatcher(rt.ID, w.consensus, w.accessList)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			rnw.watch(ctx)
-		}()
+		})
 
 		w.addRuntimeNodeWatcher(rt.ID, rnw)
 

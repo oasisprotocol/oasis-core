@@ -1177,11 +1177,9 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		// As a consequence at most one finalization can be happening at the time.
 		if len(*pendingFinalize) > 0 && cachedLastRound+1 == (*pendingFinalize)[0].GetRound() {
 			lastSummary := heap.Pop(pendingFinalize).(*blockSummary)
-			wg.Add(1)
-			go func() { // Don't block fetching and applying remaining rounds.
-				defer wg.Done()
+			wg.Go(func() { // Don't block fetching and applying remaining rounds.
 				w.finalize(ctx, lastSummary)
-			}()
+			})
 			continue
 		}
 

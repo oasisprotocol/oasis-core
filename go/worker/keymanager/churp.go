@@ -425,11 +425,9 @@ func (s *submissionScheduler) Start(height int64) {
 		ctx, cancel := context.WithCancelCause(context.Background())
 		info.cancel = cancel
 
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
+		s.wg.Go(func() {
 			s.submitApplication(ctx, info.status)
-		}()
+		})
 	}
 }
 
@@ -611,11 +609,9 @@ func (e *handoffExecutor) Start(height int64) {
 		ctx, cancel := context.WithCancelCause(context.Background())
 		info.cancel = cancel
 
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
+		e.wg.Go(func() {
 			e.handoff(ctx, info.status, dimSwitchCh)
-		}()
+		})
 	}
 }
 
@@ -944,11 +940,9 @@ func (f *handoffFinisher) Finalize(status *churp.Status) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	f.cancels[status.ID] = cancel
 
-	f.wg.Add(1)
-	go func() {
-		defer f.wg.Done()
+	f.wg.Go(func() {
 		f.finalizeHandoff(ctx, status)
-	}()
+	})
 }
 
 // finalizeHandoff tries to finalize a completed handoff.

@@ -97,21 +97,15 @@ func (s *seedNode) Stop() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := s.host.Close(); err != nil {
 			s.logger.Debug("failed to stop host",
 				"err", err,
 			)
 		}
-	}()
+	})
 
-	go func() {
-		defer wg.Done()
-		s.store.Stop()
-	}()
+	s.store.Stop()
 }
 
 // Quit implements service.BackgroundService.

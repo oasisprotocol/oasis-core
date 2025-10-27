@@ -173,7 +173,7 @@ func (app *Application) BeginBlock(ctx *api.Context) error {
 				continue
 			}
 			// Expired nodes cannot be scheduled (nodes can be expired and not yet removed).
-			if node.IsExpired(uint64(epoch)) {
+			if node.IsExpired(epoch) {
 				continue
 			}
 

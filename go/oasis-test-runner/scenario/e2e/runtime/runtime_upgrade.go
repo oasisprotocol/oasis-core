@@ -219,11 +219,9 @@ func (s *bundleServer) run(ctx context.Context) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = s.server.ListenAndServe()
-	}()
+	})
 
 	<-ctx.Done()
 

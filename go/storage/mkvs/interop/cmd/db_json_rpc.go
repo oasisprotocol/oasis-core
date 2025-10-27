@@ -41,17 +41,12 @@ func (svc *dbRPCService) Start() error {
 			if err != nil {
 				break
 			}
-			wg.Add(1)
 
-			go func() {
-				defer func() {
-					_ = conn.Close()
-					wg.Done()
-				}()
-
+			wg.Go(func() {
+				defer conn.Close()
 				codec := jsonrpc2.NewServerCodec(conn, svr)
 				svr.ServeCodec(codec)
-			}()
+			})
 		}
 		wg.Wait()
 	}()

@@ -314,11 +314,11 @@ func (sc *archiveAPI) Run(ctx context.Context, childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	var nextEpoch beacon.EpochTime
-	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
+	if err != nil {
 		return err
 	}
-	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
 	sc.Logger.Info("waiting for test client to exit")
@@ -366,13 +366,14 @@ func (sc *archiveAPI) Run(ctx context.Context, childEnv *env.Env) error {
 	sc.Logger.Info("transitioning to halt epoch",
 		"halt_epoch", haltEpoch,
 	)
-	for i := nextEpoch; i <= beacon.EpochTime(haltEpoch); i++ {
+	for nextEpoch <= beacon.EpochTime(haltEpoch) {
 		sc.Logger.Info("setting epoch",
-			"epoch", i,
+			"epoch", nextEpoch,
 		)
-		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil && i != beacon.EpochTime(haltEpoch) {
-			return fmt.Errorf("failed to set epoch %d: %w", i, err)
+		if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil && nextEpoch != beacon.EpochTime(haltEpoch) {
+			return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
 		}
+		nextEpoch++
 	}
 
 	// Wait for validators to exit.

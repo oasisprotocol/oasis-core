@@ -113,22 +113,14 @@ func (p *p2p) Stop() {
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	wg.Add(3)
 
-	go func() {
-		defer wg.Done()
-		p.peerMgr.Stop() // This blocks until the manager stops.
-	}()
-
-	go func() {
-		defer wg.Done()
-		_ = p.host.Close() // This blocks until the host stops.
-	}()
-
-	go func() {
-		defer wg.Done()
+	wg.Go(p.peerMgr.Stop) // This blocks until the manager stops.
+	wg.Go(func() {
+		_ = p.host.Close // This blocks until the host stops.
+	})
+	wg.Go(func() {
 		<-p.metricsClosedCh
-	}()
+	})
 }
 
 // Implements api.Service.

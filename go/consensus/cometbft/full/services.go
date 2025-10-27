@@ -46,13 +46,11 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 			handler := newEventHandler(filter, evCh)
 			subscriber := newEventSubscriber(query, t.node.EventBus())
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := subscriber.process(ctx, handler.handle); err != nil {
 					t.Logger.Error("event processing failed", "err", err)
 				}
-			}()
+			})
 		case blk, ok := <-blkCh:
 			if !ok {
 				return

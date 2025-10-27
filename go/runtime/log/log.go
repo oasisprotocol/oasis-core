@@ -143,13 +143,11 @@ func (l *Log) Read(ctx context.Context, opts WatchOptions) ([]string, error) {
 
 	ch := make(chan string)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for line := range ch {
 			lines = append(lines, line)
 		}
-	}()
+	})
 
 	err := l.Watch(ctx, ch, opts)
 	close(ch)

@@ -78,11 +78,10 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	if err != nil {
 		return err
 	}
-	var nextEpoch beacon.EpochTime
-	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	nextEpoch, err := sc.initialEpochTransitions(ctx, fixture)
+	if err != nil {
 		return err
 	}
-	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
 	if err = sc.WaitTestClient(); err != nil {
@@ -100,8 +99,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 
 		// Epoch transitions so nodes expire.
 		sc.Logger.Info("performing epoch transitions so nodes expire")
-		for i := 0; i < 3; i++ {
-
+		for range 3 {
 			if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
 				return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
 			}
@@ -129,13 +127,14 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	sc.Logger.Info("transitioning to halt epoch",
 		"halt_epoch", sc.haltEpoch,
 	)
-	for i := nextEpoch; i <= sc.haltEpoch; i++ {
+	for nextEpoch <= sc.haltEpoch {
 		sc.Logger.Info("setting epoch",
-			"epoch", i,
+			"epoch", nextEpoch,
 		)
-		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil && i != sc.haltEpoch {
-			return fmt.Errorf("failed to set epoch %d: %w", i, err)
+		if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil && nextEpoch != sc.haltEpoch {
+			return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
 		}
+		nextEpoch++
 	}
 
 	// Wait for validators to exit so that genesis docs are dumped.
