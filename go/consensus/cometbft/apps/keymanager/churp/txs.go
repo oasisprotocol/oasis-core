@@ -476,7 +476,7 @@ func runtimeAttestationKey(ctx *tmapi.Context, nodeID signature.PublicKey, now b
 	if err != nil {
 		return nil, err
 	}
-	if n.IsExpired(uint64(now)) {
+	if n.IsExpired(now) {
 		return nil, fmt.Errorf("keymanager: churp: node registration expired")
 	}
 	if !n.HasRoles(node.RoleKeyManager) {

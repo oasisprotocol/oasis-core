@@ -618,12 +618,11 @@ WatchBlocksLoop:
 	}
 
 	// Advance epoch to trigger any liveness slashing/suspension.
-	sc.Logger.Info("triggering epoch transition")
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch+1); err != nil {
+	if err = sc.Net.Controller().SetEpoch(ctx, epoch); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
-	sc.Logger.Info("triggering epoch transition")
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch+2); err != nil {
+	epoch++
+	if err = sc.Net.Controller().SetEpoch(ctx, epoch); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
 

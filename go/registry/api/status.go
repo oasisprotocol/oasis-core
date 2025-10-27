@@ -39,6 +39,12 @@ func (ns NodeStatus) IsFrozen() bool {
 	return ns.FreezeEndTime > 0
 }
 
+// Freeze makes the node frozen until the specified epoch, after which it may
+// become unfrozen.
+func (ns *NodeStatus) Freeze(epoch beacon.EpochTime) {
+	ns.FreezeEndTime = epoch
+}
+
 // Unfreeze makes the node unfrozen.
 func (ns *NodeStatus) Unfreeze() {
 	ns.FreezeEndTime = 0
@@ -87,6 +93,12 @@ func (ns *NodeStatus) IsSuspended(runtimeID common.Namespace, epoch beacon.Epoch
 		return false
 	}
 	return fault.IsSuspended(epoch)
+}
+
+// IsEligibleForElection checks if the node is eligible to be included
+// in non-validator committee elections at the given epoch.
+func (ns *NodeStatus) IsEligibleForElection(epoch beacon.EpochTime) bool {
+	return epoch > ns.ElectionEligibleAfter
 }
 
 // Fault is used to track the state of nodes that are experiencing liveness failures.

@@ -171,7 +171,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	expiration := uint64(epoch) + params.MaxNodeExpiration
+	expiration := epoch + params.MaxNodeExpiration
 
 	for _, idx := range idxs {
 		km := sc.Net.Keymanagers()[idx]
