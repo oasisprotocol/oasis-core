@@ -413,6 +413,13 @@ func (n *Node) handleSuspendLocked(int64) {
 	}
 }
 
+func (n *Node) updateHostedRuntimeVersion() {
+	n.CrossNode.Lock()
+	defer n.CrossNode.Unlock()
+
+	n.updateHostedRuntimeVersionLocked()
+}
+
 func (n *Node) updateHostedRuntimeVersionLocked() {
 	if n.CurrentDescriptor == nil {
 		return
@@ -729,9 +736,7 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.CrossNode.Lock()
-	n.updateHostedRuntimeVersionLocked()
-	n.CrossNode.Unlock()
+	n.updateHostedRuntimeVersion()
 
 	// Start the runtime.
 	hrt := n.GetHostedRuntime()
@@ -779,11 +784,7 @@ func (n *Node) worker() {
 					return
 				}
 
-				func() {
-					n.CrossNode.Lock()
-					defer n.CrossNode.Unlock()
-					n.updateHostedRuntimeVersionLocked()
-				}()
+				n.updateHostedRuntimeVersion()
 			case compNotify.Removed != nil:
 				// Received removal of a component.
 				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
