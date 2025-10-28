@@ -114,9 +114,23 @@ func (app *Application) maybeElect(ctx *api.Context) error {
 
 // shouldElect determines whether elections should be performed.
 func (app *Application) shouldElect(ctx *api.Context) (*electionDecision, error) {
+	// The 0th epoch will not have suitable entropy for elections, nor
+	// will it have useful node registrations.
+	baseEpoch, err := app.state.GetBaseEpoch()
+	if err != nil {
+		return nil, fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
+	}
+
+	epochChanged, epoch := app.state.EpochChanged(ctx)
+	if epoch == baseEpoch {
+		ctx.Logger().Info("system in bootstrap period, skipping election",
+			"epoch", epoch,
+		)
+		return &electionDecision{}, nil
+	}
+
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
-	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if epochChanged {
 		// For elections on epoch changes, distribute rewards.
 		return &electionDecision{
@@ -147,20 +161,6 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	_, err := app.md.Publish(ctx, schedulerApi.MessageBeforeSchedule, epoch)
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: before schedule notification failed: %w", err)
-	}
-
-	// The 0th epoch will not have suitable entropy for elections, nor
-	// will it have useful node registrations.
-	baseEpoch, err := app.state.GetBaseEpoch()
-	if err != nil {
-		return fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
-	}
-
-	if epoch == baseEpoch {
-		ctx.Logger().Info("system in bootstrap period, skipping election",
-			"epoch", epoch,
-		)
-		return nil
 	}
 
 	state := schedulerState.NewMutableState(ctx.State())
