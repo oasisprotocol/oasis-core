@@ -227,12 +227,10 @@ func (w *Worker) handleCheckpoint(ctx context.Context, check *checkpointsync.Che
 	// Spawn the worker group to fetch and restore checkpoint chunks.
 	var workerGroup sync.WaitGroup
 	doneCh := make(chan any)
-	for i := uint(0); i < maxParallelRequests; i++ {
-		workerGroup.Add(1)
-		go func() {
-			defer workerGroup.Done()
+	for range maxParallelRequests {
+		workerGroup.Go(func() {
 			w.checkpointChunkFetcher(chunkCtx, chunkDispatchCh, chunkReturnCh, errorCh)
-		}()
+		})
 	}
 	go func() {
 		defer close(doneCh)

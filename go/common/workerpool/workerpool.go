@@ -53,15 +53,16 @@ func (p *Pool) Resize(newCount uint) {
 	}
 
 	if newCount < p.currentCount {
-		for i := p.currentCount; i > newCount; i-- {
+		for range p.currentCount - newCount {
 			p.jobCh.In() <- &jobDescriptor{
 				terminate: true,
 			}
 		}
-	} else if newCount > p.currentCount {
-		for i := p.currentCount; i < newCount; i++ {
-			p.workerGroup.Add(1)
-			go p.worker()
+	}
+
+	if newCount > p.currentCount {
+		for range newCount - p.currentCount {
+			p.workerGroup.Go(p.worker)
 		}
 	}
 
@@ -116,8 +117,6 @@ func (p *Pool) lifetimeManager() {
 }
 
 func (p *Pool) worker() {
-	defer p.workerGroup.Done()
-
 	for {
 		select {
 		case <-p.stopCh:
@@ -147,8 +146,7 @@ func New(name string) *Pool {
 		logger:       logging.GetLogger(fmt.Sprintf("workerpool/%s", name)),
 	}
 
-	pool.workerGroup.Add(1)
-	go pool.worker()
+	pool.workerGroup.Go(pool.worker)
 	go pool.lifetimeManager()
 
 	return pool
