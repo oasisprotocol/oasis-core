@@ -11,7 +11,6 @@ const (
 	crashPointBatchProposeBefore       = "worker.executor.batch.propose.before"
 	crashPointBatchProposeAfter        = "worker.executor.batch.propose.after"
 	crashPointDiscrepancyDetectedAfter = "worker.executor.batch.discrepancy_detected.after"
-	crashPointRoothashReceiveAfter     = "worker.executor.batch.roothash.receive.after"
 	crashPointBatchPublishAfter        = "worker.executor.batch.schedule.publish.after"
 )
 
@@ -23,7 +22,6 @@ func init() {
 		crashPointBatchProposeBefore,
 		crashPointBatchProposeAfter,
 		crashPointDiscrepancyDetectedAfter,
-		crashPointRoothashReceiveAfter,
 		crashPointBatchPublishAfter,
 	)
 }

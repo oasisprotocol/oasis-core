@@ -129,8 +129,6 @@ var (
 // These are called from the runtime's common node's worker.
 type NodeHooks interface {
 	// Guarded by CrossNode.
-	HandleNewBlockEarlyLocked(*runtime.BlockInfo)
-	// Guarded by CrossNode.
 	HandleNewBlockLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
 	HandleRuntimeHostEventLocked(*host.Event)
@@ -531,17 +529,6 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
 	}
 
-	bi := &runtime.BlockInfo{
-		RuntimeBlock:     n.CurrentBlock,
-		ConsensusBlock:   n.CurrentConsensusBlock,
-		Epoch:            n.CurrentEpoch,
-		ActiveDescriptor: n.CurrentDescriptor,
-	}
-
-	for _, hooks := range n.hooks {
-		hooks.HandleNewBlockEarlyLocked(bi)
-	}
-
 	// Perform actions based on block type.
 	switch header.HeaderType {
 	case block.Normal:
@@ -566,9 +553,16 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		n.handleSuspendLocked(height)
 	default:
 		n.logger.Error("invalid block type",
-			"block", bi.RuntimeBlock,
+			"block", blk,
 		)
 		return
+	}
+
+	bi := &runtime.BlockInfo{
+		RuntimeBlock:     n.CurrentBlock,
+		ConsensusBlock:   n.CurrentConsensusBlock,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
 	}
 
 	n.TxPool.ProcessBlock(bi)

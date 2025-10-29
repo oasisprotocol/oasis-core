@@ -79,11 +79,6 @@ func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
 }
 
-// HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
-	// Nothing to do here.
-}
-
 // HandleNewBlockLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
 	// Nothing to do here.

@@ -330,11 +330,6 @@ func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
 
 // NodeHooks implementation.
 
-// HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (w *Worker) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
-	// Nothing to do here.
-}
-
 // HandleNewBlockLocked is guarded by CrossNode.
 func (w *Worker) HandleNewBlockLocked(bi *runtime.BlockInfo) {
 	// Notify the state syncer that there is a new block.
