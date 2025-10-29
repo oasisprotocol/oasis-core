@@ -385,20 +385,18 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	}
 
 	// Make sure all nodes will restart once the upgrade epoch is reached.
-	var group sync.WaitGroup
+	var wg sync.WaitGroup
 	errCh := make(chan error, len(sc.Net.Nodes()))
 	if !sc.shouldCancelUpgrade {
 		for _, nd := range sc.Net.Nodes() {
-			group.Add(1)
-			go func(nd *oasis.Node) {
-				defer group.Done()
+			wg.Go(func() {
 				sc.Logger.Info("waiting for node to exit", "node", nd.Name)
 				<-nd.Exit()
 				sc.Logger.Info("restarting node", "node", nd.Name)
 				if err = nd.Restart(ctx); err != nil {
 					errCh <- err
 				}
-			}(nd)
+			})
 		}
 	}
 
@@ -410,7 +408,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	if !sc.shouldCancelUpgrade {
 		// Nodes should restart.
 		sc.Logger.Info("waiting for all nodes to get restarted")
-		group.Wait()
+		wg.Wait()
 		select {
 		case err = <-errCh:
 			return fmt.Errorf("can't restart node for consensus upgrade test: %w", err)

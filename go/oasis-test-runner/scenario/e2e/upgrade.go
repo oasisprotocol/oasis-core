@@ -562,21 +562,23 @@ func (sc *nodeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	if sc.needsRestart {
 		sc.Logger.Info("restarting network")
 		errCh := make(chan error, len(sc.Net.Validators()))
-		var group sync.WaitGroup
-		for i, val := range sc.Net.Validators() {
-			group.Add(1)
-			go func(i int, val *oasis.Validator) {
-				defer group.Done()
-				sc.Logger.Debug("waiting for validator to exit", "num", i)
-				<-val.Exit()
-				sc.Logger.Debug("restarting validator", "num", i)
-				if restartError := val.Restart(ctx); err != nil {
-					errCh <- restartError
-				}
-			}(i, val)
-		}
 
-		group.Wait()
+		func() {
+			var wg sync.WaitGroup
+			defer wg.Wait()
+
+			for i, val := range sc.Net.Validators() {
+				wg.Go(func() {
+					sc.Logger.Debug("waiting for validator to exit", "num", i)
+					<-val.Exit()
+					sc.Logger.Debug("restarting validator", "num", i)
+					if restartError := val.Restart(ctx); err != nil {
+						errCh <- restartError
+					}
+				})
+			}
+		}()
+
 		select {
 		case err = <-errCh:
 			return fmt.Errorf("can't restart upgraded validator for upgrade test: %w", err)

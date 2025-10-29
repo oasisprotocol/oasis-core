@@ -78,9 +78,9 @@ func onEvidenceByzantineConsensus(
 
 		// Check for overflow.
 		if math.MaxUint64-penalty.FreezeInterval < epoch {
-			nodeStatus.FreezeEndTime = registry.FreezeForever
+			nodeStatus.Freeze(registry.FreezeForever)
 		} else {
-			nodeStatus.FreezeEndTime = epoch + penalty.FreezeInterval
+			nodeStatus.Freeze(epoch + penalty.FreezeInterval)
 		}
 	}
 

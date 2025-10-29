@@ -147,13 +147,11 @@ func (s *ConnectorTestSuite) TestConnect() {
 		require := require.New(s.T())
 
 		var wg sync.WaitGroup
-		wg.Add(100)
-		for i := 0; i < 100; i++ {
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				connected := s.connector.connect(ctx, s.allowed[1])
 				require.True(connected)
-			}()
+			})
 		}
 		wg.Wait()
 		require.Equal(2, len(s.host.Network().Peers()))
