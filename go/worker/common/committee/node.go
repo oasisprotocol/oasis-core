@@ -183,12 +183,11 @@ type Node struct {
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
-	CrossNode             sync.Mutex
-	CurrentBlock          *block.Block
-	CurrentBlockHeight    int64
-	CurrentConsensusBlock *consensus.LightBlock
-	CurrentDescriptor     *registry.Runtime
-	CurrentEpoch          beacon.EpochTime
+	CrossNode          sync.Mutex
+	CurrentBlock       *block.Block
+	CurrentBlockHeight int64
+	CurrentDescriptor  *registry.Runtime
+	CurrentEpoch       beacon.EpochTime
 
 	logger *logging.Logger
 }
@@ -470,8 +469,6 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
-	header := blk.Header
-
 	// The first received block will be treated an epoch transition (if valid).
 	// This will refresh the committee on the first block,
 	// instead of waiting for the next epoch transition to occur.
@@ -492,10 +489,9 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// Update the current block.
 	n.CurrentBlock = blk
 	n.CurrentBlockHeight = height
-	n.CurrentConsensusBlock = consensusBlk
 
 	// Update active descriptor on epoch transitions.
-	if firstBlockReceived || header.HeaderType == block.EpochTransition || header.HeaderType == block.Suspended {
+	if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition || blk.Header.HeaderType == block.Suspended {
 		var rs *roothash.RuntimeState
 		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 			RuntimeID: n.Runtime.ID(),
@@ -530,7 +526,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	}
 
 	// Perform actions based on block type.
-	switch header.HeaderType {
+	switch blk.Header.HeaderType {
 	case block.Normal:
 		if firstBlockReceived {
 			n.logger.Warn("forcing an epoch transition on first received block")
@@ -560,7 +556,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	bi := &runtime.BlockInfo{
 		RuntimeBlock:     n.CurrentBlock,
-		ConsensusBlock:   n.CurrentConsensusBlock,
+		ConsensusBlock:   consensusBlk,
 		Epoch:            n.CurrentEpoch,
 		ActiveDescriptor: n.CurrentDescriptor,
 	}
