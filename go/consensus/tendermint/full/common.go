@@ -185,6 +185,9 @@ func (n *commonNode) initialize() error {
 	}
 	n.beacon = scBeacon
 	n.serviceClients = append(n.serviceClients, scBeacon)
+	if err = n.mux.SetEpochtime(n.beacon); err != nil {
+		return err
+	}
 
 	// Initialize the rest of backends.
 	var scKeyManager tmkeymanager.ServiceClient
