@@ -1,10 +1,12 @@
 package bundle
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/volume"
 )
@@ -75,4 +77,36 @@ func TestRegisterManifest(t *testing.T) {
 	err = manager.registerManifests(manifests)
 	require.NoError(t, err)
 	require.Equal(t, len(manifests), len(store.manifestHashes))
+}
+
+func TestAddTemporary(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store := newMockStore()
+	volumeManager := newMockVolumeManager()
+	manager, err := NewManager(tmpDir, nil, store, volumeManager)
+	require.NoError(t, err)
+
+	err = common.Mkdir(manager.tmpBundleDir)
+	require.NoError(t, err)
+
+	bundle := &Bundle{
+		Manifest: &Manifest{
+			Name: "test-runtime",
+			ID: func() common.Namespace {
+				var id common.Namespace
+				if err := id.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000"); err != nil {
+					panic("failed to unmarshal id")
+				}
+				return id
+			}(),
+		},
+	}
+
+	err = bundle.Write(filepath.Join(manager.tmpBundleDir, "test-bundle.orc"))
+	require.NoError(t, err)
+
+	err = manager.AddTemporary("test-bundle.orc")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(store.manifestHashes))
 }
