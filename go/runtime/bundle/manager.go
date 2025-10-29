@@ -350,7 +350,7 @@ func (m *Manager) AddTemporary(tmpPath string, opts ...AddOption) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(root.Name(), fi.Name())
+	path := filepath.Join(m.tmpBundleDir, root.Name(), fi.Name())
 
 	return m.Add(path, opts...)
 }
