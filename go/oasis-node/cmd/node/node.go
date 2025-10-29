@@ -386,6 +386,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.RegistrationWorker,
 		n.Genesis,
 		n.commonStore,
+		true,
 	)
 	if err != nil {
 		return err

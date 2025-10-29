@@ -9,7 +9,7 @@ import (
 	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
-	tmstate "github.com/tendermint/tendermint/state"
+	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
@@ -29,15 +29,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
-	tmepochtime "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/scheduler"
 	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/staking"
-	epochtimeAPI "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
@@ -71,15 +69,15 @@ type commonNode struct {
 	mux *abci.ApplicationServer
 
 	beacon     beaconAPI.Backend
-	epochtime  epochtimeAPI.Backend
 	keymanager keymanagerAPI.Backend
 	registry   registryAPI.Backend
 	roothash   roothashAPI.Backend
 	scheduler  schedulerAPI.Backend
+	governance governanceAPI.Backend
 	staking    stakingAPI.Backend
 
 	blockStoreDB tmdb.DB
-	stateStore   tmdb.DB
+	stateStore   state.Store
 
 	// Guarded by the lock.
 	isStarted, isInitialized bool
@@ -151,9 +149,6 @@ func (n *commonNode) Stop() {
 	if err := n.blockStoreDB.Close(); err != nil {
 		n.Logger.Error("error on stopping block store", "err", err)
 	}
-	if err := n.stateStore.Close(); err != nil {
-		n.Logger.Error("error on stopping state store", "err", err)
-	}
 }
 
 func (n *commonNode) initialize() error {
@@ -175,26 +170,12 @@ func (n *commonNode) initialize() error {
 		}
 	}
 
-	// Initialize the beacon/epochtime backend.
+	// Initialize the beacon backend.
 	var (
 		err error
 
-		scEpochTime tmepochtime.ServiceClient
-		scBeacon    tmbeacon.ServiceClient
+		scBeacon tmbeacon.ServiceClient
 	)
-
-	scEpochTime, err = tmepochtime.New(n.ctx, n.parentNode, n.genesis.EpochTime.Parameters.Interval)
-	if err != nil {
-		n.Logger.Error("initEpochtime: failed to initialize epochtime backend",
-			"err", err,
-		)
-		return err
-	}
-	n.epochtime = scEpochTime
-	n.serviceClients = append(n.serviceClients, scEpochTime)
-	if err := n.mux.SetEpochtime(n.epochtime); err != nil {
-		return err
-	}
 
 	if scBeacon, err = tmbeacon.New(n.ctx, n.parentNode); err != nil {
 		n.Logger.Error("initialize: failed to initialize beapoch backend",
@@ -322,11 +303,6 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	}
 
 	// Call StateToGenesis on all backends and merge the results together.
-	epochtimeGenesis, err := n.epochtime.StateToGenesis(ctx, blockHeight)
-	if err != nil {
-		return nil, err
-	}
-
 	beaconGenesis, err := n.Beacon().StateToGenesis(ctx, blockHeight)
 	if err != nil {
 		return nil, err
@@ -357,18 +333,23 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 		return nil, err
 	}
 
+	governanceGenesis, err := n.Governance().StateToGenesis(ctx, blockHeight)
+	if err != nil {
+		return nil, err
+	}
+
 	return &genesisAPI.Document{
 		Height:     blockHeight,
 		ChainID:    genesisDoc.ChainID,
 		HaltEpoch:  genesisDoc.HaltEpoch,
 		Time:       blk.Header.Time,
-		EpochTime:  *epochtimeGenesis,
 		Beacon:     *beaconGenesis,
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,
 		Staking:    *stakingGenesis,
 		KeyManager: *keymanagerGenesis,
 		Scheduler:  *schedulerGenesis,
+		Governance: *governanceGenesis,
 		Consensus:  genesisDoc.Consensus,
 	}, nil
 }
@@ -379,10 +360,6 @@ func (n *commonNode) GetGenesisDocument(ctx context.Context) (*genesisAPI.Docume
 
 func (n *commonNode) GetChainContext(ctx context.Context) (string, error) {
 	return n.genesis.ChainContext(), nil
-}
-
-func (n *commonNode) EpochTime() epochtimeAPI.Backend {
-	return n.epochtime
 }
 
 func (n *commonNode) Beacon() beaconAPI.Backend {
@@ -407,6 +384,10 @@ func (n *commonNode) Staking() stakingAPI.Backend {
 
 func (n *commonNode) Scheduler() schedulerAPI.Backend {
 	return n.scheduler
+}
+
+func (n *commonNode) Governance() governanceAPI.Backend {
+	return n.governance
 }
 
 func (n *commonNode) RegisterApplication(app api.Application) error {
@@ -478,8 +459,8 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 	return result.Block, nil
 }
 
-func (n *commonNode) GetBlockResults(height int64) (*tmcoretypes.ResultBlockResults, error) {
-	if err := n.ensureStarted(n.ctx); err != nil {
+func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcoretypes.ResultBlockResults, error) {
+	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
 
@@ -516,19 +497,23 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 	return api.NewBlock(blk), nil
 }
 
-func (n *commonNode) GetEpoch(ctx context.Context, height int64) (epochtimeAPI.EpochTime, error) {
-	if n.epochtime == nil {
-		return epochtimeAPI.EpochInvalid, consensusAPI.ErrUnsupported
+func (n *commonNode) GetEpoch(ctx context.Context, height int64) (beaconAPI.EpochTime, error) {
+	if n.beacon == nil {
+		return beaconAPI.EpochInvalid, consensusAPI.ErrUnsupported
 	}
-	return n.epochtime.GetEpoch(ctx, height)
+	return n.beacon.GetEpoch(ctx, height)
 }
 
-func (n *commonNode) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTime) error {
-	if n.epochtime == nil {
+func (n *commonNode) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
+	if n.beacon == nil {
 		return consensusAPI.ErrUnsupported
 	}
 
-	ch, sub := n.epochtime.WatchEpochs()
+	ch, sub, err := n.beacon.WatchEpochs(ctx)
+	if err != nil {
+		return err
+	}
+
 	defer sub.Close()
 
 	for {
@@ -576,7 +561,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		txsWithResults.Transactions = append(txsWithResults.Transactions, tx[:])
 	}
 
-	res, err := n.GetBlockResults(blk.Height)
+	res, err := n.GetBlockResults(ctx, blk.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -636,9 +621,9 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 
 func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
-		ConsensusVersion: version.ConsensusProtocol.String(),
-		Backend:          api.BackendName,
-		Features:         n.SupportedFeatures(),
+		Version:  version.ConsensusProtocol,
+		Backend:  api.BackendName,
+		Features: n.SupportedFeatures(),
 	}
 
 	status.GenesisHeight = n.genesis.Height
@@ -684,20 +669,7 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			return nil, fmt.Errorf("failed to fetch current block: %w", err)
 		}
 
-		// Check if the local node is in the validator set for the latest (uncommitted) block.
-		valSetHeight := status.LatestHeight + 1
-		if valSetHeight < status.GenesisHeight {
-			valSetHeight = status.GenesisHeight
-		}
-		vals, err := tmstate.LoadValidators(n.stateStore, valSetHeight)
-		if err != nil {
-			// Failed to load validator set.
-			status.IsValidator = false
-		} else {
-			consensusPk := n.identity.ConsensusSigner.Public()
-			consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
-			status.IsValidator = vals.HasAddress(consensusAddr)
-		}
+		status.IsValidator = false
 	}
 
 	return status, nil

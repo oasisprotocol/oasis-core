@@ -215,3 +215,11 @@ type NoOpSubmissionManager struct{}
 func (m *NoOpSubmissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
 }
+
+func (m *NoOpSubmissionManager) PriceDiscovery() PriceDiscovery {
+	return &noOpPriceDiscovery{}
+}
+
+func (m *NoOpSubmissionManager) EstimateGasAndSetFee(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+	return transaction.ErrMethodNotSupported
+}

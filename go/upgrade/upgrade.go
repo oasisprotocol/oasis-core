@@ -304,7 +304,7 @@ func New(store *persistent.CommonStore, dataDir string, checkStatus bool) (api.B
 	}
 
 	if checkStatus {
-		if err := upgrader.checkStatus(dataDir); err != nil {
+		if err := upgrader.checkStatus(); err != nil {
 			return nil, err
 		}
 	}

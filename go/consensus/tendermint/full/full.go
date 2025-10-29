@@ -24,11 +24,14 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
+	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
+	tmstate "github.com/tendermint/tendermint/state"
 	tmstatesync "github.com/tendermint/tendermint/statesync"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 
+	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -39,18 +42,34 @@ import (
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
+	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
+	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/governance"
+	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
-	epochtimeAPI "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
+	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
+	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/scheduler"
+	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/staking"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
+	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/registry"
+	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash"
+	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -559,86 +578,8 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 	ch, sub, err := t.WatchTendermintBlocks()
 	if err != nil {
 		return nil, nil, err
-func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
-	status := &consensusAPI.Status{
-		Version:  version.ConsensusProtocol,
-		Backend:  api.BackendName,
-		Features: t.SupportedFeatures(),
 	}
 
-	status.ChainContext = t.genesis.ChainContext()
-	status.GenesisHeight = t.genesis.Height
-	if t.started() {
-		// Only attempt to fetch blocks in case the consensus service has started as otherwise
-		// requests will block.
-		genBlk, err := t.GetBlock(ctx, t.genesis.Height)
-		switch err {
-		case nil:
-			status.GenesisHash = genBlk.Hash
-		default:
-			// We may not be able to fetch the genesis block in case it has been pruned.
-		}
-
-		lastRetainedHeight, err := t.GetLastRetainedVersion(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get last retained height: %w", err)
-		}
-		// Some pruning configurations return 0 instead of a valid block height. Clamp those to the genesis height.
-		if lastRetainedHeight < t.genesis.Height {
-			lastRetainedHeight = t.genesis.Height
-		}
-		status.LastRetainedHeight = lastRetainedHeight
-		lastRetainedBlock, err := t.GetBlock(ctx, lastRetainedHeight)
-		switch err {
-		case nil:
-			status.LastRetainedHash = lastRetainedBlock.Hash
-		default:
-			// Before we commit the first block, we can't load it from GetBlock. Don't give its hash in this case.
-		}
-
-		// Latest block.
-		latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
-		switch err {
-		case nil:
-			status.LatestHeight = latestBlk.Height
-			status.LatestHash = latestBlk.Hash
-			status.LatestTime = latestBlk.Time
-			status.LatestStateRoot = latestBlk.StateRoot
-
-			var epoch beaconAPI.EpochTime
-			epoch, err = t.beacon.GetEpoch(ctx, status.LatestHeight)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch epoch: %w", err)
-			}
-			status.LatestEpoch = epoch
-		case consensusAPI.ErrNoCommittedBlocks:
-			// No committed blocks yet.
-		default:
-			return nil, fmt.Errorf("failed to fetch current block: %w", err)
-		}
-
-		// List of consensus peers.
-		tmpeers := t.node.Switch().Peers().List()
-		peers := make([]string, 0, len(tmpeers))
-		for _, tmpeer := range tmpeers {
-			p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
-			peers = append(peers, p)
-		}
-		status.NodePeers = peers
-
-		// Check if the local node is in the validator set for the latest (uncommitted) block.
-		valSetHeight := status.LatestHeight + 1
-		if valSetHeight < status.GenesisHeight {
-			valSetHeight = status.GenesisHeight
-		}
-		vals, err := t.stateStore.LoadValidators(valSetHeight)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load validator set: %w", err)
-		}
-		consensusPk := t.identity.ConsensusSigner.Public()
-		consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
-		status.IsValidator = vals.HasAddress(consensusAddr)
-	}
 	mapCh := make(chan *consensusAPI.Block)
 	go func() {
 		defer close(mapCh)
@@ -859,7 +800,7 @@ func (t *fullService) GetTendermintBlock(ctx context.Context, height int64) (*tm
 	return result.Block, nil
 }
 
-func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmrpctypes.ResultBlockResults, error) {
+func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmcoretypes.ResultBlockResults, error) {
 	if t.client == nil {
 		panic("client not available yet")
 	}
@@ -879,7 +820,6 @@ func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmrpc
 	return result, nil
 }
 
-func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
 func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()
@@ -1034,7 +974,7 @@ func (t *fullService) lazyInit() error {
 		switch dbCtx.ID {
 		case "state":
 			// Tendermint state database.
-			t.stateStore = db
+			t.stateStore = tmstate.NewStore(db)
 		case "blockstore":
 			t.blockStoreDB = db
 		default:

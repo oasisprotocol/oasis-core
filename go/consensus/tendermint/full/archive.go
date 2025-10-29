@@ -15,7 +15,9 @@ import (
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
+	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
+	tmdb "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -196,10 +198,12 @@ func NewArchive(
 
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
-	srv.stateStore, err = dbProvider(&tmnode.DBContext{ID: "state", Config: tmConfig})
+	var stateDB tmdb.DB
+	stateDB, err = dbProvider(&tmnode.DBContext{ID: "state", Config: tmConfig})
 	if err != nil {
 		return nil, err
 	}
+	srv.stateStore = state.NewStore(stateDB)
 
 	tmGenDoc, err := api.GetTendermintGenesisDocument(genesisProvider)
 	if err != nil {
@@ -210,7 +214,7 @@ func NewArchive(
 	tmcore.SetEnvironment(&tmcore.Environment{
 		ProxyAppQuery:    tmproxy.NewAppConnQuery(srv.abciClient),
 		ProxyAppMempool:  nil,
-		StateDB:          srv.stateStore,
+		StateStore:       srv.stateStore,
 		BlockStore:       store.NewBlockStore(srv.blockStoreDB),
 		EvidencePool:     nil,
 		ConsensusState:   nil,
