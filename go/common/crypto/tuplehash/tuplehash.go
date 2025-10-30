@@ -96,7 +96,7 @@ func leftEncode(x uint64) []byte {
 	var b [9]byte
 	binary.BigEndian.PutUint64(b[1:], x)
 	nrZeroBytes := bits.LeadingZeros64(x) / 8
-	b[nrZeroBytes] = byte(8 - nrZeroBytes)
+	b[nrZeroBytes] = byte(8 - nrZeroBytes) //nolint:gosec
 
 	return b[nrZeroBytes:]
 }
@@ -111,7 +111,7 @@ func rightEncode(x uint64) []byte {
 	var b [9]byte
 	binary.BigEndian.PutUint64(b[:], x)
 	nrZeroBytes := bits.LeadingZeros64(x) / 8
-	b[8] = byte(8 - nrZeroBytes)
+	b[8] = byte(8 - nrZeroBytes) //nolint:gosec
 
 	return b[nrZeroBytes:]
 }

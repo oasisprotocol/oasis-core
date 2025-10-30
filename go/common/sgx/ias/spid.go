@@ -27,8 +27,7 @@ func (s SPID) String() string {
 
 // MarshalBinary encodes an SPID into binary form.
 func (s SPID) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, s[:]...)
-	return
+	return append([]byte{}, s[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled SPID.

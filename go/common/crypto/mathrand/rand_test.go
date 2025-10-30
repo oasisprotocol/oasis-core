@@ -28,8 +28,8 @@ func TestRngAdapter(t *testing.T) {
 	//
 	// Sort of silly to do this repeatedly since the results are determinstic.
 	samples := make([]int, 6)
-	for i := 0; i < nrSamples; i++ {
-		samples[rng.Intn(6)]++
+	for range nrSamples {
+		samples[rng.Intn(len(samples))]++
 	}
 
 	chiSq, expected := float64(0), float64(nrSamples)/6

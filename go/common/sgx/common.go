@@ -55,8 +55,7 @@ type MrEnclave [MrEnclaveSize]byte
 
 // MarshalBinary encodes a Mrenclave into binary form.
 func (m *MrEnclave) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, m[:]...)
-	return
+	return append([]byte{}, m[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled Mrenclave.
@@ -108,8 +107,7 @@ type MrSigner [MrSignerSize]byte
 
 // MarshalBinary encodes a MrSigner into binary form.
 func (m *MrSigner) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, m[:]...)
-	return
+	return append([]byte{}, m[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled MrSigner.

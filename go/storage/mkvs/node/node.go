@@ -423,7 +423,7 @@ func (n *InternalNode) CompactMarshalBinaryV0() (data []byte, err error) {
 	data = append(data, n.Label...)
 	data = append(data, leafNodeBinary...)
 
-	return
+	return data, nil
 }
 
 // CompactMarshalBinaryV1 encodes an internal node into binary form without
@@ -435,7 +435,7 @@ func (n *InternalNode) CompactMarshalBinaryV1() (data []byte, err error) {
 	data = append(data, n.Label...)
 	data = append(data, PrefixNilNode)
 
-	return
+	return data, nil
 }
 
 // MarshalBinary encodes an internal node into binary form.
@@ -462,7 +462,7 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 	data = append(data, leftHash[:]...)
 	data = append(data, rightHash[:]...)
 
-	return
+	return data, nil
 }
 
 // UnmarshalBinary decodes a binary marshaled internal node.
@@ -642,7 +642,7 @@ func (n *LeafNode) CompactMarshalBinaryV1() (data []byte, err error) {
 	data = binary.LittleEndian.AppendUint32(data, uint32(len(n.Value)))
 	data = append(data, n.Value...)
 
-	return
+	return data, nil
 }
 
 // MarshalBinary encodes a leaf node into binary form.

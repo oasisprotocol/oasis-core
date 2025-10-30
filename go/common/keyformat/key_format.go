@@ -126,12 +126,12 @@ func (k *KeyFormat) Encode(values ...any) []byte {
 	}
 
 	size := 1
-	for i := range values {
+	for i, v := range values {
 		meta := k.meta[i]
 		elemLen := meta.size
 		if elemLen == -1 {
 			// Variable-sized element, the passed value must be a []byte.
-			elemLen = len(values[i].([]byte))
+			elemLen = len(v.([]byte))
 		}
 
 		size += elemLen

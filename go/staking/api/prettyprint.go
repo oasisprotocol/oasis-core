@@ -30,9 +30,10 @@ func PrettyPrintCommissionRatePercentage(rateNumerator quantity.Quantity) string
 //     equivalent length
 func PrettyPrintCommissionScheduleIndexInfixes(ctx context.Context) (indexInfix, emptyInfix string) {
 	index, ok := ctx.Value(prettyprint.ContextKeyCommissionScheduleIndex).(int)
-	if ok {
-		indexInfix = fmt.Sprintf("(%d) ", index+1)
-		emptyInfix = strings.Repeat(" ", len(indexInfix))
+	if !ok {
+		return "", ""
 	}
-	return
+	indexInfix = fmt.Sprintf("(%d) ", index+1)
+	emptyInfix = strings.Repeat(" ", len(indexInfix))
+	return indexInfix, emptyInfix
 }

@@ -23,7 +23,7 @@ func (k Key) MarshalBinary() (data []byte, err error) {
 	if k != nil {
 		copy(data[DepthSize:], k[:])
 	}
-	return
+	return data, nil
 }
 
 // UnmarshalBinary decodes a binary marshaled key including the length in bytes.
@@ -128,7 +128,7 @@ func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key) {
 		}
 	}
 
-	return
+	return prefix, suffix
 }
 
 // Merge bit-wise merges key of given length with another key of given length.
@@ -145,7 +145,7 @@ func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
 	newKey := make(Key, (keyLen + k2Len).ToBytes())
 	copy(newKey[:], k[:keyLenBytes])
 
-	for i := 0; i < len(k2); i++ {
+	for i := range len(k2) {
 		// First set the right chunk of the previous byte
 		if keyLen%8 != 0 && keyLenBytes > 0 {
 			newKey[keyLenBytes+i-1] |= k2[i] >> (keyLen % 8)
@@ -181,24 +181,21 @@ func (k Key) AppendBit(keyLen Depth, val bool) Key {
 //
 // Additionally, keyBitLen and k2bitLen are key lengths in bits of k and k2
 // respectively.
-func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) (bitLength Depth) {
-	minKeyLen := len(k)
-	if len(k2) < len(k) {
-		minKeyLen = len(k2)
-	}
+func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) Depth {
+	minKeyLen := min(len(k2), len(k))
 
 	// Compute the common prefix byte-wise.
 	i := Depth(0)
-	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ { //nolint:revive
+	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ { //nolint:gosec
 	}
 
 	// Prefixes match i bytes and maybe some more bits below.
-	bitLength = i * 8
+	bitLength := i * 8
 
 	if i != Depth(len(k)) && i != Depth(len(k2)) {
 		// We got a mismatch somewhere along the way. We need to compute how
 		// many additional bits in i-th byte match.
-		bitLength += Depth(bits.LeadingZeros8(k[i] ^ k2[i]))
+		bitLength += Depth(bits.LeadingZeros8(k[i] ^ k2[i])) //nolint:gosec
 	}
 
 	// In any case, bitLength should never exceed length of the shorter key.
@@ -209,5 +206,5 @@ func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) (bitLength
 		bitLength = k2bitLen
 	}
 
-	return
+	return bitLength
 }

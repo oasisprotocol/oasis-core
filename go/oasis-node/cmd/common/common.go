@@ -327,5 +327,5 @@ Go toolchain version: {{ toolchain }}
 func IsNotRootOrAllowed() (canRun bool, isRoot bool) {
 	isRoot = os.Geteuid() == 0
 	canRun = !isRoot || flags.DebugAllowRoot()
-	return
+	return canRun, isRoot
 }

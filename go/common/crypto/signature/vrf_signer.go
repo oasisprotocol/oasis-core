@@ -96,8 +96,7 @@ func (r RawProof) String() string {
 
 // MarshalBinary encodes a VRF proof into binary form.
 func (r RawProof) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, r[:]...)
-	return
+	return append([]byte{}, r[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled VRF proof.

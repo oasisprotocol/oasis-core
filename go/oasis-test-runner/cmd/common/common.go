@@ -37,12 +37,13 @@ func GetScenarios() map[string]scenario.Scenario {
 
 // GetScenarioNames returns the names of all scenarios.
 // NOTE: Scenarios are sorted alphabetically.
-func GetScenarioNames() (names []string) {
+func GetScenarioNames() []string {
+	names := make([]string, 0, len(scenarios))
 	for name := range scenarios {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	return
+	return names
 }
 
 // GetDefaultScenarios returns all registered default scenarios.

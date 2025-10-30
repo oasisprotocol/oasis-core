@@ -85,14 +85,15 @@ func (f *filteredNodeDescriptorLookup) LookupTags(id signature.PublicKey) []stri
 }
 
 // Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) GetNodes() (filtered []*node.Node) {
+func (f *filteredNodeDescriptorLookup) GetNodes() []*node.Node {
+	filtered := make([]*node.Node, 0)
 	for _, v := range f.base.GetNodes() {
 		tags := f.base.LookupTags(v.ID)
 		if f.filter(v, tags) {
 			filtered = append(filtered, v)
 		}
 	}
-	return
+	return filtered
 }
 
 // Implements NodeDescriptorLookup.

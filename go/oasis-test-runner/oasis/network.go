@@ -401,7 +401,7 @@ func (net *Network) CheckLogWatchers() (err error) {
 			err = fmt.Errorf("log watcher %s: %w", w.Name(), logErr)
 		}
 	}
-	return
+	return err
 }
 
 // Start starts the network.

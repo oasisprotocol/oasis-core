@@ -306,12 +306,12 @@ func (s *ImmutableState) SuspendedRuntime(ctx context.Context, id common.Namespa
 }
 
 // AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
-func (s *ImmutableState) AnyRuntime(ctx context.Context, id common.Namespace) (rt *registry.Runtime, err error) {
-	rt, err = s.Runtime(ctx, id)
+func (s *ImmutableState) AnyRuntime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
+	rt, err := s.Runtime(ctx, id)
 	if err == registry.ErrNoSuchRuntime {
-		rt, err = s.SuspendedRuntime(ctx, id)
+		return s.SuspendedRuntime(ctx, id)
 	}
-	return
+	return rt, err
 }
 
 func (s *ImmutableState) iterateRuntimes(

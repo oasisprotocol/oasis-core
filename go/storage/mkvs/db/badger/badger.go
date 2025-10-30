@@ -491,7 +491,7 @@ func (d *badgerNodeDB) GetEarliestVersion() uint64 {
 	return d.meta.getEarliestVersion()
 }
 
-func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, err error) {
+func (d *badgerNodeDB) GetRootsForVersion(version uint64) ([]node.Root, error) {
 	// If the version is earlier than the earliest version, we don't have the roots.
 	if version < d.meta.getEarliestVersion() {
 		return nil, nil
@@ -505,6 +505,7 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, er
 		return nil, err
 	}
 
+	roots := make([]node.Root, 0, len(rootsMeta.Roots))
 	for rootHash := range rootsMeta.Roots {
 		roots = append(roots, node.Root{
 			Namespace: d.namespace,
@@ -513,7 +514,8 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, er
 			Hash:      rootHash.Hash(),
 		})
 	}
-	return
+
+	return roots, nil
 }
 
 func (d *badgerNodeDB) HasRoot(root node.Root) bool {

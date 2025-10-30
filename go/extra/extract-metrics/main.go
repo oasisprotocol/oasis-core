@@ -184,26 +184,27 @@ func doExtractMetrics(*cobra.Command, []string) {
 //
 // )
 // ```
-func checkNewPrometheusMetric(f *token.FileSet, n ast.Node) (m Metric, ok bool) {
+func checkNewPrometheusMetric(f *token.FileSet, n ast.Node) (Metric, bool) {
 	c, ok := n.(*ast.CallExpr)
 	if !ok {
-		return
+		return Metric{}, false
 	}
 	sel, ok := c.Fun.(*ast.SelectorExpr)
 	if !ok {
-		return
+		return Metric{}, false
 	}
 	pkg, ok := sel.X.(*ast.Ident)
 	if !ok || pkg.Name != "prometheus" {
-		return m, false
+		return Metric{}, false
 	}
 	re := regexp.MustCompile(`New(.*)`)
 	if !re.MatchString(sel.Sel.String()) {
-		return m, false
+		return Metric{}, false
 	}
 
 	// Call expression is of form prometheus.New<metric Name>(...) or
 	// prometheus.New<metric Name>Vec().
+	var m Metric
 	m.Type = re.FindStringSubmatch(sel.Sel.String())[1]
 	if strings.HasSuffix(m.Type, "Vec") {
 		m.Vec = true
@@ -232,14 +233,14 @@ func checkNewPrometheusMetric(f *token.FileSet, n ast.Node) (m Metric, ok bool) 
 	if len(c.Args) > 1 {
 		l, okL := c.Args[1].(*ast.CompositeLit)
 		if !okL {
-			return
+			return Metric{}, false
 		}
 		for _, e := range l.Elts {
 			m.Labels = append(m.Labels, extractValue(e))
 		}
 	}
 
-	return
+	return m, true
 }
 
 // extractValue returns string value of the identifier or literal.

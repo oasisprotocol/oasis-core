@@ -1522,7 +1522,9 @@ func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
 //
 // The passed list of runtimes must be unique runtime descriptors for all runtimes that the node is
 // registered for.
-func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.StakeThreshold) {
+func StakeThresholdsForNode(n *node.Node, rts []*Runtime) []staking.StakeThreshold {
+	thresholds := make([]staking.StakeThreshold, 0)
+
 	// Validator nodes are global.
 	if n.HasRoles(node.RoleValidator) {
 		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeValidator))
@@ -1569,18 +1571,21 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 			}
 		}
 	}
-	return
+	return thresholds
 }
 
 // StakeThresholdsForRuntime returns the staking thresholds for the given runtime.
-func StakeThresholdsForRuntime(rt *Runtime) (thresholds []staking.StakeThreshold) {
+func StakeThresholdsForRuntime(rt *Runtime) []staking.StakeThreshold {
 	switch rt.Kind {
 	case KindCompute:
-		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindRuntimeCompute))
+		return []staking.StakeThreshold{
+			staking.GlobalStakeThreshold(staking.KindRuntimeCompute),
+		}
 	case KindKeyManager:
-		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindRuntimeKeyManager))
+		return []staking.StakeThreshold{
+			staking.GlobalStakeThreshold(staking.KindRuntimeKeyManager),
+		}
 	default:
 		panic(fmt.Errorf("registry: unknown runtime kind: %s", rt.Kind))
 	}
-	return
 }

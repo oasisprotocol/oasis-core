@@ -115,8 +115,8 @@ func (s *stakingTestsState) update(t *testing.T, staking api.Backend) {
 
 // newStakingTestsState returns a new staking tests' state or returns a testing
 // error.
-func newStakingTestsState(t *testing.T, staking api.Backend) (state *stakingTestsState) {
-	state = &stakingTestsState{}
+func newStakingTestsState(t *testing.T, staking api.Backend) *stakingTestsState {
+	var state stakingTestsState
 	accountDataList := make([]accountData, NumAccounts)
 	for i := 0; i < NumAccounts; i++ {
 		accountDataList[i] = accountData{
@@ -125,7 +125,7 @@ func newStakingTestsState(t *testing.T, staking api.Backend) (state *stakingTest
 	}
 	state.accounts = accountDataList
 	state.update(t, staking)
-	return
+	return &state
 }
 
 var (

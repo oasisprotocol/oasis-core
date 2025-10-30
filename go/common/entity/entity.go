@@ -228,7 +228,7 @@ type SignedEntity struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { // nolint: interfacer
+func (s *SignedEntity) Open(context signature.Context, entity *Entity) error {
 	return s.Signed.Open(context, entity)
 }
 

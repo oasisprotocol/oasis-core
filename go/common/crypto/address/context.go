@@ -29,8 +29,7 @@ type Context struct {
 
 // MarshalBinary encodes a context into binary form.
 func (c Context) MarshalBinary() (data []byte, err error) {
-	data = append([]byte(c.Identifier), c.Version)
-	return
+	return append([]byte(c.Identifier), c.Version), nil
 }
 
 // String returns a string representation of address' context.

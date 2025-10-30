@@ -404,9 +404,9 @@ func fetchAndCompare(
 	ctx context.Context,
 	m, scenario string,
 	sInstance, tInstance *model.SampleStream,
-) (succ bool) {
+) bool {
 	getMetric := allMetrics[m].getter
-	succ = true
+	succ := true
 
 	sAvg, sMax, err := getMetric(ctx, scenario, sInstance)
 	if err != nil {
@@ -495,7 +495,7 @@ func fetchAndCompare(
 		succ = false
 	}
 
-	return
+	return succ
 }
 
 func initCmpLogger() error {

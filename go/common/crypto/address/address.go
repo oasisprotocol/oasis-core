@@ -34,8 +34,7 @@ type Address [Size]byte
 
 // MarshalBinary encodes an address into binary form.
 func (a Address) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, a[:]...)
-	return
+	return append([]byte{}, a[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled address.
@@ -90,7 +89,7 @@ func (a Address) IsValid() bool {
 }
 
 // NewAddress creates a new address of specified version from address' context and data.
-func NewAddress(ctx Context, data []byte) (a Address) {
+func NewAddress(ctx Context, data []byte) Address {
 	if _, isRegistered := registeredContexts.Load(ctx); !isRegistered {
 		panic(fmt.Sprintf("address: context %s is not registered", ctx))
 	}
@@ -101,6 +100,7 @@ func NewAddress(ctx Context, data []byte) (a Address) {
 	if err != nil {
 		panic(err)
 	}
+	var a Address
 	_ = a.UnmarshalBinary(append([]byte{ctx.Version}, truncatedHash...))
-	return
+	return a
 }

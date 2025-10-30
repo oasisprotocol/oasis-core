@@ -32,11 +32,11 @@ func (n *naked) Wait() <-chan struct{} {
 }
 
 // Implements Process.
-func (n *naked) Error() (err error) {
+func (n *naked) Error() error {
 	n.Lock()
-	err = n.err
+	err := n.err
 	n.Unlock()
-	return
+	return err
 }
 
 func (n *naked) wait() error {

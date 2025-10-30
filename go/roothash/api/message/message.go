@@ -33,11 +33,12 @@ func (m *Message) ValidateBasic() error {
 }
 
 // MessagesHash returns a hash of provided runtime messages.
-func MessagesHash(msgs []Message) (h hash.Hash) {
+func MessagesHash(msgs []Message) hash.Hash {
 	if len(msgs) == 0 {
 		// Special case if there are no messages.
+		var h hash.Hash
 		h.Empty()
-		return
+		return h
 	}
 	return hash.NewFrom(msgs)
 }

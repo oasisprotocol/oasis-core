@@ -50,10 +50,7 @@ func (ak artifactKind) MarshalBinary() (data []byte, err error) {
 	if ak == kindInvalid {
 		return nil, errMalformedArtifactKind
 	}
-
-	data = []byte{uint8(ak)}
-
-	return
+	return []byte{uint8(ak)}, nil
 }
 
 // UnmarshalBinary decodes a binary marshaled artifact kind.

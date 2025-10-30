@@ -36,8 +36,7 @@ type Hash [Size]byte
 
 // MarshalBinary encodes a hash into binary form.
 func (h *Hash) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, h[:]...)
-	return
+	return append([]byte{}, h[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled hash.
@@ -139,15 +138,17 @@ func (h Hash) Truncate(n int) ([]byte, error) {
 }
 
 // NewFrom creates a new hash by hashing the CBOR representation of the given type.
-func NewFrom(v any) (h Hash) {
+func NewFrom(v any) Hash {
+	var h Hash
 	h.From(v)
-	return
+	return h
 }
 
 // NewFromBytes creates a new hash by hashing the provided byte string(s).
-func NewFromBytes(data ...[]byte) (h Hash) {
+func NewFromBytes(data ...[]byte) Hash {
+	var h Hash
 	h.FromBytes(data...)
-	return
+	return h
 }
 
 // NewFromReader creates a new hash by hashing data from the provided reader until EOF.
@@ -161,9 +162,10 @@ func NewFromReader(reader io.Reader) (Hash, error) {
 
 // LoadFromHexBytes creates a new hash by loading it from the given CometBFT
 // HexBytes byte array.
-func LoadFromHexBytes(data cmtbytes.HexBytes) (h Hash) {
+func LoadFromHexBytes(data cmtbytes.HexBytes) Hash {
+	var h Hash
 	_ = h.UnmarshalBinary(data[:])
-	return
+	return h
 }
 
 // Builder is a hash builder that can be used to compute hashes iteratively.
@@ -179,10 +181,11 @@ func (b *Builder) Write(p []byte) (int, error) {
 
 // Build returns the current hash.
 // It does not change the underlying hash state.
-func (b *Builder) Build() (h Hash) {
+func (b *Builder) Build() Hash {
+	var h Hash
 	sum := b.hasher.Sum([]byte{})
 	_ = h.UnmarshalBinary(sum[:])
-	return
+	return h
 }
 
 // NewBuilder creates a new hash builder.

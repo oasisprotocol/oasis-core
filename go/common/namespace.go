@@ -44,8 +44,7 @@ type Namespace [NamespaceSize]byte
 
 // MarshalBinary encodes a namespace identifier into binary form.
 func (n *Namespace) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, n[:]...)
-	return
+	return append([]byte{}, n[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled namespace identifier.

@@ -153,16 +153,17 @@ func doCommit(
 	batch db.Batch,
 	ptr *node.Pointer,
 	parent *node.Pointer,
-) (h hash.Hash, err error) {
+) (hash.Hash, error) {
 	if ptr == nil {
+		var h hash.Hash
 		h.Empty()
-		return
-	} else if ptr.Clean {
-		if err = batch.VisitCleanNode(ptr, parent); err != nil {
-			return
+		return h, nil
+	}
+	if ptr.Clean {
+		if err := batch.VisitCleanNode(ptr, parent); err != nil {
+			return hash.Hash{}, err
 		}
-		h = ptr.Hash
-		return
+		return ptr.Hash, nil
 	}
 
 	// Pointer is not clean, we need to perform some hash computations.
@@ -182,26 +183,26 @@ func doCommit(
 			panic("mkvs: non-clean pointer has clean node")
 		}
 
-		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
-			return
+		if err := batch.VisitDirtyNode(ptr, parent); err != nil {
+			return hash.Hash{}, err
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if _, err = doCommit(ctx, cache, batch, n.LeafNode, ptr); err != nil {
-			return
+		if _, err := doCommit(ctx, cache, batch, n.LeafNode, ptr); err != nil {
+			return hash.Hash{}, err
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			if _, err = doCommit(ctx, cache, batch, subNode, ptr); err != nil {
-				return
+			if _, err := doCommit(ctx, cache, batch, subNode, ptr); err != nil {
+				return hash.Hash{}, err
 			}
 		}
 
 		n.UpdateHash()
 
 		// Store the node.
-		if err = batch.PutNode(ptr); err != nil {
-			return
+		if err := batch.PutNode(ptr); err != nil {
+			return hash.Hash{}, err
 		}
 
 		batch.OnCommit(func() {
@@ -214,15 +215,15 @@ func doCommit(
 			panic("mkvs: non-clean pointer has clean node")
 		}
 
-		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
-			return
+		if err := batch.VisitDirtyNode(ptr, parent); err != nil {
+			return hash.Hash{}, err
 		}
 
 		n.UpdateHash()
 
 		// Store the node.
-		if err = batch.PutNode(ptr); err != nil {
-			return
+		if err := batch.PutNode(ptr); err != nil {
+			return hash.Hash{}, err
 		}
 
 		batch.OnCommit(func() {
@@ -236,6 +237,6 @@ func doCommit(
 		// Make node eligible for eviction.
 		cache.commitNode(ptr)
 	})
-	h = ptr.Hash
-	return
+
+	return ptr.Hash, nil
 }

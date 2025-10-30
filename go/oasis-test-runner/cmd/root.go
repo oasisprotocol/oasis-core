@@ -488,14 +488,12 @@ func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (e
 	}()
 
 	if err = sc.PreInit(); err != nil {
-		err = fmt.Errorf("root: failed to pre-initialize scenario: %w", err)
-		return
+		return fmt.Errorf("root: failed to pre-initialize scenario: %w", err)
 	}
 
 	var fixture *oasis.NetworkFixture
 	if fixture, err = sc.Fixture(); err != nil {
-		err = fmt.Errorf("root: failed to initialize network fixture: %w", err)
-		return
+		return fmt.Errorf("root: failed to initialize network fixture: %w", err)
 	}
 
 	// Instantiate fixture if it is non-nil. Otherwise assume Init will do
@@ -503,8 +501,7 @@ func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (e
 	var net *oasis.Network
 	if fixture != nil {
 		if net, err = fixture.Create(childEnv); err != nil {
-			err = fmt.Errorf("root: failed to instantiate fixture: %w", err)
-			return
+			return fmt.Errorf("root: failed to instantiate fixture: %w", err)
 		}
 	}
 
@@ -521,15 +518,13 @@ func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (e
 	}
 
 	if err = sc.Init(childEnv, net); err != nil {
-		err = fmt.Errorf("root: failed to initialize scenario: %w", err)
-		return
+		return fmt.Errorf("root: failed to initialize scenario: %w", err)
 	}
 
 	if pusher != nil {
 		metrics.UpGauge.Set(1.0)
 		if err = pusher.Push(); err != nil {
-			err = fmt.Errorf("root: failed to push metrics: %w", err)
-			return
+			return fmt.Errorf("root: failed to push metrics: %w", err)
 		}
 	}
 
@@ -538,19 +533,17 @@ func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (e
 	defer cancel()
 
 	if err = sc.Run(ctx, childEnv); err != nil {
-		err = fmt.Errorf("root: failed to run scenario: %w", err)
-		return
+		return fmt.Errorf("root: failed to run scenario: %w", err)
 	}
 
 	if pusher != nil {
 		metrics.UpGauge.Set(0.0)
 		if err = pusher.Push(); err != nil {
-			err = fmt.Errorf("root: failed to push metrics: %w", err)
-			return
+			return fmt.Errorf("root: failed to push metrics: %w", err)
 		}
 	}
 
-	return
+	return nil
 }
 
 func doCleanup(childEnv *env.Env) (err error) {
@@ -562,7 +555,7 @@ func doCleanup(childEnv *env.Env) (err error) {
 
 	childEnv.Cleanup()
 
-	return
+	return nil
 }
 
 func runList(*cobra.Command, []string) {
