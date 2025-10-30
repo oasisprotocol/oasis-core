@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # Fetch all history as the recommended way to fetch all tags and
           # branches of the project.
@@ -33,7 +33,7 @@ jobs:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ">=1.25.3"
       - name: Set up Rust
@@ -75,7 +75,7 @@ jobs:
         run: |
           make release-build
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: oasis-core-dev-release
           path: dist/*.tar.gz

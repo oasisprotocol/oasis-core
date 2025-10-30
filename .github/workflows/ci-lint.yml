@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # Check out pull request's HEAD commit instead of the merge commit to
           # prevent gitlint from failing due to too long commit message titles,
@@ -36,15 +36,15 @@ jobs:
           # Fetch all history so gitlint can check the relevant commits.
           fetch-depth: "0"
       - name: Set up Python 3
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
       - name: Set up Node.js 12
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "12.x"
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ">=1.25.3"
       - name: Set up Rust
@@ -97,7 +97,7 @@ jobs:
         # Always run this step so that all linting errors can be seen at once.
         if: always()
       - name: Ensure a clean code checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           clean: true
         if: always()
