@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
-	cmtState "github.com/cometbft/cometbft/state"
+	cmtconfig "github.com/cometbft/cometbft/config"
 	cmtBlockstore "github.com/cometbft/cometbft/store"
 	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -24,6 +25,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
+	cdb "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
+	dbProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -567,15 +570,20 @@ func minReindexedHeight(dataDir string, runtimes []common.Namespace) (int64, err
 }
 
 func pruneCometDBs(dataDir string, retainHeight int64) error {
-	// Hardcoding the path is not ideal.
-	blockstorePath := fmt.Sprintf("%s/consensus/data/blockstore.badger.db", dataDir)
-	statePath := fmt.Sprintf("%s/consensus/data/state.badger.db", dataDir)
+	cmtConfig := cmtconfig.DefaultConfig()
+	_ = viper.Unmarshal(&cmtConfig)
+	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
 
-	blockDB, err := cmtDBProvider.New(blockstorePath, false)
+	dbProvider, err := dbProvider.Provider()
+	if err != nil {
+		return fmt.Errorf("failed to obtain db provider: %w", err)
+	}
+
+	blockstoreDB, err := cdb.OpenBlockstoreDB(dbProvider, cmtConfig)
 	if err != nil {
 		return fmt.Errorf("failed to open blockstore: %w", err)
 	}
-	blockstore := cmtBlockstore.NewBlockStore(blockDB)
+	blockstore := cmtBlockstore.NewBlockStore(blockstoreDB)
 	defer blockstore.Close()
 
 	// Mimic the upstream pruning logic from CometBFT
@@ -600,11 +608,11 @@ func pruneCometDBs(dataDir string, retainHeight int64) error {
 	}
 	logger.Info("blockstore pruning finished", "pruned", n)
 
-	stateDB, err := cmtDBProvider.New(statePath, false)
+	stateDB, err := cdb.OpenStateDB(dbProvider, cmtConfig)
 	if err != nil {
 		return fmt.Errorf("failed to open state db: %w", err)
 	}
-	state := cmtState.NewStore(stateDB, cmtState.StoreOptions{})
+	state := cdb.OpenStateStore(stateDB)
 	defer state.Close()
 
 	logger.Info("pruning consensus states", "base", base, "retain_height", retainHeight)
