@@ -708,7 +708,7 @@ func New(
 	consensus consensus.Service,
 ) (Registry, error) {
 	// Get configured runtime IDs.
-	runtimeIDs, err := getConfiguredRuntimeIDs()
+	runtimeIDs, err := GetConfiguredRuntimeIDs()
 	if err != nil {
 		return nil, err
 	}
