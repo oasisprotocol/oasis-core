@@ -146,15 +146,17 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		// mismatch (the non-SGX KM returns an empty policy), so we need to
 		// do an epoch transition instead (to complete the KM runtime
 		// registration).
-		if err = sc.epochTransition(ctx); err != nil {
-			return err
-		}
 	default:
 		// In SGX mode, we can update the policy as intended.
 		if err = sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, 0, policies, nonce); err != nil {
 			return err
 		}
 		nonce++
+	}
+
+	// Apply policy at the end of an epoch.
+	if err = sc.epochTransition(ctx); err != nil {
+		return err
 	}
 
 	// Wait for key manager nodes to register, then make another epoch transition.
