@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/rpc"
 	"os/exec"
+	"slices"
 	"sync"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -80,10 +81,8 @@ func NewFactory(config any, roles ...signature.SignerRole) (signature.SignerFact
 	// It's not like all the cheap HSMs people seem to like using is going
 	// to support ECVRF anytime soon, when they don't even fully support
 	// RFC 8032.
-	for _, role := range roles {
-		if role == signature.SignerVRF {
-			return nil, signature.ErrVRFNotSupported
-		}
+	if slices.Contains(roles, signature.SignerVRF) {
+		return nil, signature.ErrVRFNotSupported
 	}
 
 	// Why yes, the correct thing to do is to call `client.Kill`,
