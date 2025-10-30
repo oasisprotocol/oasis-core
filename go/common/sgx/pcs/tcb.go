@@ -271,10 +271,8 @@ func (ti *TCBInfo) validate(teeType TeeType, ts time.Time, policy *QuotePolicy) 
 	}
 
 	// Validate FMSPC not blacklisted.
-	for _, blocked := range policy.FMSPCBlacklist {
-		if blocked == ti.FMSPC {
-			return fmt.Errorf("pcs/tcb: blacklisted FMSPC")
-		}
+	if slices.Contains(policy.FMSPCBlacklist, ti.FMSPC) {
+		return fmt.Errorf("pcs/tcb: blacklisted FMSPC")
 	}
 
 	return nil

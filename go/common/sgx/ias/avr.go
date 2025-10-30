@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -270,10 +271,8 @@ func (b *AVRBundle) Open(policy *QuotePolicy, trustRoots *x509.CertPool, ts time
 		return nil, fmt.Errorf("quote open failure: %w", err)
 	}
 	// Validate EPID GID not blacklisted.
-	for _, blocked := range policy.GIDBlacklist {
-		if blocked == quote.Body.GID {
-			return nil, fmt.Errorf("blacklisted quote GID")
-		}
+	if slices.Contains(policy.GIDBlacklist, quote.Body.GID) {
+		return nil, fmt.Errorf("blacklisted quote GID")
 	}
 
 	return avr, nil
@@ -324,13 +323,7 @@ func (a *AttestationVerificationReport) quoteStatusAllowed(policy *QuotePolicy) 
 
 	// Search through the constraints to see if the AVR quote status is
 	// explicitly allowed.
-	for _, v := range policy.AllowedQuoteStatuses {
-		if v == status {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(policy.AllowedQuoteStatuses, status)
 }
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo

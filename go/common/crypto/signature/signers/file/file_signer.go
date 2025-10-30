@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
@@ -81,10 +82,8 @@ type Factory struct {
 // EnsureRole ensures that the SignerFactory is configured for the given
 // role.
 func (fac *Factory) EnsureRole(role signature.SignerRole) error {
-	for _, v := range fac.roles {
-		if v == role {
-			return nil
-		}
+	if slices.Contains(fac.roles, role) {
+		return nil
 	}
 	return signature.ErrRoleMismatch
 }
