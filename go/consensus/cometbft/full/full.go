@@ -668,7 +668,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		return t.genesisDoc, nil
 	}
 
-	dbProvider, err := db.GetProvider()
+	dbProvider, err := db.Provider()
 	if err != nil {
 		t.Logger.Error("failed to obtain database provider",
 			"err", err,
