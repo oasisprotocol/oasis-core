@@ -193,7 +193,8 @@ func newTestNode(t *testing.T) *testNode {
 		start:        time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
-	n.Node, err = node.NewNode()
+	cfg := &config.GlobalConfig
+	n.Node, err = node.NewNode(cfg)
 	require.NoError(err, "start node")
 
 	// Add the testNode to the newly generated entity's list of nodes
