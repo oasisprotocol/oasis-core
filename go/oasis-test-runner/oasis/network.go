@@ -150,7 +150,7 @@ type NetworkCfg struct {
 	// RoothashParameters are the roothash consensus parameters.
 	RoothashParameters *roothash.ConsensusParameters `json:"roothash_parameters,omitempty"`
 
-	// SchedulerWeakAlpkaOk is for disabling the VRF alpha entropy requirement.
+	// SchedulerWeakAlphaOk is for disabling the VRF alpha entropy requirement.
 	SchedulerWeakAlphaOk bool `json:"scheduler_weak_alpha_ok,omitempty"`
 
 	// SchedulerForceElect are the rigged committee elections.
