@@ -40,15 +40,8 @@ func (t *TxQueueMeta) FirstSeen() time.Time {
 // UsableTransactionSource is a place to retrieve txs that are "good enough." "Good enough" variously means CheckTx'd,
 // came from roothash incoming message, or came from our own node.
 type UsableTransactionSource interface {
-	// GetSchedulingSuggestion returns some number of txs to give to the scheduler as part of the initial
-	// batch.
-	GetSchedulingSuggestion(limit int) []*TxQueueMeta
-	// GetTxByHash returns the specific tx, if it is in this queue. The bool is like `value, ok := txMap[key]`. Used
-	// for resolving a batch from hashes and serving txSync.
-	GetTxByHash(h hash.Hash) (*TxQueueMeta, bool)
-	// HandleTxsUsed is a callback to indicate that the scheduler is done with a set of txs, by hash. For most
-	// implementations, remove it from internal storage.
-	HandleTxsUsed(hashes []hash.Hash)
+	// Get returns the specific tx, if it is in this queue.
+	Get(hash hash.Hash) (*TxQueueMeta, bool)
 	// All returns all transactions without removing them.
 	All() []*TxQueueMeta
 }

@@ -194,7 +194,7 @@ func (t *txPool) Has(hash hash.Hash) bool {
 
 func (t *txPool) Get(hash hash.Hash) ([]byte, bool) {
 	for _, q := range t.usableSources {
-		if tx, ok := q.GetTxByHash(hash); ok {
+		if tx, ok := q.Get(hash); ok {
 			return tx.Raw(), true
 		}
 	}
@@ -335,15 +335,11 @@ func (t *txPool) ClearProposedBatch() {
 
 func (t *txPool) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
 	t.drainLock.Lock()
-	var txs []*TxQueueMeta
-	for _, q := range t.usableSources {
-		txs = append(txs, q.GetSchedulingSuggestion(limit)...)
-	}
-	return txs
+	return t.mainQueue.Schedule(limit)
 }
 
 func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
-	return t.mainQueue.GetSchedulingExtra(limit)
+	return t.mainQueue.ScheduleExtra(limit)
 }
 
 func (t *txPool) FinishScheduling() {
@@ -361,9 +357,7 @@ func (t *txPool) RejectTxs(hashes []hash.Hash) {
 }
 
 func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
-	for _, q := range t.usableSources {
-		q.HandleTxsUsed(hashes)
-	}
+	t.mainQueue.HandleTxsUsed(hashes)
 
 	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 }
@@ -374,7 +368,7 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash
 HASH_LOOP:
 	for i, h := range batch {
 		for _, q := range t.usableSources {
-			tx, ok := q.GetTxByHash(h)
+			tx, ok := q.Get(h)
 			if !ok {
 				continue
 			}
