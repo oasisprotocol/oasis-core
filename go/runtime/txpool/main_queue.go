@@ -62,6 +62,14 @@ func newMainQueue(capacity int) *mainQueue {
 	}
 }
 
+// Size returns the current number of transactions in the queue.
+func (q *mainQueue) Size() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return q.scheduler.size()
+}
+
 // GetSchedulingSuggestion implements UsableTransactionSource.
 func (q *mainQueue) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
 	q.mu.Lock()

@@ -376,7 +376,7 @@ func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
 		q.HandleTxsUsed(hashes)
 	}
 
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 }
 
@@ -651,7 +651,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		t.checkTxNotifier.Broadcast(newTxs)
 	}
 
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 
 	return nil
@@ -868,7 +868,7 @@ func (t *txPool) recheck() {
 			results = append(results, notifyCh)
 		}
 	}
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 
 	if len(pcts) == 0 {
