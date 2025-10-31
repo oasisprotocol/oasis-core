@@ -27,7 +27,7 @@ const (
 	// checkTxTimeout is the maximum time the runtime can spend checking transactions.
 	checkTxTimeout = 15 * time.Second
 	// checkTxRetryDelay is the time to wait before queuing a check tx retry.
-	checkTxRetryDelay = 1 * time.Second
+	checkTxRetryDelay = time.Second
 	// checkTxWaitRoundSyncedTimeout is the time to wait for block to be
 	// synced with storage at the start of check tx.
 	checkTxWaitRoundSyncedTimeout = 5 * time.Second
@@ -42,7 +42,7 @@ const (
 	// republishLimitReinvokeTimeout is the timeout to the next republish worker invocation in
 	// case when the maxRepublishTxs limit is reached. This should be much shorter than the
 	// RepublishInterval.
-	republishLimitReinvokeTimeout = 1 * time.Second
+	republishLimitReinvokeTimeout = time.Second
 )
 
 // TransactionPool is an interface for managing a pool of transactions.
@@ -97,7 +97,7 @@ type TransactionPool interface {
 
 	// GetSchedulingSuggestion returns a list of transactions to schedule. This begins a
 	// scheduling session, which suppresses transaction rechecking and republishing. Subsequently
-	// call GetSchedulingExtra for more transactions, followed by FinishScheduling.
+	// call GetSchedulingExtra for more transactions.
 	GetSchedulingSuggestion(limit int) []*TxQueueMeta
 
 	// GetSchedulingExtra returns transactions to schedule.
@@ -106,10 +106,6 @@ type TransactionPool interface {
 	// transactions from the pool. Transactions will be skipped until the given hash is encountered
 	// and only the following transactions will be returned.
 	GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta
-
-	// FinishScheduling finishes a scheduling session, which resumes transaction rechecking and
-	// republishing.
-	FinishScheduling()
 
 	// ProcessBlock updates the last known runtime block information.
 	ProcessBlock(bi *runtime.BlockInfo)
@@ -154,8 +150,6 @@ type txPool struct {
 	checkTxQueue    *checkTxQueue
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
-
-	drainLock sync.Mutex
 
 	usableSources []UsableTransactionSource
 	rimQueue      *rimQueue
@@ -334,16 +328,11 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
-	t.drainLock.Lock()
 	return t.mainQueue.Schedule(limit)
 }
 
 func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
 	return t.mainQueue.ScheduleExtra(limit)
-}
-
-func (t *txPool) FinishScheduling() {
-	t.drainLock.Unlock()
 }
 
 func (t *txPool) RejectTxs(hashes []hash.Hash) {
@@ -429,9 +418,6 @@ func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, 
 }
 
 func (t *txPool) All() [][]byte {
-	t.drainLock.Lock()
-	defer t.drainLock.Unlock()
-
 	var txs [][]byte
 	for _, q := range t.usableSources {
 		for _, tx := range q.All() {
@@ -758,12 +744,7 @@ func (t *txPool) republishWorker() {
 		}
 
 		// Get transactions to republish.
-		var txs []*TxQueueMeta
-		func() {
-			t.drainLock.Lock()
-			defer t.drainLock.Unlock()
-			txs = t.mainQueue.All()
-		}()
+		txs := t.mainQueue.All()
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
@@ -829,9 +810,6 @@ func (t *txPool) recheckWorker() {
 }
 
 func (t *txPool) recheck() {
-	t.drainLock.Lock()
-	defer t.drainLock.Unlock()
-
 	// Get a batch of scheduled transactions.
 	var pcts []*PendingCheckTransaction
 	var results []chan *protocol.CheckTxResult

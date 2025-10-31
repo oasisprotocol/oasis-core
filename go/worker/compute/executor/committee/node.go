@@ -411,7 +411,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	default:
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
-		n.commonNode.TxPool.FinishScheduling()
 		return
 	}
 
@@ -431,7 +430,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	go func() {
 		defer close(done)
 		n.startSchedulingBatch(ctx, batch)
-		n.commonNode.TxPool.FinishScheduling()
 	}()
 }
 
