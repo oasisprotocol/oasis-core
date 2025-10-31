@@ -117,8 +117,8 @@ func (q *mainQueue) PeekAll() []*TxQueueMeta {
 	return q.scheduler.all()
 }
 
-// OfferChecked implements RecheckableTransactionStore.
-func (q *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
+// Add adds the given transaction to the queue.
+func (q *mainQueue) Add(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
 	t := newMainQueueTransaction(tx, string(meta.Sender), meta.SenderSeq, meta.Priority)
 
 	q.mu.Lock()
@@ -128,16 +128,16 @@ func (q *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata
 	return q.scheduler.add(t, meta.SenderStateSeq)
 }
 
-// TakeAll implements RecheckableTransactionStore.
-func (q *mainQueue) TakeAll() []*TxQueueMeta {
+// Drain removes all transactions currently in the queue and returns them.
+func (q *mainQueue) Drain() []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	return q.scheduler.drain()
 }
 
-// GetTxsToPublish implements RepublishableTransactionSource.
-func (q *mainQueue) GetTxsToPublish() []*TxQueueMeta {
+// All returns all transactions currently in the queue.
+func (q *mainQueue) All() []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 

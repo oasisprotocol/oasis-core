@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 // TxQueueMeta stores some queuing-related metadata alongside a raw transaction.
@@ -52,18 +51,4 @@ type UsableTransactionSource interface {
 	HandleTxsUsed(hashes []hash.Hash)
 	// PeekAll returns all transactions without removing them.
 	PeekAll() []*TxQueueMeta
-}
-
-// RecheckableTransactionStore provides methods for rechecking.
-type RecheckableTransactionStore interface {
-	// TakeAll removes all txs and returns them.
-	TakeAll() []*TxQueueMeta
-	// OfferChecked adds a tx that is checked.
-	OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error
-}
-
-// RepublishableTransactionSource is a place to get txs that we want to push.
-type RepublishableTransactionSource interface {
-	// GetTxsToPublish gets txs that this queue wants to publish.
-	GetTxsToPublish() []*TxQueueMeta
 }
