@@ -440,7 +440,7 @@ func (t *txPool) All() [][]byte {
 
 	var txs [][]byte
 	for _, q := range t.usableSources {
-		for _, tx := range q.PeekAll() {
+		for _, tx := range q.All() {
 			txs = append(txs, tx.Raw())
 		}
 	}

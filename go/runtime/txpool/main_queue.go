@@ -109,14 +109,6 @@ func (q *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
 	}
 }
 
-// PeekAll implements UsableTransactionSource.
-func (q *mainQueue) PeekAll() []*TxQueueMeta {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	return q.scheduler.all()
-}
-
 // Add adds the given transaction to the queue.
 func (q *mainQueue) Add(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
 	t := newMainQueueTransaction(tx, string(meta.Sender), meta.SenderSeq, meta.Priority)

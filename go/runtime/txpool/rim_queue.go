@@ -23,11 +23,13 @@ func newRimQueue() *rimQueue {
 	}
 }
 
+// GetSchedulingSuggestion implements UsableTransactionSource.
 func (q *rimQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
 	// Runtimes instead get transactions from the incoming messages.
 	return nil
 }
 
+// GetTxByHash implements UsableTransactionSource.
 func (q *rimQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -35,11 +37,13 @@ func (q *rimQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
 	return tx, ok
 }
 
+// HandleTxsUsed implements UsableTransactionSource.
 func (q *rimQueue) HandleTxsUsed([]hash.Hash) {
 	// The roothash module manages the incoming message queue on its own, so we don't do anything here.
 }
 
-func (q *rimQueue) PeekAll() []*TxQueueMeta {
+// All implements UsableTransactionSource.
+func (q *rimQueue) All() []*TxQueueMeta {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
