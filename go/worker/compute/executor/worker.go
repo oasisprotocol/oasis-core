@@ -155,6 +155,10 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return err
 	}
 
+	// Register prune handler.
+	pruner := committee.NewPruneHandler(commonNode.Runtime.ID(), commonNode.Consensus)
+	commonNode.Runtime.History().Pruner().RegisterHandler(pruner)
+
 	commonNode.AddHooks(node)
 	w.runtimes[id] = node
 

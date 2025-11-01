@@ -4,29 +4,36 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
-// pruneHandler is a prune handler that prevents pruning of the last normal round.
-type pruneHandler struct {
-	commonNode *committee.Node
+// PruneHandler is a prune handler that prevents pruning of the last normal round.
+type PruneHandler struct {
+	runtimeID common.Namespace
+	consensus consensus.Service
 }
 
-func (p *pruneHandler) Prune(rounds []uint64) error {
-	p.commonNode.CrossNode.Lock()
-	height := p.commonNode.CurrentBlockHeight
-	p.commonNode.CrossNode.Unlock()
+// NewPruneHandler creates a new prune handler.
+func NewPruneHandler(runtimeID common.Namespace, consensus consensus.Service) *PruneHandler {
+	return &PruneHandler{
+		runtimeID: runtimeID,
+		consensus: consensus,
+	}
+}
 
+// Prune verifies that no rounds beyond the last normal round are pruned.
+func (p *PruneHandler) Prune(rounds []uint64) error {
 	// Make sure we never prune past the last normal round, as some runtimes will do historic queries
 	// for things that are not available in the last consensus state (e.g. delegation/undelegation
 	// events that happened while the runtime was suspended or not producing blocks).
-	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(context.Background(), &roothash.RuntimeRequest{
-		RuntimeID: p.commonNode.Runtime.ID(),
-		Height:    height,
+	state, err := p.consensus.RootHash().GetRuntimeState(context.TODO(), &roothash.RuntimeRequest{
+		RuntimeID: p.runtimeID,
+		Height:    consensus.HeightLatest,
 	})
 	if err != nil {
-		return fmt.Errorf("worker/executor: failed to fetch runtime state at %d: %w", height, err)
+		return fmt.Errorf("worker/executor: failed to fetch runtime state: %w", err)
 	}
 
 	for _, round := range rounds {

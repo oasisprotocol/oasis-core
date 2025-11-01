@@ -129,8 +129,6 @@ var (
 // These are called from the runtime's common node's worker.
 type NodeHooks interface {
 	// Guarded by CrossNode.
-	HandleNewBlockEarlyLocked(*runtime.BlockInfo)
-	// Guarded by CrossNode.
 	HandleNewBlockLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
 	HandleRuntimeHostEventLocked(*host.Event)
@@ -185,12 +183,11 @@ type Node struct {
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
-	CrossNode             sync.Mutex
-	CurrentBlock          *block.Block
-	CurrentBlockHeight    int64
-	CurrentConsensusBlock *consensus.LightBlock
-	CurrentDescriptor     *registry.Runtime
-	CurrentEpoch          beacon.EpochTime
+	CrossNode          sync.Mutex
+	CurrentBlock       *block.Block
+	CurrentBlockHeight int64
+	CurrentDescriptor  *registry.Runtime
+	CurrentEpoch       beacon.EpochTime
 
 	logger *logging.Logger
 }
@@ -413,6 +410,13 @@ func (n *Node) handleSuspendLocked(int64) {
 	}
 }
 
+func (n *Node) updateHostedRuntimeVersion() {
+	n.CrossNode.Lock()
+	defer n.CrossNode.Unlock()
+
+	n.updateHostedRuntimeVersionLocked()
+}
+
 func (n *Node) updateHostedRuntimeVersionLocked() {
 	if n.CurrentDescriptor == nil {
 		return
@@ -465,8 +469,6 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
-	header := blk.Header
-
 	// The first received block will be treated an epoch transition (if valid).
 	// This will refresh the committee on the first block,
 	// instead of waiting for the next epoch transition to occur.
@@ -487,10 +489,9 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// Update the current block.
 	n.CurrentBlock = blk
 	n.CurrentBlockHeight = height
-	n.CurrentConsensusBlock = consensusBlk
 
 	// Update active descriptor on epoch transitions.
-	if firstBlockReceived || header.HeaderType == block.EpochTransition || header.HeaderType == block.Suspended {
+	if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition || blk.Header.HeaderType == block.Suspended {
 		var rs *roothash.RuntimeState
 		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 			RuntimeID: n.Runtime.ID(),
@@ -524,19 +525,8 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
 	}
 
-	bi := &runtime.BlockInfo{
-		RuntimeBlock:     n.CurrentBlock,
-		ConsensusBlock:   n.CurrentConsensusBlock,
-		Epoch:            n.CurrentEpoch,
-		ActiveDescriptor: n.CurrentDescriptor,
-	}
-
-	for _, hooks := range n.hooks {
-		hooks.HandleNewBlockEarlyLocked(bi)
-	}
-
 	// Perform actions based on block type.
-	switch header.HeaderType {
+	switch blk.Header.HeaderType {
 	case block.Normal:
 		if firstBlockReceived {
 			n.logger.Warn("forcing an epoch transition on first received block")
@@ -559,9 +549,16 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		n.handleSuspendLocked(height)
 	default:
 		n.logger.Error("invalid block type",
-			"block", bi.RuntimeBlock,
+			"block", blk,
 		)
 		return
+	}
+
+	bi := &runtime.BlockInfo{
+		RuntimeBlock:     n.CurrentBlock,
+		ConsensusBlock:   consensusBlk,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
 	}
 
 	n.TxPool.ProcessBlock(bi)
@@ -729,9 +726,7 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.CrossNode.Lock()
-	n.updateHostedRuntimeVersionLocked()
-	n.CrossNode.Unlock()
+	n.updateHostedRuntimeVersion()
 
 	// Start the runtime.
 	hrt := n.GetHostedRuntime()
@@ -779,11 +774,7 @@ func (n *Node) worker() {
 					return
 				}
 
-				func() {
-					n.CrossNode.Lock()
-					defer n.CrossNode.Unlock()
-					n.updateHostedRuntimeVersionLocked()
-				}()
+				n.updateHostedRuntimeVersion()
 			case compNotify.Removed != nil:
 				// Received removal of a component.
 				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
