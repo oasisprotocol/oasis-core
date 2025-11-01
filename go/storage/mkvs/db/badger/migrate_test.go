@@ -532,9 +532,11 @@ func prettyPrintDBV5(ndb api.NodeDB) { //nolint: unused
 	}
 }
 
-func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) {
+func readDump(t *testing.T, ndb api.NodeDB, caseName string) testCase {
 	data, err := os.ReadFile(filepath.Join("testdata", caseName))
 	require.NoError(t, err, "ReadFile")
+
+	var tc testCase
 	err = json.Unmarshal(data, &tc)
 	require.NoError(t, err, "Unmarshal")
 
@@ -550,7 +552,7 @@ func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) {
 		}
 	}
 	b.Flush()
-	return
+	return tc
 }
 
 func dumpDB(ndb api.NodeDB, caseName string, tc testCase) { //nolint: unused

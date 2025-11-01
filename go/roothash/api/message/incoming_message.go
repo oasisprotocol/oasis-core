@@ -31,11 +31,12 @@ type IncomingMessage struct {
 }
 
 // InMessagesHash returns a hash of provided incoming runtime messages.
-func InMessagesHash(msgs []*IncomingMessage) (h hash.Hash) {
+func InMessagesHash(msgs []*IncomingMessage) hash.Hash {
 	if len(msgs) == 0 {
 		// Special case if there are no messages.
+		var h hash.Hash
 		h.Empty()
-		return
+		return h
 	}
 	return hash.NewFrom(msgs)
 }

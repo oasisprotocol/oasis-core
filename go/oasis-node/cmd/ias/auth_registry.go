@@ -83,9 +83,10 @@ func (auth *registryAuthenticator) watchRuntimes(ctx context.Context, conn *grpc
 		auth.logger.Error("unable to connect to registry",
 			"err", err,
 		)
+		return nil, nil, nil, err
 	}
 
-	return
+	return ch, sub, client, nil
 }
 
 func (auth *registryAuthenticator) watchEpochs(ctx context.Context, conn *grpc.ClientConn) (
@@ -111,9 +112,10 @@ func (auth *registryAuthenticator) watchEpochs(ctx context.Context, conn *grpc.C
 		auth.logger.Error("unable to connect to timekeeping",
 			"err", err,
 		)
+		return nil, nil, err
 	}
 
-	return
+	return ch, sub, nil
 }
 
 func (auth *registryAuthenticator) refreshLoop(

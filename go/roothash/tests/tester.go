@@ -810,9 +810,7 @@ func mustGetCommittee(
 	epoch beaconAPI.EpochTime,
 	sched scheduler.Backend,
 	nodes map[signature.PublicKey]*registryTests.TestNode,
-) (
-	executorCommittee *testCommittee,
-) {
+) *testCommittee {
 	require := require.New(t)
 
 	ch, sub, err := sched.WatchCommittees(context.Background())
@@ -854,14 +852,11 @@ func mustGetCommittee(
 
 			switch committee.Kind {
 			case scheduler.KindComputeExecutor:
-				executorCommittee = &ret
-			}
-
-			if executorCommittee == nil {
+			default:
 				continue
 			}
 
-			return
+			return &ret
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive committee event")
 		}

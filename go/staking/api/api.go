@@ -889,11 +889,12 @@ func GlobalStakeThreshold(kind ThresholdKind) StakeThreshold {
 }
 
 // GlobalStakeThresholds creates a new list of global StakeThresholds.
-func GlobalStakeThresholds(kinds ...ThresholdKind) (sts []StakeThreshold) {
+func GlobalStakeThresholds(kinds ...ThresholdKind) []StakeThreshold {
+	sts := make([]StakeThreshold, 0, len(kinds))
 	for _, k := range kinds {
 		sts = append(sts, GlobalStakeThreshold(k))
 	}
-	return
+	return sts
 }
 
 // StakeAccumulator is a per-escrow-account stake accumulator.

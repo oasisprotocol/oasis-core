@@ -12,9 +12,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
-func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
-	require.NoError(t, q.FromInt64(i), "FromInt64")
-	return
+func mustInitQuantity(t *testing.T, i int64) quantity.Quantity {
+	var q quantity.Quantity
+	err := q.FromInt64(i)
+	require.NoError(t, err, "FromInt64")
+	return q
 }
 
 func mustInitQuantityP(t *testing.T, i int64) *quantity.Quantity {

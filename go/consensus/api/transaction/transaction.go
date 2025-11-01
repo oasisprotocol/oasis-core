@@ -210,7 +210,7 @@ func (s SignedTransaction) PrettyType() (any, error) {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTransaction) Open(tx *Transaction) error { // nolint: interfacer
+func (s *SignedTransaction) Open(tx *Transaction) error {
 	return s.Signed.Open(SignatureContext, tx)
 }
 

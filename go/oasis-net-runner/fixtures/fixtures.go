@@ -19,17 +19,11 @@ var (
 )
 
 // GetFixture generates fixture object from given file or default fixture, if no fixtures file provided.
-func GetFixture() (f *oasis.NetworkFixture, err error) {
+func GetFixture() (*oasis.NetworkFixture, error) {
 	if viper.IsSet(cfgFile) {
-		f, err = newFixtureFromFile(viper.GetString(cfgFile))
-	} else {
-		f, err = newDefaultFixture()
+		return newFixtureFromFile(viper.GetString(cfgFile))
 	}
-	if err != nil {
-		return
-	}
-
-	return
+	return newDefaultFixture()
 }
 
 // DumpFixture dumps given fixture to JSON-encoded bytes.

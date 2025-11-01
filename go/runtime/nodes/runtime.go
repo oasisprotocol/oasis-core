@@ -22,13 +22,14 @@ func tagForRole(r node.RolesMask) string {
 }
 
 // TagsForRoleMask returns node lookup tags for node roles.
-func TagsForRoleMask(nodeRoles node.RolesMask) (tags []string) {
+func TagsForRoleMask(nodeRoles node.RolesMask) []string {
+	tags := make([]string, 0)
 	for _, r := range node.Roles() {
 		if nodeRoles&r != 0 {
 			tags = append(tags, tagForRole(r))
 		}
 	}
-	return
+	return tags
 }
 
 type runtimeNodesWatcher struct {

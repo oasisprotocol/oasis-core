@@ -11,15 +11,14 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func isTransferPermitted(params *staking.ConsensusParameters, fromAddr staking.Address) (permitted bool) {
-	permitted = true
+func isTransferPermitted(params *staking.ConsensusParameters, fromAddr staking.Address) bool {
 	if params.DisableTransfers {
-		permitted = false
 		if params.UndisableTransfersFrom != nil && params.UndisableTransfersFrom[fromAddr] {
-			permitted = true
+			return true
 		}
+		return false
 	}
-	return
+	return true
 }
 
 func (app *Application) transfer(ctx *api.Context, state *stakingState.MutableState, xfer *staking.Transfer) (*staking.TransferResult, error) {

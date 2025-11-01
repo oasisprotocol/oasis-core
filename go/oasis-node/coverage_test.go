@@ -1,5 +1,4 @@
 //go:build e2ecoverage
-// +build e2ecoverage
 
 package main
 

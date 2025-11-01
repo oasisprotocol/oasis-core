@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 // Package fuzz provides some common utilities useful for fuzzing other packages.
 package fuzz

@@ -82,5 +82,5 @@ func loadAVR(t *testing.T, version int) (raw, sig, certs []byte) {
 	certs, err = os.ReadFile("testdata/avr_certificates_urlencoded.pem")
 	require.NoError(t, err, "Read certificate chain")
 
-	return
+	return raw, sig, certs
 }

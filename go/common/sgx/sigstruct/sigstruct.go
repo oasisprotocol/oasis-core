@@ -161,7 +161,7 @@ func postProcessSignature(raw []byte, modulus *big.Int) (sigBytes, q1Bytes, q2By
 		return nil, nil, nil, fmt.Errorf("sgx/sigstruct: failed to serialize q2: %w", err)
 	}
 
-	return
+	return sigBytes, q1Bytes, q2Bytes, nil
 }
 
 func deriveQ1Q2(sig, modulus *big.Int) (*big.Int, *big.Int) {

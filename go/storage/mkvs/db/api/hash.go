@@ -24,8 +24,7 @@ type TypedHash [TypedHashSize]byte
 
 // MarshalBinary encodes a typed hash into binary form.
 func (h *TypedHash) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, h[:]...)
-	return
+	return append([]byte{}, h[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled hash.
@@ -90,21 +89,24 @@ func (h *TypedHash) Type() node.RootType {
 }
 
 // Hash returns the hash portion of the typed hash.
-func (h *TypedHash) Hash() (rh hash.Hash) {
+func (h *TypedHash) Hash() hash.Hash {
+	var rh hash.Hash
 	copy(rh[:], h[1:])
-	return
+	return rh
 }
 
 // TypedHashFromParts creates a new typed hash with the parts given.
-func TypedHashFromParts(typ node.RootType, hash hash.Hash) (h TypedHash) {
+func TypedHashFromParts(typ node.RootType, hash hash.Hash) TypedHash {
+	var h TypedHash
 	h[0] = byte(typ)
 	copy(h[1:], hash[:])
-	return
+	return h
 }
 
 // TypedHashFromRoot creates a new typed hash corresponding to the given storage root.
-func TypedHashFromRoot(root node.Root) (h TypedHash) {
+func TypedHashFromRoot(root node.Root) TypedHash {
+	var h TypedHash
 	h[0] = byte(root.Type)
 	copy(h[1:], root.Hash[:])
-	return
+	return h
 }

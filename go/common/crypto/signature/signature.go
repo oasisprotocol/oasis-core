@@ -109,8 +109,7 @@ func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 
 // MarshalBinary encodes a public key into binary form.
 func (k PublicKey) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, k[:]...)
-	return
+	return append([]byte{}, k[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled public key.
@@ -265,8 +264,7 @@ func (r RawSignature) Equal(cmp RawSignature) bool {
 
 // MarshalBinary encodes a signature into binary form.
 func (r RawSignature) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, r[:]...)
-	return
+	return append([]byte{}, r[:]...), nil
 }
 
 // UnmarshalBinary decodes a binary marshaled signature.
@@ -619,7 +617,7 @@ type SignedPublicKey struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedPublicKey) Open(context Context, pub *PublicKey) error { // nolint: interfacer
+func (s *SignedPublicKey) Open(context Context, pub *PublicKey) error {
 	return s.Signed.Open(context, pub)
 }
 
@@ -649,16 +647,17 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 
 // NewPublicKey creates a new public key from the given hex representation or
 // panics.
-func NewPublicKey(hex string) (pk PublicKey) {
+func NewPublicKey(hex string) PublicKey {
+	var pk PublicKey
 	if err := pk.UnmarshalHex(hex); err != nil {
 		panic(err)
 	}
-	return
+	return pk
 }
 
 // HashToPublicKey creates a public key via h2c from the given domain separator
 // and message.  The private key of the returned public key is unknown.
-func HashToPublicKey(dst, message []byte) (pk PublicKey) {
+func HashToPublicKey(dst, message []byte) PublicKey {
 	point, err := h2c.Edwards25519_XMD_SHA512_ELL2_RO(dst, message)
 	if err != nil {
 		panic(err)
@@ -666,8 +665,11 @@ func HashToPublicKey(dst, message []byte) (pk PublicKey) {
 
 	var aCompressed curve.CompressedEdwardsY
 	aCompressed.SetEdwardsPoint(point)
+
+	var pk PublicKey
 	copy(pk[:], aCompressed[:])
-	return
+
+	return pk
 }
 
 // RegisterTestPublicKey registers a hardcoded test public key with the

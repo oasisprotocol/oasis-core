@@ -178,7 +178,7 @@ func (d *badgerNodeDB) GetEarliestVersion() uint64 {
 }
 
 // Implements api.NodeDB.
-func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, err error) {
+func (d *badgerNodeDB) GetRootsForVersion(version uint64) ([]node.Root, error) {
 	// If the version is earlier than the earliest version, we don't have the roots.
 	if version < d.meta.getEarliestVersion() {
 		return nil, nil
@@ -191,6 +191,7 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, er
 	it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 	defer it.Close()
 
+	roots := make([]node.Root, 0)
 	for it.Rewind(); it.Valid(); it.Next() {
 		var (
 			v        uint64
@@ -207,7 +208,8 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, er
 			Hash:      rootHash.Hash(),
 		})
 	}
-	return
+
+	return roots, nil
 }
 
 // Implements api.NodeDB.

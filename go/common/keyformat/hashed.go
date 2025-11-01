@@ -54,11 +54,11 @@ func (h *hashedFormat) MarshalBinary(v any) (data []byte, err error) {
 
 	data, err = h.getData(v)
 	if err != nil {
-		return
+		return nil, err
 	}
 	hh := hash.NewFromBytes(data)
 	data = hh[:]
-	return
+	return data, nil
 }
 
 // Implements CustomFormat.

@@ -235,7 +235,7 @@ func (t *transfer) getRandomAccountPairWithBalance(rng *rand.Rand, minBalance *q
 
 	from = &t.accounts[perm[fromPermIdx]]
 	to = &t.accounts[perm[toPermIdx]]
-	return
+	return from, to, nil
 }
 
 // Implements Workload.

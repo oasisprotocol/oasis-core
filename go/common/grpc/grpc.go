@@ -174,7 +174,7 @@ func (l *grpcLogAdapter) V(level int) bool {
 	return l.verbosity >= level
 }
 
-func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	// TODO: Pull useful things out of ctx for logging.
 	seq := atomic.AddUint64(&l.reqSeq, 1)
 	if l.isDebug {
@@ -188,26 +188,26 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req any, info *grpc.Un
 	grpcServerCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
 
 	start := time.Now()
-	resp, err = handler(ctx, req)
+	rsp, err := handler(ctx, req)
 	grpcServerLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
-	switch err {
-	case nil:
-		if l.isDebug {
-			l.reqLogger.Debug("request succeeded",
-				"method", info.FullMethod,
-				"req_seq", seq,
-				"resp", resp,
-			)
-		}
-	default:
+	if err != nil {
 		l.reqLogger.Error("request failed",
 			"method", info.FullMethod,
 			"req_seq", seq,
 			"err", err,
 		)
+		return nil, err
 	}
 
-	return
+	if l.isDebug {
+		l.reqLogger.Debug("request succeeded",
+			"method", info.FullMethod,
+			"req_seq", seq,
+			"resp", rsp,
+		)
+	}
+
+	return rsp, nil
 }
 
 func (l *grpcLogAdapter) unaryClientLogger(ctx context.Context,

@@ -316,11 +316,12 @@ func loadSentryNodeInfo(s *oasis.Sentry) (*oasis.Sentry, string, string, signatu
 	return s, sentryAddress, sentryCtrlAddress, sentryP2PPubkey
 }
 
-func consensusCometBFTAddrs(status *control.Status) (consensusPeers []string) {
+func consensusCometBFTAddrs(status *control.Status) []string {
+	peers := make([]string, 0, len(status.Consensus.P2P.Peers))
 	for _, np := range status.Consensus.P2P.Peers {
-		consensusPeers = append(consensusPeers, strings.Split(np, "@")[0])
+		peers = append(peers, strings.Split(np, "@")[0])
 	}
-	return
+	return peers
 }
 
 func sanityCheckValidatorPeers(expected, actual []string) error {

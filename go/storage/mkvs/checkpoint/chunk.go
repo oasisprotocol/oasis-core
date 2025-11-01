@@ -98,21 +98,18 @@ func (sc *seqChunker) createChunk(ctx context.Context, tree mkvs.Tree, offset no
 	// We build the chunk until the proof becomes too large or we have reached the end.
 	for it.Seek(offset); it.Valid() && it.GetProofBuilder().Size() < sc.chunkSize; it.Next() {
 		// Check if context got cancelled while iterating to abort early.
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return
+		if err := ctx.Err(); err != nil {
+			return hash.Hash{}, nil, err
 		}
 	}
-	if it.Err() != nil {
-		err = fmt.Errorf("failed to iterate: %w", it.Err())
-		return
+	if err := it.Err(); err != nil {
+		return hash.Hash{}, nil, fmt.Errorf("failed to iterate: %w", err)
 	}
 
 	// Build our chunk.
 	proof, err := it.GetProof()
 	if err != nil {
-		err = fmt.Errorf("failed to build proof: %w", err)
-		return
+		return hash.Hash{}, nil, fmt.Errorf("failed to build proof: %w", err)
 	}
 
 	// Determine the next offset (not included in proof).
@@ -122,7 +119,11 @@ func (sc *seqChunker) createChunk(ctx context.Context, tree mkvs.Tree, offset no
 	}
 
 	chunkHash, err = writeChunk(proof, w)
-	return
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	return chunkHash, nextOffset, nil
 }
 
 // parallelChunker implements chunker interface.
@@ -344,45 +345,45 @@ func doRestoreChunk(
 	batch db.Batch,
 	ptr *node.Pointer,
 	parent *node.Pointer,
-) (err error) {
+) error {
 	if ptr == nil {
-		return
+		return nil
 	}
 
 	switch n := ptr.Node.(type) {
 	case nil:
-		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
-			return
+		if err := batch.VisitDirtyNode(ptr, parent); err != nil {
+			return err
 		}
 	case *node.InternalNode:
-		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
-			return
+		if err := batch.VisitDirtyNode(ptr, parent); err != nil {
+			return err
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if err = doRestoreChunk(ctx, batch, n.LeafNode, ptr); err != nil {
-			return
+		if err := doRestoreChunk(ctx, batch, n.LeafNode, ptr); err != nil {
+			return err
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
-			if err = doRestoreChunk(ctx, batch, subNode, ptr); err != nil {
-				return
+			if err := doRestoreChunk(ctx, batch, subNode, ptr); err != nil {
+				return err
 			}
 		}
 
 		// Store the node.
-		if err = batch.PutNode(ptr); err != nil {
-			return
+		if err := batch.PutNode(ptr); err != nil {
+			return err
 		}
 	case *node.LeafNode:
 		// Leaf node -- store the node.
-		if err = batch.VisitDirtyNode(ptr, parent); err != nil {
-			return
+		if err := batch.VisitDirtyNode(ptr, parent); err != nil {
+			return err
 		}
-		if err = batch.PutNode(ptr); err != nil {
-			return
+		if err := batch.PutNode(ptr); err != nil {
+			return err
 		}
 	}
 
-	return
+	return nil
 }

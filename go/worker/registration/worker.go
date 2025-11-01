@@ -437,7 +437,7 @@ Loop:
 				cbs = append(cbs, cb)
 				vers = append(vers, ver)
 			}
-			return
+			return h, cbs, vers
 		}()
 		if hooks == nil {
 			w.logger.Debug("not registering, no role provider hooks")

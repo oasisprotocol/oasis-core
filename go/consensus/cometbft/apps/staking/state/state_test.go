@@ -18,10 +18,11 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
+func mustInitQuantity(t *testing.T, i int64) quantity.Quantity {
+	var q quantity.Quantity
 	err := q.FromBigInt(big.NewInt(i))
 	require.NoError(t, err, "FromBigInt")
-	return
+	return q
 }
 
 func mustInitQuantityP(t *testing.T, i int64) *quantity.Quantity {
