@@ -23,11 +23,14 @@ func NewPruneHandler(runtimeID common.Namespace, consensus consensus.Service) *P
 	}
 }
 
-// Prune verifies that no rounds beyond the last normal round are pruned.
-func (p *PruneHandler) Prune(rounds []uint64) error {
-	// Make sure we never prune past the last normal round, as some runtimes will do historic queries
-	// for things that are not available in the last consensus state (e.g. delegation/undelegation
-	// events that happened while the runtime was suspended or not producing blocks).
+// CanPruneRuntime returns no error when pruning runtime rounds would not go past last normal round.
+//
+// This is important as some runtimes will do historic queries for things that are not available
+// in the last consensus state (e.g. delegation/undelegation events that happened while the runtime
+// was suspended or not producing blocks).
+//
+// Implements runtime.history.PruneHandler.
+func (p *PruneHandler) CanPruneRuntime(rounds []uint64) error {
 	state, err := p.consensus.RootHash().GetRuntimeState(context.TODO(), &roothash.RuntimeRequest{
 		RuntimeID: p.runtimeID,
 		Height:    consensus.HeightLatest,

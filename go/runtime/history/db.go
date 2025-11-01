@@ -270,6 +270,34 @@ func (d *DB) getLastBlock() (*roothash.AnnotatedBlock, error) {
 	return &blk, nil
 }
 
+func (d *DB) deleteBlock(round uint64) error {
+	return d.db.Update(func(tx *badger.Txn) error {
+		it := tx.NewIterator(badger.IteratorOptions{
+			Prefix: blockKeyFmt.Encode(),
+		})
+		defer it.Close()
+
+		it.Rewind()
+		if !it.Valid() {
+			return fmt.Errorf("db is empty")
+		}
+		item := it.Item()
+
+		var blk roothash.AnnotatedBlock
+		if err := item.Value(func(val []byte) error {
+			return cbor.UnmarshalTrusted(val, &blk)
+		}); err != nil {
+			return fmt.Errorf("failed to unmarshal earliest block: %w", err)
+		}
+
+		if blk.Block.Header.Round != round {
+			return fmt.Errorf("deleting non-earliest version (earliest: %d)", blk.Block.Header.Round)
+		}
+
+		return tx.Delete(item.KeyCopy(nil))
+	})
+}
+
 func (d *DB) close() {
 	d.gc.Stop()
 	d.db.Close()

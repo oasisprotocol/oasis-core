@@ -166,6 +166,8 @@ type Worker struct {
 	diffCh     chan *fetchedDiff
 	finalizeCh chan finalizeResult
 
+	pruningInterval time.Duration
+
 	initCh chan struct{}
 }
 
@@ -177,6 +179,7 @@ func New(
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointSyncCfg *CheckpointSyncConfig,
+	pruningInterval time.Duration,
 ) (*Worker, error) {
 	initMetrics()
 
@@ -199,6 +202,8 @@ func New(
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
+
+		pruningInterval: pruningInterval,
 
 		initCh: make(chan struct{}),
 	}
@@ -1013,6 +1018,13 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	}
 	close(w.initCh)
 	w.logger.Info("initialized")
+
+	statePruner := newPruner(w.localStorage.NodeDB(), w.commonNode.Runtime.History(), w.pruningInterval)
+	wg.Go(func() {
+		if err := statePruner.serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			w.logger.Error("state pruner failed: %w", err)
+		}
+	})
 
 	// Notify the checkpointer of the genesis round so it can be checkpointed.
 	w.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
