@@ -62,8 +62,16 @@ func newMainQueue(capacity int) *mainQueue {
 	}
 }
 
-// GetSchedulingSuggestion implements UsableTransactionSource.
-func (q *mainQueue) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
+// Size returns the current number of transactions in the queue.
+func (q *mainQueue) Size() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return q.scheduler.size()
+}
+
+// Schedule returns transactions to schedule.
+func (q *mainQueue) Schedule(limit int) []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -71,16 +79,26 @@ func (q *mainQueue) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
 	return q.scheduler.schedule(limit)
 }
 
-// GetSchedulingExtra returns more transactions to schedule.
-func (q *mainQueue) GetSchedulingExtra(limit int) []*TxQueueMeta {
+// ScheduleExtra returns more transactions to schedule.
+func (q *mainQueue) ScheduleExtra(limit int) []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	return q.scheduler.schedule(limit)
 }
 
-// GetTxByHash implements UsableTransactionSource.
-func (q *mainQueue) GetTxByHash(hash hash.Hash) (*TxQueueMeta, bool) {
+// HandleTxsUsed removes transaction with the given hash.
+func (q *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	for _, hash := range hashes {
+		q.scheduler.handleTxUsed(hash)
+	}
+}
+
+// Get implements UsableTransactionSource.
+func (q *mainQueue) Get(hash hash.Hash) (*TxQueueMeta, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -91,26 +109,8 @@ func (q *mainQueue) GetTxByHash(hash hash.Hash) (*TxQueueMeta, bool) {
 	return tx.meta, true
 }
 
-// HandleTxsUsed implements UsableTransactionSource.
-func (q *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	for _, hash := range hashes {
-		q.scheduler.handleTxUsed(hash)
-	}
-}
-
-// PeekAll implements UsableTransactionSource.
-func (q *mainQueue) PeekAll() []*TxQueueMeta {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	return q.scheduler.all()
-}
-
-// OfferChecked implements RecheckableTransactionStore.
-func (q *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
+// Add adds the given transaction to the queue.
+func (q *mainQueue) Add(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
 	t := newMainQueueTransaction(tx, string(meta.Sender), meta.SenderSeq, meta.Priority)
 
 	q.mu.Lock()
@@ -120,16 +120,16 @@ func (q *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata
 	return q.scheduler.add(t, meta.SenderStateSeq)
 }
 
-// TakeAll implements RecheckableTransactionStore.
-func (q *mainQueue) TakeAll() []*TxQueueMeta {
+// Drain removes all transactions currently in the queue and returns them.
+func (q *mainQueue) Drain() []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	return q.scheduler.drain()
 }
 
-// GetTxsToPublish implements RepublishableTransactionSource.
-func (q *mainQueue) GetTxsToPublish() []*TxQueueMeta {
+// All returns all transactions currently in the queue.
+func (q *mainQueue) All() []*TxQueueMeta {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 

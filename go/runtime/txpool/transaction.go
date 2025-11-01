@@ -22,8 +22,10 @@ type PendingCheckTransaction struct {
 
 	// flags are the transaction check flags.
 	flags txCheckFlags
-	// dstQueue is where to offer the tx after checking, or nil to discard.
-	dstQueue RecheckableTransactionStore
+	// local indicates whether the transaction came from our own node.
+	local bool
+	// discard indicates whether the transaction should be discarded after validation.
+	discard bool
 	// notifyCh is a channel for sending back the transaction check result.
 	notifyCh chan *protocol.CheckTxResult
 }

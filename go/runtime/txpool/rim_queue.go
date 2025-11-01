@@ -9,8 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
-var _ UsableTransactionSource = (*rimQueue)(nil)
-
 // rimQueue exposes transactions from roothash incoming messages.
 type rimQueue struct {
 	mu  sync.RWMutex
@@ -23,23 +21,16 @@ func newRimQueue() *rimQueue {
 	}
 }
 
-func (q *rimQueue) GetSchedulingSuggestion(int) []*TxQueueMeta {
-	// Runtimes instead get transactions from the incoming messages.
-	return nil
-}
-
-func (q *rimQueue) GetTxByHash(h hash.Hash) (*TxQueueMeta, bool) {
+// Get implements UsableTransactionSource.
+func (q *rimQueue) Get(h hash.Hash) (*TxQueueMeta, bool) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	tx, ok := q.txs[h]
 	return tx, ok
 }
 
-func (q *rimQueue) HandleTxsUsed([]hash.Hash) {
-	// The roothash module manages the incoming message queue on its own, so we don't do anything here.
-}
-
-func (q *rimQueue) PeekAll() []*TxQueueMeta {
+// All implements UsableTransactionSource.
+func (q *rimQueue) All() []*TxQueueMeta {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 

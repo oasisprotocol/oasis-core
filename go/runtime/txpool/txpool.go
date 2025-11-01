@@ -27,7 +27,7 @@ const (
 	// checkTxTimeout is the maximum time the runtime can spend checking transactions.
 	checkTxTimeout = 15 * time.Second
 	// checkTxRetryDelay is the time to wait before queuing a check tx retry.
-	checkTxRetryDelay = 1 * time.Second
+	checkTxRetryDelay = time.Second
 	// checkTxWaitRoundSyncedTimeout is the time to wait for block to be
 	// synced with storage at the start of check tx.
 	checkTxWaitRoundSyncedTimeout = 5 * time.Second
@@ -42,7 +42,7 @@ const (
 	// republishLimitReinvokeTimeout is the timeout to the next republish worker invocation in
 	// case when the maxRepublishTxs limit is reached. This should be much shorter than the
 	// RepublishInterval.
-	republishLimitReinvokeTimeout = 1 * time.Second
+	republishLimitReinvokeTimeout = time.Second
 )
 
 // TransactionPool is an interface for managing a pool of transactions.
@@ -97,7 +97,7 @@ type TransactionPool interface {
 
 	// GetSchedulingSuggestion returns a list of transactions to schedule. This begins a
 	// scheduling session, which suppresses transaction rechecking and republishing. Subsequently
-	// call GetSchedulingExtra for more transactions, followed by FinishScheduling.
+	// call GetSchedulingExtra for more transactions.
 	GetSchedulingSuggestion(limit int) []*TxQueueMeta
 
 	// GetSchedulingExtra returns transactions to schedule.
@@ -106,10 +106,6 @@ type TransactionPool interface {
 	// transactions from the pool. Transactions will be skipped until the given hash is encountered
 	// and only the following transactions will be returned.
 	GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta
-
-	// FinishScheduling finishes a scheduling session, which resumes transaction rechecking and
-	// republishing.
-	FinishScheduling()
 
 	// ProcessBlock updates the last known runtime block information.
 	ProcessBlock(bi *runtime.BlockInfo)
@@ -155,14 +151,9 @@ type txPool struct {
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
 
-	drainLock sync.Mutex
-
-	usableSources        []UsableTransactionSource
-	recheckableStores    []RecheckableTransactionStore
-	republishableSources []RepublishableTransactionSource
-	rimQueue             *rimQueue
-	localQueue           *localQueue
-	mainQueue            *mainQueue
+	usableSources []UsableTransactionSource
+	rimQueue      *rimQueue
+	mainQueue     *mainQueue
 
 	proposedTxsLock sync.Mutex
 	proposedTxs     map[hash.Hash]*TxQueueMeta
@@ -197,7 +188,7 @@ func (t *txPool) Has(hash hash.Hash) bool {
 
 func (t *txPool) Get(hash hash.Hash) ([]byte, bool) {
 	for _, q := range t.usableSources {
-		if tx, ok := q.GetTxByHash(hash); ok {
+		if tx, ok := q.Get(hash); ok {
 			return tx.Raw(), true
 		}
 	}
@@ -243,15 +234,6 @@ func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*Pend
 	}
 
 	// Queue transaction for checks.
-	var queue RecheckableTransactionStore
-	switch {
-	case discard:
-	case local:
-		queue = t.localQueue
-	default:
-		queue = t.mainQueue
-	}
-
 	var notifyCh chan *protocol.CheckTxResult
 	if wait {
 		notifyCh = make(chan *protocol.CheckTxResult, 1)
@@ -265,7 +247,8 @@ func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*Pend
 
 	pct := &PendingCheckTransaction{
 		TxQueueMeta: meta,
-		dstQueue:    queue,
+		local:       local,
+		discard:     discard,
 		notifyCh:    notifyCh,
 	}
 
@@ -345,20 +328,11 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) GetSchedulingSuggestion(limit int) []*TxQueueMeta {
-	t.drainLock.Lock()
-	var txs []*TxQueueMeta
-	for _, q := range t.usableSources {
-		txs = append(txs, q.GetSchedulingSuggestion(limit)...)
-	}
-	return txs
+	return t.mainQueue.Schedule(limit)
 }
 
 func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta {
-	return t.mainQueue.GetSchedulingExtra(limit)
-}
-
-func (t *txPool) FinishScheduling() {
-	t.drainLock.Unlock()
+	return t.mainQueue.ScheduleExtra(limit)
 }
 
 func (t *txPool) RejectTxs(hashes []hash.Hash) {
@@ -372,12 +346,9 @@ func (t *txPool) RejectTxs(hashes []hash.Hash) {
 }
 
 func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
-	for _, q := range t.usableSources {
-		q.HandleTxsUsed(hashes)
-	}
+	t.mainQueue.HandleTxsUsed(hashes)
 
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
-	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 }
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
@@ -386,7 +357,7 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash
 HASH_LOOP:
 	for i, h := range batch {
 		for _, q := range t.usableSources {
-			tx, ok := q.GetTxByHash(h)
+			tx, ok := q.Get(h)
 			if !ok {
 				continue
 			}
@@ -447,12 +418,9 @@ func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, 
 }
 
 func (t *txPool) All() [][]byte {
-	t.drainLock.Lock()
-	defer t.drainLock.Unlock()
-
 	var txs [][]byte
 	for _, q := range t.usableSources {
-		for _, tx := range q.PeekAll() {
+		for _, tx := range q.All() {
 			txs = append(txs, tx.Raw())
 		}
 	}
@@ -573,7 +541,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 			continue
 		}
 
-		if batch[i].dstQueue == nil {
+		if batch[i].discard {
 			notifySubmitter(i)
 			continue
 		}
@@ -604,7 +572,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 
 	// Queue checked transactions for scheduling.
 	for i, pct := range goodPcts {
-		if err = pct.dstQueue.OfferChecked(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
+		if err = t.mainQueue.Add(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
 			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
 				"hash", pct.Hash(),
@@ -626,8 +594,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		if !pct.flags.isRecheck() {
 			// Mark new transactions as never having been published. The republish worker will
 			// publish these immediately.
-			publishTime := time.Time{}
-			if pct.dstQueue == t.mainQueue {
+			var publishTime time.Time
+			if !pct.local {
 				// This being a tx we got from outside, it's usually something that another node
 				// has just broadcast. Treat it as if it were published just now so that we don't
 				// immediately publish again from our node.
@@ -651,8 +619,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		t.checkTxNotifier.Broadcast(newTxs)
 	}
 
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
-	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 
 	return nil
 }
@@ -777,14 +744,7 @@ func (t *txPool) republishWorker() {
 		}
 
 		// Get transactions to republish.
-		var txs []*TxQueueMeta
-		(func() {
-			t.drainLock.Lock()
-			defer t.drainLock.Unlock()
-			for _, q := range t.republishableSources {
-				txs = append(txs, q.GetTxsToPublish()...)
-			}
-		})()
+		txs := t.mainQueue.All()
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
@@ -850,26 +810,20 @@ func (t *txPool) recheckWorker() {
 }
 
 func (t *txPool) recheck() {
-	t.drainLock.Lock()
-	defer t.drainLock.Unlock()
-
 	// Get a batch of scheduled transactions.
 	var pcts []*PendingCheckTransaction
 	var results []chan *protocol.CheckTxResult
-	for _, q := range t.recheckableStores {
-		for _, tx := range q.TakeAll() {
-			notifyCh := make(chan *protocol.CheckTxResult, 1)
-			pcts = append(pcts, &PendingCheckTransaction{
-				TxQueueMeta: tx,
-				flags:       txCheckRecheck,
-				dstQueue:    q,
-				notifyCh:    notifyCh,
-			})
-			results = append(results, notifyCh)
-		}
+	for _, tx := range t.mainQueue.Drain() {
+		notifyCh := make(chan *protocol.CheckTxResult, 1)
+		pcts = append(pcts, &PendingCheckTransaction{
+			TxQueueMeta: tx,
+			flags:       txCheckRecheck,
+			notifyCh:    notifyCh,
+		})
+		results = append(results, notifyCh)
 	}
-	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.scheduler.size()))
-	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
+
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.Size()))
 
 	if len(pcts) == 0 {
 		return
@@ -914,31 +868,27 @@ func New(
 	maxCheckTxQueueSize := int((110 * cfg.MaxPoolSize) / 100)
 
 	rq := newRimQueue()
-	lq := newLocalQueue()
 	mq := newMainQueue(int(cfg.MaxPoolSize))
 
 	return &txPool{
-		logger:               logging.GetLogger("runtime/txpool"),
-		stopCh:               make(chan struct{}),
-		quitCh:               make(chan struct{}),
-		initCh:               make(chan struct{}),
-		runtimeID:            runtimeID,
-		cfg:                  cfg,
-		runtime:              host.NewRichRuntime(runtime),
-		history:              history,
-		txPublisher:          txPublisher,
-		seenCache:            seenCache,
-		checkTxQueue:         newCheckTxQueue(maxCheckTxQueueSize, int(cfg.MaxCheckTxBatchSize)),
-		checkTxCh:            channels.NewRingChannel(1),
-		checkTxNotifier:      pubsub.NewBroker(false),
-		recheckTxCh:          channels.NewRingChannel(1),
-		usableSources:        []UsableTransactionSource{rq, lq, mq},
-		recheckableStores:    []RecheckableTransactionStore{lq, mq},
-		republishableSources: []RepublishableTransactionSource{lq, mq},
-		rimQueue:             rq,
-		localQueue:           lq,
-		mainQueue:            mq,
-		proposedTxs:          make(map[hash.Hash]*TxQueueMeta),
-		republishCh:          channels.NewRingChannel(1),
+		logger:          logging.GetLogger("runtime/txpool"),
+		stopCh:          make(chan struct{}),
+		quitCh:          make(chan struct{}),
+		initCh:          make(chan struct{}),
+		runtimeID:       runtimeID,
+		cfg:             cfg,
+		runtime:         host.NewRichRuntime(runtime),
+		history:         history,
+		txPublisher:     txPublisher,
+		seenCache:       seenCache,
+		checkTxQueue:    newCheckTxQueue(maxCheckTxQueueSize, int(cfg.MaxCheckTxBatchSize)),
+		checkTxCh:       channels.NewRingChannel(1),
+		checkTxNotifier: pubsub.NewBroker(false),
+		recheckTxCh:     channels.NewRingChannel(1),
+		usableSources:   []UsableTransactionSource{rq, mq},
+		rimQueue:        rq,
+		mainQueue:       mq,
+		proposedTxs:     make(map[hash.Hash]*TxQueueMeta),
+		republishCh:     channels.NewRingChannel(1),
 	}
 }
