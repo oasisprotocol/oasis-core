@@ -319,6 +319,15 @@ func doDBCompactions(_ *cobra.Command, args []string) error {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	running, err := cmdCommon.IsNodeRunning()
+	if err != nil {
+		return fmt.Errorf("failed to ensure the node is not running: %w", err)
+	}
+
+	if running {
+		return fmt.Errorf("compaction can only be done when the node is not running")
+	}
+
 	dataDir := cmdCommon.DataDir()
 
 	logger.Info("Starting database compactions. This may take a while...")
@@ -435,6 +444,15 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 func doPrune(_ *cobra.Command, args []string) error {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	running, err := cmdCommon.IsNodeRunning()
+	if err != nil {
+		return fmt.Errorf("failed to ensure the node is not running: %w", err)
+	}
+
+	if running {
+		return fmt.Errorf("pruning can only be done when the node is not running")
 	}
 
 	if config.GlobalConfig.Consensus.Prune.Strategy == cmtConfig.PruneStrategyNone {

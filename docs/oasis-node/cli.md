@@ -336,7 +336,7 @@ oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7
 
 ### compact-experimental
 
-Run
+Run (when the node is not running):
 
 ```sh
 oasis-node storage compact-experimental --config /path/to/config/file
@@ -367,7 +367,7 @@ maintenance periods.
 
 ### prune-experimental
 
-Run
+Run (when the node is not running):
 
 ```sh
 oasis-node storage prune-experimental --config /path/to/config/file
