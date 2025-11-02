@@ -122,6 +122,18 @@ func (c *Client) LastTrustedHeight() (int64, error) {
 	return height, nil
 }
 
+// FirstTrustedHeight returns the first (oldest) trusted height.
+func (c *Client) FirstTrustedHeight() (int64, error) {
+	height, err := c.lightClient.FirstTrustedHeight()
+	if err != nil {
+		return 0, err
+	}
+	if height == -1 {
+		return 0, fmt.Errorf("no trusted headers")
+	}
+	return height, nil
+}
+
 // VerifyHeader verifies the given header.
 func (c *Client) VerifyHeader(ctx context.Context, header *cmttypes.Header) error {
 	c.mu.Lock()
