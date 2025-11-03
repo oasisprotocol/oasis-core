@@ -156,9 +156,9 @@ func (c *Core) GetGenesisDocument(context.Context) (*genesisAPI.Document, error)
 
 // GetLastRetainedHeight implements api.Backend.
 func (c *Core) GetLastRetainedHeight(ctx context.Context) (int64, error) {
-	// The last retained height cannot be verified, nor does it need to be,
-	// as it is not sensitive information.
-	return c.provider.GetLastRetainedHeight(ctx)
+	// The last retained height equals to the last retained light client height
+	// as this is the oldest height stateless client can verify the data against.
+	return c.lightClient.FirstTrustedHeight()
 }
 
 // GetLatestHeight implements api.Backend.
