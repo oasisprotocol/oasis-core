@@ -184,7 +184,7 @@ type Node struct {
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
 	CrossNode          sync.Mutex
-	CurrentBlock       *block.Block
+	CurrentBlockRound  uint64
 	CurrentBlockHeight int64
 	CurrentDescriptor  *registry.Runtime
 	CurrentEpoch       beacon.EpochTime
@@ -276,10 +276,8 @@ func (n *Node) GetStatus() (*api.Status, error) {
 	var status api.Status
 	status.Status = n.getStatusStateLocked()
 
-	if n.CurrentBlock != nil {
-		status.LatestRound = n.CurrentBlock.Header.Round
-		status.LatestHeight = n.CurrentBlockHeight
-	}
+	status.LatestRound = n.CurrentBlockRound
+	status.LatestHeight = n.CurrentBlockHeight
 
 	if n.CurrentDescriptor != nil {
 		activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
@@ -473,10 +471,10 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// This will refresh the committee on the first block,
 	// instead of waiting for the next epoch transition to occur.
 	// Helps in cases where node is restarted mid epoch.
-	firstBlockReceived := n.CurrentBlock == nil
+	firstBlockReceived := n.CurrentBlockHeight == 0
 
 	// Update the current block.
-	n.CurrentBlock = blk
+	n.CurrentBlockRound = blk.Header.Round
 	n.CurrentBlockHeight = height
 
 	// Update active descriptor on epoch transitions.
@@ -554,7 +552,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	}
 
 	bi := &runtime.BlockInfo{
-		RuntimeBlock:     n.CurrentBlock,
+		RuntimeBlock:     blk,
 		ConsensusBlock:   consensusBlk,
 		Epoch:            n.CurrentEpoch,
 		ActiveDescriptor: n.CurrentDescriptor,
