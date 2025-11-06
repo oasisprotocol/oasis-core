@@ -475,25 +475,13 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// Helps in cases where node is restarted mid epoch.
 	firstBlockReceived := n.CurrentBlock == nil
 
-	// Fetch light consensus block.
-	consensusBlk, err := n.Consensus.Core().GetLightBlock(n.ctx, height)
-	if err != nil {
-		n.logger.Error("failed to query light block",
-			"err", err,
-			"height", height,
-			"round", blk.Header.Round,
-		)
-		return
-	}
-
 	// Update the current block.
 	n.CurrentBlock = blk
 	n.CurrentBlockHeight = height
 
 	// Update active descriptor on epoch transitions.
 	if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition || blk.Header.HeaderType == block.Suspended {
-		var rs *roothash.RuntimeState
-		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
+		rs, err := n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 			RuntimeID: n.Runtime.ID(),
 			Height:    height,
 		})
@@ -550,6 +538,17 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	default:
 		n.logger.Error("invalid block type",
 			"block", blk,
+		)
+		return
+	}
+
+	// Fetch light consensus block.
+	consensusBlk, err := n.Consensus.Core().GetLightBlock(n.ctx, height)
+	if err != nil {
+		n.logger.Error("failed to query light block",
+			"err", err,
+			"height", height,
+			"round", blk.Header.Round,
 		)
 		return
 	}
