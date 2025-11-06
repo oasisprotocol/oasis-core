@@ -12,6 +12,68 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.7 (2025-11-06)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/oasis-node: Add new command for compacting consensus databases
+  ([#6311](https://github.com/oasisprotocol/oasis-core/issues/6311))
+
+  A new experimental command `oasis-node storage compact-experimental`
+  was added.
+
+  The command triggers manual compactions for all the consensus databases.
+  This way node operators can forcefuly release disk space if enabling late
+  pruning.
+
+- Go bump to 1.25.3
+  ([#6377](https://github.com/oasisprotocol/oasis-core/issues/6377))
+
+  Update Go toolchain to version 1.25.3 to avoid invalid behavior with
+  `Root.OpenRoot` present in Go 1.25.0–1.25.1 (see golang/go#75139).
+
+### Bug Fixes
+
+- go/runtime/manager: Fix temporary bundle path
+  ([#6375](https://github.com/oasisprotocol/oasis-core/issues/6375))
+
+- go/runtime/txpool: Remove local queue
+  ([#6381](https://github.com/oasisprotocol/oasis-core/issues/6381))
+
+  Removes the local queue, which doesn’t support multiple transactions
+  per sender. All incoming transactions are now added to the main queue.
+
+  The following metric has been removed:
+
+  - `oasis_txpool_local_queue_size`
+
+- stateless-client: Fix incorrect GetLastRetainedHeight method
+  ([#6382](https://github.com/oasisprotocol/oasis-core/issues/6382))
+
+  Previously, this method would return one of the provider's last retained
+  heights which could cause issues with runtime light history reindexing.
+
+  This has been fixed, by setting the last retained height to the
+  light client's last retained height, as this is the oldest height
+  the stateless client can use to verify consensus data against.
+
+### Internal Changes
+
+- Bump CometBFT to 0.37.16-oasis1
+  ([#6358](https://github.com/oasisprotocol/oasis-core/issues/6358))
+
+- rust: Bump Rust toolchain to 2025-06-23
+  ([#6367](https://github.com/oasisprotocol/oasis-core/issues/6367))
+
+- go: Bump golangci-lint to v2.6.0
+  ([#6383](https://github.com/oasisprotocol/oasis-core/issues/6383))
+
 ## 25.6 (2025-10-11)
 
 | Protocol          | Version   |
