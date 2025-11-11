@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -193,14 +194,7 @@ func (nw *versionedNodeDescriptorWatcher) updateLocked(n *node.Node, tag string)
 	nw.nodesByPeerID[n.P2P.ID] = n
 
 	if len(tag) > 0 {
-		var hasTag bool
-		for _, t := range nw.tags[n.ID] {
-			if t == tag {
-				hasTag = true
-				break
-			}
-		}
-		if !hasTag {
+		if !slices.Contains(nw.tags[n.ID], tag) {
 			nw.tags[n.ID] = append(nw.tags[n.ID], tag)
 		}
 	}

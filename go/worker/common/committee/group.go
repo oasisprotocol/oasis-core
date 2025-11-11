@@ -3,6 +3,7 @@ package committee
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -43,12 +44,7 @@ type CommitteeInfo struct { // nolint: revive
 
 // HasRole checks whether the node has the given role.
 func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
-	for _, r := range ci.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ci.Roles, role)
 }
 
 type epoch struct {

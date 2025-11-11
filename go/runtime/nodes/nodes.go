@@ -2,6 +2,8 @@
 package nodes
 
 import (
+	"slices"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -200,12 +202,7 @@ func IgnoreNodeFilter(id signature.PublicKey) NodeFilterFunc {
 // TagFilter returns a node filter function that only includes nodes with the given tag.
 func TagFilter(tag string) NodeFilterFunc {
 	return func(_ *node.Node, tags []string) bool {
-		for _, t := range tags {
-			if t == tag {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(tags, tag)
 	}
 }
 

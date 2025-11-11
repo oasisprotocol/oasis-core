@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -457,12 +458,7 @@ type ForceElectCommitteeRole struct {
 
 // HasRole returns true whether the force election configuration specifies a given role.
 func (fe *ForceElectCommitteeRole) HasRole(role Role) bool {
-	for _, r := range fe.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(fe.Roles, role)
 }
 
 // ElectedEvent is the elected committee kind event.
