@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -32,12 +33,7 @@ func valideSubmitProposal(v uint16, epoch uint64, handler upgrade.HandlerName, t
 }
 
 func valideCastVote(vote governance.Vote) bool {
-	for _, v := range []governance.Vote{governance.VoteAbstain, governance.VoteYes, governance.VoteNo} {
-		if vote == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]governance.Vote{governance.VoteAbstain, governance.VoteYes, governance.VoteNo}, vote)
 }
 
 func main() {

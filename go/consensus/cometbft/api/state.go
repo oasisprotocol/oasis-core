@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -311,10 +312,8 @@ func (s *ImmutableState) CheckContextMode(ctx context.Context, allowedModes []Co
 		return fmt.Errorf("abci: method must only be called from ABCI context")
 	}
 
-	for _, m := range allowedModes {
-		if abciCtx.Mode() == m {
-			return nil
-		}
+	if slices.Contains(allowedModes, abciCtx.Mode()) {
+		return nil
 	}
 
 	return fmt.Errorf("abci: method cannot be called from the specified ABCI context mode (%s)", abciCtx.Mode())

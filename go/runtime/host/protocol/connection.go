@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -188,15 +189,7 @@ func (c *connection) setStateLocked(s state) {
 	// Validate state transition.
 	dests := validStateTransitions[c.state]
 
-	var valid bool
-	for _, dest := range dests {
-		if dest == s {
-			valid = true
-			break
-		}
-	}
-
-	if !valid {
+	if !slices.Contains(dests, s) {
 		panic(fmt.Sprintf("invalid state transition: %s -> %s", c.state, s))
 	}
 

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -330,14 +331,7 @@ func sanityCheckValidatorPeers(expected, actual []string) error {
 			len(expected), len(actual))
 	}
 	for _, expect := range expected {
-		var found bool
-		for _, key := range actual {
-			if key == expect {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(actual, expect) {
 			return fmt.Errorf("expected consensus peer missing: %s", expect)
 		}
 	}

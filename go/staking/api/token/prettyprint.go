@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -49,11 +50,8 @@ func PrettyPrintAmount(ctx context.Context, amount any, w io.Writer) {
 	// Use token's value sign if it is contained in the context and a valid one.
 	signCtx, ok := ctx.Value(prettyprint.ContextKeyTokenValueSign).(string)
 	if ok {
-		for _, s := range TokenValueAllowedSigns {
-			if signCtx == s {
-				sign = signCtx
-				break
-			}
+		if slices.Contains(TokenValueAllowedSigns, signCtx) {
+			sign = signCtx
 		}
 	}
 

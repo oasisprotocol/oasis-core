@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -170,15 +171,7 @@ func (n *Node) transitionState(state NodeState) {
 	// Validate state transition.
 	dests := validStateTransitions[n.state.Name()]
 
-	var valid bool
-	for _, dest := range dests[:] {
-		if dest == state.Name() {
-			valid = true
-			break
-		}
-	}
-
-	if !valid {
+	if !slices.Contains(dests[:], state.Name()) {
 		panic(fmt.Sprintf("invalid state transition: %s -> %s", n.state, state))
 	}
 
