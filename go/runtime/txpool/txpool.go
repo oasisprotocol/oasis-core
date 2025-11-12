@@ -571,25 +571,39 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 	)
 
 	// Queue checked transactions for scheduling.
+	stateSeqNums := make(map[string]uint64)
 	for i, pct := range goodPcts {
-		if err = t.mainQueue.Add(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
+		idx := batchIndices[i]
+		res := results[idx]
+
+		// XXXX: Temporary workaround for an Oasis SDK bug that incorrectly
+		// increments the sender's state sequence number during transaction
+		// check.
+		sender := string(res.Meta.Sender)
+		if seq, ok := stateSeqNums[sender]; ok {
+			res.Meta.SenderStateSeq = seq
+		} else {
+			stateSeqNums[sender] = res.Meta.SenderStateSeq
+		}
+
+		if err = t.mainQueue.Add(pct.TxQueueMeta, res.Meta); err != nil {
 			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
 				"hash", pct.Hash(),
 			)
 
 			// Change the result into an error and notify submitter.
-			results[batchIndices[i]].Error = protocol.Error{
+			res.Error = protocol.Error{
 				Module:  "txpool",
 				Code:    1,
 				Message: err.Error(),
 			}
-			notifySubmitter(batchIndices[i])
+			notifySubmitter(idx)
 			continue
 		}
 
 		// Notify submitter of success.
-		notifySubmitter(batchIndices[i])
+		notifySubmitter(idx)
 
 		if !pct.flags.isRecheck() {
 			// Mark new transactions as never having been published. The republish worker will
