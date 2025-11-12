@@ -176,7 +176,7 @@ func (c *Core) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.L
 	if err != nil {
 		return nil, err
 	}
-	return light.EncodeLightBlock(lb)
+	return light.EncodeLightBlock(lb, lb.Height)
 }
 
 // GetNextBlockState implements api.Backend.

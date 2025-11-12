@@ -49,6 +49,7 @@ import (
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager"
 	tmchurp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager/churp"
 	tmsecrets "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/keymanager/secrets"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/scheduler"
@@ -639,29 +640,9 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 		}
 
 		lb.SignedHeader = &commit.SignedHeader
-		tmHeight = commit.Header.Height
 	}
 
-	protoLb, err := lb.ToProto()
-	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to convert light block: %w", err)
-	}
-	if protoLb.ValidatorSet != nil {
-		// ToProto sets the TotalVotingPower to 0, but the rust side FromProto requires it.
-		// https://github.com/tendermint/tendermint/blob/41c176ccc6a75d25631d0f891efb2e19a33329dc/types/validator_set.go#L949-L951
-		// https://github.com/informalsystems/tendermint-rs/blob/c70f6eea9ccd1f41c0a608c5285b6af98b66c9fe/tendermint/src/validator.rs#L38-L45
-		protoLb.ValidatorSet.TotalVotingPower = lb.ValidatorSet.TotalVotingPower()
-	}
-
-	meta, err := protoLb.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to marshal light block: %w", err)
-	}
-
-	return &consensusAPI.LightBlock{
-		Height: tmHeight,
-		Meta:   meta,
-	}, nil
+	return light.EncodeLightBlock(&lb, tmHeight)
 }
 
 // Implements consensusAPI.Backend.
