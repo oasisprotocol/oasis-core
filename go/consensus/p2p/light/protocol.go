@@ -23,6 +23,7 @@ func ProtocolID(chainContext string) core.ProtocolID {
 
 const (
 	MethodGetLightBlock  = "GetLightBlock"
+	MethodGetValidators  = "GetValidators"
 	MethodGetParameters  = "GetParameters"
 	MethodSubmitEvidence = "SubmitEvidence"
 )

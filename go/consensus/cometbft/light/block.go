@@ -44,6 +44,43 @@ func DecodeLightBlock(lb *consensus.LightBlock) (*cmttypes.LightBlock, error) {
 	return clb, nil
 }
 
+// EncodeValidators creates a new consensus validator set from a CometBFT validator set.
+func EncodeValidators(validators *cmttypes.ValidatorSet, height int64) (*consensus.Validators, error) {
+	lb := cmttypes.LightBlock{
+		ValidatorSet: validators,
+	}
+
+	plb, err := lightBlockToProto(&lb)
+	if err != nil {
+		return nil, err
+	}
+
+	meta, err := plb.ValidatorSet.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal validators: %w", err)
+	}
+
+	return &consensus.Validators{
+		Height: height,
+		Meta:   meta,
+	}, nil
+}
+
+// DecodeValidators creates a new CometBFT validator set from a consensus validator set.
+func DecodeValidators(validators *consensus.Validators) (*cmttypes.ValidatorSet, error) {
+	var pvs cmtproto.ValidatorSet
+	if err := pvs.Unmarshal(validators.Meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal validators: %w", err)
+	}
+
+	vs, err := cmttypes.ValidatorSetFromProto(&pvs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert validators: %w", err)
+	}
+
+	return vs, nil
+}
+
 func lightBlockToProto(lb *cmttypes.LightBlock) (*cmtproto.LightBlock, error) {
 	plb, err := lb.ToProto()
 	if err != nil {

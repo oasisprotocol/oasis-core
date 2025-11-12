@@ -179,6 +179,39 @@ func (c *Core) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.L
 	return light.EncodeLightBlock(lb, lb.Height)
 }
 
+// GetValidators implements api.Backend.
+func (c *Core) GetValidators(ctx context.Context, height int64) (*consensusAPI.Validators, error) {
+	lb, err := c.lightBlock(ctx, height)
+	switch err {
+	case nil:
+		return light.EncodeValidators(lb.ValidatorSet, lb.Height)
+	default:
+	}
+
+	// If the requested height is not yet available (i.e., in the future),
+	// try to fetch the validators manually and verify them against
+	// the previous light block.
+	if height < 2 {
+		return nil, consensusAPI.ErrVersionNotFound
+	}
+
+	lb, err = c.lightBlock(ctx, height-1)
+	if err != nil {
+		return nil, err
+	}
+
+	validators, err := c.provider.GetValidators(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = c.verifyNextValidators(validators, lb); err != nil {
+		return nil, err
+	}
+
+	return validators, nil
+}
+
 // GetNextBlockState implements api.Backend.
 func (c *Core) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
 	lb, err := c.lightBlock(ctx, consensusAPI.HeightLatest)
@@ -670,6 +703,23 @@ func (c *Core) verifyProof(ctx context.Context, proof *transaction.Proof, tx *tr
 	hash := sha256.Sum256(cbor.Marshal(tx))
 	if err := merkle.Verify(proof.RawProof, stateRoot[:], hash[:]); err != nil {
 		return fmt.Errorf("failed to verify proof: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Core) verifyNextValidators(validators *consensusAPI.Validators, lb *cmttypes.LightBlock) error {
+	if validators.Height != lb.Height+1 {
+		return fmt.Errorf("mismatched block height")
+	}
+
+	vs, err := light.DecodeValidators(validators)
+	if err != nil {
+		return err
+	}
+
+	if !bytes.Equal(vs.Hash(), lb.NextValidatorsHash.Bytes()) {
+		return fmt.Errorf("mismatched next validator set")
 	}
 
 	return nil

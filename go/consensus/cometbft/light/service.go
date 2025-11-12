@@ -48,13 +48,28 @@ func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensu
 		return p.getLightBlock(ctx, height)
 	})
 	if err != nil {
-		c.logger.Debug("failed to fetch light block from peer",
+		c.logger.Debug("failed to fetch light block from peers",
 			"err", err,
 			"height", height,
 		)
 		return nil, err
 	}
 	return rsp.lb, nil
+}
+
+// Validators implements the LightProvider interface.
+func (c *ClientService) Validators(ctx context.Context, height int64) (*consensus.Validators, error) {
+	validators, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Validators, rpc.PeerFeedback, error) {
+		return p.getValidators(ctx, height)
+	})
+	if err != nil {
+		c.logger.Debug("failed to fetch validators from peers",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+	return validators, nil
 }
 
 // New creates a new CometBFT light client service backed by the local full node.

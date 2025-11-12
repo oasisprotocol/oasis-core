@@ -45,6 +45,8 @@ var (
 	methodGetBlockResults = serviceName.NewMethod("GetBlockResults", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
+	// methodGetValidators is the GetValidators method.
+	methodGetValidators = serviceName.NewMethod("GetValidators", int64(0))
 	// methodGetLatestHeight is the GetLatestHeight method.
 	methodGetLatestHeight = serviceName.NewMethod("GetLatestHeight", nil)
 	// methodGetLastRetainedHeight is the GetLastRetainedHeight method.
@@ -123,6 +125,10 @@ var (
 			{
 				MethodName: methodGetLightBlock.ShortName(),
 				Handler:    handlerGetLightBlock,
+			},
+			{
+				MethodName: methodGetValidators.ShortName(),
+				Handler:    handlerGetValidators,
 			},
 			{
 				MethodName: methodGetLatestHeight.ShortName(),
@@ -417,6 +423,29 @@ func handlerGetLightBlock(
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Services).Core().GetLightBlock(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetValidators(
+	srv any,
+	ctx context.Context,
+	dec func(any) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (any, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Services).Core().GetValidators(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetValidators.FullName(),
+	}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(Services).Core().GetValidators(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -850,6 +879,14 @@ func (c *Client) GetBlockResults(ctx context.Context, height int64) (*BlockResul
 func (c *Client) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
 	var rsp LightBlock
 	if err := c.conn.Invoke(ctx, methodGetLightBlock.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *Client) GetValidators(ctx context.Context, height int64) (*Validators, error) {
+	var rsp Validators
+	if err := c.conn.Invoke(ctx, methodGetValidators.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

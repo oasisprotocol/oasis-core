@@ -9,11 +9,14 @@ use anyhow::{anyhow, Result};
 use tendermint::{
     block::signed_header::SignedHeader as TMSignedHeader, chain, validator::Set as TMValidatorSet,
 };
-use tendermint_proto::{types::LightBlock as RawLightBlock, Protobuf};
+use tendermint_proto::{
+    types::{LightBlock as RawLightBlock, ValidatorSet as RawValidatorSet},
+    Protobuf,
+};
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
-    consensus::LightBlock,
+    consensus::{LightBlock, Validators},
     storage::mkvs::{Root, RootType},
 };
 
@@ -48,6 +51,11 @@ pub fn encode_light_block(light_block_meta: LightBlockMeta) -> Result<LightBlock
     let meta = LightBlockMeta::encode_vec(light_block_meta);
 
     Ok(LightBlock { height, meta })
+}
+
+/// Decode the validators as Tendermint validators.
+pub fn decode_validators(validators: Validators) -> Result<TMValidatorSet> {
+    Protobuf::<RawValidatorSet>::decode_vec(&validators.meta).map_err(|e| anyhow!("{}", e))
 }
 
 /// Extract state root from the given signed block header.

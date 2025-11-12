@@ -319,6 +319,11 @@ func (b *mockBackend) GetLightBlock(context.Context, int64) (*consensusAPI.Light
 	panic("unimplemented")
 }
 
+// GetValidators implements api.Backend.
+func (b *mockBackend) GetValidators(context.Context, int64) (*consensusAPI.Validators, error) {
+	panic("unimplemented")
+}
+
 // GetNextBlockState implements api.Backend.
 func (b *mockBackend) GetNextBlockState(context.Context) (*consensusAPI.NextBlockState, error) {
 	panic("unimplemented")

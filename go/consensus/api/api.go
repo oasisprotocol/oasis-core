@@ -141,6 +141,9 @@ type Backend interface {
 	// client verification.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
 
+	// GetValidators returns validators at a specific height.
+	GetValidators(ctx context.Context, height int64) (*Validators, error)
+
 	// GetLatestHeight returns the height of the latest consensus block.
 	GetLatestHeight(ctx context.Context) (int64, error)
 

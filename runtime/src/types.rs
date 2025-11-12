@@ -21,7 +21,7 @@ use crate::{
         roothash::{self, Block, ComputeResultsHeader, Header},
         state::keymanager::Status as KeyManagerStatus,
         transaction::{Proof, SignedTransaction},
-        LightBlock,
+        LightBlock, Validators,
     },
     enclave_rpc,
     storage::mkvs::{sync, WriteLog},
@@ -262,6 +262,12 @@ pub enum Body {
     },
     HostFetchConsensusBlockResponse {
         block: LightBlock,
+    },
+    HostFetchConsensusValidatorsRequest {
+        height: u64,
+    },
+    HostFetchConsensusValidatorsResponse {
+        validators: Validators,
     },
     HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest),
     HostFetchConsensusEventsResponse(HostFetchConsensusEventsResponse),

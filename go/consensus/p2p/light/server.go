@@ -27,23 +27,29 @@ type service struct {
 func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error) {
 	switch method {
 	case MethodGetLightBlock:
-		var rq int64
-		if err := cbor.Unmarshal(body, &rq); err != nil {
+		var height int64
+		if err := cbor.Unmarshal(body, &height); err != nil {
 			return nil, rpc.ErrBadRequest
 		}
-		return s.handleGetLightBlock(ctx, rq)
+		return s.handleGetLightBlock(ctx, height)
+	case MethodGetValidators:
+		var height int64
+		if err := cbor.Unmarshal(body, &height); err != nil {
+			return nil, rpc.ErrBadRequest
+		}
+		return s.handleGetValidators(ctx, height)
 	case MethodGetParameters:
-		var rq int64
-		if err := cbor.Unmarshal(body, &rq); err != nil {
+		var height int64
+		if err := cbor.Unmarshal(body, &height); err != nil {
 			return nil, rpc.ErrBadRequest
 		}
-		return s.consensus.GetParameters(ctx, rq)
+		return s.consensus.GetParameters(ctx, height)
 	case MethodSubmitEvidence:
-		var rq consensus.Evidence
-		if err := cbor.Unmarshal(body, &rq); err != nil {
+		var evidence consensus.Evidence
+		if err := cbor.Unmarshal(body, &evidence); err != nil {
 			return nil, rpc.ErrBadRequest
 		}
-		return nil, s.consensus.SubmitEvidence(ctx, &rq)
+		return nil, s.consensus.SubmitEvidence(ctx, &evidence)
 	default:
 		return nil, rpc.ErrMethodNotSupported
 	}
@@ -51,6 +57,10 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 
 func (s *service) handleGetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
 	return s.consensus.GetLightBlock(ctx, height)
+}
+
+func (s *service) handleGetValidators(ctx context.Context, height int64) (*consensus.Validators, error) {
+	return s.consensus.GetValidators(ctx, height)
 }
 
 // NewServer creates a new light block sync protocol server.

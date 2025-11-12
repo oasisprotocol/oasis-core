@@ -646,6 +646,26 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) GetValidators(ctx context.Context, height int64) (*consensusAPI.Validators, error) {
+	if err := n.ensureStarted(ctx); err != nil {
+		return nil, err
+	}
+
+	tmHeight, err := n.heightToCometBFTHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	// Don't use the client as that imposes stupid pagination. Access the state database directly.
+	validators, err := n.stateStore.LoadValidators(tmHeight)
+	if err != nil {
+		return nil, consensusAPI.ErrVersionNotFound
+	}
+
+	return light.EncodeValidators(validators, tmHeight)
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetLatestHeight(context.Context) (int64, error) {
 	return n.heightToCometBFTHeight(consensusAPI.HeightLatest)
 }

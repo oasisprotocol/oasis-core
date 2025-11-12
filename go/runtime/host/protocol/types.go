@@ -107,34 +107,36 @@ type Body struct {
 	RuntimeNotifyResponse                         *Empty                                        `json:",omitempty"`
 
 	// Host interface.
-	HostRPCCallRequest               *HostRPCCallRequest               `json:",omitempty"`
-	HostRPCCallResponse              *HostRPCCallResponse              `json:",omitempty"`
-	HostSubmitPeerFeedbackRequest    *HostSubmitPeerFeedbackRequest    `json:",omitempty"`
-	HostSubmitPeerFeedbackResponse   *Empty                            `json:",omitempty"`
-	HostStorageSyncRequest           *HostStorageSyncRequest           `json:",omitempty"`
-	HostStorageSyncResponse          *HostStorageSyncResponse          `json:",omitempty"`
-	HostLocalStorageGetRequest       *HostLocalStorageGetRequest       `json:",omitempty"`
-	HostLocalStorageGetResponse      *HostLocalStorageGetResponse      `json:",omitempty"`
-	HostLocalStorageSetRequest       *HostLocalStorageSetRequest       `json:",omitempty"`
-	HostLocalStorageSetResponse      *Empty                            `json:",omitempty"`
-	HostFetchConsensusBlockRequest   *HostFetchConsensusBlockRequest   `json:",omitempty"`
-	HostFetchConsensusBlockResponse  *HostFetchConsensusBlockResponse  `json:",omitempty"`
-	HostFetchConsensusEventsRequest  *HostFetchConsensusEventsRequest  `json:",omitempty"`
-	HostFetchConsensusEventsResponse *HostFetchConsensusEventsResponse `json:",omitempty"`
-	HostFetchTxBatchRequest          *HostFetchTxBatchRequest          `json:",omitempty"`
-	HostFetchTxBatchResponse         *HostFetchTxBatchResponse         `json:",omitempty"`
-	HostFetchGenesisHeightRequest    *HostFetchGenesisHeightRequest    `json:",omitempty"`
-	HostFetchGenesisHeightResponse   *HostFetchGenesisHeightResponse   `json:",omitempty"`
-	HostFetchBlockMetadataTxRequest  *HostFetchBlockMetadataTxRequest  `json:",omitempty"`
-	HostFetchBlockMetadataTxResponse *HostFetchBlockMetadataTxResponse `json:",omitempty"`
-	HostProveFreshnessRequest        *HostProveFreshnessRequest        `json:",omitempty"`
-	HostProveFreshnessResponse       *HostProveFreshnessResponse       `json:",omitempty"`
-	HostIdentityRequest              *HostIdentityRequest              `json:",omitempty"`
-	HostIdentityResponse             *HostIdentityResponse             `json:",omitempty"`
-	HostSubmitTxRequest              *HostSubmitTxRequest              `json:",omitempty"`
-	HostSubmitTxResponse             *HostSubmitTxResponse             `json:",omitempty"`
-	HostRegisterNotifyRequest        *HostRegisterNotifyRequest        `json:",omitempty"`
-	HostRegisterNotifyResponse       *Empty                            `json:",omitempty"`
+	HostRPCCallRequest                   *HostRPCCallRequest                   `json:",omitempty"`
+	HostRPCCallResponse                  *HostRPCCallResponse                  `json:",omitempty"`
+	HostSubmitPeerFeedbackRequest        *HostSubmitPeerFeedbackRequest        `json:",omitempty"`
+	HostSubmitPeerFeedbackResponse       *Empty                                `json:",omitempty"`
+	HostStorageSyncRequest               *HostStorageSyncRequest               `json:",omitempty"`
+	HostStorageSyncResponse              *HostStorageSyncResponse              `json:",omitempty"`
+	HostLocalStorageGetRequest           *HostLocalStorageGetRequest           `json:",omitempty"`
+	HostLocalStorageGetResponse          *HostLocalStorageGetResponse          `json:",omitempty"`
+	HostLocalStorageSetRequest           *HostLocalStorageSetRequest           `json:",omitempty"`
+	HostLocalStorageSetResponse          *Empty                                `json:",omitempty"`
+	HostFetchConsensusBlockRequest       *HostFetchConsensusBlockRequest       `json:",omitempty"`
+	HostFetchConsensusBlockResponse      *HostFetchConsensusBlockResponse      `json:",omitempty"`
+	HostFetchConsensusValidatorsRequest  *HostFetchConsensusValidatorsRequest  `json:",omitempty"`
+	HostFetchConsensusValidatorsResponse *HostFetchConsensusValidatorsResponse `json:",omitempty"`
+	HostFetchConsensusEventsRequest      *HostFetchConsensusEventsRequest      `json:",omitempty"`
+	HostFetchConsensusEventsResponse     *HostFetchConsensusEventsResponse     `json:",omitempty"`
+	HostFetchTxBatchRequest              *HostFetchTxBatchRequest              `json:",omitempty"`
+	HostFetchTxBatchResponse             *HostFetchTxBatchResponse             `json:",omitempty"`
+	HostFetchGenesisHeightRequest        *HostFetchGenesisHeightRequest        `json:",omitempty"`
+	HostFetchGenesisHeightResponse       *HostFetchGenesisHeightResponse       `json:",omitempty"`
+	HostFetchBlockMetadataTxRequest      *HostFetchBlockMetadataTxRequest      `json:",omitempty"`
+	HostFetchBlockMetadataTxResponse     *HostFetchBlockMetadataTxResponse     `json:",omitempty"`
+	HostProveFreshnessRequest            *HostProveFreshnessRequest            `json:",omitempty"`
+	HostProveFreshnessResponse           *HostProveFreshnessResponse           `json:",omitempty"`
+	HostIdentityRequest                  *HostIdentityRequest                  `json:",omitempty"`
+	HostIdentityResponse                 *HostIdentityResponse                 `json:",omitempty"`
+	HostSubmitTxRequest                  *HostSubmitTxRequest                  `json:",omitempty"`
+	HostSubmitTxResponse                 *HostSubmitTxResponse                 `json:",omitempty"`
+	HostRegisterNotifyRequest            *HostRegisterNotifyRequest            `json:",omitempty"`
+	HostRegisterNotifyResponse           *Empty                                `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -561,6 +563,16 @@ type HostFetchConsensusBlockRequest struct {
 // HostFetchConsensusBlockResponse is a response from host fetching the given consensus light block.
 type HostFetchConsensusBlockResponse struct {
 	Block consensus.LightBlock `json:"block"`
+}
+
+// HostFetchConsensusValidatorsRequest is a request to host to fetch the given consensus validators.
+type HostFetchConsensusValidatorsRequest struct {
+	Height uint64 `json:"height"`
+}
+
+// HostFetchConsensusValidatorsResponse is a response from host fetching the given consensus validators.
+type HostFetchConsensusValidatorsResponse struct {
+	Validators consensus.Validators `json:"validators"`
 }
 
 // EventKind is the consensus event kind.
