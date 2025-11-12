@@ -170,13 +170,7 @@ func (k PublicKey) Equal(cmp PublicKey) bool {
 
 // String returns a string representation of the public key.
 func (k PublicKey) String() string {
-	b64Key := base64.StdEncoding.EncodeToString(k[:])
-
-	if len(k) != PublicKeySize {
-		return "[malformed]: " + b64Key
-	}
-
-	return b64Key
+	return base64.StdEncoding.EncodeToString(k[:])
 }
 
 // IsValid checks whether the public key is well-formed.
