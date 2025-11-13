@@ -258,6 +258,25 @@ func (p *CompositeProvider) GetLightBlock(ctx context.Context, height int64) (*c
 	return lb, nil
 }
 
+// GetValidators implements consensusAPI.Backend.
+func (p *CompositeProvider) GetValidators(ctx context.Context, height int64) (*consensusAPI.Validators, error) {
+	var validators *consensusAPI.Validators
+
+	err := p.call(func(provider consensusAPI.Backend) error {
+		var err error
+		if validators, err = provider.GetValidators(ctx, height); err != nil {
+			p.logger.Warn("failed to get validators", "err", err)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validators from any provider: %w", err)
+	}
+
+	return validators, nil
+}
+
 // GetNextBlockState implements consensusAPI.Backend.
 func (p *CompositeProvider) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
 	var state *consensusAPI.NextBlockState

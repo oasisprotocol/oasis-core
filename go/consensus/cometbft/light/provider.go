@@ -273,6 +273,31 @@ func (p *Provider) getLightBlock(ctx context.Context, height int64) (*lightBlock
 	return rsp, pf, nil
 }
 
+func (p *Provider) getValidators(ctx context.Context, height int64) (*consensus.Validators, rpc.PeerFeedback, error) {
+	peerID := p.getPeer()
+	if peerID == nil {
+		return nil, nil, consensus.ErrVersionNotFound
+	}
+
+	var validators consensus.Validators
+	pf, err := p.rc.Call(ctx, *peerID, light.MethodGetValidators, height, &validators)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if validators.Height != height {
+		pf.RecordBadPeer()
+		return nil, nil, consensus.ErrVersionNotFound
+	}
+
+	if _, err = DecodeValidators(&validators); err != nil {
+		pf.RecordBadPeer()
+		return nil, nil, fmt.Errorf("corrupted validators: %w", err)
+	}
+
+	return &validators, pf, nil
+}
+
 func (p *Provider) getParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
 	peerID := p.getPeer()
 	if peerID == nil {

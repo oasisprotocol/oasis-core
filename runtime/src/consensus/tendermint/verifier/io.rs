@@ -5,13 +5,13 @@ use tendermint_light_client::{
         self,
         io::{AtHeight, IoError},
     },
-    types::{LightBlock as TMLightBlock, PeerId},
+    types::{LightBlock as TMLightBlock, PeerId, ValidatorSet as TMValidatorSet},
 };
 use tendermint_rpc::error::Error as RpcError;
 
 use crate::{
     consensus::{
-        tendermint::{decode_light_block, LightBlockMeta},
+        tendermint::{decode_light_block, decode_validators, LightBlockMeta},
         transaction::SignedTransactionWithProof,
         HEIGHT_LATEST,
     },
@@ -49,6 +49,25 @@ impl Io {
             .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         Ok(block)
+    }
+
+    fn fetch_validators(&self, height: u64) -> Result<TMValidatorSet, IoError> {
+        let result = self
+            .protocol
+            .call_host(Body::HostFetchConsensusValidatorsRequest { height })
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        // Extract generic validators from response.
+        let validators = match result {
+            Body::HostFetchConsensusValidatorsResponse { validators } => validators,
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
+        };
+
+        // Decode validators as Tendermint validators.
+        let validators = decode_validators(validators)
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        Ok(validators)
     }
 
     pub fn fetch_genesis_height(&self) -> Result<u64, IoError> {
@@ -109,7 +128,6 @@ impl components::io::Io for Io {
             AtHeight::Highest => HEIGHT_LATEST,
         };
 
-        // Fetch light block at height and height+1.
         let block = Io::fetch_light_block(self, height)?;
         let height: u64 = block
             .signed_header
@@ -118,14 +136,13 @@ impl components::io::Io for Io {
             .header()
             .height
             .into();
-        // NOTE: It seems that the requirement to fetch the next validator set is redundant and it
-        //       should be handled at a higher layer of the light client.
-        let next_block = Io::fetch_light_block(self, height + 1)?;
+
+        let next_validators = Io::fetch_validators(self, height + 1)?;
 
         Ok(TMLightBlock {
             signed_header: block.signed_header.unwrap(), // Checked above.
             validators: block.validators,
-            next_validators: next_block.validators,
+            next_validators,
             provider: PeerId::new([0; 20]),
         })
     }

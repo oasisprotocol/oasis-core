@@ -31,6 +31,13 @@ pub struct LightBlock {
     pub meta: Vec<u8>,
 }
 
+/// Consensus validator set.
+#[derive(Clone, Default, Debug, cbor::Encode, cbor::Decode)]
+pub struct Validators {
+    pub height: u64,
+    pub meta: Vec<u8>,
+}
+
 /// An event emitted by the consensus layer.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub enum Event {

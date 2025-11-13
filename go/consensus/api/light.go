@@ -23,6 +23,9 @@ type LightService interface {
 type LightProvider interface {
 	// LightBlock retrieves an untrusted light block at the specified height.
 	LightBlock(ctx context.Context, height int64) (*LightBlock, error)
+
+	// Validators retrieves an untrusted validator set at the specified height.
+	Validators(ctx context.Context, height int64) (*Validators, error)
 }
 
 // LightClient is a consensus light client interface.
@@ -39,6 +42,14 @@ type LightBlock struct {
 	// Height contains the block height.
 	Height int64 `json:"height"`
 	// Meta contains the consensus backend specific light block.
+	Meta []byte `json:"meta"`
+}
+
+// Validators is a validator set for the specified height.
+type Validators struct {
+	// Height contains the block height.
+	Height int64 `json:"height"`
+	// Meta contains the consensus backend specific validator set.
 	Meta []byte `json:"meta"`
 }
 

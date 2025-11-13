@@ -95,6 +95,9 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostFetchConsensusBlockRequest != nil:
 		// Consensus light client.
 		rsp.HostFetchConsensusBlockResponse, err = h.handleHostFetchConsensusBlock(ctx, rq.HostFetchConsensusBlockRequest)
+	case rq.HostFetchConsensusValidatorsRequest != nil:
+		// Consensus validators.
+		rsp.HostFetchConsensusValidatorsResponse, err = h.handleHostFetchConsensusValidators(ctx, rq.HostFetchConsensusValidatorsRequest)
 	case rq.HostFetchConsensusEventsRequest != nil:
 		// Consensus events.
 		rsp.HostFetchConsensusEventsResponse, err = h.handleHostFetchConsensusEvents(ctx, rq.HostFetchConsensusEventsRequest)
@@ -277,6 +280,26 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 		}
 	}
 	return &protocol.HostFetchConsensusBlockResponse{Block: *blk}, nil
+}
+
+func (h *runtimeHostHandler) handleHostFetchConsensusValidators(
+	ctx context.Context,
+	rq *protocol.HostFetchConsensusValidatorsRequest,
+) (*protocol.HostFetchConsensusValidatorsResponse, error) {
+	vs, err := h.consensus.Core().GetValidators(ctx, int64(rq.Height))
+	if err != nil {
+		lp, err := h.env.GetLightProvider()
+		if err != nil {
+			return nil, err
+		}
+
+		vs, err = lp.Validators(ctx, int64(rq.Height))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &protocol.HostFetchConsensusValidatorsResponse{Validators: *vs}, nil
 }
 
 func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
