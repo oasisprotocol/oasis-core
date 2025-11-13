@@ -44,8 +44,8 @@ func (c *ClientService) TrustedLightBlock(int64) (*consensus.LightBlock, error) 
 
 // LightBlock implements the LightProvider interface.
 func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
-	lb, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-		return p.GetLightBlock(ctx, height)
+	rsp, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*lightBlock, rpc.PeerFeedback, error) {
+		return p.getLightBlock(ctx, height)
 	})
 	if err != nil {
 		c.logger.Debug("failed to fetch light block from peer",
@@ -54,7 +54,7 @@ func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensu
 		)
 		return nil, err
 	}
-	return lb, nil
+	return rsp.lb, nil
 }
 
 // New creates a new CometBFT light client service backed by the local full node.

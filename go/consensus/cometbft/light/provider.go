@@ -233,30 +233,47 @@ func (p *Provider) GetStoredLightBlock(int64) (*consensus.LightBlock, error) {
 	return nil, consensus.ErrVersionNotFound
 }
 
-// GetLightBlock implements api.Provider.
-func (p *Provider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+type lightBlock struct {
+	lb  *consensus.LightBlock
+	clb *cmttypes.LightBlock
+}
+
+func (p *Provider) getLightBlock(ctx context.Context, height int64) (*lightBlock, rpc.PeerFeedback, error) {
 	peerID := p.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
 	}
 
-	var rsp consensus.LightBlock
-	pf, err := p.rc.Call(ctx, *peerID, light.MethodGetLightBlock, height, &rsp)
+	var lb consensus.LightBlock
+	pf, err := p.rc.Call(ctx, *peerID, light.MethodGetLightBlock, height, &lb)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Ensure peer returned the block for the queried height.
-	if rsp.Height != height {
+	if lb.Height != height {
 		pf.RecordBadPeer()
 		return nil, nil, consensus.ErrVersionNotFound
 	}
 
-	return &rsp, pf, nil
+	clb, err := DecodeLightBlock(&lb)
+	if err != nil {
+		pf.RecordBadPeer()
+		return nil, nil, err
+	}
+	if err = clb.ValidateBasic(p.chainID); err != nil {
+		pf.RecordFailure()
+		return nil, nil, err
+	}
+
+	rsp := &lightBlock{
+		lb:  &lb,
+		clb: clb,
+	}
+
+	return rsp, pf, nil
 }
 
-// GetParameters implements api.Provider.
-func (p *Provider) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
+func (p *Provider) getParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
 	peerID := p.getPeer()
 	if peerID == nil {
 		return nil, nil, consensus.ErrVersionNotFound
@@ -290,24 +307,12 @@ func (p *Provider) LightBlock(ctx context.Context, height int64) (*cmttypes.Ligh
 
 // LightBlockWithPeerID implements api.Provider.
 func (p *Provider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
-	rsp, pf, err := p.GetLightBlock(ctx, height)
-	switch {
-	case err == nil:
-	case errors.Is(err, consensus.ErrVersionNotFound):
-		return nil, "", cmtlightprovider.ErrLightBlockNotFound
-	default:
-		return nil, "", cmtlightprovider.ErrNoResponse
-	}
-
-	clb, err := DecodeLightBlock(rsp)
+	rsp, pf, err := p.getLightBlock(ctx, height)
 	if err != nil {
-		pf.RecordBadPeer()
+		if errors.Is(err, consensus.ErrVersionNotFound) {
+			return nil, "", cmtlightprovider.ErrLightBlockNotFound
+		}
 		return nil, "", cmtlightprovider.ErrNoResponse
 	}
-	if err = clb.ValidateBasic(p.chainID); err != nil {
-		pf.RecordFailure()
-		return nil, "", cmtlightprovider.ErrNoResponse
-	}
-
-	return clb, string(pf.PeerID()), nil
+	return rsp.clb, string(pf.PeerID()), nil
 }

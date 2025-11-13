@@ -192,7 +192,7 @@ func (c *Client) VerifyParametersAt(ctx context.Context, height int64) (*cmttype
 
 func (c *Client) getParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
 	return tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Parameters, rpc.PeerFeedback, error) {
-		return p.GetParameters(ctx, height)
+		return p.getParameters(ctx, height)
 	})
 }
 
