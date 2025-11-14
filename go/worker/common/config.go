@@ -15,11 +15,13 @@ type Config struct {
 
 	TxPool tpConfig.Config
 
+	MetricsEnabled bool
+
 	logger *logging.Logger
 }
 
 // NewConfig creates a new worker config.
-func NewConfig() (*Config, error) {
+func NewConfig(metricsEnabled bool) (*Config, error) {
 	// Parse sentry configuration.
 	var sentryAddresses []node.TLSAddress
 	for _, v := range config.GlobalConfig.Runtime.SentryAddresses {
@@ -33,6 +35,7 @@ func NewConfig() (*Config, error) {
 	cfg := Config{
 		SentryAddresses: sentryAddresses,
 		TxPool:          config.GlobalConfig.Runtime.TxPool,
+		MetricsEnabled:  metricsEnabled,
 		logger:          logging.GetLogger("worker/config"),
 	}
 

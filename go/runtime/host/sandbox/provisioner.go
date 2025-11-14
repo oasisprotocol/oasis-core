@@ -48,6 +48,9 @@ type Config struct {
 
 	// InsecureNoSandbox disables the sandbox and runs the runtime binary directly.
 	InsecureNoSandbox bool
+
+	// MetricsEnabled is true if prometheus metrics are enabled.
+	MetricsEnabled bool
 }
 
 type sandboxProvisioner struct {

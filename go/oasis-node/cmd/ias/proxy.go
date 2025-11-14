@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	iasHTTP "github.com/oasisprotocol/oasis-core/go/ias/http"
 	iasProxy "github.com/oasisprotocol/oasis-core/go/ias/proxy"
@@ -152,8 +153,10 @@ func doProxy(cmd *cobra.Command, _ []string) {
 	}
 	env.svcMgr.Register(env.grpcSrv)
 
+	// For every command where applicable you will have to parse yaml config??
+	cfg := &config.GlobalConfig
 	// Initialize the metrics server.
-	metrics, err := metrics.New()
+	metrics, err := metrics.New(&cfg.Metrics)
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
