@@ -509,8 +509,8 @@ github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641 h1:8vZBx878kg60
 github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641/go.mod h1:SpXXQ5YoyJw6s3/6cMTQuxvgRl3PCJiyaX9p6b155UU=
 github.com/oasisprotocol/cometbft v0.37.2-oasis1 h1:7yr/5f0vV1bQLKoZHFhs3mcHay3nLKT9m8bVIJAgdMU=
 github.com/oasisprotocol/cometbft v0.37.2-oasis1/go.mod h1:w7GZmT0jJ/i9Uz9ZWtzE3chuNZ3phUboSrFzPZIoYts=
-github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce h1:/pEpMk55wH0X+E5zedGEMOdLuWmV8P4+4W3+LZaM6kg=
-github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce/go.mod h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s=
+github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729 h1:yfQ2sO9WJXUAIUR+g7NUkxJSKCAFJcR5sUDu+ZmjTZI=
+github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729/go.mod h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s=
 github.com/oasisprotocol/oasis-core/go v0.2300.1-0.20231116141950-ddb723e5305e h1:tluV6G4uVqlHc/3aF0m6/ZYxc9iwY5N/7GE0r7W/YbY=
 github.com/oasisprotocol/oasis-core/go v0.2300.1-0.20231116141950-ddb723e5305e/go.mod h1:3ub+3LT8GEjuzeAXrve9pZEDkM/goL1HKBXVp4queNM=
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661 h1:MB73kGMtuMGS+6VDoU/mitzff7Cu+aZo9ta5wabuxVA=
