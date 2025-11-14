@@ -287,12 +287,13 @@ func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, er
 	return annBlk.Block, nil
 }
 
-func (h *runtimeHistory) Prune(height int64) error {
+// CanPruneConsenus returns no error when the specified consensus height has been already reindexed.
+//
+// Implements consensus.api.StatePruneHandler
+func (h *runtimeHistory) CanPruneConsensus(height int64) error {
 	lastHeight, err := h.LastConsensusHeight()
 	if err != nil {
-		h.logger.Warn("failed to fetch last consensus height for tracked runtime",
-			"err", err,
-		)
+		h.logger.Warn("failed to fetch last consensus height for tracked runtime", "err", err)
 		// We can't be sure if it is ok to prune this version, so prevent pruning to be safe.
 		return fmt.Errorf("failed to fetch last consensus height for tracked runtime: %w", err)
 	}
@@ -334,14 +335,10 @@ func (h *runtimeHistory) pruneWorker() {
 				return
 			}
 
-			h.logger.Debug("pruning runtime history",
-				"round", round.(uint64),
-			)
+			h.logger.Debug("pruning runtime history", "round", round.(uint64))
 
 			if err := h.pruner.Prune(round.(uint64)); err != nil {
-				h.logger.Error("failed to prune",
-					"err", err,
-				)
+				h.logger.Debug("failed to prune", "err", err)
 				continue
 			}
 		case <-h.stopCh:
