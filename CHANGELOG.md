@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.8 (2025-11-17)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/consensus/api: Support fetching validator set
+  ([#6397](https://github.com/oasisprotocol/oasis-core/issues/6397))
+
+### Internal Changes
+
+- go: Bump curve25519-voi to v0.0.0-2ab5a27a1729
+  ([#6402](https://github.com/oasisprotocol/oasis-core/issues/6402))
+
+- go: Bump x/crypto to v0.44.0
+  ([#6405](https://github.com/oasisprotocol/oasis-core/issues/6405))
+
 ## 25.7 (2025-11-06)
 
 | Protocol          | Version   |
