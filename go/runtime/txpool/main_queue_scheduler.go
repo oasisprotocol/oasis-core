@@ -7,6 +7,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 )
 
+// blockedTransactions is a list of hex-encoded transaction hashes that
+// should be rejected by the scheduler.
+var blockedTransactions = []string{}
+
 // mainQueueScheduler manages and prepares transactions for scheduling.
 type mainQueueScheduler struct {
 	// capacity is the maximum number of transactions that can be stored
@@ -34,10 +38,22 @@ type mainQueueScheduler struct {
 	// with the sequence number of their most recent transaction that has been
 	// scheduled for execution.
 	scheduled map[string]uint64
+
+	// blocked contains all transactions that should be blocked by the scheduler.
+	blocked map[hash.Hash]struct{}
 }
 
 // newMainQueueScheduler creates a new transaction scheduler for the main queue.
 func newMainQueueScheduler(capacity int) *mainQueueScheduler {
+	blocked := make(map[hash.Hash]struct{})
+	for _, hex := range blockedTransactions {
+		var h hash.Hash
+		if err := h.UnmarshalHex(hex); err != nil {
+			panic(fmt.Sprintf("malformed transaction hash: %s", hex))
+		}
+		blocked[h] = struct{}{}
+	}
+
 	return &mainQueueScheduler{
 		capacity:  capacity,
 		txs:       make(map[hash.Hash]*mainQueueTransaction),
@@ -45,6 +61,7 @@ func newMainQueueScheduler(capacity int) *mainQueueScheduler {
 		minHeap:   make(minPriorityTxHeap, 0),
 		maxHeap:   make(maxPriorityTxHeap, 0),
 		scheduled: make(map[string]uint64),
+		blocked:   blocked,
 	}
 }
 
@@ -101,6 +118,11 @@ func (s *mainQueueScheduler) add(tx *mainQueueTransaction, seq uint64) error {
 	// Reject expired transaction.
 	if tx.seq < seqHeap.seq {
 		return fmt.Errorf("transaction expired")
+	}
+
+	// Reject blocked transaction.
+	if _, ok := s.blocked[tx.meta.hash]; ok {
+		return fmt.Errorf("transaction blocked")
 	}
 
 	// Replace existing transaction.
