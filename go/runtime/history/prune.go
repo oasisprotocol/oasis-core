@@ -128,30 +128,36 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 			pruned = append(pruned, round)
 		}
 
-		// If there is nothing to prune, do not call any handlers.
-		if len(pruned) == 0 {
+		if len(pruned) == 0 { // nothing to prune
 			return nil
 		}
 
-		// Before pruning anything, run all prune handlers. If any of them
-		// fails we abort the prune.
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-
-		for _, ph := range p.handlers {
-			if err := ph.CanPruneRuntime(pruned); err != nil {
-				p.logger.Debug("prune handler failed, aborting prune",
-					"err", err,
-					"round_count", len(pruned),
-					"round_min", pruned[0],
-					"round_max", pruned[len(pruned)-1],
-				)
-				return fmt.Errorf("runtime/history: prune handler failed: %w", err)
-			}
+		if err := p.canPrune(pruned); err != nil {
+			p.logger.Debug("prune handler blocked pruning, aborting prune",
+				"err", err,
+				"round_count", len(pruned),
+				"round_min", pruned[0],
+				"round_max", pruned[len(pruned)-1], // safe due to length check above
+			)
+			return fmt.Errorf("prune handler blocked pruning: %w", err)
 		}
 
 		return nil
 	})
+}
+
+// canPrune checks if all prune handlers allow pruning specified rounds.
+func (p *keepLastPruner) canPrune(rounds []uint64) error {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	for _, ph := range p.handlers {
+		if err := ph.CanPruneRuntime(rounds); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // PruneInterval implements Pruner.
