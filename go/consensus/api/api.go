@@ -428,18 +428,15 @@ type StatePruner interface {
 	RegisterHandler(handler StatePruneHandler)
 }
 
-// StatePruneHandler is a handler that is called when heights are pruned
+// StatePruneHandler is a handler that is called before heights are pruned
 // from history.
 type StatePruneHandler interface {
-	// Prune is called before the specified height is pruned.
-	//
-	// If an error is returned, pruning is aborted and the height is
-	// not pruned from history.
+	// CanPruneConsensus is called to check if the specified height can be pruned.
 	//
 	// Note that this can be called for the same height multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(height int64) error
+	CanPruneConsensus(height int64) error
 }
 
 // EstimateGasRequest is a EstimateGas request.

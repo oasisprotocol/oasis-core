@@ -24,18 +24,15 @@ const (
 // PrunerFactory is the runtime history pruner factory interface.
 type PrunerFactory func(runtimeID common.Namespace, db *DB) (Pruner, error)
 
-// PruneHandler is a handler that is called when rounds are pruned
+// PruneHandler is a handler that is called before rounds are pruned
 // from history.
 type PruneHandler interface {
-	// Prune is called before the specified rounds are pruned.
-	//
-	// If an error is returned, pruning is aborted and the rounds are
-	// not pruned from history.
+	// CanPruneRuntime is called before to check if the specified round can be pruned.
 	//
 	// Note that this can be called for the same round multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(rounds []uint64) error
+	CanPruneRuntime(rounds []uint64) error
 }
 
 // Pruner is the runtime history pruner interface.
@@ -131,30 +128,36 @@ func (p *keepLastPruner) Prune(latestRound uint64) error {
 			pruned = append(pruned, round)
 		}
 
-		// If there is nothing to prune, do not call any handlers.
-		if len(pruned) == 0 {
+		if len(pruned) == 0 { // nothing to prune
 			return nil
 		}
 
-		// Before pruning anything, run all prune handlers. If any of them
-		// fails we abort the prune.
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-
-		for _, ph := range p.handlers {
-			if err := ph.Prune(pruned); err != nil {
-				p.logger.Error("prune handler failed, aborting prune",
-					"err", err,
-					"round_count", len(pruned),
-					"round_min", pruned[0],
-					"round_max", pruned[len(pruned)-1],
-				)
-				return fmt.Errorf("runtime/history: prune handler failed: %w", err)
-			}
+		if err := p.canPrune(pruned); err != nil {
+			p.logger.Debug("prune handler blocked pruning, aborting prune",
+				"err", err,
+				"round_count", len(pruned),
+				"round_min", pruned[0],
+				"round_max", pruned[len(pruned)-1], // safe due to length check above
+			)
+			return fmt.Errorf("prune handler blocked pruning: %w", err)
 		}
 
 		return nil
 	})
+}
+
+// canPrune checks if all prune handlers allow pruning specified rounds.
+func (p *keepLastPruner) canPrune(rounds []uint64) error {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	for _, ph := range p.handlers {
+		if err := ph.CanPruneRuntime(rounds); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // PruneInterval implements Pruner.
