@@ -32,8 +32,11 @@ type SGXConstraints struct {
 	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
 	Enclaves []sgx.EnclaveIdentity `json:"enclaves,omitempty"`
 
-	// Policy is the quote policy.
+	// Policy is the quote policy that all attestations must satisfy.
 	Policy *quote.Policy `json:"policy,omitempty"`
+
+	// PerRolePolicy defines additional role specific quote policies.
+	PerRolePolicy map[RolesMask]*quote.Policy `json:"per_role_policy,omitempty"`
 
 	// MaxAttestationAge is the maximum attestation age (in blocks).
 	MaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
@@ -220,7 +223,7 @@ func (sa *SGXAttestation) Verify(
 	sc *SGXConstraints,
 	rak signature.PublicKey,
 	rek *x25519.PublicKey,
-	nodeID signature.PublicKey,
+	n *Node,
 ) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
@@ -229,10 +232,23 @@ func (sa *SGXAttestation) Verify(
 	// Use defaults from consensus parameters.
 	cfg.SGX.ApplyDefaultConstraints(sc)
 
-	// Verify the quote.
+	// Verify the quote againt the default policy.
 	verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to verify quote against default policy: %w", err)
+	}
+
+	// Verify the quote against role specific policy (if applicable).
+	for role, policy := range sc.PerRolePolicy {
+		if !n.HasRoles(role) {
+			continue
+		}
+
+		// TODO: should we check verified quote is still equal to the one from the default policy,
+		// that is used down for the further validation?
+		if _, err := sa.Quote.Verify(policy, ts); err != nil {
+			return fmt.Errorf("failed to verify quote against %s's policy: %w", role, err)
+		}
 	}
 
 	// Ensure that the MRENCLAVE/MRSIGNER match what is specified
@@ -254,7 +270,7 @@ func (sa *SGXAttestation) Verify(
 
 	if cfg.SGX.SignedAttestations {
 		// In case the signed attestation feature is enabled, verify the signature.
-		return sa.verifyAttestationSignature(sc, rak, rek, verifiedQuote.ReportData, nodeID, height)
+		return sa.verifyAttestationSignature(sc, rak, rek, verifiedQuote.ReportData, n.ID, height)
 	}
 
 	return nil
