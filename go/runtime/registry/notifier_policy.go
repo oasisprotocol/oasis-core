@@ -165,9 +165,11 @@ func (n *KeyManagerNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *c
 
 		// Make sure that we actually have a new quote policy and that the current runtime version
 		// supports quote policy updates.
-		if !quotePolicyUpdated && sc != nil && sc.Policy != nil {
-			n.updateKeyManagerQuotePolicy(sc.Policy)
-			quotePolicyUpdated = true
+		if !quotePolicyUpdated && sc != nil { // Possible nil vs empty semantic change (check if it matters).
+			if policy := sc.EffectivePolicy(node.RoleKeyManager); policy != nil {
+				n.updateKeyManagerQuotePolicy(policy)
+				quotePolicyUpdated = true
+			}
 		}
 
 		select {
