@@ -412,7 +412,7 @@ func isSuitableExecutorWorker(
 				ctx.Now(),
 				uint64(ctx.LastHeight()),
 				activeDeployment.TEE,
-				n.node.ID,
+				n.node,
 				isFeatureVersion242,
 			); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestation",

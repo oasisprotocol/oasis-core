@@ -619,7 +619,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// both validators and compute nodes and have out of date attestation evidence. Removing
 			// such nodes could lead to consensus not having the proper majority. This is safe as
 			// attestation evidence is independently verified before scheduling committees.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, &n, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
 				return nil, nil, err
 			}
 
@@ -795,7 +795,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
 func VerifyNodeRuntimeEnclaveIDs(
 	logger *logging.Logger,
-	nodeID signature.PublicKey,
+	n *node.Node,
 	rt *node.Runtime,
 	regRt *Runtime,
 	teeCfg *node.TEEFeatures,
@@ -830,9 +830,9 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion242); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, n, isFeatureVersion242); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
-				"node_id", nodeID,
+				"node_id", n.ID,
 				"runtime_id", rt.ID,
 				"ts", ts,
 				"err", err,
