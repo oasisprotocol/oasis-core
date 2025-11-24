@@ -423,9 +423,9 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	}
 
 	// Always take the latest epoch to avoid reverting to stale state.
-	epoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+	epoch, err := n.Consensus.Beacon().GetNextEpoch(n.ctx, consensus.HeightLatest)
 	if err != nil {
-		n.logger.Error("failed to fetch current epoch",
+		n.logger.Error("failed to fetch next block epoch",
 			"err", err,
 		)
 		return
