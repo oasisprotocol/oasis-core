@@ -104,6 +104,33 @@ func (sc *ServiceClient) GetEpoch(ctx context.Context, height int64) (api.EpochT
 	return epoch, err
 }
 
+func (sc *ServiceClient) GetNextEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+	if height == consensus.HeightLatest {
+		latest, err := sc.consensus.GetLatestHeight(ctx)
+		if err != nil {
+			return api.EpochInvalid, err
+		}
+		height = latest
+	}
+
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return api.EpochInvalid, err
+	}
+
+	future, err := q.FutureEpoch(ctx)
+	if err != nil {
+		return api.EpochInvalid, err
+	}
+
+	if future != nil && future.Height == height+1 {
+		return future.Epoch, nil
+	}
+
+	epoch, _, err := q.Epoch(ctx)
+	return epoch, err
+}
+
 func (sc *ServiceClient) GetFutureEpoch(ctx context.Context, height int64) (*api.EpochTimeState, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
