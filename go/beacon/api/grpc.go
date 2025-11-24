@@ -18,6 +18,8 @@ var (
 	methodGetBaseEpoch = serviceName.NewMethod("GetBaseEpoch", nil)
 	// methodGetEpoch is the GetEpoch method.
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
+	// methodGetNextEpoch is the GetNextEpoch method.
+	methodGetNextEpoch = serviceName.NewMethod("GetNextEpoch", int64(0))
 	// methodGetFutureEpoch is the GetFutureEpoch method.
 	methodGetFutureEpoch = serviceName.NewMethod("GetFutureEpoch", int64(0))
 	// methodGetEpochBlock is the GetEpochBlock method.
@@ -46,6 +48,10 @@ var (
 			{
 				MethodName: methodGetEpoch.ShortName(),
 				Handler:    handlerGetEpoch,
+			},
+			{
+				MethodName: methodGetNextEpoch.ShortName(),
+				Handler:    handlerGetNextEpoch,
 			},
 			{
 				MethodName: methodGetFutureEpoch.ShortName(),
@@ -120,6 +126,29 @@ func handlerGetEpoch(
 	}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(Backend).GetEpoch(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetNextEpoch(
+	srv any,
+	ctx context.Context,
+	dec func(any) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (any, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetNextEpoch(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetNextEpoch.FullName(),
+	}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(Backend).GetNextEpoch(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -318,6 +347,14 @@ func (c *Client) GetBaseEpoch(ctx context.Context) (EpochTime, error) {
 func (c *Client) GetEpoch(ctx context.Context, height int64) (EpochTime, error) {
 	var rsp EpochTime
 	if err := c.conn.Invoke(ctx, methodGetEpoch.FullName(), height, &rsp); err != nil {
+		return 0, err
+	}
+	return rsp, nil
+}
+
+func (c *Client) GetNextEpoch(ctx context.Context, height int64) (EpochTime, error) {
+	var rsp EpochTime
+	if err := c.conn.Invoke(ctx, methodGetNextEpoch.FullName(), height, &rsp); err != nil {
 		return 0, err
 	}
 	return rsp, nil
