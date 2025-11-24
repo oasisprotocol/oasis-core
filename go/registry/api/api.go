@@ -619,8 +619,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// both validators and compute nodes and have out of date attestation evidence. Removing
 			// such nodes could lead to consensus not having the proper majority. This is safe as
 			// attestation evidence is independently verified before scheduling committees.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, &n, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
-				return nil, nil, err
+			if !isSanityCheck && !isGenesis {
+				if err := VerifyNodeRuntimeEnclaveIDs(logger, &n, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil {
+					return nil, nil, err
+				}
 			}
 
 			// Enforce what kinds of runtimes are allowed.
