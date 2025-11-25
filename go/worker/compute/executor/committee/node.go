@@ -400,8 +400,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
 	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
-	case n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
-		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
