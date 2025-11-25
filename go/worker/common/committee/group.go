@@ -50,8 +50,6 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 type epoch struct {
 	// epochNumber is the sequential number of the epoch.
 	epochNumber beacon.EpochTime
-	// epochHeight is the height at which the epoch transition happened.
-	epochHeight int64
 
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
@@ -64,7 +62,6 @@ type EpochSnapshot struct {
 	identity *identity.Identity
 
 	epochNumber beacon.EpochTime
-	epochHeight int64
 
 	runtime *registry.Runtime
 
@@ -91,11 +88,6 @@ func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
 // GetEpochNumber returns the sequential number of the epoch.
 func (e *EpochSnapshot) GetEpochNumber() beacon.EpochTime {
 	return e.epochNumber
-}
-
-// GetEpochHeight returns the consensus height corresponding to the epoch transition.
-func (e *EpochSnapshot) GetEpochHeight() int64 {
-	return e.epochHeight
 }
 
 // IsExecutorMember checks if the current node is a member of the executor committee
@@ -244,10 +236,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	if err != nil {
 		return err
 	}
-	epochHeight, err := g.consensus.Beacon().GetEpochBlock(ctx, epochNumber)
-	if err != nil {
-		return err
-	}
 
 	// Fetch current runtime descriptor.
 	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtimeID, Height: height})
@@ -261,7 +249,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
 		epochNumber:       epochNumber,
-		epochHeight:       epochHeight,
 		executorCommittee: executorCommittee,
 		runtime:           runtime,
 	}
@@ -286,7 +273,6 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	s := &EpochSnapshot{
 		identity:          g.identity,
 		epochNumber:       g.activeEpoch.epochNumber,
-		epochHeight:       g.activeEpoch.epochHeight,
 		runtime:           g.activeEpoch.runtime,
 		executorCommittee: g.activeEpoch.executorCommittee,
 		nodes:             g.nodes,
