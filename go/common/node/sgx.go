@@ -126,6 +126,10 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 		}
 	}
 
+	if !isFeatureVersion242 && sc.PerRolePolicy != nil {
+		return fmt.Errorf("per role policy should be empty")
+	}
+
 	return nil
 }
 
