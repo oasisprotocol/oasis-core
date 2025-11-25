@@ -22,6 +22,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -466,6 +467,7 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		n.blockInfo.Epoch,
 		n.blockInfo.ConsensusBlock,
 		n.blockInfo.RuntimeBlock,
+		n.blockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		hash.Hash{}, // IORoot is ignored as it is yet to be determined.
@@ -512,6 +514,7 @@ func (n *Node) runtimeExecuteTxBatch(
 	epoch beacon.EpochTime,
 	consensusBlk *consensus.LightBlock,
 	blk *block.Block,
+	inMsgs []*message.IncomingMessage,
 	state *roothash.RuntimeState,
 	roundResults *roothash.RoundResults,
 	inputRoot hash.Hash,
@@ -520,18 +523,6 @@ func (n *Node) runtimeExecuteTxBatch(
 	// Ensure block round is synced to storage.
 	n.logger.Debug("ensuring block round is synced", "round", blk.Header.Round)
 	if _, err := n.commonNode.Runtime.History().WaitRoundSynced(ctx, blk.Header.Round); err != nil {
-		return nil, err
-	}
-
-	// Fetch any incoming messages.
-	inMsgs, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		Height:    consensusBlk.Height,
-	})
-	if err != nil {
-		n.logger.Error("failed to fetch incoming runtime message queue metadata",
-			"err", err,
-		)
 		return nil, err
 	}
 
@@ -623,6 +614,7 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		n.blockInfo.Epoch,
 		n.blockInfo.ConsensusBlock,
 		n.blockInfo.RuntimeBlock,
+		n.blockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		proposal.Header.BatchHash,

@@ -551,28 +551,29 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 		return
 	}
 
-	bi := &runtime.BlockInfo{
-		RuntimeBlock:     blk,
-		ConsensusBlock:   consensusBlk,
-		Epoch:            n.CurrentEpoch,
-		ActiveDescriptor: n.CurrentDescriptor,
-	}
-
-	n.TxPool.ProcessBlock(bi)
-
 	// Fetch incoming messages.
 	inMsgs, err := n.Consensus.RootHash().GetIncomingMessageQueue(n.ctx, &roothash.InMessageQueueRequest{
 		RuntimeID: n.Runtime.ID(),
-		Height:    consensusBlk.Height,
+		Height:    height,
 	})
 	if err != nil {
 		n.logger.Error("failed to query incoming messages",
 			"err", err,
 			"height", height,
-			"round", bi.RuntimeBlock.Header.Round,
+			"round", blk.Header.Round,
 		)
 		return
 	}
+
+	bi := &runtime.BlockInfo{
+		RuntimeBlock:     blk,
+		ConsensusBlock:   consensusBlk,
+		IncomingMessages: inMsgs,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
+	}
+
+	n.TxPool.ProcessBlock(bi)
 	n.TxPool.ProcessIncomingMessages(inMsgs)
 
 	for _, hooks := range n.hooks {
