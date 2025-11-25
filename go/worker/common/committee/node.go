@@ -2,7 +2,6 @@ package committee
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -226,10 +225,6 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
-	if err := n.Group.Start(); err != nil {
-		return fmt.Errorf("failed to start group services: %w", err)
-	}
-
 	go n.worker()
 	if cmmetrics.Enabled() {
 		go n.metricsWorker()

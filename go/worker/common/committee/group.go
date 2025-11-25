@@ -295,11 +295,6 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	return s
 }
 
-// Start starts the group services.
-func (g *Group) Start() error {
-	return nil
-}
-
 // NewGroup creates a new group.
 func NewGroup(
 	ctx context.Context,
