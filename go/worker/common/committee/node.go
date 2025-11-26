@@ -169,7 +169,6 @@ type Node struct {
 	stopOnce  sync.Once
 	quitCh    chan struct{}
 	initCh    chan struct{}
-	resumeCh  chan struct{}
 
 	hooks []NodeHooks
 
@@ -180,6 +179,7 @@ type Node struct {
 	hostedRuntimeProvisioned  uint32
 	historyReindexingDone     uint32
 	workersInitialized        uint32
+	runtimeSuspended          uint32
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
@@ -192,7 +192,7 @@ type Node struct {
 	logger *logging.Logger
 }
 
-func (n *Node) getStatusStateLocked() api.StatusState {
+func (n *Node) getStatusState() api.StatusState {
 	if atomic.LoadUint32(&n.consensusSynced) == 0 {
 		return api.StatusStateWaitingConsensusSync
 	}
@@ -211,8 +211,7 @@ func (n *Node) getStatusStateLocked() api.StatusState {
 	if atomic.LoadUint32(&n.hostedRuntimeProvisioned) == 0 {
 		return api.StatusStateWaitingHostedRuntime
 	}
-	// If resumeCh exists the runtime is suspended (safe to check since the cross node lock should be held).
-	if n.resumeCh != nil {
+	if atomic.LoadUint32(&n.runtimeSuspended) == 1 {
 		return api.StatusStateRuntimeSuspended
 	}
 
@@ -266,11 +265,8 @@ func (n *Node) AddHooks(hooks NodeHooks) {
 
 // GetStatus returns the common committee node status.
 func (n *Node) GetStatus() (*api.Status, error) {
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
-
 	status := api.Status{
-		Status:        n.getStatusStateLocked(),
+		Status:        n.getStatusState(),
 		LatestRound:   n.CurrentBlockRound,
 		LatestHeight:  n.CurrentBlockHeight,
 		SchedulerRank: math.MaxUint64,
@@ -337,55 +333,10 @@ func (n *Node) handleEpochTransition(committee *scheduler.Committee) {
 	epochNumber.With(n.getMetricLabels()).Set(float64(committee.ValidFor))
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleSuspendLocked() {
+func (n *Node) handleSuspend() {
 	n.logger.Warn("runtime has been suspended")
 
-	// Suspend group.
 	n.Group.Suspend()
-
-	// If the runtime has been suspended, we need to switch to checking the latest registry
-	// descriptor instead of the active one as otherwise we may miss deployment updates and never
-	// register, keeping the runtime suspended.
-	if n.resumeCh == nil {
-		resumeCh := make(chan struct{})
-		n.resumeCh = resumeCh
-		rt := n.CurrentDescriptor
-
-		go func() {
-			epoCh, epoSub, _ := n.Consensus.Beacon().WatchEpochs(n.ctx)
-			defer epoSub.Close()
-			ch, sub, _ := n.Runtime.WatchRegistryDescriptor()
-			defer sub.Close()
-
-			for {
-				select {
-				case <-n.stopCh:
-					return
-				case <-epoCh:
-					// Epoch transition while suspended, maybe the version is now valid.
-				case rt = <-ch:
-					// Descriptor update while suspended.
-				case <-resumeCh:
-					// Runtime no longer suspended, stop.
-					return
-				}
-
-				n.CrossNode.Lock()
-
-				// Make sure we are still suspended.
-				if n.resumeCh == nil {
-					n.CrossNode.Unlock()
-					return
-				}
-
-				n.CurrentDescriptor = rt
-				n.CrossNode.Unlock()
-
-				n.updateHostedRuntimeVersion(rt)
-			}
-		}()
-	}
 }
 
 func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
@@ -466,39 +417,25 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 			return
 		}
 
-		// Notify suspended runtime watcher to stop.
-		if !rs.Suspended && n.resumeCh != nil {
-			close(n.resumeCh)
-			n.resumeCh = nil
-		}
-
 		n.updateHostedRuntimeVersion(rs.Runtime)
 
 		// Make sure to update the key manager if needed.
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
 
-		if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition {
+		switch rs.Suspended {
+		case true:
+			n.handleSuspend()
+			atomic.StoreUint32(&n.runtimeSuspended, 1)
+		case false:
 			n.handleEpochTransition(rs.Committee)
+			atomic.StoreUint32(&n.runtimeSuspended, 0)
 		}
 	}
 
-	// Perform actions based on block type.
-	switch blk.Header.HeaderType {
-	case block.Normal:
-	case block.RoundFailed:
-		if firstBlockReceived {
-			break
-		}
+	// Count failed rounds.
+	if blk.Header.HeaderType == block.RoundFailed && !firstBlockReceived {
 		n.logger.Warn("round has failed")
 		failedRoundCount.With(n.getMetricLabels()).Inc()
-	case block.EpochTransition:
-	case block.Suspended:
-		n.handleSuspendLocked()
-	default:
-		n.logger.Error("invalid block type",
-			"block", blk,
-		)
-		return
 	}
 
 	// Fetch light consensus block.
@@ -675,6 +612,18 @@ func (n *Node) worker() {
 		}
 	}
 
+	// Start watching runtime descriptors so we know when to update the hosted
+	// runtime version, ensuring we never miss any deployment updates, even if
+	// the runtime is suspended.
+	rtCh, rtSub, err := n.Runtime.WatchRegistryDescriptor()
+	if err != nil {
+		n.logger.Error("failed to watch registry descriptor",
+			"err", err,
+		)
+		return
+	}
+	defer rtSub.Close()
+
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
 	n.updateHostedRuntimeVersion(rt)
@@ -712,6 +661,8 @@ func (n *Node) worker() {
 		case ev := <-hrtEventCh:
 			// Received a hosted runtime event.
 			n.handleRuntimeHostEvent(ev)
+		case rt = <-rtCh:
+			n.updateHostedRuntimeVersion(rt)
 		case compNotify := <-compCh:
 			switch {
 			case compNotify.Added != nil:
@@ -724,10 +675,6 @@ func (n *Node) worker() {
 					)
 					return
 				}
-
-				n.CrossNode.Lock()
-				rt := n.CurrentDescriptor
-				n.CrossNode.Unlock()
 
 				n.updateHostedRuntimeVersion(rt)
 			case compNotify.Removed != nil:
