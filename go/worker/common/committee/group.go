@@ -12,6 +12,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -111,6 +113,7 @@ type Group struct {
 	identity  *identity.Identity
 
 	consensus consensus.Service
+	p2p       p2pAPI.Service
 
 	executorCommittee *CommitteeInfo
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
@@ -177,6 +180,13 @@ func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Commit
 	// Freeze the committee.
 	g.nodes.Freeze(0)
 
+	// Mark all executor nodes in the current committee as important.
+	if pm := g.p2p.PeerManager(); pm != nil {
+		if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
+			pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeCompute, g.runtimeID, pids)
+		}
+	}
+
 	// Update the current committee.
 	g.executorCommittee = &CommitteeInfo{
 		Indices:    indices,
@@ -216,6 +226,7 @@ func NewGroup(
 	runtimeID common.Namespace,
 	identity *identity.Identity,
 	consensus consensus.Service,
+	p2p p2p.Service,
 ) (*Group, error) {
 	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {
@@ -226,6 +237,7 @@ func NewGroup(
 		runtimeID: runtimeID,
 		identity:  identity,
 		consensus: consensus,
+		p2p:       p2p,
 		nodes:     nw,
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
 	}, nil

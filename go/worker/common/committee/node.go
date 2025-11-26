@@ -327,28 +327,14 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 func (n *Node) handleEpochTransition(committee *scheduler.Committee) {
 	n.logger.Info("epoch transition has occurred")
 
-	epochTransitionCount.With(n.getMetricLabels()).Inc()
-
-	// Transition group.
 	if err := n.Group.EpochTransition(n.ctx, committee); err != nil {
 		n.logger.Error("unable to handle epoch transition",
 			"err", err,
 		)
 	}
 
-	// Mark all executor nodes in the current committee as important.
-	epoch, ok := n.Group.GetEpochSnapshot()
-	if !ok {
-		return
-	}
-	ec := epoch.GetExecutorCommittee()
-	if pm := n.P2P.PeerManager(); pm != nil {
-		if pids, err := p2pAPI.PublicKeyMapToPeerIDs(ec.Peers); err == nil {
-			pm.PeerTagger().SetPeerImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), pids)
-		}
-	}
-
-	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.executorCommittee.Committee.ValidFor))
+	epochTransitionCount.With(n.getMetricLabels()).Inc()
+	epochNumber.With(n.getMetricLabels()).Set(float64(committee.ValidFor))
 }
 
 // Guarded by n.CrossNode.
@@ -858,7 +844,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), identity, consensus)
+	group, err := NewGroup(ctx, runtime.ID(), identity, consensus, p2pHost)
 	if err != nil {
 		cancel()
 		return nil, err
