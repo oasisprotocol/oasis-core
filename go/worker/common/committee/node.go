@@ -348,7 +348,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 		}
 	}
 
-	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
+	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.executorCommittee.Committee.ValidFor))
 }
 
 // Guarded by n.CrossNode.

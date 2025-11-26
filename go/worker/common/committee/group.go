@@ -6,7 +6,6 @@ import (
 	"slices"
 	"sync"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -48,9 +47,6 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 }
 
 type epoch struct {
-	// epochNumber is the sequential number of the epoch.
-	epochNumber beacon.EpochTime
-
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
 
@@ -60,8 +56,6 @@ type epoch struct {
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
 	identity *identity.Identity
-
-	epochNumber beacon.EpochTime
 
 	runtime *registry.Runtime
 
@@ -78,11 +72,6 @@ func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 // GetExecutorCommittee returns the current executor committee.
 func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
 	return e.executorCommittee
-}
-
-// GetEpochNumber returns the sequential number of the epoch.
-func (e *EpochSnapshot) GetEpochNumber() beacon.EpochTime {
-	return e.epochNumber
 }
 
 // IsExecutorMember checks if the current node is a member of the executor committee
@@ -226,12 +215,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return fmt.Errorf("group: no executor committee")
 	}
 
-	// Fetch the new epoch.
-	epochNumber, err := g.consensus.Beacon().GetEpoch(ctx, height)
-	if err != nil {
-		return err
-	}
-
 	// Fetch current runtime descriptor.
 	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
@@ -243,7 +226,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
-		epochNumber:       epochNumber,
 		executorCommittee: executorCommittee,
 		runtime:           runtime,
 	}
@@ -267,7 +249,6 @@ func (g *Group) GetEpochSnapshot() (*EpochSnapshot, bool) {
 
 	return &EpochSnapshot{
 		identity:          g.identity,
-		epochNumber:       g.activeEpoch.epochNumber,
 		runtime:           g.activeEpoch.runtime,
 		executorCommittee: g.activeEpoch.executorCommittee,
 		nodes:             g.nodes,

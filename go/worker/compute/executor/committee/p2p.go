@@ -31,7 +31,7 @@ func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signatu
 		return fmt.Errorf("epoch is not yet known")
 	}
 
-	switch now := epoch.GetEpochNumber(); {
+	switch now := epoch.GetExecutorCommittee().Committee.ValidFor; {
 	case cm.Epoch == now:
 	case cm.Epoch < now:
 		// Past messages will never become valid.
