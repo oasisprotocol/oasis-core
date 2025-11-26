@@ -89,11 +89,6 @@ func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
 	return e.executorCommittee.HasRole(scheduler.RoleBackupWorker)
 }
 
-// Nodes returns a node descriptor lookup interface.
-func (e *EpochSnapshot) Nodes() nodes.NodeDescriptorLookup {
-	return e.nodes
-}
-
 // Node looks up a node descriptor.
 //
 // Implements commitment.NodeLookup.
