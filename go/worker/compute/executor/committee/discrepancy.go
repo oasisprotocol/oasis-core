@@ -71,8 +71,7 @@ func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCo
 	}
 
 	// Verify and add the commitment.
-	rt := n.epoch.GetRuntime()
-	if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, rt, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
+	if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, n.blockInfo.ActiveDescriptor, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
 		n.logger.Debug("ignoring bad observed executor commitment, verification failed",
 			"err", err,
 			"node_id", ec.NodeID,
@@ -89,7 +88,7 @@ func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCo
 	}
 
 	// In case observed commits indicate a discrepancy, preempt consensus and immediately handle.
-	if _, err := n.commitPool.ProcessCommitments(n.committee, rt.Executor.AllowedStragglers, false); err != commitment.ErrDiscrepancyDetected {
+	if _, err := n.commitPool.ProcessCommitments(n.committee, n.blockInfo.ActiveDescriptor.Executor.AllowedStragglers, false); err != commitment.ErrDiscrepancyDetected {
 		return
 	}
 

@@ -46,27 +46,13 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 	return slices.Contains(ci.Roles, role)
 }
 
-type epoch struct {
-	// executorCommittee is the executor committee we are a member of.
-	executorCommittee *CommitteeInfo
-
-	runtime *registry.Runtime
-}
-
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
 	identity *identity.Identity
 
-	runtime *registry.Runtime
-
 	executorCommittee *CommitteeInfo
 
 	nodes nodes.VersionedNodeDescriptorWatcher
-}
-
-// GetRuntime returns the current runtime descriptor.
-func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
-	return e.runtime
 }
 
 // GetExecutorCommittee returns the current executor committee.
@@ -126,7 +112,7 @@ type Group struct {
 
 	consensus consensus.Service
 
-	activeEpoch *epoch
+	executorCommittee *CommitteeInfo
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
 	// TODO: Consider removing nodes.
 	nodes nodes.VersionedNodeDescriptorWatcher
@@ -141,8 +127,8 @@ func (g *Group) Suspend() {
 	g.Lock()
 	defer g.Unlock()
 
-	// Invalidate current epoch.
-	g.activeEpoch = nil
+	// Invalidate current committee.
+	g.executorCommittee = nil
 }
 
 // EpochTransition processes an epoch transition that just happened.
@@ -150,15 +136,15 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	g.Lock()
 	defer g.Unlock()
 
-	// Invalidate current epoch. In case we cannot process this transition,
+	// Invalidate current committee. In case we cannot process this transition,
 	// this should cause the node to transition into NotReady and stay there
 	// until the next epoch transition.
-	g.activeEpoch = nil
+	g.executorCommittee = nil
 	// Reset watched nodes.
 	g.nodes.Reset()
 	defer func() {
 		// Make sure there are no unneeded watched nodes in case this method fails.
-		if g.activeEpoch == nil {
+		if g.executorCommittee == nil {
 			g.nodes.Reset()
 		}
 	}()
@@ -215,20 +201,11 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return fmt.Errorf("group: no executor committee")
 	}
 
-	// Fetch current runtime descriptor.
-	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtimeID, Height: height})
-	if err != nil {
-		return err
-	}
-
 	// Freeze the committee.
 	g.nodes.Freeze(height)
 
-	// Update the current epoch.
-	g.activeEpoch = &epoch{
-		executorCommittee: executorCommittee,
-		runtime:           runtime,
-	}
+	// Update the current committee.
+	g.executorCommittee = executorCommittee
 
 	g.logger.Info("epoch transition complete",
 		"epoch", epochNumber,
@@ -243,14 +220,13 @@ func (g *Group) GetEpochSnapshot() (*EpochSnapshot, bool) {
 	g.RLock()
 	defer g.RUnlock()
 
-	if g.activeEpoch == nil {
+	if g.executorCommittee == nil {
 		return nil, false
 	}
 
 	return &EpochSnapshot{
 		identity:          g.identity,
-		runtime:           g.activeEpoch.runtime,
-		executorCommittee: g.activeEpoch.executorCommittee,
+		executorCommittee: g.executorCommittee,
 		nodes:             g.nodes,
 	}, true
 }

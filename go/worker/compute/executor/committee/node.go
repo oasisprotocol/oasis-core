@@ -1157,8 +1157,7 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 
 	if observed {
 		// Verify the commitment.
-		rt := n.epoch.GetRuntime()
-		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, rt, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
+		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, n.blockInfo.ActiveDescriptor, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
 			n.logger.Debug("ignoring bad executor commitment, verification failed",
 				"err", err,
 				"node_id", ec.NodeID,
