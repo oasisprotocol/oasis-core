@@ -132,7 +132,7 @@ func (g *Group) Suspend() {
 }
 
 // EpochTransition processes an epoch transition that just happened.
-func (g *Group) EpochTransition(ctx context.Context, height int64) error {
+func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Committee) error {
 	g.Lock()
 	defer g.Unlock()
 
@@ -149,67 +149,46 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 	}()
 
-	// Request committees from scheduler.
-	committees, err := g.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
-		RuntimeID: g.runtimeID,
-		Height:    height,
-	})
-	if err != nil {
-		return fmt.Errorf("group: failed to get committees: %w", err)
-	}
-
 	// Find the current committees.
-	var executorCommittee *CommitteeInfo
 	publicIdentity := g.identity.NodeSigner.Public()
-	for _, cm := range committees {
-		var (
-			roles   []scheduler.Role
-			indices []int
-		)
-		publicKeys := make(map[signature.PublicKey]struct{})
-		peers := make(map[signature.PublicKey]struct{})
-		for index, member := range cm.Members {
-			publicKeys[member.PublicKey] = struct{}{}
-			if member.PublicKey.Equal(publicIdentity) {
-				roles = append(roles, member.Role)
-				indices = append(indices, index)
-			}
 
-			// Start watching the member's node descriptor.
-			var n *node.Node
-			if n, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, TagForCommittee(cm.Kind)); err != nil {
-				return fmt.Errorf("group: failed to fetch node info: %w", err)
-			}
-
-			peers[n.P2P.ID] = struct{}{}
+	var (
+		roles   []scheduler.Role
+		indices []int
+	)
+	publicKeys := make(map[signature.PublicKey]struct{})
+	peers := make(map[signature.PublicKey]struct{})
+	for index, member := range committee.Members {
+		publicKeys[member.PublicKey] = struct{}{}
+		if member.PublicKey.Equal(publicIdentity) {
+			roles = append(roles, member.Role)
+			indices = append(indices, index)
 		}
 
-		ci := &CommitteeInfo{
-			Indices:    indices,
-			Roles:      roles,
-			Committee:  cm,
-			PublicKeys: publicKeys,
-			Peers:      peers,
+		// Start watching the member's node descriptor.
+		n, err := g.nodes.WatchNodeWithTag(ctx, member.PublicKey, TagForCommittee(committee.Kind))
+		if err != nil {
+			return fmt.Errorf("group: failed to fetch node info: %w", err)
 		}
 
-		switch cm.Kind {
-		case scheduler.KindComputeExecutor:
-			executorCommittee = ci
-		}
-	}
-	if executorCommittee == nil {
-		return fmt.Errorf("group: no executor committee")
+		peers[n.P2P.ID] = struct{}{}
 	}
 
 	// Freeze the committee.
-	g.nodes.Freeze(height)
+	g.nodes.Freeze(0)
 
 	// Update the current committee.
-	g.executorCommittee = executorCommittee
+	g.executorCommittee = &CommitteeInfo{
+		Indices:    indices,
+		Roles:      roles,
+		Committee:  committee,
+		PublicKeys: publicKeys,
+		Peers:      peers,
+	}
 
 	g.logger.Info("epoch transition complete",
 		"epoch", epochNumber,
-		"executor_roles", executorCommittee.Roles,
+		"executor_roles", g.executorCommittee.Roles,
 	)
 
 	return nil

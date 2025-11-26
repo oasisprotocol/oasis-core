@@ -29,6 +29,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
@@ -323,14 +324,13 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleEpochTransitionLocked(height int64) {
+func (n *Node) handleEpochTransition(committee *scheduler.Committee) {
 	n.logger.Info("epoch transition has occurred")
 
 	epochTransitionCount.With(n.getMetricLabels()).Inc()
 
 	// Transition group.
-	if err := n.Group.EpochTransition(n.ctx, height); err != nil {
+	if err := n.Group.EpochTransition(n.ctx, committee); err != nil {
 		n.logger.Error("unable to handle epoch transition",
 			"err", err,
 		)
@@ -352,7 +352,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 }
 
 // Guarded by n.CrossNode.
-func (n *Node) handleSuspendLocked(int64) {
+func (n *Node) handleSuspendLocked() {
 	n.logger.Warn("runtime has been suspended")
 
 	// Suspend group.
@@ -501,30 +501,24 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 
 		// Make sure to update the key manager if needed.
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
+
+		if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition {
+			n.handleEpochTransition(rs.Committee)
+		}
 	}
 
 	// Perform actions based on block type.
 	switch blk.Header.HeaderType {
 	case block.Normal:
-		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(height)
-		}
 	case block.RoundFailed:
 		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(height)
-		} else {
-			// Round has failed.
-			n.logger.Warn("round has failed")
-			failedRoundCount.With(n.getMetricLabels()).Inc()
+			break
 		}
+		n.logger.Warn("round has failed")
+		failedRoundCount.With(n.getMetricLabels()).Inc()
 	case block.EpochTransition:
-		// Process an epoch transition.
-		n.handleEpochTransitionLocked(height)
 	case block.Suspended:
-		// Process runtime being suspended.
-		n.handleSuspendLocked(height)
+		n.handleSuspendLocked()
 	default:
 		n.logger.Error("invalid block type",
 			"block", blk,
