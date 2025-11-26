@@ -436,7 +436,7 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 	)
 
 	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
-		Epoch:    n.blockInfo.Epoch,
+		Epoch:    n.epoch.GetEpochNumber(),
 		Proposal: proposal,
 	})
 
