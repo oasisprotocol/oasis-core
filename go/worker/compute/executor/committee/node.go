@@ -1378,13 +1378,20 @@ func (n *Node) roundWorker(ctx context.Context) {
 	n.proposals.Prune(round)
 
 	// Need to be an executor committee member.
-	n.epoch = n.commonNode.Group.GetEpochSnapshot()
-	if !n.epoch.IsExecutorMember() {
+	epoch, ok := n.commonNode.Group.GetEpochSnapshot()
+	if !ok {
+		n.logger.Debug("skipping round, no executor committee",
+			"round", round,
+		)
+		return
+	}
+	if !epoch.IsExecutorMember() {
 		n.logger.Debug("skipping round, not an executor member",
 			"round", round,
 		)
 		return
 	}
+	n.epoch = epoch
 
 	// This should never fail as we only register to be an executor worker
 	// once the hosted runtime is ready.

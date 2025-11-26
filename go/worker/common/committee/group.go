@@ -70,11 +70,6 @@ type EpochSnapshot struct {
 	nodes nodes.VersionedNodeDescriptorWatcher
 }
 
-// IsValid checks whether the given epoch snapshot is valid (represents an actual epoch).
-func (e *EpochSnapshot) IsValid() bool {
-	return e.identity != nil
-}
-
 // GetRuntime returns the current runtime descriptor.
 func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
@@ -262,23 +257,21 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 }
 
 // GetEpochSnapshot returns a snapshot of the currently active epoch.
-func (g *Group) GetEpochSnapshot() *EpochSnapshot {
+func (g *Group) GetEpochSnapshot() (*EpochSnapshot, bool) {
 	g.RLock()
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil {
-		return &EpochSnapshot{}
+		return nil, false
 	}
 
-	s := &EpochSnapshot{
+	return &EpochSnapshot{
 		identity:          g.identity,
 		epochNumber:       g.activeEpoch.epochNumber,
 		runtime:           g.activeEpoch.runtime,
 		executorCommittee: g.activeEpoch.executorCommittee,
 		nodes:             g.nodes,
-	}
-
-	return s
+	}, true
 }
 
 // NewGroup creates a new group.

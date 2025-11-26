@@ -26,8 +26,8 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (any, error) {
 func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signature.PublicKey, msg any) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
-	epoch := h.n.commonNode.Group.GetEpochSnapshot()
-	if !epoch.IsValid() {
+	epoch, ok := h.n.commonNode.Group.GetEpochSnapshot()
+	if !ok {
 		return fmt.Errorf("epoch is not yet known")
 	}
 
@@ -69,7 +69,10 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.Publi
 		crash.Here(crashPointBatchReceiveAfter)
 
 		proposal := cm.Proposal
-		epoch := h.n.commonNode.Group.GetEpochSnapshot()
+		epoch, ok := h.n.commonNode.Group.GetEpochSnapshot()
+		if !ok {
+			return fmt.Errorf("epoch is not yet known")
+		}
 
 		// Before opening the signed dispatch message, verify that it was actually signed by one
 		// of the transaction schedulers.

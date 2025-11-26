@@ -281,8 +281,8 @@ func (n *Node) GetStatus() (*api.Status, error) {
 	default:
 	}
 
-	epoch := n.Group.GetEpochSnapshot()
-	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
+	if epoch, ok := n.Group.GetEpochSnapshot(); ok {
+		cmte := epoch.GetExecutorCommittee()
 		status.ExecutorRoles = cmte.Roles
 
 		// Include scheduler rank.
@@ -336,14 +336,15 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 		)
 	}
 
-	epoch := n.Group.GetEpochSnapshot()
-
 	// Mark all executor nodes in the current committee as important.
-	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		if pm := n.P2P.PeerManager(); pm != nil {
-			if pids, err := p2pAPI.PublicKeyMapToPeerIDs(ec.Peers); err == nil {
-				pm.PeerTagger().SetPeerImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), pids)
-			}
+	epoch, ok := n.Group.GetEpochSnapshot()
+	if !ok {
+		return
+	}
+	ec := epoch.GetExecutorCommittee()
+	if pm := n.P2P.PeerManager(); pm != nil {
+		if pids, err := p2pAPI.PublicKeyMapToPeerIDs(ec.Peers); err == nil {
+			pm.PeerTagger().SetPeerImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), pids)
 		}
 	}
 
@@ -785,11 +786,11 @@ func (n *Node) updatePeriodicMetrics() {
 
 	n.logger.Debug("updating periodic worker node metrics")
 
-	epoch := n.Group.GetEpochSnapshot()
-	cmte := epoch.GetExecutorCommittee()
-	if cmte == nil {
+	epoch, ok := n.Group.GetEpochSnapshot()
+	if !ok {
 		return
 	}
+	cmte := epoch.GetExecutorCommittee()
 
 	executorCommitteeP2PPeers.With(labels).Set(float64(len(n.P2P.Peers(n.Runtime.ID()))))
 	workerIsExecutorWorker.With(labels).Set(boolToMetricVal(epoch.IsExecutorWorker()))
