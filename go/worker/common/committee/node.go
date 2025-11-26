@@ -380,26 +380,15 @@ func (n *Node) handleSuspendLocked() {
 				}
 
 				n.CurrentDescriptor = rt
-
-				n.updateHostedRuntimeVersionLocked()
 				n.CrossNode.Unlock()
+
+				n.updateHostedRuntimeVersion(rt)
 			}
 		}()
 	}
 }
 
-func (n *Node) updateHostedRuntimeVersion() {
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
-
-	n.updateHostedRuntimeVersionLocked()
-}
-
-func (n *Node) updateHostedRuntimeVersionLocked() {
-	if n.CurrentDescriptor == nil {
-		return
-	}
-
+func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
 	// Always take the latest epoch to avoid reverting to stale state.
 	epoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
 	if err != nil {
@@ -410,7 +399,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	}
 
 	// Update the runtime version based on the currently active deployment.
-	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
+	activeDeploy := rt.ActiveDeployment(epoch)
 	var activeVersion *version.Version
 	if activeDeploy != nil {
 		activeVersion = &activeDeploy.Version
@@ -419,7 +408,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	// For compute nodes, determine if there is a next version and activate it early.
 	var nextVersion *version.Version
 	if config.GlobalConfig.Mode == config.ModeCompute {
-		nextDeploy := n.CurrentDescriptor.NextDeployment(epoch)
+		nextDeploy := rt.NextDeployment(epoch)
 		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
 
 		if nextDeploy != nil && nextDeploy.ValidFrom-epoch <= preWarmEpochs {
@@ -483,7 +472,7 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 			n.resumeCh = nil
 		}
 
-		n.updateHostedRuntimeVersionLocked()
+		n.updateHostedRuntimeVersion(rs.Runtime)
 
 		// Make sure to update the key manager if needed.
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
@@ -688,7 +677,7 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.updateHostedRuntimeVersion()
+	n.updateHostedRuntimeVersion(rt)
 
 	// Start the runtime.
 	hrt := n.GetHostedRuntime()
@@ -736,7 +725,11 @@ func (n *Node) worker() {
 					return
 				}
 
-				n.updateHostedRuntimeVersion()
+				n.CrossNode.Lock()
+				rt := n.CurrentDescriptor
+				n.CrossNode.Unlock()
+
+				n.updateHostedRuntimeVersion(rt)
 			case compNotify.Removed != nil:
 				// Received removal of a component.
 				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
