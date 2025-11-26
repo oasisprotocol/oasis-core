@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eapache/channels"
-
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -162,7 +160,6 @@ type Worker struct {
 	statusLock sync.RWMutex
 	status     api.StorageWorkerStatus
 
-	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
 	finalizeCh chan finalizeResult
 
@@ -199,7 +196,6 @@ func New(
 
 		status: api.StatusInitializing,
 
-		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
@@ -336,9 +332,8 @@ func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
 // NodeHooks implementation.
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (w *Worker) HandleNewBlockLocked(bi *runtime.BlockInfo) {
-	// Notify the state syncer that there is a new block.
-	w.blockCh.In() <- bi.RuntimeBlock
+func (w *Worker) HandleNewBlockLocked(*runtime.BlockInfo) {
+	// Nothing to do here.
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
@@ -1116,6 +1111,12 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	// including all missing rounds since the last fully applied one. Fetched diffs are then applied
 	// in round order, ensuring no gaps. Once a round has all its roots applied, background finalization
 	// for that round is triggered asynchronously, not blocking concurrent fetching and diff application.
+	blkCh, blkSub, err := w.commonNode.Runtime.History().WatchCommittedBlocks()
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to runtime blocks: %w", err)
+	}
+	defer blkSub.Close()
+
 	for {
 		// Drain the Apply and Finalize queues first, before waiting for new events in the select below.
 
@@ -1192,21 +1193,20 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 		}
 
 		select {
-		case inBlk := <-w.blockCh.Out():
-			blk := inBlk.(*block.Block)
+		case blk := <-blkCh:
 			w.logger.Debug("incoming block",
-				"round", blk.Header.Round,
+				"round", blk.Block.Header.Round,
 				"last_synced", lastFullyAppliedRound,
 				"last_finalized", cachedLastRound,
 			)
 
 			// Check if we're far enough to reasonably register as available.
-			latestBlockRound = blk.Header.Round
+			latestBlockRound = blk.Block.Header.Round
 			w.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 			if _, ok := summaryCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == w.undefinedRound {
 				dummy := blockSummary{
-					Namespace: blk.Header.Namespace,
+					Namespace: blk.Block.Header.Namespace,
 					Round:     lastFullyAppliedRound + 1,
 					Roots: []storageApi.Root{
 						{
@@ -1231,19 +1231,19 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 			if startSummaryRound == w.undefinedRound {
 				startSummaryRound++
 			}
-			for i := startSummaryRound; i < blk.Header.Round; i++ {
+			for i := startSummaryRound; i < blk.Block.Header.Round; i++ {
 				if _, ok := summaryCache[i]; ok {
 					continue
 				}
 				var oldBlock *block.Block
 				oldBlock, err = w.commonNode.Runtime.History().GetCommittedBlock(ctx, i)
 				if err != nil {
-					return fmt.Errorf("failed to get block for round %d (current round: %d): %w", i, blk.Header.Round, err)
+					return fmt.Errorf("failed to get block for round %d (current round: %d): %w", i, blk.Block.Header.Round, err)
 				}
 				summaryCache[i] = summaryFromBlock(oldBlock)
 			}
-			if _, ok := summaryCache[blk.Header.Round]; !ok {
-				summaryCache[blk.Header.Round] = summaryFromBlock(blk)
+			if _, ok := summaryCache[blk.Block.Header.Round]; !ok {
+				summaryCache[blk.Block.Header.Round] = summaryFromBlock(blk.Block)
 			}
 
 			triggerRoundFetches()
