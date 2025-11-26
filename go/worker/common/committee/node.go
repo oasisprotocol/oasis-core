@@ -268,20 +268,18 @@ func (n *Node) GetStatus() (*api.Status, error) {
 	n.CrossNode.Lock()
 	defer n.CrossNode.Unlock()
 
-	var status api.Status
-	status.Status = n.getStatusStateLocked()
-
-	status.LatestRound = n.CurrentBlockRound
-	status.LatestHeight = n.CurrentBlockHeight
-
-	if n.CurrentDescriptor != nil {
-		activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
-		if activeDeploy != nil {
-			status.ActiveVersion = &activeDeploy.Version
-		}
+	status := api.Status{
+		Status:        n.getStatusStateLocked(),
+		LatestRound:   n.CurrentBlockRound,
+		LatestHeight:  n.CurrentBlockHeight,
+		SchedulerRank: math.MaxUint64,
 	}
 
-	status.SchedulerRank = math.MaxUint64
+	switch activeVersion, err := n.GetHostedRuntime().GetActiveVersion(); err {
+	case nil:
+		status.ActiveVersion = activeVersion
+	default:
+	}
 
 	epoch := n.Group.GetEpochSnapshot()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
@@ -428,8 +426,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
 	var activeVersion *version.Version
 	if activeDeploy != nil {
-		activeVersion = new(version.Version)
-		*activeVersion = activeDeploy.Version
+		activeVersion = &activeDeploy.Version
 	}
 
 	// For compute nodes, determine if there is a next version and activate it early.
@@ -439,8 +436,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
 
 		if nextDeploy != nil && nextDeploy.ValidFrom-epoch <= preWarmEpochs {
-			nextVersion = new(version.Version)
-			*nextVersion = nextDeploy.Version
+			nextVersion = &nextDeploy.Version
 		}
 	}
 
@@ -627,14 +623,6 @@ func (n *Node) worker() {
 		return
 	}
 	atomic.StoreUint32(&n.runtimeRegistryDescriptor, 1)
-
-	n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
-	if err != nil {
-		n.logger.Error("failed to fetch current epoch",
-			"err", err,
-		)
-		return
-	}
 
 	n.logger.Info("runtime is registered with the registry")
 
