@@ -50,8 +50,6 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
-	identity *identity.Identity
-
 	executorCommittee *CommitteeInfo
 
 	nodes nodes.VersionedNodeDescriptorWatcher
@@ -209,7 +207,6 @@ func (g *Group) GetEpochSnapshot() (*EpochSnapshot, bool) {
 	}
 
 	return &EpochSnapshot{
-		identity:          g.identity,
 		executorCommittee: g.executorCommittee,
 		nodes:             g.nodes,
 	}, true
