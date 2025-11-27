@@ -120,7 +120,7 @@ func PolicyForRoot(root node.Root) *RootPolicy {
 
 // RootTypesWithPolicy returns all root types where the given policy predicate evaluates to true.
 func RootTypesWithPolicy(policyFn func(*RootPolicy) bool) []node.RootType {
-	types := make([]node.RootType, 0)
+	var types []node.RootType
 	for rootType, policy := range rootPolicies {
 		if policyFn(policy) {
 			types = append(types, rootType)
