@@ -505,7 +505,7 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) ([]node.Root, error) {
 		return nil, err
 	}
 
-	roots := make([]node.Root, 0, len(rootsMeta.Roots))
+	var roots []node.Root
 	for rootHash := range rootsMeta.Roots {
 		roots = append(roots, node.Root{
 			Namespace: d.namespace,

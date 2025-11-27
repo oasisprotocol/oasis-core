@@ -191,7 +191,7 @@ func (d *badgerNodeDB) GetRootsForVersion(version uint64) ([]node.Root, error) {
 	it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 	defer it.Close()
 
-	roots := make([]node.Root, 0)
+	var roots []node.Root
 	for it.Rewind(); it.Valid(); it.Next() {
 		var (
 			v        uint64

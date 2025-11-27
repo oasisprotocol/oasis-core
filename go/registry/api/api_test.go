@@ -352,3 +352,87 @@ func TestVerifyNodeUpdate(t *testing.T) {
 		require.Equal(t, tc.err, err, tc.msg)
 	}
 }
+
+func TestStakeThresholdsForNode(t *testing.T) {
+	nodeRuntimes := []*node.Runtime{
+		{
+			ID: common.Namespace{1},
+		},
+		{
+			ID: common.Namespace{2},
+		},
+	}
+
+	runtimes := []*Runtime{
+		{
+			ID: common.Namespace{1},
+		},
+		{
+			ID: common.Namespace{2},
+		},
+		{
+			ID: common.Namespace{3},
+		},
+	}
+
+	t.Run("No roles", func(t *testing.T) {
+		// The returned slice must be nil (not empty) to ensure consistent
+		// CBOR encoding in the consensus state.
+		var n node.Node
+		thresholds := StakeThresholdsForNode(&n, nil)
+		require.Nil(t, thresholds)
+	})
+
+	t.Run("Validator", func(t *testing.T) {
+		n := node.Node{
+			Roles: node.RoleValidator,
+		}
+		thresholds := StakeThresholdsForNode(&n, nil)
+		require.Len(t, thresholds, 1)
+	})
+
+	for name, role := range map[string]node.RolesMask{
+		"Keymanager": node.RoleKeyManager,
+		"Compute":    node.RoleComputeWorker,
+		"Observer":   node.RoleObserver,
+	} {
+		t.Run(fmt.Sprintf("%s without runtimes", name), func(t *testing.T) {
+			// The returned slice must be nil (not empty) to ensure consistent
+			// CBOR encoding in the consensus state.
+			n := node.Node{
+				Roles: role,
+			}
+			thresholds := StakeThresholdsForNode(&n, nil)
+			require.Nil(t, thresholds)
+		})
+
+		t.Run(fmt.Sprintf("%s with runtimes", name), func(t *testing.T) {
+			n := node.Node{
+				Roles:    role,
+				Runtimes: nodeRuntimes,
+			}
+
+			thresholds := StakeThresholdsForNode(&n, runtimes)
+			require.Len(t, thresholds, 2)
+		})
+
+		t.Run(fmt.Sprintf("%s with unknown runtime", name), func(t *testing.T) {
+			n := node.Node{
+				Roles:    role,
+				Runtimes: nodeRuntimes,
+			}
+			require.Panics(t, func() {
+				_ = StakeThresholdsForNode(&n, nil)
+			})
+		})
+	}
+
+	t.Run("Multiple roles", func(t *testing.T) {
+		n := node.Node{
+			Roles:    node.RoleValidator | node.RoleComputeWorker | node.RoleKeyManager | node.RoleObserver,
+			Runtimes: nodeRuntimes,
+		}
+		thresholds := StakeThresholdsForNode(&n, runtimes)
+		require.Len(t, thresholds, 7)
+	})
+}

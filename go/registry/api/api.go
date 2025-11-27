@@ -1523,7 +1523,7 @@ func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
 // The passed list of runtimes must be unique runtime descriptors for all runtimes that the node is
 // registered for.
 func StakeThresholdsForNode(n *node.Node, rts []*Runtime) []staking.StakeThreshold {
-	thresholds := make([]staking.StakeThreshold, 0)
+	var thresholds []staking.StakeThreshold
 
 	// Validator nodes are global.
 	if n.HasRoles(node.RoleValidator) {

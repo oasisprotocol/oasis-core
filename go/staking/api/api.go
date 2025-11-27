@@ -890,7 +890,7 @@ func GlobalStakeThreshold(kind ThresholdKind) StakeThreshold {
 
 // GlobalStakeThresholds creates a new list of global StakeThresholds.
 func GlobalStakeThresholds(kinds ...ThresholdKind) []StakeThreshold {
-	sts := make([]StakeThreshold, 0, len(kinds))
+	var sts []StakeThreshold
 	for _, k := range kinds {
 		sts = append(sts, GlobalStakeThreshold(k))
 	}

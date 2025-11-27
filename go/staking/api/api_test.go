@@ -201,6 +201,25 @@ func TestStakeThreshold(t *testing.T) {
 	}
 }
 
+func TestGlobalStakeThresholds(t *testing.T) {
+	t.Run("No kinds", func(t *testing.T) {
+		// The returned slice must be nil (not empty) to ensure consistent
+		// CBOR encoding in the consensus state.
+		thresholds := GlobalStakeThresholds()
+		require.Nil(t, thresholds)
+	})
+
+	t.Run("One kind", func(t *testing.T) {
+		thresholds := GlobalStakeThresholds(KindEntity)
+		require.Len(t, thresholds, 1)
+	})
+
+	t.Run("Multiple kinds", func(t *testing.T) {
+		thresholds := GlobalStakeThresholds(KindEntity, KindNodeCompute, KindNodeKeyManager)
+		require.Len(t, thresholds, 3)
+	})
+}
+
 func TestStakeAccumulator(t *testing.T) {
 	require := require.New(t)
 
