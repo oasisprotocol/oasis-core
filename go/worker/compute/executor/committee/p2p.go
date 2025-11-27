@@ -26,12 +26,12 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (any, error) {
 func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signature.PublicKey, msg any) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
-	epoch, ok := h.n.commonNode.Group.GetEpochSnapshot()
+	committeeInfo, ok := h.n.commonNode.Group.CommitteeInfo()
 	if !ok {
-		return fmt.Errorf("epoch is not yet known")
+		return fmt.Errorf("executor committee is not yet known")
 	}
 
-	switch now := epoch.GetExecutorCommittee().Committee.ValidFor; {
+	switch now := committeeInfo.Committee.ValidFor; {
 	case cm.Epoch == now:
 	case cm.Epoch < now:
 		// Past messages will never become valid.
@@ -45,12 +45,7 @@ func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signatu
 	}
 
 	// Only known committee members are allowed to submit messages on this topic.
-	committee := epoch.GetExecutorCommittee()
-	if committee == nil {
-		return fmt.Errorf("executor committee is not yet known")
-	}
-
-	if _, ok := committee.Peers[peerID]; !ok {
+	if _, ok := committeeInfo.Peers[peerID]; !ok {
 		return p2pError.Permanent(fmt.Errorf("peer is not authorized to publish committee messages"))
 	}
 	return nil
@@ -69,15 +64,15 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.Publi
 		crash.Here(crashPointBatchReceiveAfter)
 
 		proposal := cm.Proposal
-		epoch, ok := h.n.commonNode.Group.GetEpochSnapshot()
+
+		committeeInfo, ok := h.n.commonNode.Group.CommitteeInfo()
 		if !ok {
-			return fmt.Errorf("epoch is not yet known")
+			return fmt.Errorf("executor committee is not yet known")
 		}
 
 		// Before opening the signed dispatch message, verify that it was actually signed by one
 		// of the transaction schedulers.
-		committee := epoch.GetExecutorCommittee().Committee
-		rank, ok := committee.SchedulerRank(proposal.Header.Round, proposal.NodeID)
+		rank, ok := committeeInfo.Committee.SchedulerRank(proposal.Header.Round, proposal.NodeID)
 		if !ok {
 			// Invalid scheduler, do not forward.
 			return p2pError.Permanent(errMsgFromNonTxnSched)

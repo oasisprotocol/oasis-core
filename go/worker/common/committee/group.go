@@ -35,12 +35,29 @@ func TagForCommittee(kind scheduler.CommitteeKind) string {
 }
 
 // CommitteeInfo contains information about a committee of nodes.
-type CommitteeInfo struct { // nolint: revive
+type CommitteeInfo struct {
 	Indices    []int
 	Roles      []scheduler.Role
 	Committee  *scheduler.Committee
 	PublicKeys map[signature.PublicKey]struct{}
 	Peers      map[signature.PublicKey]struct{}
+
+	nodes nodes.VersionedNodeDescriptorWatcher
+}
+
+// IsMember checks if the current node is a member of the committee.
+func (ci *CommitteeInfo) IsMember() bool {
+	return len(ci.Roles) > 0
+}
+
+// IsWorker checks if the current node is a worker of the committee.
+func (ci *CommitteeInfo) IsWorker() bool {
+	return ci.HasRole(scheduler.RoleWorker)
+}
+
+// IsBackupWorker checks if the current node is a backup worker of the committee.
+func (ci *CommitteeInfo) IsBackupWorker() bool {
+	return ci.HasRole(scheduler.RoleBackupWorker)
 }
 
 // HasRole checks whether the node has the given role.
@@ -48,50 +65,11 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 	return slices.Contains(ci.Roles, role)
 }
 
-// EpochSnapshot is an immutable snapshot of epoch state.
-type EpochSnapshot struct {
-	executorCommittee *CommitteeInfo
-
-	nodes nodes.VersionedNodeDescriptorWatcher
-}
-
-// GetExecutorCommittee returns the current executor committee.
-func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
-	return e.executorCommittee
-}
-
-// IsExecutorMember checks if the current node is a member of the executor committee
-// in the current epoch.
-func (e *EpochSnapshot) IsExecutorMember() bool {
-	if e.executorCommittee == nil {
-		return false
-	}
-	return len(e.executorCommittee.Roles) > 0
-}
-
-// IsExecutorWorker checks if the current node is a worker of the executor committee
-// in the current epoch.
-func (e *EpochSnapshot) IsExecutorWorker() bool {
-	if e.executorCommittee == nil {
-		return false
-	}
-	return e.executorCommittee.HasRole(scheduler.RoleWorker)
-}
-
-// IsExecutorBackupWorker checks if the current node is a backup worker of the executor
-// committee in the current epoch.
-func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
-	if e.executorCommittee == nil {
-		return false
-	}
-	return e.executorCommittee.HasRole(scheduler.RoleBackupWorker)
-}
-
 // Node looks up a node descriptor.
 //
 // Implements commitment.NodeLookup.
-func (e *EpochSnapshot) Node(_ context.Context, id signature.PublicKey) (*node.Node, error) {
-	n := e.nodes.Lookup(id)
+func (ci *CommitteeInfo) Node(_ context.Context, id signature.PublicKey) (*node.Node, error) {
+	n := ci.nodes.Lookup(id)
 	if n == nil {
 		return nil, registry.ErrNoSuchNode
 	}
@@ -108,12 +86,47 @@ type Group struct {
 	consensus consensus.Service
 	p2p       p2pAPI.Service
 
-	executorCommittee *CommitteeInfo
+	committee *CommitteeInfo
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
 	// TODO: Consider removing nodes.
 	nodes nodes.VersionedNodeDescriptorWatcher
 
 	logger *logging.Logger
+}
+
+// NewGroup creates a new group.
+func NewGroup(
+	ctx context.Context,
+	runtimeID common.Namespace,
+	identity *identity.Identity,
+	consensus consensus.Service,
+	p2p p2p.Service,
+) (*Group, error) {
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
+	if err != nil {
+		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
+	}
+
+	return &Group{
+		runtimeID: runtimeID,
+		identity:  identity,
+		consensus: consensus,
+		p2p:       p2p,
+		nodes:     nw,
+		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
+	}, nil
+}
+
+// CommitteeInfo returns the currently active committee info.
+func (g *Group) CommitteeInfo() (*CommitteeInfo, bool) {
+	g.RLock()
+	defer g.RUnlock()
+
+	if g.committee == nil {
+		return nil, false
+	}
+
+	return g.committee, true
 }
 
 // Suspend processes a runtime suspension that just happened.
@@ -124,7 +137,7 @@ func (g *Group) Suspend() {
 	defer g.Unlock()
 
 	// Invalidate current committee.
-	g.executorCommittee = nil
+	g.committee = nil
 }
 
 // EpochTransition processes an epoch transition that just happened.
@@ -135,12 +148,12 @@ func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Commit
 	// Invalidate current committee. In case we cannot process this transition,
 	// this should cause the node to transition into NotReady and stay there
 	// until the next epoch transition.
-	g.executorCommittee = nil
+	g.committee = nil
 	// Reset watched nodes.
 	g.nodes.Reset()
 	defer func() {
 		// Make sure there are no unneeded watched nodes in case this method fails.
-		if g.executorCommittee == nil {
+		if g.committee == nil {
 			g.nodes.Reset()
 		}
 	}()
@@ -181,56 +194,19 @@ func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Commit
 	}
 
 	// Update the current committee.
-	g.executorCommittee = &CommitteeInfo{
+	g.committee = &CommitteeInfo{
 		Indices:    indices,
 		Roles:      roles,
 		Committee:  committee,
 		PublicKeys: publicKeys,
 		Peers:      peers,
+		nodes:      g.nodes,
 	}
 
 	g.logger.Info("epoch transition complete",
 		"epoch", epochNumber,
-		"executor_roles", g.executorCommittee.Roles,
+		"executor_roles", g.committee.Roles,
 	)
 
 	return nil
-}
-
-// GetEpochSnapshot returns a snapshot of the currently active epoch.
-func (g *Group) GetEpochSnapshot() (*EpochSnapshot, bool) {
-	g.RLock()
-	defer g.RUnlock()
-
-	if g.executorCommittee == nil {
-		return nil, false
-	}
-
-	return &EpochSnapshot{
-		executorCommittee: g.executorCommittee,
-		nodes:             g.nodes,
-	}, true
-}
-
-// NewGroup creates a new group.
-func NewGroup(
-	ctx context.Context,
-	runtimeID common.Namespace,
-	identity *identity.Identity,
-	consensus consensus.Service,
-	p2p p2p.Service,
-) (*Group, error) {
-	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
-	if err != nil {
-		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
-	}
-
-	return &Group{
-		runtimeID: runtimeID,
-		identity:  identity,
-		consensus: consensus,
-		p2p:       p2p,
-		nodes:     nw,
-		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
-	}, nil
 }

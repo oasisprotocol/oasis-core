@@ -278,17 +278,16 @@ func (n *Node) GetStatus() (*api.Status, error) {
 	default:
 	}
 
-	if epoch, ok := n.Group.GetEpochSnapshot(); ok {
-		cmte := epoch.GetExecutorCommittee()
-		status.ExecutorRoles = cmte.Roles
+	if committeeInfo, ok := n.Group.CommitteeInfo(); ok {
+		status.ExecutorRoles = committeeInfo.Roles
 
 		// Include scheduler rank.
-		if rank, ok := cmte.Committee.SchedulerRank(status.LatestRound+1, n.Identity.NodeSigner.Public()); ok {
+		if rank, ok := committeeInfo.Committee.SchedulerRank(status.LatestRound+1, n.Identity.NodeSigner.Public()); ok {
 			status.SchedulerRank = rank
 		}
 
 		// Include liveness statistics if the node is an executor committee member.
-		if epoch.IsExecutorMember() {
+		if committeeInfo.IsMember() {
 			rs, err := n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 				RuntimeID: n.Runtime.ID(),
 				Height:    consensus.HeightLatest,
@@ -298,7 +297,7 @@ func (n *Node) GetStatus() (*api.Status, error) {
 					TotalRounds: rs.LivenessStatistics.TotalRounds,
 				}
 
-				for _, index := range cmte.Indices {
+				for _, index := range committeeInfo.Indices {
 					status.Liveness.LiveRounds += rs.LivenessStatistics.LiveRounds[index]
 					status.Liveness.FinalizedProposals += rs.LivenessStatistics.FinalizedProposals[index]
 					status.Liveness.MissedProposals += rs.LivenessStatistics.MissedProposals[index]
@@ -706,17 +705,16 @@ func (n *Node) updatePeriodicMetrics() {
 
 	n.logger.Debug("updating periodic worker node metrics")
 
-	epoch, ok := n.Group.GetEpochSnapshot()
+	committeeInfo, ok := n.Group.CommitteeInfo()
 	if !ok {
 		return
 	}
-	cmte := epoch.GetExecutorCommittee()
 
 	executorCommitteeP2PPeers.With(labels).Set(float64(len(n.P2P.Peers(n.Runtime.ID()))))
-	workerIsExecutorWorker.With(labels).Set(boolToMetricVal(epoch.IsExecutorWorker()))
-	workerIsExecutorBackup.With(labels).Set(boolToMetricVal(epoch.IsExecutorBackupWorker()))
+	workerIsExecutorWorker.With(labels).Set(boolToMetricVal(committeeInfo.IsWorker()))
+	workerIsExecutorBackup.With(labels).Set(boolToMetricVal(committeeInfo.IsBackupWorker()))
 
-	if !epoch.IsExecutorMember() {
+	if !committeeInfo.IsMember() {
 		// Default to 1 if node is not in committee.
 		livenessRatio.With(labels).Set(1.0)
 		return
@@ -732,7 +730,7 @@ func (n *Node) updatePeriodicMetrics() {
 
 	totalRounds := rs.LivenessStatistics.TotalRounds
 	var liveRounds uint64
-	for _, index := range cmte.Indices {
+	for _, index := range committeeInfo.Indices {
 		liveRounds += rs.LivenessStatistics.LiveRounds[index]
 	}
 	livenessTotalRounds.With(labels).Set(float64(totalRounds))
