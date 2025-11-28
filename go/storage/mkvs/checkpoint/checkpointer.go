@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/eapache/channels"
@@ -337,7 +337,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 			lastCheckpointVersion = cp.Root.Version
 		}
 	}
-	sort.Slice(cpVersions, func(i, j int) bool { return cpVersions[i] < cpVersions[j] })
+	slices.Sort(cpVersions)
 
 	// Make sure to not start earlier than the earliest version.
 	earlyVersion := c.ndb.GetEarliestVersion()
