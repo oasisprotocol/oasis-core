@@ -12,6 +12,39 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 25.9 (2025-11-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/oasis-node: Add new command for offline pruning of consensus databases
+  ([#6321](https://github.com/oasisprotocol/oasis-core/issues/6321))
+
+  A new experimental command `oasis-node storage prune-experimental`
+  was added, enabling offline pruning as specified in the configuration.
+
+  Operators are encouraged to run this command whenever they change pruning
+  configuration, to ensure node is healthy when it starts.
+
+### Bug Fixes
+
+- Fix runtime state pruning performance
+  ([#6352](https://github.com/oasisprotocol/oasis-core/issues/6352))
+
+  Previously, pruning the runtime state with many local versions could
+  significantly slow down state synchronization.
+
+  This has been fixed by moving state pruning out of the BadgerDB
+  transaction responsible for pruning the runtime’s light history.
+
+- registry/api: Use nil instead of empty slices
+  ([#6413](https://github.com/oasisprotocol/oasis-core/issues/6413))
+
 ## 25.8 (2025-11-17)
 
 | Protocol          | Version   |
