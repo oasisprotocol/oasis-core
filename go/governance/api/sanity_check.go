@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -124,9 +124,7 @@ func SanityCheckPendingUpgrades(upgrades []*upgrade.Descriptor, epoch beacon.Epo
 	if len(upgradeEpochs) < 2 {
 		return nil
 	}
-	sort.Slice(upgradeEpochs, func(i, j int) bool {
-		return upgradeEpochs[i] < upgradeEpochs[j]
-	})
+	slices.Sort(upgradeEpochs)
 	prevEpoch := upgradeEpochs[0]
 	for i := 1; i < len(upgradeEpochs); i++ {
 		currEpoch := upgradeEpochs[i]
