@@ -200,6 +200,8 @@ func (p *genericPruner) canPrune(v int64) error {
 	return nil
 }
 
+// Warning: When registering new handler DO NOT forget to update the logic for
+// "oasis-node storage prune" command as well.
 func (p *genericPruner) RegisterHandler(handler consensus.StatePruneHandler) {
 	p.Lock()
 	defer p.Unlock()

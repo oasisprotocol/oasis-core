@@ -2,8 +2,10 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +71,20 @@ func InternalSocketPath() string {
 		return config.GlobalConfig.Common.InternalSocketPath
 	}
 	return filepath.Join(DataDir(), InternalSocketName)
+}
+
+// IsNodeRunning returns true when the node is running.
+func IsNodeRunning() (bool, error) {
+	path := InternalSocketPath()
+
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	return true, nil
 }
 
 // IsNodeCmd returns true iff the current command is the ekiden node.

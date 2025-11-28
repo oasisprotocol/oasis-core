@@ -336,7 +336,7 @@ oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7
 
 ### compact-experimental
 
-Run
+Run (when the node is not running):
 
 ```sh
 oasis-node storage compact-experimental --config /path/to/config/file
@@ -364,3 +364,26 @@ may stay constant or not be reclaimed for a very long time.
 
 This command gives operators manual control to release disk space during
 maintenance periods.
+
+### prune-experimental
+
+Run (when the node is not running):
+
+```sh
+oasis-node storage prune-experimental --config /path/to/config/file
+```
+
+to trigger manual pruning of consensus database instances:
+
+```sh
+{"caller":"storage.go:433","level":"info","module":"cmd/storage", \
+"msg":"Starting consensus databases pruning. This may take a while...", \
+"ts":"2025-10-23T11:02:11.129822974Z"}
+```
+
+Operators should run this whenever they change pruning configuration, e.g. when
+enabling it for the first time, or later changing it to retain less data. This
+way they guarantee the node is healthy when it starts.
+
+Following successful pruning, to release disk space, they are encouraged to run
+[the compaction command](#compact-experimental).

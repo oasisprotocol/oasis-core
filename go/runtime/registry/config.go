@@ -26,7 +26,10 @@ func getLocalConfig(runtimeID common.Namespace, compID component.ID) map[string]
 	return compCfg.Config
 }
 
-func getConfiguredRuntimeIDs() ([]common.Namespace, error) {
+// GetConfiguredRuntimeIDs returns namespaces of all the configured runtimes.
+//
+// Configuration is validated against the current mode of the node.
+func GetConfiguredRuntimeIDs() ([]common.Namespace, error) {
 	// Check if any runtimes are configured to be hosted.
 	runtimes := make(map[common.Namespace]struct{})
 	for _, cfg := range config.GlobalConfig.Runtime.Runtimes {
