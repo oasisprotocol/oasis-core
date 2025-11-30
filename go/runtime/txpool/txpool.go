@@ -263,7 +263,7 @@ func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 	t.logger.Debug("queuing transaction for check",
 		"tx", pct.Raw(),
 		"hash", pct.Hash(),
-		"recheck", pct.flags.isRecheck(),
+		"recheck", pct.checked,
 	)
 	if err := t.checkTxQueue.add(pct); err != nil {
 		t.logger.Warn("unable to queue transaction",
@@ -529,7 +529,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 				"tx", batch[i].Raw(),
 				"hash", batch[i].Hash(),
 				"result", res,
-				"recheck", batch[i].flags.isRecheck(),
+				"recheck", batch[i].checked,
 			)
 
 			// Make sure a failed transaction is removed from the seen cache as the transaction may
@@ -548,7 +548,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 
 		// For any transactions that are to be queued, we defer notification until queued.
 
-		if !batch[i].flags.isRecheck() {
+		if !batch[i].checked {
 			acceptedTransactions.With(t.getMetricLabels()).Inc()
 			newTxs = append(newTxs, batch[i])
 		}
@@ -605,7 +605,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		// Notify submitter of success.
 		notifySubmitter(idx)
 
-		if !pct.flags.isRecheck() {
+		if !pct.checked {
 			// Mark new transactions as never having been published. The republish worker will
 			// publish these immediately.
 			var publishTime time.Time
@@ -831,7 +831,7 @@ func (t *txPool) recheck() {
 		notifyCh := make(chan *protocol.CheckTxResult, 1)
 		pcts = append(pcts, &PendingCheckTransaction{
 			TxQueueMeta: tx,
-			flags:       txCheckRecheck,
+			checked:     true,
 			notifyCh:    notifyCh,
 		})
 		results = append(results, notifyCh)

@@ -2,7 +2,6 @@ package committee
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -30,6 +29,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
@@ -169,7 +169,6 @@ type Node struct {
 	stopOnce  sync.Once
 	quitCh    chan struct{}
 	initCh    chan struct{}
-	resumeCh  chan struct{}
 
 	hooks []NodeHooks
 
@@ -180,11 +179,12 @@ type Node struct {
 	hostedRuntimeProvisioned  uint32
 	historyReindexingDone     uint32
 	workersInitialized        uint32
+	runtimeSuspended          uint32
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
 	CrossNode          sync.Mutex
-	CurrentBlock       *block.Block
+	CurrentBlockRound  uint64
 	CurrentBlockHeight int64
 	CurrentDescriptor  *registry.Runtime
 	CurrentEpoch       beacon.EpochTime
@@ -192,7 +192,7 @@ type Node struct {
 	logger *logging.Logger
 }
 
-func (n *Node) getStatusStateLocked() api.StatusState {
+func (n *Node) getStatusState() api.StatusState {
 	if atomic.LoadUint32(&n.consensusSynced) == 0 {
 		return api.StatusStateWaitingConsensusSync
 	}
@@ -211,8 +211,7 @@ func (n *Node) getStatusStateLocked() api.StatusState {
 	if atomic.LoadUint32(&n.hostedRuntimeProvisioned) == 0 {
 		return api.StatusStateWaitingHostedRuntime
 	}
-	// If resumeCh exists the runtime is suspended (safe to check since the cross node lock should be held).
-	if n.resumeCh != nil {
+	if atomic.LoadUint32(&n.runtimeSuspended) == 1 {
 		return api.StatusStateRuntimeSuspended
 	}
 
@@ -226,10 +225,6 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
-	if err := n.Group.Start(); err != nil {
-		return fmt.Errorf("failed to start group services: %w", err)
-	}
-
 	go n.worker()
 	if cmmetrics.Enabled() {
 		go n.metricsWorker()
@@ -270,37 +265,29 @@ func (n *Node) AddHooks(hooks NodeHooks) {
 
 // GetStatus returns the common committee node status.
 func (n *Node) GetStatus() (*api.Status, error) {
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
-
-	var status api.Status
-	status.Status = n.getStatusStateLocked()
-
-	if n.CurrentBlock != nil {
-		status.LatestRound = n.CurrentBlock.Header.Round
-		status.LatestHeight = n.CurrentBlockHeight
+	status := api.Status{
+		Status:        n.getStatusState(),
+		LatestRound:   n.CurrentBlockRound,
+		LatestHeight:  n.CurrentBlockHeight,
+		SchedulerRank: math.MaxUint64,
 	}
 
-	if n.CurrentDescriptor != nil {
-		activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
-		if activeDeploy != nil {
-			status.ActiveVersion = &activeDeploy.Version
-		}
+	switch activeVersion, err := n.GetHostedRuntime().GetActiveVersion(); err {
+	case nil:
+		status.ActiveVersion = activeVersion
+	default:
 	}
 
-	status.SchedulerRank = math.MaxUint64
-
-	epoch := n.Group.GetEpochSnapshot()
-	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
-		status.ExecutorRoles = cmte.Roles
+	if committeeInfo, ok := n.Group.CommitteeInfo(); ok {
+		status.ExecutorRoles = committeeInfo.Roles
 
 		// Include scheduler rank.
-		if rank, ok := cmte.Committee.SchedulerRank(status.LatestRound+1, epoch.identity.NodeSigner.Public()); ok {
+		if rank, ok := committeeInfo.Committee.SchedulerRank(status.LatestRound+1, n.Identity.NodeSigner.Public()); ok {
 			status.SchedulerRank = rank
 		}
 
 		// Include liveness statistics if the node is an executor committee member.
-		if epoch.IsExecutorMember() {
+		if committeeInfo.IsMember() {
 			rs, err := n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 				RuntimeID: n.Runtime.ID(),
 				Height:    consensus.HeightLatest,
@@ -310,7 +297,7 @@ func (n *Node) GetStatus() (*api.Status, error) {
 					TotalRounds: rs.LivenessStatistics.TotalRounds,
 				}
 
-				for _, index := range cmte.Indices {
+				for _, index := range committeeInfo.Indices {
 					status.Liveness.LiveRounds += rs.LivenessStatistics.LiveRounds[index]
 					status.Liveness.FinalizedProposals += rs.LivenessStatistics.FinalizedProposals[index]
 					status.Liveness.MissedProposals += rs.LivenessStatistics.MissedProposals[index]
@@ -332,96 +319,26 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleEpochTransitionLocked(height int64) {
+func (n *Node) handleEpochTransition(committee *scheduler.Committee) {
 	n.logger.Info("epoch transition has occurred")
 
-	epochTransitionCount.With(n.getMetricLabels()).Inc()
-
-	// Transition group.
-	if err := n.Group.EpochTransition(n.ctx, height); err != nil {
+	if err := n.Group.EpochTransition(n.ctx, committee); err != nil {
 		n.logger.Error("unable to handle epoch transition",
 			"err", err,
 		)
 	}
 
-	epoch := n.Group.GetEpochSnapshot()
-
-	// Mark all executor nodes in the current committee as important.
-	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		if pm := n.P2P.PeerManager(); pm != nil {
-			if pids, err := p2pAPI.PublicKeyMapToPeerIDs(ec.Peers); err == nil {
-				pm.PeerTagger().SetPeerImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), pids)
-			}
-		}
-	}
-
-	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
+	epochTransitionCount.With(n.getMetricLabels()).Inc()
+	epochNumber.With(n.getMetricLabels()).Set(float64(committee.ValidFor))
 }
 
-// Guarded by n.CrossNode.
-func (n *Node) handleSuspendLocked(int64) {
+func (n *Node) handleSuspend() {
 	n.logger.Warn("runtime has been suspended")
 
-	// Suspend group.
 	n.Group.Suspend()
-
-	// If the runtime has been suspended, we need to switch to checking the latest registry
-	// descriptor instead of the active one as otherwise we may miss deployment updates and never
-	// register, keeping the runtime suspended.
-	if n.resumeCh == nil {
-		resumeCh := make(chan struct{})
-		n.resumeCh = resumeCh
-		rt := n.CurrentDescriptor
-
-		go func() {
-			epoCh, epoSub, _ := n.Consensus.Beacon().WatchEpochs(n.ctx)
-			defer epoSub.Close()
-			ch, sub, _ := n.Runtime.WatchRegistryDescriptor()
-			defer sub.Close()
-
-			for {
-				select {
-				case <-n.stopCh:
-					return
-				case <-epoCh:
-					// Epoch transition while suspended, maybe the version is now valid.
-				case rt = <-ch:
-					// Descriptor update while suspended.
-				case <-resumeCh:
-					// Runtime no longer suspended, stop.
-					return
-				}
-
-				n.CrossNode.Lock()
-
-				// Make sure we are still suspended.
-				if n.resumeCh == nil {
-					n.CrossNode.Unlock()
-					return
-				}
-
-				n.CurrentDescriptor = rt
-
-				n.updateHostedRuntimeVersionLocked()
-				n.CrossNode.Unlock()
-			}
-		}()
-	}
 }
 
-func (n *Node) updateHostedRuntimeVersion() {
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
-
-	n.updateHostedRuntimeVersionLocked()
-}
-
-func (n *Node) updateHostedRuntimeVersionLocked() {
-	if n.CurrentDescriptor == nil {
-		return
-	}
-
+func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
 	// Always take the latest epoch to avoid reverting to stale state.
 	epoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
 	if err != nil {
@@ -432,22 +349,20 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	}
 
 	// Update the runtime version based on the currently active deployment.
-	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
+	activeDeploy := rt.ActiveDeployment(epoch)
 	var activeVersion *version.Version
 	if activeDeploy != nil {
-		activeVersion = new(version.Version)
-		*activeVersion = activeDeploy.Version
+		activeVersion = &activeDeploy.Version
 	}
 
 	// For compute nodes, determine if there is a next version and activate it early.
 	var nextVersion *version.Version
 	if config.GlobalConfig.Mode == config.ModeCompute {
-		nextDeploy := n.CurrentDescriptor.NextDeployment(epoch)
+		nextDeploy := rt.NextDeployment(epoch)
 		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
 
 		if nextDeploy != nil && nextDeploy.ValidFrom-epoch <= preWarmEpochs {
-			nextVersion = new(version.Version)
-			*nextVersion = nextDeploy.Version
+			nextVersion = &nextDeploy.Version
 		}
 	}
 
@@ -473,27 +388,15 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 	// This will refresh the committee on the first block,
 	// instead of waiting for the next epoch transition to occur.
 	// Helps in cases where node is restarted mid epoch.
-	firstBlockReceived := n.CurrentBlock == nil
-
-	// Fetch light consensus block.
-	consensusBlk, err := n.Consensus.Core().GetLightBlock(n.ctx, height)
-	if err != nil {
-		n.logger.Error("failed to query light block",
-			"err", err,
-			"height", height,
-			"round", blk.Header.Round,
-		)
-		return
-	}
+	firstBlockReceived := n.CurrentBlockHeight == 0
 
 	// Update the current block.
-	n.CurrentBlock = blk
+	n.CurrentBlockRound = blk.Header.Round
 	n.CurrentBlockHeight = height
 
 	// Update active descriptor on epoch transitions.
 	if firstBlockReceived || blk.Header.HeaderType == block.EpochTransition || blk.Header.HeaderType == block.Suspended {
-		var rs *roothash.RuntimeState
-		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
+		rs, err := n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 			RuntimeID: n.Runtime.ID(),
 			Height:    height,
 		})
@@ -513,69 +416,61 @@ func (n *Node) handleNewBlock(blk *block.Block, height int64) {
 			return
 		}
 
-		// Notify suspended runtime watcher to stop.
-		if !rs.Suspended && n.resumeCh != nil {
-			close(n.resumeCh)
-			n.resumeCh = nil
-		}
-
-		n.updateHostedRuntimeVersionLocked()
+		n.updateHostedRuntimeVersion(rs.Runtime)
 
 		// Make sure to update the key manager if needed.
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
+
+		switch rs.Suspended {
+		case true:
+			n.handleSuspend()
+			atomic.StoreUint32(&n.runtimeSuspended, 1)
+		case false:
+			n.handleEpochTransition(rs.Committee)
+			atomic.StoreUint32(&n.runtimeSuspended, 0)
+		}
 	}
 
-	// Perform actions based on block type.
-	switch blk.Header.HeaderType {
-	case block.Normal:
-		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(height)
-		}
-	case block.RoundFailed:
-		if firstBlockReceived {
-			n.logger.Warn("forcing an epoch transition on first received block")
-			n.handleEpochTransitionLocked(height)
-		} else {
-			// Round has failed.
-			n.logger.Warn("round has failed")
-			failedRoundCount.With(n.getMetricLabels()).Inc()
-		}
-	case block.EpochTransition:
-		// Process an epoch transition.
-		n.handleEpochTransitionLocked(height)
-	case block.Suspended:
-		// Process runtime being suspended.
-		n.handleSuspendLocked(height)
-	default:
-		n.logger.Error("invalid block type",
-			"block", blk,
+	// Count failed rounds.
+	if blk.Header.HeaderType == block.RoundFailed && !firstBlockReceived {
+		n.logger.Warn("round has failed")
+		failedRoundCount.With(n.getMetricLabels()).Inc()
+	}
+
+	// Fetch light consensus block.
+	consensusBlk, err := n.Consensus.Core().GetLightBlock(n.ctx, height)
+	if err != nil {
+		n.logger.Error("failed to query light block",
+			"err", err,
+			"height", height,
+			"round", blk.Header.Round,
 		)
 		return
 	}
 
-	bi := &runtime.BlockInfo{
-		RuntimeBlock:     n.CurrentBlock,
-		ConsensusBlock:   consensusBlk,
-		Epoch:            n.CurrentEpoch,
-		ActiveDescriptor: n.CurrentDescriptor,
-	}
-
-	n.TxPool.ProcessBlock(bi)
-
 	// Fetch incoming messages.
 	inMsgs, err := n.Consensus.RootHash().GetIncomingMessageQueue(n.ctx, &roothash.InMessageQueueRequest{
 		RuntimeID: n.Runtime.ID(),
-		Height:    consensusBlk.Height,
+		Height:    height,
 	})
 	if err != nil {
 		n.logger.Error("failed to query incoming messages",
 			"err", err,
 			"height", height,
-			"round", bi.RuntimeBlock.Header.Round,
+			"round", blk.Header.Round,
 		)
 		return
 	}
+
+	bi := &runtime.BlockInfo{
+		RuntimeBlock:     blk,
+		ConsensusBlock:   consensusBlk,
+		IncomingMessages: inMsgs,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
+	}
+
+	n.TxPool.ProcessBlock(bi)
 	n.TxPool.ProcessIncomingMessages(inMsgs)
 
 	for _, hooks := range n.hooks {
@@ -634,14 +529,6 @@ func (n *Node) worker() {
 		return
 	}
 	atomic.StoreUint32(&n.runtimeRegistryDescriptor, 1)
-
-	n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
-	if err != nil {
-		n.logger.Error("failed to fetch current epoch",
-			"err", err,
-		)
-		return
-	}
 
 	n.logger.Info("runtime is registered with the registry")
 
@@ -724,9 +611,21 @@ func (n *Node) worker() {
 		}
 	}
 
+	// Start watching runtime descriptors so we know when to update the hosted
+	// runtime version, ensuring we never miss any deployment updates, even if
+	// the runtime is suspended.
+	rtCh, rtSub, err := n.Runtime.WatchRegistryDescriptor()
+	if err != nil {
+		n.logger.Error("failed to watch registry descriptor",
+			"err", err,
+		)
+		return
+	}
+	defer rtSub.Close()
+
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.updateHostedRuntimeVersion()
+	n.updateHostedRuntimeVersion(rt)
 
 	// Start the runtime.
 	hrt := n.GetHostedRuntime()
@@ -761,6 +660,8 @@ func (n *Node) worker() {
 		case ev := <-hrtEventCh:
 			// Received a hosted runtime event.
 			n.handleRuntimeHostEvent(ev)
+		case rt = <-rtCh:
+			n.updateHostedRuntimeVersion(rt)
 		case compNotify := <-compCh:
 			switch {
 			case compNotify.Added != nil:
@@ -774,7 +675,7 @@ func (n *Node) worker() {
 					return
 				}
 
-				n.updateHostedRuntimeVersion()
+				n.updateHostedRuntimeVersion(rt)
 			case compNotify.Removed != nil:
 				// Received removal of a component.
 				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
@@ -804,17 +705,16 @@ func (n *Node) updatePeriodicMetrics() {
 
 	n.logger.Debug("updating periodic worker node metrics")
 
-	epoch := n.Group.GetEpochSnapshot()
-	cmte := epoch.GetExecutorCommittee()
-	if cmte == nil {
+	committeeInfo, ok := n.Group.CommitteeInfo()
+	if !ok {
 		return
 	}
 
 	executorCommitteeP2PPeers.With(labels).Set(float64(len(n.P2P.Peers(n.Runtime.ID()))))
-	workerIsExecutorWorker.With(labels).Set(boolToMetricVal(epoch.IsExecutorWorker()))
-	workerIsExecutorBackup.With(labels).Set(boolToMetricVal(epoch.IsExecutorBackupWorker()))
+	workerIsExecutorWorker.With(labels).Set(boolToMetricVal(committeeInfo.IsWorker()))
+	workerIsExecutorBackup.With(labels).Set(boolToMetricVal(committeeInfo.IsBackupWorker()))
 
-	if !epoch.IsExecutorMember() {
+	if !committeeInfo.IsMember() {
 		// Default to 1 if node is not in committee.
 		livenessRatio.With(labels).Set(1.0)
 		return
@@ -830,7 +730,7 @@ func (n *Node) updatePeriodicMetrics() {
 
 	totalRounds := rs.LivenessStatistics.TotalRounds
 	var liveRounds uint64
-	for _, index := range cmte.Indices {
+	for _, index := range committeeInfo.Indices {
 		liveRounds += rs.LivenessStatistics.LiveRounds[index]
 	}
 	livenessTotalRounds.With(labels).Set(float64(totalRounds))
@@ -882,7 +782,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), identity, consensus)
+	group, err := NewGroup(ctx, runtime.ID(), identity, consensus, p2pHost)
 	if err != nil {
 		cancel()
 		return nil, err

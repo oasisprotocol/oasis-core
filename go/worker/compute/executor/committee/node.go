@@ -22,12 +22,12 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -75,7 +75,6 @@ type Node struct {
 	state            NodeState
 	stateTransitions *pubsub.Broker
 	proposals        *proposalQueue
-	committee        *scheduler.Committee
 	commitPool       *commitment.Pool
 
 	blockInfoCh      chan *runtime.BlockInfo
@@ -90,7 +89,7 @@ type Node struct {
 	// Local, set and used by every round worker.
 
 	rt            host.RichRuntime
-	epoch         *committee.EpochSnapshot
+	committeeInfo *committee.CommitteeInfo
 	blockInfo     *runtime.BlockInfo
 	rtState       *roothash.RuntimeState
 	roundResults  *roothash.RoundResults
@@ -256,7 +255,7 @@ func (n *Node) updateState(ctx context.Context, minRank uint64, maxRank uint64, 
 			state.Cancel()
 
 			// The backup workers should process only if the discrepancy was detected.
-			if !n.epoch.IsExecutorWorker() && n.epoch.IsExecutorBackupWorker() && !discrepancy {
+			if !n.committeeInfo.IsWorker() && n.committeeInfo.IsBackupWorker() && !discrepancy {
 				n.transitionState(StateWaitingForEvent{
 					proposal: state.proposal,
 					rank:     state.rank,
@@ -337,7 +336,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	}
 
 	// Only executor workers are permitted to schedule batches.
-	if !n.epoch.IsExecutorWorker() {
+	if !n.committeeInfo.IsWorker() {
 		n.logger.Debug("not scheduling, not an executor")
 		return
 	}
@@ -399,8 +398,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
 	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
-	case n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
-		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
@@ -437,7 +434,7 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 	)
 
 	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
-		Epoch:    n.blockInfo.Epoch,
+		Epoch:    n.committeeInfo.Committee.ValidFor,
 		Proposal: proposal,
 	})
 
@@ -466,6 +463,7 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		n.blockInfo.Epoch,
 		n.blockInfo.ConsensusBlock,
 		n.blockInfo.RuntimeBlock,
+		n.blockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		hash.Hash{}, // IORoot is ignored as it is yet to be determined.
@@ -512,6 +510,7 @@ func (n *Node) runtimeExecuteTxBatch(
 	epoch beacon.EpochTime,
 	consensusBlk *consensus.LightBlock,
 	blk *block.Block,
+	inMsgs []*message.IncomingMessage,
 	state *roothash.RuntimeState,
 	roundResults *roothash.RoundResults,
 	inputRoot hash.Hash,
@@ -520,18 +519,6 @@ func (n *Node) runtimeExecuteTxBatch(
 	// Ensure block round is synced to storage.
 	n.logger.Debug("ensuring block round is synced", "round", blk.Header.Round)
 	if _, err := n.commonNode.Runtime.History().WaitRoundSynced(ctx, blk.Header.Round); err != nil {
-		return nil, err
-	}
-
-	// Fetch any incoming messages.
-	inMsgs, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		Height:    consensusBlk.Height,
-	})
-	if err != nil {
-		n.logger.Error("failed to fetch incoming runtime message queue metadata",
-			"err", err,
-		)
 		return nil, err
 	}
 
@@ -623,6 +610,7 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		n.blockInfo.Epoch,
 		n.blockInfo.ConsensusBlock,
 		n.blockInfo.RuntimeBlock,
+		n.blockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		proposal.Header.BatchHash,
@@ -846,7 +834,7 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 	switch discrepancy {
 	case true:
 		// Only backup executor workers are permitted to process batches.
-		if !n.epoch.IsExecutorBackupWorker() {
+		if !n.committeeInfo.IsBackupWorker() {
 			n.logger.Debug("not processing, not a backup executor")
 			return
 		}
@@ -930,7 +918,7 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 	}
 
 	// The backup workers should process only if the discrepancy was detected.
-	if !n.epoch.IsExecutorWorker() && n.epoch.IsExecutorBackupWorker() && !discrepancy {
+	if !n.committeeInfo.IsWorker() && n.committeeInfo.IsBackupWorker() && !discrepancy {
 		n.transitionState(StateWaitingForEvent{
 			proposal: proposal,
 			rank:     rank,
@@ -1122,9 +1110,8 @@ func (n *Node) handleExecutorCommitment(ctx context.Context, ec *commitment.Exec
 		"commitment", ec,
 	)
 
-	id := n.commonNode.Identity.NodeSigner.Public()
 	switch {
-	case n.committee.IsWorker(id):
+	case n.committeeInfo.IsWorker():
 		n.estimatePoolRank(ctx, ec, false)
 	}
 }
@@ -1134,11 +1121,10 @@ func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitm
 		"commitment", ec,
 	)
 
-	id := n.commonNode.Identity.NodeSigner.Public()
 	switch {
-	case n.committee.IsWorker(id):
+	case n.committeeInfo.IsWorker():
 		n.estimatePoolRank(ctx, ec, true)
-	case n.committee.IsBackupWorker(id):
+	case n.committeeInfo.IsBackupWorker():
 		n.predictDiscrepancy(ctx, ec)
 	}
 }
@@ -1167,8 +1153,7 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 
 	if observed {
 		// Verify the commitment.
-		rt := n.epoch.GetRuntime()
-		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, rt, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
+		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, n.blockInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
 			n.logger.Debug("ignoring bad executor commitment, verification failed",
 				"err", err,
 				"node_id", ec.NodeID,
@@ -1179,7 +1164,7 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	}
 
 	// Update pool rank.
-	rank, ok := n.committee.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
+	rank, ok := n.committeeInfo.Committee.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
 	if !ok {
 		n.logger.Debug("ignoring bad executor commitment, scheduler not in committee",
 			"node_id", ec.NodeID,
@@ -1388,20 +1373,20 @@ func (n *Node) roundWorker(ctx context.Context) {
 	n.proposals.Prune(round)
 
 	// Need to be an executor committee member.
-	n.epoch = n.commonNode.Group.GetEpochSnapshot()
-	if epoch := n.epoch.GetEpochNumber(); epoch != n.blockInfo.Epoch {
-		n.logger.Debug("skipping round, behind common worker",
-			"epoch", epoch,
-			"block_epoch", n.blockInfo.Epoch,
+	committeeInfo, ok := n.commonNode.Group.CommitteeInfo()
+	if !ok {
+		n.logger.Debug("skipping round, no executor committee",
+			"round", round,
 		)
 		return
 	}
-	if !n.epoch.IsExecutorMember() {
+	if !committeeInfo.IsMember() {
 		n.logger.Debug("skipping round, not an executor member",
 			"round", round,
 		)
 		return
 	}
+	n.committeeInfo = committeeInfo
 
 	// This should never fail as we only register to be an executor worker
 	// once the hosted runtime is ready.
@@ -1429,17 +1414,16 @@ func (n *Node) roundWorker(ctx context.Context) {
 
 	// Compute node's rank when scheduling transactions.
 	id := n.commonNode.Identity.NodeSigner.Public()
-	n.committee = n.epoch.GetExecutorCommittee().Committee
 	n.rank = math.MaxUint64
-	if rank, ok := n.committee.SchedulerRank(round, id); ok {
+	if rank, ok := committeeInfo.Committee.SchedulerRank(round, id); ok {
 		n.rank = rank
 	}
 
 	n.logger.Debug("node is an executor member",
 		"round", round,
 		"rank", n.rank,
-		"worker", n.epoch.IsExecutorWorker(),
-		"backup_worker", n.epoch.IsExecutorBackupWorker(),
+		"worker", committeeInfo.IsWorker(),
+		"backup_worker", committeeInfo.IsBackupWorker(),
 	)
 
 	// Estimate the pool's highest rank to prevent committing to worse-ranked proposals
