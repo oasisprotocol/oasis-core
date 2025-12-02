@@ -232,6 +232,7 @@ where
                 .as_ref()
                 .and_then(|id| id.quote_policy());
 
+            // TODO also respect per-role policy.
             self.builder = mem::take(&mut self.builder).quote_policy(policy);
         }
 

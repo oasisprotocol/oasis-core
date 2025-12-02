@@ -111,6 +111,7 @@ impl PolicyVerifier {
         version: Option<Version>,
     ) -> Result<QuotePolicy> {
         let published_policy = self.quote_policy(runtime_id, version)?;
+        // TODO also check per-role policy.
 
         if policy != published_policy {
             debug!(

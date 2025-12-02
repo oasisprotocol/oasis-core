@@ -464,7 +464,7 @@ impl Secrets {
             self.runtime_id,
             Some(self.runtime_id),
             Policy::global().may_replicate_from(),
-            self.identity.quote_policy(),
+            self.identity.quote_policy(), // TODO per role policies.
             self.protocol.clone(),
             self.consensus_verifier.clone(),
             self.identity.clone(),

@@ -119,6 +119,7 @@ impl Handler {
             })?
         };
 
+        // TODO: Also set per role quote policy.
         self.identity.set_quote_policy(policy)?;
 
         Ok(())

@@ -72,6 +72,10 @@ struct Inner {
     quote: Option<Arc<Quote>>,
     quote_timestamp: Option<i64>,
     quote_policy: Option<Arc<QuotePolicy>>,
+    // TODO Add per role quote policy.
+    // But if the runtime cannot trust the host how can it obtain the "role" that is being used for?
+    // Query consensus registry using `node_id`, to obtain the current node struct and thus it's roles?
+    // But the host could set any node_id...
     known_quotes: VecDeque<Arc<Quote>>,
     enclave_identity: Option<EnclaveIdentity>,
     node_identity: Option<signature::PublicKey>,
@@ -350,6 +354,7 @@ impl Identity {
             return Err(QuoteError::EndorsedQuoteMismatch.into());
         }
         ect.verify(policy)?;
+        // TODO verify per role quote policy.
 
         inner.endorsed_capability_tee = Some(ect);
 
@@ -399,7 +404,7 @@ impl Identity {
             let quote = inner.quote.as_ref().unwrap();
             let timestamp = inner.quote_timestamp.unwrap();
             let quote_policy = inner.quote_policy.as_ref().unwrap();
-
+            // TODO also here per-role policy.
             if !quote.is_fresh(now, timestamp, quote_policy) {
                 // Reset the quote.
                 inner.quote = None;
@@ -421,6 +426,8 @@ impl Identity {
     pub fn quote_policy(&self) -> Option<Arc<QuotePolicy>> {
         let inner = self.inner.read().unwrap();
         inner.quote_policy.clone()
+
+        // TODO add per role quote policy.
     }
 
     /// Verify a provided RAK binding.
