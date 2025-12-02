@@ -63,6 +63,9 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		return nil, fmt.Errorf("failed to get quote: %w", err)
 	}
 
+	// TODO: Check per-role policy, so that periodic reatestation validates it early.
+	// In theory consensus and runtime validation would capture wrong attestation later on.
+	// If we want to do that we will have to pass node roles here somehow.
 	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, ec.cfg, sp.consensus, nil)
 	if err != nil {
 		return nil, err
