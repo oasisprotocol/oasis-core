@@ -443,6 +443,10 @@ func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 			TDX:                        &pcs.TdxQuotePolicy{},
 		},
 	}
+
+	// TODO: Check per-role policy, so that periodic reatestation validates it early.
+	// In theory consensus and runtime validation would capture wrong attestation later on.
+	// If we want to do that wee will have to pass node roles here somehow.
 	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, hp.Config, p.consensus, fallbackPolicy)
 	if err != nil {
 		return nil, err

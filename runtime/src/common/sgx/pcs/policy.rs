@@ -16,6 +16,11 @@ pub struct QuotePolicy {
     pub min_tcb_evaluation_data_number: u32,
 
     /// A list of hexadecimal encoded FMSPCs specifying which processor packages and platform
+    /// instances are allowed.
+    #[cbor(optional)]
+    pub fmspc_whitelist: Vec<String>,
+
+    /// A list of hexadecimal encoded FMSPCs specifying which processor packages and platform
     /// instances are blocked.
     #[cbor(optional)]
     pub fmspc_blacklist: Vec<String>,
@@ -31,6 +36,7 @@ impl Default for QuotePolicy {
             disabled: false,
             tcb_validity_period: 30,
             min_tcb_evaluation_data_number: DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER,
+            fmspc_whitelist: Vec::new(),
             fmspc_blacklist: Vec::new(),
             tdx: None,
         }

@@ -656,7 +656,7 @@ func TestVerifyRuntime(t *testing.T) {
 			tc.cpFn(&cp)
 		}
 
-		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &tc.rr, false, true, beacon.EpochTime(10))
+		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &tc.rr, false, true, beacon.EpochTime(10), true)
 		switch {
 		case tc.err == nil:
 			require.NoError(err, tc.msg)

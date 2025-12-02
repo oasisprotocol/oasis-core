@@ -107,6 +107,7 @@ func (ep *teeStateEPID) update(
 		return nil, fmt.Errorf("error while getting quote: %w", err)
 	}
 
+	// TODO: No need to be per-role here as epid is deprecated?
 	quotePolicy, err := sgxCommon.GetQuotePolicy(ctx, ep.cfg, sp.consensus, nil)
 	if err != nil {
 		return nil, err

@@ -30,7 +30,7 @@ func GetQuotePolicy(
 	cfg *host.Config,
 	cs consensus.Service,
 	fallbackPolicy *sgxQuote.Policy,
-) (*sgxQuote.Policy, error) {
+) (*sgxQuote.Policy, error) { // TODO also returning per-role policy here introduces module cycle.
 	switch cfg.Component.Kind {
 	case component.RONL:
 		// Load RONL policy from the consensus layer.

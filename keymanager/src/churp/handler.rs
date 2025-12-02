@@ -1145,7 +1145,7 @@ impl<S: Suite> Instance<S> {
             self.runtime_id,
             Some(self.runtime_id),
             enclaves,
-            self.identity.quote_policy(),
+            self.identity.quote_policy(), // TODO per role policies
             self.protocol.clone(),
             self.consensus_verifier.clone(),
             self.identity.clone(),
