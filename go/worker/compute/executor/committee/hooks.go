@@ -8,18 +8,17 @@ import (
 // Ensure Node implements NodeHooks.
 var _ committee.NodeHooks = (*Node)(nil)
 
-// HandleNewBlockLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
+// HandleNewDispatchInfo implements NodeHooks.
+func (n *Node) HandleNewDispatchInfo(di *runtime.DispatchInfo) {
 	// Update our availability.
 	n.nudgeAvailabilityLocked(false)
 
-	// Drop blocks if the worker falls behind.
+	// Drop if the worker falls behind.
 	select {
-	case <-n.blockInfoCh:
+	case <-n.dispatchInfoCh:
 	default:
 	}
 
 	// Non-blocking send.
-	n.blockInfoCh <- bi
+	n.dispatchInfoCh <- di
 }

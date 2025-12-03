@@ -21,7 +21,14 @@ type BlockInfo struct {
 
 	// Epoch is the epoch the runtime block belongs to.
 	Epoch beacon.EpochTime
+}
 
-	// ActiveDescriptor is the runtime descriptor active for the runtime block.
+// DispatchInfo provides the context for checking, executing, or scheduling
+// a batch of transactions.
+type DispatchInfo struct {
+	// BlockInfo holds information about the latest runtime block.
+	BlockInfo *BlockInfo
+
+	// ActiveDescriptor is the runtime descriptor currently in use for dispatch.
 	ActiveDescriptor *registry.Runtime
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
@@ -107,8 +106,11 @@ type TransactionPool interface {
 	// and only the following transactions will be returned.
 	GetSchedulingExtra(offset *hash.Hash, limit int) []*TxQueueMeta
 
-	// ProcessBlock updates the last known runtime block information.
-	ProcessBlock(bi *runtime.BlockInfo)
+	// RecheckTxs triggers a recheck of all transactions.
+	RecheckTxs()
+
+	// ProcessDispatchInfo updates the last known runtime dispatch information.
+	ProcessDispatchInfo(di *runtime.DispatchInfo)
 
 	// ProcessIncomingMessages loads transactions from incoming messages into the pool.
 	ProcessIncomingMessages(inMsgs []*message.IncomingMessage)
@@ -158,10 +160,10 @@ type txPool struct {
 	proposedTxsLock sync.Mutex
 	proposedTxs     map[hash.Hash]*TxQueueMeta
 
-	blockInfoLock      sync.Mutex
-	blockInfo          *runtime.BlockInfo
-	lastBlockProcessed time.Time
-	lastRecheckRound   uint64
+	dispatchInfoLock          sync.Mutex
+	dispatchInfo              *runtime.DispatchInfo
+	lastDispatchInfoProcessed time.Time
+	lastRecheckRound          uint64
 
 	republishCh *channels.RingChannel
 }
@@ -385,24 +387,39 @@ HASH_LOOP:
 	return txs, missingTxs
 }
 
-func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) {
-	t.blockInfoLock.Lock()
-	defer t.blockInfoLock.Unlock()
+func (t *txPool) ProcessDispatchInfo(di *runtime.DispatchInfo) {
+	t.dispatchInfoLock.Lock()
+	defer t.dispatchInfoLock.Unlock()
 
-	if t.blockInfo == nil {
+	if t.dispatchInfo == nil {
 		close(t.initCh)
 	}
 
-	t.blockInfo = bi
-	t.lastBlockProcessed = time.Now()
+	t.dispatchInfo = di
+	t.lastDispatchInfoProcessed = time.Now()
 
-	// Force transaction rechecks on epoch transitions and if needed.
-	isEpochTransition := bi.RuntimeBlock.Header.HeaderType == block.EpochTransition
-	roundDifference := bi.RuntimeBlock.Header.Round - t.lastRecheckRound
-	if isEpochTransition || roundDifference > t.cfg.RecheckInterval {
-		t.recheckTxCh.In() <- struct{}{}
-		t.lastRecheckRound = bi.RuntimeBlock.Header.Round
+	roundDifference := di.BlockInfo.RuntimeBlock.Header.Round - t.lastRecheckRound
+	if roundDifference > t.cfg.RecheckInterval {
+		t.recheckTxsLocked()
 	}
+}
+
+func (t *txPool) RecheckTxs() {
+	t.dispatchInfoLock.Lock()
+	defer t.dispatchInfoLock.Unlock()
+
+	t.recheckTxsLocked()
+}
+
+func (t *txPool) recheckTxsLocked() {
+	select {
+	case <-t.initCh:
+	default:
+		return
+	}
+
+	t.recheckTxCh.In() <- struct{}{}
+	t.lastRecheckRound = t.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round
 }
 
 func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) {
@@ -427,14 +444,14 @@ func (t *txPool) All() [][]byte {
 	return txs
 }
 
-func (t *txPool) getCurrentBlockInfo() (*runtime.BlockInfo, time.Time, error) {
-	t.blockInfoLock.Lock()
-	defer t.blockInfoLock.Unlock()
+func (t *txPool) getCurrentDispatchInfo() (*runtime.DispatchInfo, time.Time, error) {
+	t.dispatchInfoLock.Lock()
+	defer t.dispatchInfoLock.Unlock()
 
-	if t.blockInfo == nil {
-		return nil, time.Time{}, fmt.Errorf("no current block available")
+	if t.dispatchInfo == nil {
+		return nil, time.Time{}, fmt.Errorf("no current dispatch info available")
 	}
-	return t.blockInfo, t.lastBlockProcessed, nil
+	return t.dispatchInfo, t.lastDispatchInfoProcessed, nil
 }
 
 // checkTxBatch requests the runtime to check the validity of a transaction batch.
@@ -445,22 +462,22 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		return fmt.Errorf("runtime is not available")
 	}
 
-	// Get the current block info.
-	bi, lastBlockProcessed, err := t.getCurrentBlockInfo()
+	// Get the current dispatch info.
+	di, lastDispatchInfoProcessed, err := t.getCurrentDispatchInfo()
 	if err != nil {
-		return fmt.Errorf("failed to get current block info: %w", err)
+		return fmt.Errorf("failed to get current dispatch info: %w", err)
 	}
 
 	// Ensure block round is synced to storage.
 	waitSyncCtx, cancelWaitSyncCtx := context.WithTimeout(ctx, checkTxWaitRoundSyncedTimeout)
 	defer cancelWaitSyncCtx()
 
-	t.logger.Debug("ensuring block round is synced", "round", bi.RuntimeBlock.Header.Round)
-	if _, err = t.history.WaitRoundSynced(waitSyncCtx, bi.RuntimeBlock.Header.Round); err != nil {
+	t.logger.Debug("ensuring block round is synced", "round", di.BlockInfo.RuntimeBlock.Header.Round)
+	if _, err = t.history.WaitRoundSynced(waitSyncCtx, di.BlockInfo.RuntimeBlock.Header.Round); err != nil {
 		// Block round isn't synced yet, so make sure the batch check is
 		// retried later to avoid aborting the runtime, as it is not its fault.
 		t.logger.Info("block round is not synced yet, retrying transaction batch check later",
-			"round", bi.RuntimeBlock.Header.Round,
+			"round", di.BlockInfo.RuntimeBlock.Header.Round,
 			"err", err,
 		)
 		t.checkTxCh.In() <- struct{}{}
@@ -482,7 +499,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		for _, pct := range batch {
 			rawTxBatch = append(rawTxBatch, pct.Raw())
 		}
-		return t.runtime.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
+		return t.runtime.CheckTx(checkCtx, di.BlockInfo.RuntimeBlock, di.BlockInfo.ConsensusBlock, di.BlockInfo.Epoch, di.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
 	}()
 	switch {
 	case err == nil:
@@ -625,7 +642,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		// Kick off publishing for any new txs after waiting for block publish delay based on when
 		// we received the block that we just used to check the transaction batch.
 		go func() {
-			time.Sleep(time.Until(lastBlockProcessed.Add(newBlockPublishDelay)))
+			time.Sleep(time.Until(lastDispatchInfoProcessed.Add(newBlockPublishDelay)))
 			t.republishCh.In() <- struct{}{}
 		}()
 

@@ -16,7 +16,7 @@ type discrepancyEvent struct {
 }
 
 func (n *Node) handleDiscrepancy(ctx context.Context, ev *discrepancyEvent) {
-	if ev.round != n.blockInfo.RuntimeBlock.Header.Round+1 {
+	if ev.round != n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round+1 {
 		n.logger.Debug("ignoring bad discrepancy event",
 			"height", ev.height,
 			"round", ev.round,
@@ -71,7 +71,7 @@ func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCo
 	}
 
 	// Verify and add the commitment.
-	if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, n.blockInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
+	if err := commitment.VerifyExecutorCommitment(ctx, n.dispatchInfo.BlockInfo.RuntimeBlock, n.dispatchInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
 		n.logger.Debug("ignoring bad observed executor commitment, verification failed",
 			"err", err,
 			"node_id", ec.NodeID,
@@ -88,15 +88,15 @@ func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCo
 	}
 
 	// In case observed commits indicate a discrepancy, preempt consensus and immediately handle.
-	if _, err := n.commitPool.ProcessCommitments(n.committeeInfo.Committee, n.blockInfo.ActiveDescriptor.Executor.AllowedStragglers, false); err != commitment.ErrDiscrepancyDetected {
+	if _, err := n.commitPool.ProcessCommitments(n.committeeInfo.Committee, n.dispatchInfo.ActiveDescriptor.Executor.AllowedStragglers, false); err != commitment.ErrDiscrepancyDetected {
 		return
 	}
 
 	n.logger.Warn("observed commitments indicate discrepancy")
 
 	n.handleDiscrepancy(ctx, &discrepancyEvent{
-		height:        uint64(n.blockInfo.ConsensusBlock.Height),
-		round:         n.blockInfo.RuntimeBlock.Header.Round + 1,
+		height:        uint64(n.dispatchInfo.BlockInfo.ConsensusBlock.Height),
+		round:         n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1,
 		rank:          n.commitPool.HighestRank,
 		timeout:       false,
 		authoritative: false,

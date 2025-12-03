@@ -140,10 +140,12 @@ func (g *Group) Suspend() {
 	g.committee = nil
 }
 
-// EpochTransition processes an epoch transition that just happened.
-func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Committee) error {
+// CommitteeTransition processes a committee transition that just happened.
+func (g *Group) CommitteeTransition(ctx context.Context, committee *scheduler.Committee) error {
 	g.Lock()
 	defer g.Unlock()
+
+	g.logger.Info("committee transition")
 
 	// Invalidate current committee. In case we cannot process this transition,
 	// this should cause the node to transition into NotReady and stay there
@@ -203,7 +205,7 @@ func (g *Group) EpochTransition(ctx context.Context, committee *scheduler.Commit
 		nodes:      g.nodes,
 	}
 
-	g.logger.Info("epoch transition complete",
+	g.logger.Info("committee transition complete",
 		"epoch", epochNumber,
 		"executor_roles", g.committee.Roles,
 	)

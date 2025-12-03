@@ -12,6 +12,8 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
@@ -79,12 +81,14 @@ func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
 }
 
-// HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
+// HandleNewDispatchInfo implements NodeHooks.
+func (n *Node) HandleNewDispatchInfo(*runtime.DispatchInfo) {
 	// Nothing to do here.
 }
 
-// HandleRuntimeHostEventLocked is guarded by CrossNode.
+// HandleRuntimeHostEventLocked implements NodeHooks.
+//
+// Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 	if n.roleProvider == nil {
 		return
@@ -169,15 +173,14 @@ func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult,
 func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *component.ID) ([]byte, error) {
 	hrt := n.commonNode.GetHostedRuntime()
 
-	// Fetch the active descriptor so we can get the current message limits.
-	n.commonNode.CrossNode.Lock()
-	dsc := n.commonNode.CurrentDescriptor
-	n.commonNode.CrossNode.Unlock()
-
-	if dsc == nil {
-		return nil, api.ErrNoHostedRuntime
+	rs, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    consensus.HeightLatest,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get runtime state: %w", err)
 	}
-	maxMessages := dsc.Executor.MaxMessages
+	maxMessages := rs.Runtime.Executor.MaxMessages
 
 	annBlk, err := n.commonNode.Runtime.History().GetAnnotatedBlock(ctx, round)
 	if err != nil {
