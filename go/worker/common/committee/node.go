@@ -499,8 +499,11 @@ func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
 func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	defer close(n.quitCh)
-	defer (n.cancelCtx)()
+	defer n.cancelCtx()
 
 	// Wait for consensus sync.
 	n.logger.Info("delaying worker start until after initial synchronization")
@@ -636,14 +639,8 @@ func (n *Node) worker() {
 	defer hrt.Stop()
 
 	// Start the runtime host notifier and other services.
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-
 	wg.Go(func() {
-		if err := n.services.Serve(ctx); err != nil {
+		if err := n.services.Serve(n.ctx); err != nil {
 			n.logger.Error("service group stopped", "err", err)
 		}
 	})
