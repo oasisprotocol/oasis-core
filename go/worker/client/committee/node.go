@@ -86,10 +86,8 @@ func (n *Node) HandleNewDispatchInfo(*runtime.DispatchInfo) {
 	// Nothing to do here.
 }
 
-// HandleRuntimeHostEventLocked implements NodeHooks.
-//
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
+// HandleRuntimeHostEvent implements NodeHooks.
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	if n.roleProvider == nil {
 		return
 	}

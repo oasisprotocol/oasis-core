@@ -50,9 +50,10 @@ const executeBatchTimeoutFactor = 3
 
 // Node is a committee node.
 type Node struct {
-	runtimeReady         bool
-	runtimeTrustSynced   bool
-	runtimeTrustSyncCncl context.CancelFunc
+	mu                     sync.Mutex
+	runtimeReady           bool
+	runtimeTrustSynced     bool
+	runtimeTrustSyncCancel context.CancelFunc
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -962,10 +963,11 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 	}
 }
 
-// HandleRuntimeHostEventLocked implements NodeHooks.
-//
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
+// HandleRuntimeHostEvent implements NodeHooks.
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	switch {
 	case ev.Started != nil:
 		// Make sure the runtime supports all the required features.
@@ -1316,9 +1318,9 @@ func (n *Node) worker() {
 			n.logger.Info("termination requested")
 			return
 		case <-n.commonNode.KeyManagerClient.Initialized():
-			n.commonNode.CrossNode.Lock()
+			n.mu.Lock()
 			n.nudgeAvailabilityLocked(false)
-			n.commonNode.CrossNode.Unlock()
+			n.mu.Unlock()
 		}
 	}()
 

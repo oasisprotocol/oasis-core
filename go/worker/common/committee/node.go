@@ -131,8 +131,8 @@ type NodeHooks interface {
 	// HandleNewDispatchInfo handles the latest block information and the
 	// active runtime descriptor for transaction dispatch.
 	HandleNewDispatchInfo(*runtime.DispatchInfo)
-	// Guarded by CrossNode.
-	HandleRuntimeHostEventLocked(*host.Event)
+	// HandleRuntimeHostEvent handles new runtime host event.
+	HandleRuntimeHostEvent(*host.Event)
 
 	// Initialized returns a channel that will be closed when the worker is initialized and ready
 	// to service requests.
@@ -182,11 +182,9 @@ type Node struct {
 	workersInitialized        uint32
 	runtimeSuspended          uint32
 
-	// Mutable and shared between nodes' workers.
-	// Guarded by .CrossNode.
-	CrossNode          sync.Mutex
-	CurrentBlockRound  uint64
-	CurrentBlockHeight int64
+	mu           sync.Mutex
+	latestRound  uint64
+	latestHeight int64
 
 	committeeRound   uint64
 	lastBlockInfo    *runtime.BlockInfo
@@ -269,14 +267,14 @@ func (n *Node) AddHooks(hooks NodeHooks) {
 
 // GetStatus returns the common committee node status.
 func (n *Node) GetStatus() (*api.Status, error) {
-	n.CrossNode.Lock()
+	n.mu.Lock()
 	status := api.Status{
 		Status:        n.getStatusState(),
-		LatestRound:   n.CurrentBlockRound,
-		LatestHeight:  n.CurrentBlockHeight,
+		LatestRound:   n.latestRound,
+		LatestHeight:  n.latestHeight,
 		SchedulerRank: math.MaxUint64,
 	}
-	n.CrossNode.Unlock()
+	n.mu.Unlock()
 
 	switch activeVersion, err := n.GetHostedRuntime().GetActiveVersion(); err {
 	case nil:
@@ -383,9 +381,6 @@ func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
 }
 
 func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
-
 	n.logger.Debug("got runtime event", "ev", ev)
 
 	switch {
@@ -396,7 +391,7 @@ func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
 	}
 
 	for _, hooks := range n.hooks {
-		hooks.HandleRuntimeHostEventLocked(ev)
+		hooks.HandleRuntimeHostEvent(ev)
 	}
 }
 
@@ -646,10 +641,10 @@ func (n *Node) handleRuntimeBlock(ctx context.Context, blk *roothash.AnnotatedBl
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
 	// Update status of the current block.
-	n.CrossNode.Lock()
-	n.CurrentBlockRound = blk.Block.Header.Round
-	n.CurrentBlockHeight = blk.Height
-	n.CrossNode.Unlock()
+	n.mu.Lock()
+	n.latestRound = blk.Block.Header.Round
+	n.latestHeight = blk.Height
+	n.mu.Unlock()
 
 	// Track how many rounds have failed.
 	if blk.Block.Header.HeaderType == block.RoundFailed {
@@ -742,9 +737,6 @@ func (n *Node) updatePeriodicMetrics() {
 	}
 
 	labels := n.getMetricLabels()
-
-	n.CrossNode.Lock()
-	defer n.CrossNode.Unlock()
 
 	n.logger.Debug("updating periodic worker node metrics")
 

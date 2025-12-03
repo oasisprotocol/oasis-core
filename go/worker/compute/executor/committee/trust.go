@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 )
 
-// startRuntimeTrustSyncLocked asks the runtime to start syncing its light client up to the current
+// startRuntimeTrustSync asks the runtime to start syncing its light client up to the current
 // latest height. If the runtime does not actually use a trust root, this will be a no-op.
 //
 // When syncing is completed, the runtimeTrustSycned flag will be set.
@@ -17,7 +17,7 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 	n.cancelRuntimeTrustSyncLocked() // Cancel any outstanding sync.
 
 	var ctx context.Context
-	ctx, n.runtimeTrustSyncCncl = context.WithCancel(n.ctx)
+	ctx, n.runtimeTrustSyncCancel = context.WithCancel(n.ctx)
 
 	syncOp := func() error {
 		height, err := n.commonNode.Consensus.Core().GetLatestHeight(ctx)
@@ -53,8 +53,8 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 		n.logger.Info("runtime light client sync succeeded")
 
 		// Runtime has successfully synced its light client.
-		n.commonNode.CrossNode.Lock()
-		defer n.commonNode.CrossNode.Unlock()
+		n.mu.Lock()
+		defer n.mu.Unlock()
 
 		n.runtimeTrustSynced = true
 		n.nudgeAvailabilityLocked(true)
@@ -62,9 +62,9 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 }
 
 func (n *Node) cancelRuntimeTrustSyncLocked() {
-	if n.runtimeTrustSyncCncl == nil {
+	if n.runtimeTrustSyncCancel == nil {
 		return
 	}
-	n.runtimeTrustSyncCncl()
-	n.runtimeTrustSyncCncl = nil
+	n.runtimeTrustSyncCancel()
+	n.runtimeTrustSyncCancel = nil
 }

@@ -11,7 +11,9 @@ var _ committee.NodeHooks = (*Node)(nil)
 // HandleNewDispatchInfo implements NodeHooks.
 func (n *Node) HandleNewDispatchInfo(di *runtime.DispatchInfo) {
 	// Update our availability.
+	n.mu.Lock()
 	n.nudgeAvailabilityLocked(false)
+	n.mu.Unlock()
 
 	// Drop if the worker falls behind.
 	select {

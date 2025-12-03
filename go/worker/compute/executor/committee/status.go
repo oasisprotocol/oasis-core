@@ -6,8 +6,8 @@ import (
 
 // GetStatus returns the executor committee node status.
 func (n *Node) GetStatus() (*api.Status, error) {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	var status api.Status
 	switch {

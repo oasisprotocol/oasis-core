@@ -334,10 +334,8 @@ func (w *Worker) HandleNewDispatchInfo(*runtime.DispatchInfo) {
 	// Nothing to do here.
 }
 
-// HandleRuntimeHostEventLocked implements NodeHooks.
-//
-// Guarded by n.commonNode.CrossNode.
-func (w *Worker) HandleRuntimeHostEventLocked(*host.Event) {
+// HandleRuntimeHostEvent implements NodeHooks.
+func (w *Worker) HandleRuntimeHostEvent(*host.Event) {
 	// Nothing to do here.
 }
 
