@@ -3,6 +3,7 @@ package committee
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -169,16 +170,6 @@ func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult,
 func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *component.ID) ([]byte, error) {
 	hrt := n.commonNode.GetHostedRuntime()
 
-	// Fetch the active descriptor so we can get the current message limits.
-	n.commonNode.CrossNode.Lock()
-	dsc := n.commonNode.CurrentDescriptor
-	n.commonNode.CrossNode.Unlock()
-
-	if dsc == nil {
-		return nil, api.ErrNoHostedRuntime
-	}
-	maxMessages := dsc.Executor.MaxMessages
-
 	annBlk, err := n.commonNode.Runtime.History().GetAnnotatedBlock(ctx, round)
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
@@ -202,6 +193,8 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		return nil, fmt.Errorf("component '%s' not found", comp)
 	}
 	dst := host.NewRichRuntime(rt)
+
+	maxMessages := uint32(math.MaxUint32)
 
 	return dst.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
 }
