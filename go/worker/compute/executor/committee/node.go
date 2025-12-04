@@ -356,22 +356,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		return
 	}
 
-	// Fetch incoming message queue metadata to see if there's any queued messages.
-	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(ctx, &roothash.RuntimeRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		// We make the check at the latest height even though we will later only look at the last
-		// height. This will make sure that any messages eventually get processed even if there are
-		// no other runtime transactions being sent. In the worst case this will result in an empty
-		// block being generated.
-		Height: consensus.HeightLatest,
-	})
-	if err != nil {
-		n.logger.Error("failed to fetch incoming runtime message queue metadata",
-			"err", err,
-		)
-		return
-	}
-
 	// Check what the runtime supports.
 	rtInfo, err := n.rt.GetInfo(ctx)
 	if err != nil {
@@ -395,7 +379,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		// We have some transactions, schedule batch.
 	case len(n.roundResults.Messages) > 0:
 		// We have runtime message results (and batch timeout expired), schedule batch.
-	case inMsgMeta.Size > 0:
+	case len(n.dispatchInfo.BlockInfo.IncomingMessages) > 0:
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
 	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
