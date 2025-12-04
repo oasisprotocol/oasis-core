@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	cometbftDB "github.com/cometbft/cometbft-db"
 	cmtCfg "github.com/cometbft/cometbft/config"
 	"github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
@@ -61,7 +62,7 @@ func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
 	return blockstore, nil
 }
 
-func openConsensusStatestore(dataDir string) (state.Store, error) {
+func openConsensusStateDB(dataDir string) (cometbftDB.DB, error) {
 	cmtConfig := cmtCfg.DefaultConfig()
 	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
 
@@ -69,7 +70,11 @@ func openConsensusStatestore(dataDir string) (state.Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain db provider: %w", err)
 	}
-	stateDB, err := cmtDB.OpenStateDB(dbProvider, cmtConfig)
+	return cmtDB.OpenStateDB(dbProvider, cmtConfig)
+}
+
+func openConsensusStatestore(dataDir string) (state.Store, error) {
+	stateDB, err := openConsensusStateDB(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open state db: %w", err)
 	}
