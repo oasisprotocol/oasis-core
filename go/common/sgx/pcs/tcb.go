@@ -270,9 +270,14 @@ func (ti *TCBInfo) validate(teeType TeeType, ts time.Time, policy *QuotePolicy) 
 		return fmt.Errorf("pcs/tcb: invalid TCB evaluation data number")
 	}
 
-	// Validate FMSPC not blacklisted.
+	// Validate FMSPC is whitelisted.
+	if len(policy.FMSPCWhitelist) > 0 && !slices.Contains(policy.FMSPCWhitelist, ti.FMSPC) {
+		return fmt.Errorf("pcs/tcb: FMSPC is not whitelisted")
+	}
+
+	// Validate FMSPC is not blacklisted.
 	if slices.Contains(policy.FMSPCBlacklist, ti.FMSPC) {
-		return fmt.Errorf("pcs/tcb: blacklisted FMSPC")
+		return fmt.Errorf("pcs/tcb: FMSPC is blacklisted")
 	}
 
 	return nil

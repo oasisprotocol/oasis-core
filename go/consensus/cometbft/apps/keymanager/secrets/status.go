@@ -32,6 +32,7 @@ func generateStatus( // nolint: gocyclo
 	nodes []*node.Node,
 	params *registry.ConsensusParameters,
 	epoch beacon.EpochTime,
+	isFeatureVersion242 bool,
 ) *secrets.Status {
 	status := &secrets.Status{
 		ID:            kmrt.ID,
@@ -111,7 +112,7 @@ nextNode:
 				continue nextNode
 			}
 
-			initResponse, err := VerifyExtraInfo(ctx.Logger(), n.ID, kmrt, nodeRt, ts, height, params)
+			initResponse, err := VerifyExtraInfo(ctx.Logger(), n.ID, kmrt, nodeRt, ts, height, params, isFeatureVersion242)
 			if err != nil {
 				ctx.Logger().Error("failed to validate ExtraInfo", append(vars, "err", err)...)
 				continue nextNode
@@ -231,8 +232,9 @@ func VerifyExtraInfo(
 	ts time.Time,
 	height uint64,
 	params *registry.ConsensusParameters,
+	isFeatureVersion242 bool,
 ) (*secrets.InitResponse, error) {
-	if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height); err != nil {
+	if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height, isFeatureVersion242); err != nil {
 		return nil, err
 	}
 	if nodeRt.ExtraInfo == nil {

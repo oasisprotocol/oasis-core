@@ -10,8 +10,10 @@ import (
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (ext *secretsExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) error {
@@ -24,6 +26,11 @@ func (ext *secretsExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime)
 	params, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
+	}
+
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return err
 	}
 
 	// Recalculate all the key manager statuses.
@@ -64,7 +71,7 @@ func (ext *secretsExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime)
 			return fmt.Errorf("failed to query key manager master secret: %w", err)
 		}
 
-		newStatus := generateStatus(ctx, rt, oldStatus, secret, nodes, params, epoch)
+		newStatus := generateStatus(ctx, rt, oldStatus, secret, nodes, params, epoch, isFeatureVersion242)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,

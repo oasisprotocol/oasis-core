@@ -11,8 +11,10 @@ import (
 // Consensus242 is the name of the upgrade that enables features introduced in Oasis Core 24.2.
 //
 // This upgrade includes:
-//   - The `MayQuery“ field in the CHURP SGX policy, which defines which enclave identities
+//   - The `MayQuery` field in the CHURP SGX policy, which defines which enclave identities
 //     are allowed to query runtime key shares.
+//   - The `FMSPCWhitelist` field in the quote policy, which defines which processor packages
+//     and platform instances are allowed.
 //   - An updated key manager policy update transaction that applies a new policy at the epoch
 //     boundary.
 const Consensus242 = "consensus242"
