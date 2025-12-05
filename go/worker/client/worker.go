@@ -148,7 +148,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		// leave it like that before initialization starts, so the registration
 		// is blocked until the runtime finishes initializing.
 		// The availability of the role provider is changed in
-		// HandleRuntimeHostEventLocked in worker/client/committee/node.go.
+		// HandleRuntimeHostEvent in worker/client/committee/node.go.
 	default:
 	}
 

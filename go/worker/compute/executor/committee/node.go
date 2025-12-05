@@ -50,9 +50,10 @@ const executeBatchTimeoutFactor = 3
 
 // Node is a committee node.
 type Node struct {
-	runtimeReady         bool
-	runtimeTrustSynced   bool
-	runtimeTrustSyncCncl context.CancelFunc
+	mu                     sync.Mutex
+	runtimeReady           bool
+	runtimeTrustSynced     bool
+	runtimeTrustSyncCancel context.CancelFunc
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -77,7 +78,7 @@ type Node struct {
 	proposals        *proposalQueue
 	commitPool       *commitment.Pool
 
-	blockInfoCh      chan *runtime.BlockInfo
+	dispatchInfoCh   chan *runtime.DispatchInfo
 	processedBatchCh chan *processedBatch
 	reselectCh       chan struct{}
 	missingTxCh      chan [][]byte
@@ -90,7 +91,7 @@ type Node struct {
 
 	rt            host.RichRuntime
 	committeeInfo *committee.CommitteeInfo
-	blockInfo     *runtime.BlockInfo
+	dispatchInfo  *runtime.DispatchInfo
 	rtState       *roothash.RuntimeState
 	roundResults  *roothash.RoundResults
 	discrepancy   *discrepancyEvent
@@ -343,31 +344,22 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 
 	// If the next block will be an epoch transition block, do not propose anything as it will be
 	// reverted anyway (since the committee will change).
-	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, n.blockInfo.ConsensusBlock.Height)
+	height, err := n.commonNode.Consensus.Core().GetLatestHeight(ctx)
+	if err != nil {
+		n.logger.Error("failed to fetch latest height",
+			"err", err,
+		)
+		return
+	}
+	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, height)
 	if err != nil {
 		n.logger.Error("failed to fetch future epoch state",
 			"err", err,
 		)
 		return
 	}
-	if epochState != nil && epochState.Height == n.blockInfo.ConsensusBlock.Height+1 {
+	if epochState != nil && epochState.Height == height+1 {
 		n.logger.Debug("not scheduling, next consensus block is an epoch transition")
-		return
-	}
-
-	// Fetch incoming message queue metadata to see if there's any queued messages.
-	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(ctx, &roothash.RuntimeRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		// We make the check at the latest height even though we will later only look at the last
-		// height. This will make sure that any messages eventually get processed even if there are
-		// no other runtime transactions being sent. In the worst case this will result in an empty
-		// block being generated.
-		Height: consensus.HeightLatest,
-	})
-	if err != nil {
-		n.logger.Error("failed to fetch incoming runtime message queue metadata",
-			"err", err,
-		)
 		return
 	}
 
@@ -394,7 +386,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		// We have some transactions, schedule batch.
 	case len(n.roundResults.Messages) > 0:
 		// We have runtime message results (and batch timeout expired), schedule batch.
-	case inMsgMeta.Size > 0:
+	case len(n.dispatchInfo.BlockInfo.IncomingMessages) > 0:
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
 	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
@@ -460,10 +452,10 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		ctx,
 		n.rt,
 		protocol.ExecutionModeSchedule,
-		n.blockInfo.Epoch,
-		n.blockInfo.ConsensusBlock,
-		n.blockInfo.RuntimeBlock,
-		n.blockInfo.IncomingMessages,
+		n.dispatchInfo.BlockInfo.Epoch,
+		n.dispatchInfo.BlockInfo.ConsensusBlock,
+		n.dispatchInfo.BlockInfo.RuntimeBlock,
+		n.dispatchInfo.BlockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		hash.Hash{}, // IORoot is ignored as it is yet to be determined.
@@ -487,8 +479,8 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 	proposal := commitment.Proposal{
 		NodeID: n.commonNode.Identity.NodeSigner.Public(),
 		Header: commitment.ProposalHeader{
-			Round:        n.blockInfo.RuntimeBlock.Header.Round + 1,
-			PreviousHash: n.blockInfo.RuntimeBlock.Header.EncodedHash(),
+			Round:        n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1,
+			PreviousHash: n.dispatchInfo.BlockInfo.RuntimeBlock.Header.EncodedHash(),
 			BatchHash:    rsp.TxInputRoot,
 		},
 		Batch: rsp.TxHashes,
@@ -607,10 +599,10 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		ctx,
 		n.rt,
 		protocol.ExecutionModeExecute,
-		n.blockInfo.Epoch,
-		n.blockInfo.ConsensusBlock,
-		n.blockInfo.RuntimeBlock,
-		n.blockInfo.IncomingMessages,
+		n.dispatchInfo.BlockInfo.Epoch,
+		n.dispatchInfo.BlockInfo.ConsensusBlock,
+		n.dispatchInfo.BlockInfo.RuntimeBlock,
+		n.dispatchInfo.BlockInfo.IncomingMessages,
 		n.rtState,
 		n.roundResults,
 		proposal.Header.BatchHash,
@@ -739,10 +731,10 @@ func (n *Node) proposeBatch(
 	// Submit commitment.
 	// Make sure we are still in the right state/round.
 	state, ok := n.state.(StateProcessingBatch)
-	if !ok || lastHeader.Round != n.blockInfo.RuntimeBlock.Header.Round {
+	if !ok || lastHeader.Round != n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round {
 		n.logger.Error("new state or round since started proposing batch",
 			"state", state,
-			"round", n.blockInfo.RuntimeBlock.Header.Round,
+			"round", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round,
 			"expected_round", lastHeader.Round,
 		)
 		return
@@ -861,8 +853,8 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 
 	// Submit failure if the batch is invalid.
 	// The scheduler is violating the protocol and should be punished.
-	maxBatchSize := n.blockInfo.ActiveDescriptor.TxnScheduler.MaxBatchSize
-	maxBytes := n.blockInfo.ActiveDescriptor.TxnScheduler.MaxBatchSizeBytes
+	maxBatchSize := n.dispatchInfo.ActiveDescriptor.TxnScheduler.MaxBatchSize
+	maxBytes := n.dispatchInfo.ActiveDescriptor.TxnScheduler.MaxBatchSizeBytes
 	if batchSize > maxBatchSize || maxBytes > 0 && bytes > maxBytes {
 		n.transitionStateToProcessingFailure(proposal, rank, bytes, maxBytes, batchSize, maxBatchSize)
 		return
@@ -912,7 +904,7 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 	// TODO: Handle proposal equivocation.
 
 	// Maybe process if we have the correct block.
-	currentHash := n.blockInfo.RuntimeBlock.Header.EncodedHash()
+	currentHash := n.dispatchInfo.BlockInfo.RuntimeBlock.Header.EncodedHash()
 	if !currentHash.Equal(&proposal.Header.PreviousHash) {
 		return
 	}
@@ -962,7 +954,11 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 	}
 }
 
-func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
+// HandleRuntimeHostEvent implements NodeHooks.
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	switch {
 	case ev.Started != nil:
 		// Make sure the runtime supports all the required features.
@@ -1023,7 +1019,7 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 		)
 		return
 	}
-	lastHeader := n.blockInfo.RuntimeBlock.Header
+	lastHeader := n.dispatchInfo.BlockInfo.RuntimeBlock.Header
 
 	// A nil batch indicates that scheduling or processing has failed.
 	// Return to the initial state and retry.
@@ -1131,7 +1127,7 @@ func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitm
 
 func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorCommitment, observed bool) {
 	// Filter for this round only.
-	round := n.blockInfo.RuntimeBlock.Header.Round + 1
+	round := n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1
 	if ec.Header.Header.Round != round {
 		n.logger.Debug("ignoring bad executor commitment, not for this round",
 			"round", round,
@@ -1153,7 +1149,7 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 
 	if observed {
 		// Verify the commitment.
-		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, n.blockInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
+		if err := commitment.VerifyExecutorCommitment(ctx, n.dispatchInfo.BlockInfo.RuntimeBlock, n.dispatchInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
 			n.logger.Debug("ignoring bad executor commitment, verification failed",
 				"err", err,
 				"node_id", ec.NodeID,
@@ -1185,18 +1181,18 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 
 func (n *Node) finalizePreviousRound() {
 	n.logger.Info("considering the round finalized",
-		"round", n.blockInfo.RuntimeBlock.Header.Round,
-		"header_hash", n.blockInfo.RuntimeBlock.Header.EncodedHash(),
-		"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+		"round", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round,
+		"header_hash", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.EncodedHash(),
+		"header_type", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType,
 	)
 
-	if n.proposedBatch != nil && n.blockInfo.RuntimeBlock.Header.HeaderType == block.Normal {
-		switch n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
+	if n.proposedBatch != nil && n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType == block.Normal {
+		switch n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
 		case false:
 			n.logger.Error("proposed batch was not finalized",
-				"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+				"header_io_root", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot,
 				"proposed_io_root", n.proposedBatch.proposedIORoot,
-				"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+				"header_type", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType,
 				"batch_size", len(n.proposedBatch.txHashes),
 			)
 		case true:
@@ -1205,7 +1201,7 @@ func (n *Node) finalizePreviousRound() {
 
 			n.logger.Debug("removing processed batch from queue",
 				"batch_size", len(n.proposedBatch.txHashes),
-				"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+				"io_root", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot,
 			)
 
 			// Remove processed transactions from queue.
@@ -1313,15 +1309,15 @@ func (n *Node) worker() {
 			n.logger.Info("termination requested")
 			return
 		case <-n.commonNode.KeyManagerClient.Initialized():
-			n.commonNode.CrossNode.Lock()
+			n.mu.Lock()
 			n.nudgeAvailabilityLocked(false)
-			n.commonNode.CrossNode.Unlock()
+			n.mu.Unlock()
 		}
 	}()
 
 	// Restart the round worker every time a runtime block is finalized.
 	for {
-		var bi *runtime.BlockInfo
+		var di *runtime.DispatchInfo
 
 		func() {
 			var wg sync.WaitGroup
@@ -1337,12 +1333,12 @@ func (n *Node) worker() {
 
 			select {
 			case <-n.stopCh:
-			case bi = <-n.blockInfoCh:
+			case di = <-n.dispatchInfoCh:
 			}
 		}()
 
-		// Round worker stopped, so it is safe to update the last block info.
-		n.blockInfo = bi
+		// Round worker stopped, so it is safe to update the last dispatch info.
+		n.dispatchInfo = di
 
 		select {
 		case <-n.stopCh:
@@ -1354,10 +1350,10 @@ func (n *Node) worker() {
 }
 
 func (n *Node) roundWorker(ctx context.Context) {
-	if n.blockInfo == nil {
+	if n.dispatchInfo == nil {
 		return
 	}
-	round := n.blockInfo.RuntimeBlock.Header.Round + 1
+	round := n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1
 
 	n.logger.Debug("round worker started",
 		"round", round,
@@ -1399,7 +1395,7 @@ func (n *Node) roundWorker(ctx context.Context) {
 
 	// Fetch state and round results upfront.
 	var err error
-	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, n.blockInfo.ConsensusBlock.Height)
+	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, n.dispatchInfo.BlockInfo.ConsensusBlock.Height)
 	if err != nil {
 		n.logger.Debug("skipping round, failed to fetch state and round results",
 			"err", err,
@@ -1409,7 +1405,7 @@ func (n *Node) roundWorker(ctx context.Context) {
 
 	// Prepare flush timer for the primary transaction scheduler.
 	flush := false
-	flushTimer := time.NewTimer(n.blockInfo.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
+	flushTimer := time.NewTimer(n.dispatchInfo.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
 	defer flushTimer.Stop()
 
 	// Compute node's rank when scheduling transactions.
@@ -1538,7 +1534,7 @@ func NewNode(
 		state:            StateWaitingForBatch{},
 		txSync:           txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
 		stateTransitions: pubsub.NewBroker(false),
-		blockInfoCh:      make(chan *runtime.BlockInfo, 1),
+		dispatchInfoCh:   make(chan *runtime.DispatchInfo, 1),
 		processedBatchCh: make(chan *processedBatch, 1),
 		reselectCh:       make(chan struct{}, 1),
 		missingTxCh:      make(chan [][]byte, 1),

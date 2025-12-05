@@ -329,15 +329,13 @@ func (w *Worker) GetLocalStorage() storageApi.LocalBackend {
 	return w.localStorage
 }
 
-// NodeHooks implementation.
-
-// HandleNewBlockLocked is guarded by CrossNode.
-func (w *Worker) HandleNewBlockLocked(*runtime.BlockInfo) {
+// HandleNewDispatchInfo implements NodeHooks.
+func (w *Worker) HandleNewDispatchInfo(*runtime.DispatchInfo) {
 	// Nothing to do here.
 }
 
-// HandleRuntimeHostEventLocked is guarded by CrossNode.
-func (w *Worker) HandleRuntimeHostEventLocked(*host.Event) {
+// HandleRuntimeHostEvent implements NodeHooks.
+func (w *Worker) HandleRuntimeHostEvent(*host.Event) {
 	// Nothing to do here.
 }
 
