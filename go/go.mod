@@ -33,7 +33,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.6
 	github.com/hpcloud/tail v1.0.0
 	github.com/ipfs/go-log/v2 v2.6.0
-	github.com/libp2p/go-libp2p v0.44.0
+	github.com/libp2p/go-libp2p v0.46.0
 	github.com/libp2p/go-libp2p-pubsub v0.15.0
 	github.com/mdlayher/vsock v1.2.1
 	github.com/multiformats/go-multiaddr v0.16.0
@@ -50,7 +50,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tidwall/btree v1.6.0
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -83,7 +83,6 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/color v1.14.1 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
-	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-kit/kit v0.13.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
@@ -174,8 +173,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.55.0 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/quic-go/quic-go v0.57.1 // indirect
 	github.com/quic-go/webtransport-go v0.9.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rs/cors v1.11.1 // indirect
