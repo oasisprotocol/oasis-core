@@ -26,12 +26,14 @@ import (
 var errRuntimeNotReady = errors.New("runtime is not yet ready")
 
 const (
-	runtimeInitTimeout         = 1 * time.Second
-	runtimeExtendedInitTimeout = 120 * time.Second
-	runtimeInterruptTimeout    = 1 * time.Second
+	runtimeInitTimeout         = time.Second
+	runtimeExtendedInitTimeout = 2 * time.Minute
+	runtimeInterruptTimeout    = time.Second
 	stopTickerTimeout          = 15 * time.Minute
 	watchdogInterval           = 15 * time.Second
 	watchdogPingTimeout        = 5 * time.Second
+	restartMaxInterval         = time.Hour
+	restartMaxElapsedTime      = 24 * time.Hour
 
 	ctrlChannelBufferSize = 16
 )
@@ -473,7 +475,10 @@ func (h *sandboxHost) manager(ctx context.Context) {
 				// Initialize a ticker for restarting the process. We use a separate channel
 				// to restart the process immediately on the first run, as we don't want to wait
 				// for the first tick.
-				ticker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
+				ticker = backoff.NewTicker(backoff.NewExponentialBackOff(
+					backoff.WithMaxInterval(restartMaxInterval),
+					backoff.WithMaxElapsedTime(restartMaxElapsedTime),
+				))
 				firstTickCh <- struct{}{}
 				attempt = 0
 			}
@@ -483,7 +488,11 @@ func (h *sandboxHost) manager(ctx context.Context) {
 				h.logger.Warn("termination requested")
 				return
 			case <-firstTickCh:
-			case <-ticker.C:
+			case _, ok := <-ticker.C:
+				if !ok {
+					h.logger.Warn("restart ticker stopped")
+					return
+				}
 			}
 
 			attempt++
@@ -494,6 +503,7 @@ func (h *sandboxHost) manager(ctx context.Context) {
 			if err := h.startProcess(ctx); err != nil {
 				h.logger.Error("failed to start runtime",
 					"err", err,
+					"attempt", attempt,
 				)
 
 				// Notify subscribers that a runtime has failed to start.
