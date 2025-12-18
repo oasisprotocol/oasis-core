@@ -91,13 +91,13 @@ func (s *StoreTestSuite) TestRemove() {
 	require := require.New(s.T())
 
 	// Remove few.
-	s.store.Remove("ns-1", s.infos[0].ID)
-	s.store.Remove("ns-2", s.infos[3].ID)
+	_ = s.store.Remove("ns-1", s.infos[0].ID)
+	_ = s.store.Remove("ns-2", s.infos[3].ID)
 
 	// Remove non-existing.
-	s.store.Remove("ns-1", s.infos[4].ID)
-	s.store.Remove("ns-404", s.infos[0].ID)
-	s.store.Remove("ns-404", s.infos[4].ID)
+	_ = s.store.Remove("ns-1", s.infos[4].ID)
+	_ = s.store.Remove("ns-404", s.infos[0].ID)
+	_ = s.store.Remove("ns-404", s.infos[4].ID)
 
 	require.Equal(2, s.store.size("ns-1"))
 	require.Equal(1, s.store.size("ns-2"))
@@ -150,7 +150,7 @@ func (s *StoreTestSuite) TestStoreOptions() {
 		require.Error(err)
 
 		// But if we remove one we can add another one.
-		store.Remove("ns-2", s.infos[1].ID)
+		_ = store.Remove("ns-2", s.infos[1].ID)
 		_, err = store.Add("ns-3", s.infos[2])
 		require.NoError(err)
 	})
@@ -173,7 +173,7 @@ func (s *StoreTestSuite) TestStoreOptions() {
 		require.Error(err)
 
 		// Remove one and test if we can add again.
-		store.Remove("ns-1", s.infos[0].ID)
+		_ = store.Remove("ns-1", s.infos[0].ID)
 		_, err = store.Add("ns-1", s.infos[1])
 		require.NoError(err)
 	})

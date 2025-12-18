@@ -308,6 +308,8 @@ func (n *Node) Start() error {
 		for _, worker := range n.net.computeWorkers {
 			n.Config.Consensus.Providers = append(n.Config.Consensus.Providers, "unix:"+worker.SocketPath())
 		}
+	case config.ModeSeed:
+		n.Config.P2P.Discovery.Bootstrap.AllowPrivateIPs = true
 	}
 
 	args.extraArgs(n.extraArgs)
