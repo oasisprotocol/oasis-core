@@ -17,7 +17,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	p2pProtocol "github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -99,7 +98,8 @@ type Node struct {
 	dispatchInfoCh   chan struct{}
 	activeDescriptor *registry.Runtime
 
-	logger *logging.Logger
+	logger         *logging.Logger
+	metricsEnabled bool
 }
 
 func (n *Node) getStatusState() api.StatusState {
@@ -136,7 +136,7 @@ func (n *Node) Name() string {
 // Start starts the service.
 func (n *Node) Start() error {
 	go n.worker()
-	if cmmetrics.Enabled() {
+	if n.metricsEnabled {
 		go n.metricsWorker()
 	}
 
@@ -642,6 +642,7 @@ func NewNode(
 	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
 	txPoolCfg tpConfig.Config,
+	metricsEnabled bool,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -677,6 +678,7 @@ func NewNode(
 		initCh:          make(chan struct{}),
 		dispatchInfoCh:  make(chan struct{}, 1),
 		logger:          logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		metricsEnabled:  metricsEnabled,
 	}
 
 	// Prepare the key manager client wrapper.

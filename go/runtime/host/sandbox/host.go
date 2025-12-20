@@ -278,7 +278,7 @@ func (h *sandboxHost) startProcess(ctx context.Context) (err error) {
 		"pid", p.GetPID(),
 	)
 
-	pc, err := protocol.NewConnection(h.logger, h.id, h.rtCfg.MessageHandler)
+	pc, err := protocol.NewConnection(h.logger, h.id, h.rtCfg.MessageHandler, h.cfg.MetricsEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to create connection: %w", err)
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -147,7 +148,10 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 
 	round := uint64(3)
 	isTxScheduler := viper.GetBool(CfgPrimarySchedulerExpected)
+	// For every command where applicable you will have to parse yaml config??
+	cfg := &config.GlobalConfig
 	b, err := initializeAndRegisterByzantineNode(
+		cfg,
 		runtimeID,
 		node.RoleComputeWorker,
 		scheduler.RoleWorker,
