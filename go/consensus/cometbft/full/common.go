@@ -523,19 +523,6 @@ func (n *commonNode) heightToCometBFTHeight(height int64) (int64, error) {
 	return height, nil
 }
 
-// Implements consensusAPI.Backend.
-func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	acct, err := n.Staking().Account(ctx, &stakingAPI.OwnerQuery{
-		Height: req.Height,
-		Owner:  req.AccountAddress,
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return acct.General.Nonce, nil
-}
-
 // GetCometBFTBlock returns the CometBFT block at the specified height.
 func (n *commonNode) GetCometBFTBlock(ctx context.Context, height int64) (*cmttypes.Block, error) {
 	if err := n.ensureStarted(ctx); err != nil {
