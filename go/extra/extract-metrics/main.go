@@ -65,8 +65,9 @@ func markdownTable(metrics map[string]Metric) string {
 		baseDir = filepath.Dir(markdownTplFile)
 	}
 
-	mdTable := "Name | Type | Description | Labels | Package\n"
-	mdTable += "-----|------|-------------|--------|--------\n"
+	var mdTable strings.Builder
+	mdTable.WriteString("Name | Type | Description | Labels | Package\n")
+	mdTable.WriteString("-----|------|-------------|--------|--------\n")
 	for _, k := range ordKeys {
 		m := metrics[k]
 		pkg, _ := filepath.Rel(codebasePath, m.Filename)
@@ -78,11 +79,11 @@ func markdownTable(metrics map[string]Metric) string {
 		desc := html.EscapeString(m.Help)
 		labels := strings.Join(m.Labels, ", ")
 
-		mdTable += fmt.Sprintf("%s | %s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
-			labels, pkg, fileURL)
+		mdTable.WriteString(fmt.Sprintf("%s | %s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
+			labels, pkg, fileURL))
 	}
 
-	return mdTable
+	return mdTable.String()
 }
 
 func printMarkdown(metrics map[string]Metric) {
