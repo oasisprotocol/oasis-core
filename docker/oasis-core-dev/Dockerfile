@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Package versions.
 ARG GO_VERSION=1.25.5
@@ -25,7 +25,7 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     pkg-config software-properties-common \
     python3 python3-pyelftools \
     # for gitlint
-    python3-pip \
+    python3-venv python3-pip \
     # for rust openssl
     libssl-dev libcurl4-openssl-dev \
     # for benchmarks
@@ -33,9 +33,14 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     # for seccomp Go bindings support
     libseccomp-dev \
     bubblewrap && \
-    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
-    # for linting Git commits
-    pip install gitlint
+    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
+
+# Create an isolated Python virtual environment.
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# Install gitlint inside the virtual environment for linting Git commits.
+RUN pip install gitlint
 
 ENV HOME="/root"
 ENV GOPATH="/go"
