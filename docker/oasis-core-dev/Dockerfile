@@ -20,7 +20,7 @@ ARG LEGACY_GO_VERSION=1.20.2
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    build-essential git gdb cmake clang-11 gcc-multilib \
+    build-essential git gdb cmake clang-18 gcc-multilib \
     curl wget unzip \
     pkg-config software-properties-common \
     python3 python3-pyelftools \
