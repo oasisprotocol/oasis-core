@@ -111,14 +111,20 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 		return fmt.Errorf("unsupported SGX constraints version: %d", sc.V)
 	}
 
-	// Check for TDX enablement.
-	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
-		return fmt.Errorf("TDX policy not supported")
+	validatePolicy := func(policy *quote.Policy) error {
+		// Check for TDX enablement.
+		if !cfg.SGX.TDX && policy.PCS != nil && policy.PCS.TDX != nil {
+			return fmt.Errorf("TDX policy not supported")
+		}
+		if err := policy.Validate(isFeatureVersion242); err != nil {
+			return fmt.Errorf("invalid policy: %w", err)
+		}
+		return nil
 	}
 
-	// Check that policy is compliant with the current feature version.
+	// Check default policy.
 	if sc.Policy != nil {
-		if err := sc.Policy.Validate(isFeatureVersion242); err != nil {
+		if err := validatePolicy(sc.Policy); err != nil {
 			return fmt.Errorf("invalid policy: %w", err)
 		}
 	}
