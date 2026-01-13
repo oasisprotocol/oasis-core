@@ -11,7 +11,7 @@ use crate::{
         sgx::Quote, version::Version,
     },
     consensus::{
-        registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
+        registry::{EndorsedCapabilityTEE, RolesMask, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
         verifier::Verifier,
     },
     host::Host,
@@ -115,7 +115,8 @@ impl Handler {
             let runtime_id = self.runtime_id;
             tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.
-                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, Some(version))
+                PolicyVerifier::new(consensus_verifier)
+                    .effective_quote_policy(&runtime_id, Some(version), RolesMask::ROLE_EMPTY)
             })?
         };
 

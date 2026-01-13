@@ -245,6 +245,7 @@ impl Session {
             return Ok(None);
         }
 
+        // TODO: Ensure correctly propagated per-role policy is in the session config.
         let policy = self
             .cfg
             .policy
