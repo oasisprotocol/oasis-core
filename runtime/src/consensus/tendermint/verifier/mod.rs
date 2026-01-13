@@ -707,7 +707,7 @@ impl Verifier {
             "trust_root_chain_context" => ?trust_root.chain_context,
         );
 
-        let host_node_id =
+        let (host_node_id, _) =
             block_on(self.protocol.identity()).expect("host should provide a node identity");
 
         let mut cache = Cache::new(host_node_id);
