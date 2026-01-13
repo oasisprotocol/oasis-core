@@ -40,7 +40,7 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.25.3).
+* [Go] (at least version 1.25.5).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -52,18 +52,18 @@ Core:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.25.3, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.25.5, with:
 
     ```
-    go install golang.org/dl/go1.25.3@latest
-    go1.25.3 download
+    go install golang.org/dl/go1.25.5@latest
+    go1.25.5 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.25.3
+    export OASIS_GO=go1.25.5
     ```
 
 * [Rust].
@@ -151,7 +151,7 @@ Core:
   ```
   curl -sSfL \
   https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v2.6.0
+   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v2.8.0
   ```
 
 * (**OPTIONAL**) [protoc-gen-go].

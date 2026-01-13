@@ -1,5 +1,7 @@
 module github.com/oasisprotocol/oasis-core/go
 
+go 1.25.5
+
 replace (
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.16-oasis1
 
@@ -205,5 +207,3 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
-
-go 1.25.3
