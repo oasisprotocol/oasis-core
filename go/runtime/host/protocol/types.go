@@ -659,4 +659,6 @@ type HostIdentityRequest struct{}
 type HostIdentityResponse struct {
 	// NodeID is the host node identifier.
 	NodeID signature.PublicKey `json:"node_id"`
+	// Roles is the host node role mask.
+	Roles node.RolesMask `json:"roles,omitempty"`
 }

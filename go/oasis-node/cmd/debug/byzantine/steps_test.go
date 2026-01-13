@@ -7,15 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
 
 func TestFakeCapabilitySGX(t *testing.T) {
-	var nodeID signature.PublicKey
-	_, fakeCapabilitiesSGX, err := initFakeCapabilitiesSGX(nodeID)
+	var n node.Node
+	_, fakeCapabilitiesSGX, err := initFakeCapabilitiesSGX(n.ID)
 	require.NoError(t, err, "initFakeCapabilitiesSGX failed")
 
 	cs := cbor.Marshal(node.SGXConstraints{
@@ -31,5 +30,5 @@ func TestFakeCapabilitySGX(t *testing.T) {
 
 	ias.SetSkipVerify()
 	ias.SetAllowDebugEnclaves()
-	require.NoError(t, fakeCapabilitiesSGX.TEE.Verify(&teeCfg, time.Now(), 1, cs, nodeID, true), "fakeCapabilitiesSGX not valid")
+	require.NoError(t, fakeCapabilitiesSGX.TEE.Verify(&teeCfg, time.Now(), 1, cs, &n, true), "fakeCapabilitiesSGX not valid")
 }
