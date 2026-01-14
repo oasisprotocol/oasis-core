@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Package versions.
 ARG GO_VERSION=1.25.5
@@ -10,7 +10,7 @@ ARG GOLANGCILINT_VERSION=2.8.0
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
 ARG GOFUMPT_VERSION=v0.8.0
 ARG GOIMPORTS_VERSION=v0.36.0
-ARG RUST_NIGHTLY_VERSION=2025-06-23
+ARG RUST_NIGHTLY_VERSION=2026-01-01
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
@@ -20,12 +20,12 @@ ARG LEGACY_GO_VERSION=1.20.2
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    build-essential git gdb cmake clang-11 gcc-multilib \
+    build-essential git gdb cmake clang-18 gcc-multilib \
     curl wget unzip \
     pkg-config software-properties-common \
     python3 python3-pyelftools \
     # for gitlint
-    python3-pip \
+    python3-venv python3-pip \
     # for rust openssl
     libssl-dev libcurl4-openssl-dev \
     # for benchmarks
@@ -33,9 +33,14 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     # for seccomp Go bindings support
     libseccomp-dev \
     bubblewrap && \
-    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
-    # for linting Git commits
-    pip install gitlint
+    apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/*
+
+# Create an isolated Python virtual environment.
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# Install gitlint inside the virtual environment for linting Git commits.
+RUN pip install gitlint
 
 ENV HOME="/root"
 ENV GOPATH="/go"

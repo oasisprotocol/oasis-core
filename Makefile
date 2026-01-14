@@ -16,11 +16,12 @@ build-tools:
 	@$(ECHO) "$(MAGENTA)*** Building Rust tools...$(OFF)"
 	@CARGO_TARGET_DIR=target/default cargo install --locked --path tools
 
-# NOTE: We explictly set CARGO_TARGET_DIR as a workaround to avoid
+# NOTE: We explicitly set CARGO_TARGET_DIR as a workaround to avoid
 #       recompilations in newer cargo nightly builds.
 #       See https://github.com/oasisprotocol/oasis-core/pull/2673 for details.
 build-runtimes:
-	@CARGO_TARGET_ROOT=$(shell pwd)/target && for e in $(RUNTIMES); do \
+	@export CC_x86_64_fortanix_unknown_sgx=clang-18 && \
+	CARGO_TARGET_ROOT=$(shell pwd)/target && for e in $(RUNTIMES); do \
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \
 		(cd $$e && \
 			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo build --release --target x86_64-fortanix-unknown-sgx && \
