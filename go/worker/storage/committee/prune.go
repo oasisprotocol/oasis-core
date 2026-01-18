@@ -20,6 +20,9 @@ type pruneHandler struct {
 // Implements runtime.history.PruneHandler.
 func (p *pruneHandler) CanPruneRuntime(rounds []uint64) error {
 	lastSycnedRound, _, _ := p.worker.GetLastSynced()
+	if lastSycnedRound == defaultUndefinedRound {
+		return fmt.Errorf("worker/storage: tried to prune past last synced round (empty state db)")
+	}
 
 	for _, round := range rounds {
 		if round >= lastSycnedRound {
