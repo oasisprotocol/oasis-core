@@ -762,6 +762,14 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	w.status = api.StatusStarting
 	w.statusLock.Unlock()
 
+	var fetchPool *workerpool.Pool
+	defer func() {
+		if fetchPool == nil {
+			return
+		}
+		fetchPool.Stop()
+	}()
+
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -1033,9 +1041,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	syncingRounds := make(map[uint64]*inFlight)
 	summaryCache := make(map[uint64]*blockSummary)
 
-	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
+	fetchPool = workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
 	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
-	defer fetchPool.Stop()
 
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
