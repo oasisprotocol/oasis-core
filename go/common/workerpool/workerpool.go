@@ -81,7 +81,11 @@ func (p *Pool) Stop() {
 		close(p.stopCh)
 	})
 
-	for range p.jobCh.Out() { //nolint:revive
+	for item := range p.jobCh.Out() { //nolint:revive
+		job := item.(*jobDescriptor)
+		if job.completeCh != nil {
+			close(job.completeCh)
+		}
 		// Clear the channel to close all go routines and prevent memory leaks.
 	}
 }
@@ -92,7 +96,7 @@ func (p *Pool) Quit() <-chan struct{} {
 }
 
 // Submit adds a task to the pool's queue and returns a channel that will be closed
-// once the task is complete.
+// once the task is complete or the pool is stopped.
 func (p *Pool) Submit(job func()) <-chan struct{} {
 	p.lock.Lock()
 	defer p.lock.Unlock()
