@@ -163,9 +163,17 @@ type Worker struct {
 	diffCh     chan *fetchedDiff
 	finalizeCh chan finalizeResult
 
-	pruneInterval time.Duration
+	pruneCfg PruneConfig
 
 	initCh chan struct{}
+}
+
+// PruneConfig configures pruning of the state DB.
+type PruneConfig struct {
+	// Enabled is true when pruning is enabled.
+	Enabled bool
+	// Interval specifies frequency at which pruning will be triggered.
+	Interval time.Duration
 }
 
 // New creates a new storage worker.
@@ -176,7 +184,7 @@ func New(
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointSyncCfg *CheckpointSyncConfig,
-	pruneInterval time.Duration,
+	pruneCfg PruneConfig,
 ) (*Worker, error) {
 	initMetrics()
 
@@ -199,7 +207,7 @@ func New(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		pruneInterval: pruneInterval,
+		pruneCfg: pruneCfg,
 
 		initCh: make(chan struct{}),
 	}
@@ -1012,12 +1020,14 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	close(w.initCh)
 	w.logger.Info("initialized")
 
-	statePruner := newPruner(w.localStorage.NodeDB(), w.commonNode.Runtime.History(), w.pruneInterval)
-	wg.Go(func() {
-		if err := statePruner.serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			w.logger.Error("state pruner failed: %w", err)
-		}
-	})
+	if w.pruneCfg.Enabled {
+		statePruner := newPruner(w.localStorage.NodeDB(), w.commonNode.Runtime.History(), w.pruneCfg.Interval)
+		wg.Go(func() {
+			if err := statePruner.serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				w.logger.Error("state pruner failed: %w", err)
+			}
+		})
+	}
 
 	// Notify the checkpointer of the genesis round so it can be checkpointed.
 	w.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)

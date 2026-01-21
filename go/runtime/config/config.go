@@ -377,6 +377,11 @@ type PruneConfig struct {
 	NumKept uint64 `yaml:"num_kept"`
 }
 
+// IsEnabled returns true when pruning is enabled.
+func (p PruneConfig) IsEnabled() bool {
+	return p.Strategy != "none"
+}
+
 // IndexerConfig is history indexer configuration.
 type IndexerConfig struct {
 	// BatchSize is max number of blocks committed in a batch during history reindex.
