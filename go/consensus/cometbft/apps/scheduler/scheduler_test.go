@@ -804,11 +804,13 @@ func TestElectCommittee(t *testing.T) {
 
 		rewardableEntities := make(map[staking.Address]struct{})
 
+		entropy, err := beaconState.Beacon(ctx)
+		require.NoError(err, "Beacon")
+
 		err = electCommittee(
 			ctx,
 			epoch,
 			schedulerParameters,
-			beaconState,
 			beaconParameters,
 			registryParameters,
 			stakeAcc,
@@ -817,6 +819,8 @@ func TestElectCommittee(t *testing.T) {
 			&tc.rt,
 			nodes,
 			tc.kind,
+			entropy,
+			nil,
 			true,
 		)
 		require.NoError(err, "committee election should not fail")

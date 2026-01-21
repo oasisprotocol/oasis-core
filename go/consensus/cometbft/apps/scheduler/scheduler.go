@@ -114,9 +114,23 @@ func (app *Application) maybeElect(ctx *api.Context) error {
 
 // shouldElect determines whether elections should be performed.
 func (app *Application) shouldElect(ctx *api.Context) (*electionDecision, error) {
+	// The 0th epoch will not have suitable entropy for elections, nor
+	// will it have useful node registrations.
+	baseEpoch, err := app.state.GetBaseEpoch()
+	if err != nil {
+		return nil, fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
+	}
+
+	epochChanged, epoch := app.state.EpochChanged(ctx)
+	if epoch == baseEpoch {
+		ctx.Logger().Info("system in bootstrap period, skipping election",
+			"epoch", epoch,
+		)
+		return &electionDecision{}, nil
+	}
+
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
-	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if epochChanged {
 		// For elections on epoch changes, distribute rewards.
 		return &electionDecision{
@@ -149,20 +163,6 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		return fmt.Errorf("cometbft/scheduler: before schedule notification failed: %w", err)
 	}
 
-	// The 0th epoch will not have suitable entropy for elections, nor
-	// will it have useful node registrations.
-	baseEpoch, err := app.state.GetBaseEpoch()
-	if err != nil {
-		return fmt.Errorf("cometbft/scheduler: couldn't get base epoch: %w", err)
-	}
-
-	if epoch == baseEpoch {
-		ctx.Logger().Info("system in bootstrap period, skipping election",
-			"epoch", epoch,
-		)
-		return nil
-	}
-
 	state := schedulerState.NewMutableState(ctx.State())
 	schedulerParameters, err := state.ConsensusParameters(ctx)
 	if err != nil {
@@ -177,6 +177,20 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	if err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't get beacon parameters: %w", err)
 	}
+	entropy, err := beaconState.Beacon(ctx)
+	if err != nil {
+		return fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
+	}
+
+	var vrf *beacon.PrevVRFState
+	if beaconParameters.Backend == beacon.BackendVRF {
+		vrfState, err := beaconState.VRFState(ctx)
+		if err != nil {
+			return fmt.Errorf("cometbft/scheduler: failed to query VRF state: %w", err)
+		}
+		vrf = vrfState.PrevState
+	}
+
 	// If weak alphas are allowed then skip the eligibility check as
 	// well because the byzantine node and associated tests are extremely
 	// fragile, and breaks in hard-to-debug ways if timekeeping isn't
@@ -231,12 +245,13 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 	validatorEntities, err := electValidators(
 		ctx,
 		epoch,
-		beaconState,
 		beaconParameters,
 		stakeAcc,
 		rewardableEntities,
 		nodes,
 		schedulerParameters,
+		entropy,
+		vrf,
 	)
 	if err != nil {
 		// It is unclear what the behavior should be if the validator
@@ -255,13 +270,14 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		ctx,
 		epoch,
 		schedulerParameters,
-		beaconState,
 		beaconParameters,
 		registryParameters,
 		stakeAcc,
 		rewardableEntities,
 		validatorEntities,
 		committeeNodes,
+		entropy,
+		vrf,
 		isFeatureVersion242,
 	); err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
@@ -301,24 +317,35 @@ func (app *Application) ExecuteTx(*api.Context, *transaction.Transaction) error 
 func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
+	validatorUpdates, err := updateValidators(ctx, resp)
+	if err != nil {
+		return resp, err
+	}
+
+	resp.ValidatorUpdates = validatorUpdates
+
+	return resp, nil
+}
+
+func updateValidators(ctx *api.Context, resp types.ResponseEndBlock) ([]types.ValidatorUpdate, error) {
 	state := schedulerState.NewMutableState(ctx.State())
 	pendingValidators, err := state.PendingValidators(ctx)
 	if err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to query pending validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to query pending validators: %w", err)
 	}
 	if pendingValidators == nil {
 		// No validator updates to apply.
-		return resp, nil
+		return nil, nil
 	}
 
 	currentValidators, err := state.CurrentValidators(ctx)
 	if err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to query current validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to query current validators: %w", err)
 	}
 
 	// Clear out the pending validator update.
 	if err = state.PutPendingValidators(ctx, nil); err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to clear validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to clear validators: %w", err)
 	}
 
 	// CometBFT expects a vector of ValidatorUpdate that expresses
@@ -326,14 +353,13 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	resp.ValidatorUpdates = diffValidators(ctx.Logger(), currentValidators, pendingValidators)
+	validatorUpdates := diffValidators(ctx.Logger(), currentValidators, pendingValidators)
 
 	// Stash the updated validator set.
 	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
-		return resp, fmt.Errorf("cometbft/scheduler: failed to set validators: %w", err)
+		return nil, fmt.Errorf("cometbft/scheduler: failed to set validators: %w", err)
 	}
-
-	return resp, nil
+	return validatorUpdates, nil
 }
 
 func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]*scheduler.Validator) []types.ValidatorUpdate {
@@ -433,13 +459,14 @@ func (app *Application) electCommittees(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
 	schedulerParameters *scheduler.ConsensusParameters,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	rewardableEntities map[staking.Address]struct{},
 	validatorEntities map[staking.Address]struct{},
 	nodes []*nodeWithStatus,
+	entropy []byte,
+	vrf *beacon.PrevVRFState,
 	isFeatureVersion242 bool,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
@@ -457,7 +484,6 @@ func (app *Application) electCommittees(
 				ctx,
 				epoch,
 				schedulerParameters,
-				beaconState,
 				beaconParameters,
 				registryParameters,
 				stakeAcc,
@@ -466,6 +492,8 @@ func (app *Application) electCommittees(
 				runtime,
 				nodes,
 				kind,
+				entropy,
+				vrf,
 				isFeatureVersion242,
 			); err != nil {
 				return err
@@ -481,12 +509,13 @@ func (app *Application) electCommittees(
 func electValidators(
 	ctx *api.Context,
 	epoch beacon.EpochTime,
-	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	rewardableEntities map[staking.Address]struct{},
 	nodes []*node.Node,
 	schedulerParameters *scheduler.ConsensusParameters,
+	entropy []byte,
+	vrf *beacon.PrevVRFState,
 ) (map[staking.Address]struct{}, error) {
 	// Filter nodes based on eligibility and minimum required entity stake.
 	var validators []*node.Node
@@ -509,17 +538,13 @@ func electValidators(
 
 	// Sort all of the entities that are actually running eligible validator
 	// nodes by descending stake.
-	weakEntropy, err := beaconState.Beacon(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cometbft/scheduler: couldn't get beacon: %w", err)
-	}
-	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, weakEntropy, schedulerParameters)
+	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, entropy, schedulerParameters)
 	if err != nil {
 		return nil, err
 	}
 
 	// Shuffle validator nodes.
-	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconState, beaconParameters, validators)
+	shuffledNodes, err := shuffleValidators(ctx, epoch, schedulerParameters, beaconParameters, validators, entropy, vrf)
 	if err != nil {
 		return nil, err
 	}
