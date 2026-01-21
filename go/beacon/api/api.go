@@ -71,9 +71,16 @@ type Backend interface {
 	GetBaseEpoch(context.Context) (EpochTime, error)
 
 	// GetEpoch returns the epoch number at the specified block height.
+	//
 	// Calling this method with height `consensus.HeightLatest`, should
-	// return the epoch of latest known block.
+	// return the epoch of the latest finalized block.
 	GetEpoch(context.Context, int64) (EpochTime, error)
+
+	// GetNextEpoch returns the epoch number after the specified block height.
+	//
+	// Calling this method with height `consensus.HeightLatest`, should
+	// return the epoch of the next block after the latest finalized block.
+	GetNextEpoch(context.Context, int64) (EpochTime, error)
 
 	// GetFutureEpoch returns any future epoch that is currently scheduled
 	// to occur at a specific height.
@@ -108,6 +115,7 @@ type Backend interface {
 	WatchLatestEpoch(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error)
 
 	// GetBeacon gets the beacon for the provided block height.
+	//
 	// Calling this method with height `consensus.HeightLatest` should
 	// return the beacon for the latest finalized block.
 	GetBeacon(context.Context, int64) ([]byte, error)
