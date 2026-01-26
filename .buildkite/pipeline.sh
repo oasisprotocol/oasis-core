@@ -90,5 +90,8 @@ if pr_and_no_code_related_changes; then
     pipeline=.buildkite/code-skip.pipeline.yml
 fi
 
+# Temporary only to trigger benchmarks pipeline.
+pipeline=.buildkite/benchmarks.pipeline.yml
+
 # Upload the selected pipeline.
 cat $pipeline | buildkite-agent pipeline upload
