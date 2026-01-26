@@ -82,6 +82,9 @@ type Config struct {
 	// This is useful in tests so most SGX code can be tested even on machines that lack SGX. Note
 	// that this also requires quote verification to be skipped.
 	InsecureMock bool
+
+	// MetricsEnabled is true if prometheus metrics are enabled.
+	MetricsEnabled bool
 }
 
 type sgxProvisioner struct {
@@ -107,7 +110,9 @@ func NewProvisioner(cfg Config) (host.Provisioner, error) {
 		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
 	}
 
-	sgxCommon.InitMetrics()
+	if cfg.MetricsEnabled {
+		sgxCommon.InitMetrics()
+	}
 
 	p := &sgxProvisioner{
 		cfg:       cfg,
@@ -125,6 +130,7 @@ func NewProvisioner(cfg Config) (host.Provisioner, error) {
 		HostInitializer:   p.hostInitializer,
 		InsecureNoSandbox: cfg.InsecureNoSandbox,
 		Logger:            p.logger,
+		MetricsEnabled:    cfg.MetricsEnabled,
 	})
 	if err != nil {
 		return nil, err
@@ -340,7 +346,7 @@ func (p *sgxProvisioner) initCapabilityTEE(ctx context.Context, cfg *host.Config
 		insecureMock: p.cfg.InsecureMock,
 	}
 
-	targetInfo, err := ts.init(ctx, p)
+	targetInfo, err := ts.init(ctx, p, p.cfg.MetricsEnabled)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing TEE state: %w", err)
 	}
