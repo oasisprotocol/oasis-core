@@ -235,7 +235,7 @@ func DefaultConfig() Config {
 		UpgradeStopDelay: time.Minute,
 		Prune: PruneConfig{
 			Strategy: PruneStrategyNone,
-			NumKept:  3600,
+			NumKept:  250_000,
 			Interval: 2 * time.Minute,
 		},
 		Checkpointer: CheckpointerConfig{
