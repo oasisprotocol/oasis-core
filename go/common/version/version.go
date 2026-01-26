@@ -83,6 +83,10 @@ func FromString(s string) (Version, error) {
 	s = strings.Split(s, "-")[0]
 	// Trim potential git commit.
 	s = strings.Split(s, "+")[0]
+	// Trim potential pre-release suffixes without hyphen.
+	s = strings.Split(s, "rc")[0]
+	s = strings.Split(s, "alpha")[0]
+	s = strings.Split(s, "beta")[0]
 	// Take at most four components: major.minor.patch.remainder.
 	split := strings.SplitN(s, ".", 4)
 

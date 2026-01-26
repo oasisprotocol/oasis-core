@@ -82,6 +82,10 @@ func TestFromString(t *testing.T) {
 		{"1.0", Version{1, 0, 0}},
 		{"1", Version{1, 0, 0}},
 		{"1.2.3.4", Version{1, 2, 3}},
+		{"1.26rc3", Version{1, 26, 0}},
+		{"1.26-rc3", Version{1, 26, 0}},
+		{"1.26beta3", Version{1, 26, 0}},
+		{"1.26-beta3", Version{1, 26, 0}},
 	} {
 		version, err := FromString(v.semver)
 		require.NoError(err)
