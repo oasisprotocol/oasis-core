@@ -123,10 +123,10 @@ unsafe impl Send for Tree {}
 impl Tree {
     /// Construct a new tree instance using the given read syncer and options struct.
     pub fn new(read_syncer: Box<dyn ReadSync>, opts: &Options) -> Tree {
-        let root_type = if opts.root.is_none() {
-            opts.root_type.unwrap()
+        let root_type = if let Some(root) = opts.root {
+            root.root_type
         } else {
-            opts.root.unwrap().root_type
+            opts.root_type.unwrap()
         };
         let tree = Tree {
             cache: RefCell::new(LRUCache::new(
