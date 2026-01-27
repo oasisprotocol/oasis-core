@@ -31,7 +31,7 @@ jobs:
         build_number: [1, 2]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # NOTE: We make a git checkout to a unique directory for each build to
           # catch reproducibility issues with code in different local paths.
@@ -92,7 +92,7 @@ jobs:
           OASIS_NODE_MAKE_PATH: go/oasis-node/oasis-node
           OASIS_NODE_GORELEASER_PATH: dist/oasis-node_linux_amd64_v1/oasis-node
       - name: Upload checksums
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: oasis-node-SHA256SUMs-build${{ matrix.build_number }}
           path: oasis-node-SHA256SUMs
@@ -105,12 +105,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download checksums for build 1
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: oasis-node-SHA256SUMs-build1
           path: oasis-node-SHA256SUMs-build1
       - name: Download checksum for build 2
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: oasis-node-SHA256SUMs-build2
           path: oasis-node-SHA256SUMs-build2
