@@ -521,7 +521,7 @@ func DefaultConfig() Config {
 		Prune: PruneConfig{
 			Strategy: "none",
 			Interval: 2 * time.Minute,
-			NumKept:  600,
+			NumKept:  250_000,
 		},
 		Indexer: IndexerConfig{
 			BatchSize: 1000,
