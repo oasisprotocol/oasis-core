@@ -1086,11 +1086,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 				rootType := prevRoots[i].Type
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
-					doneCh := fetchPool.Submit(func() {
+					_ = fetchPool.Submit(func() {
 						w.fetchDiff(ctx, this.Round, prevRoots[i], this.Roots[i])
-					})
-					wg.Go(func() {
-						<-doneCh
 					})
 				}
 			}
