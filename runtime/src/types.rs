@@ -17,7 +17,7 @@ use crate::{
     consensus::{
         self,
         beacon::EpochTime,
-        registry::EndorsedCapabilityTEE,
+        registry::{EndorsedCapabilityTEE, RolesMask},
         roothash::{self, Block, ComputeResultsHeader, Header},
         state::keymanager::Status as KeyManagerStatus,
         transaction::{Proof, SignedTransaction},
@@ -301,6 +301,8 @@ pub enum Body {
     HostIdentityRequest {},
     HostIdentityResponse {
         node_id: signature::PublicKey,
+        #[cbor(optional)]
+        roles: Option<RolesMask>,
     },
     HostSubmitTxRequest {
         runtime_id: Namespace,

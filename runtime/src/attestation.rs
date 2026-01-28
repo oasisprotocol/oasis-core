@@ -113,9 +113,15 @@ impl Handler {
             let consensus_verifier = self.consensus_verifier.clone();
             let version = self.version;
             let runtime_id = self.runtime_id;
+            // TODO: Chicken and an egg problem: enclave should verify quote prior
+            // to being registered, but this means it cannot fetch roles from the consensus,
+            // meaning it trust the host that it should not? Similar problem is for the
+            // node_id?
+            let (_, roles) = self.host.identity().await?;
             tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.
-                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, Some(version))
+                PolicyVerifier::new(consensus_verifier)
+                    .effective_quote_policy(&runtime_id, Some(version), roles)
             })?
         };
 
@@ -137,7 +143,7 @@ impl Handler {
         );
 
         // Configure the quote and policy on the identity.
-        let node_id = self.host.identity().await?;
+        let (node_id, _) = self.host.identity().await?;
         let verified_quote = self.identity.set_quote(node_id, quote)?;
 
         // Sign the report data, latest verified consensus height, REK and host node ID.

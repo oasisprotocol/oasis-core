@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
@@ -115,7 +116,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)
 	case rq.HostIdentityRequest != nil:
 		// Host identity.
-		rsp.HostIdentityResponse, err = h.handleHostIdentity()
+		rsp.HostIdentityResponse, err = h.handleHostIdentity(ctx)
 	default:
 		err = fmt.Errorf("method not supported")
 	}
@@ -438,13 +439,17 @@ func (h *runtimeHostHandler) handleHostProveFreshness(
 	}, nil
 }
 
-func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityResponse, error) {
+func (h *runtimeHostHandler) handleHostIdentity(ctx context.Context) (*protocol.HostIdentityResponse, error) {
 	identity, err := h.env.GetNodeIdentity()
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Populate roles via environment. Similar problem to common.GetQuotePolicy, i.e.
+	// we don't have access to role provider and we either have to find a mapping from config to
+	// the roles we are registering for or find a way to get them.
 
 	return &protocol.HostIdentityResponse{
 		NodeID: identity.NodeSigner.Public(),
+		Roles:  node.RoleEmpty,
 	}, nil
 }
