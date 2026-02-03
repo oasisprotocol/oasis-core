@@ -79,6 +79,8 @@ func (v Version) String() string {
 // major.minor.patch components are considered where major is mandatory.
 // Any component following patch is ignored.
 func FromString(s string) (Version, error) {
+	// Trim everything after the first space.
+	s = strings.Split(s, " ")[0]
 	// Trim potential pre-release suffix.
 	s = strings.Split(s, "-")[0]
 	// Trim potential git commit.
