@@ -370,7 +370,7 @@ impl TCBLevel {
         //    in the TCB Level. If it is greater or equal to the value in TCB Level, read status
         //    assigned to this TCB level (in case of SGX) or go to c (in case of TDX). Otherwise,
         //    move to the next item on TCB Levels list.
-        if self.tcb.pcesvn < pcesvn {
+        if pcesvn < self.tcb.pcesvn {
             return false;
         }
 
@@ -693,4 +693,116 @@ pub struct EnclaveTCBLevel {
 pub struct EnclaveTCBVersions {
     #[serde(rename = "isvsvn")]
     pub isv_svn: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tcb_level_matches() {
+        let pcesvn: u32 = 10;
+        let sgx_svn: [u32; 16] = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
+        let tdx_svn: [u32; 16] = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31];
+
+        let mut tl = TCBLevel::default();
+        tl.tcb.pcesvn = pcesvn;
+
+        for i in 0..16 {
+            tl.tcb.sgx_components[i].svn = sgx_svn[i];
+            tl.tcb.tdx_components[i].svn = tdx_svn[i];
+        }
+
+        struct TestCase {
+            name: &'static str,
+            pcesvn: u32,
+            sgx_svn: [u32; 16],
+            tdx_svn: Option<[u32; 16]>,
+            matches: bool,
+        }
+
+        let tcs = vec![
+            TestCase {
+                name: "same values",
+                pcesvn,
+                sgx_svn,
+                tdx_svn: Some(tdx_svn),
+                matches: true,
+            },
+            TestCase {
+                name: "higher pcesvn",
+                pcesvn: pcesvn + 1,
+                sgx_svn,
+                tdx_svn: Some(tdx_svn),
+                matches: true,
+            },
+            TestCase {
+                name: "lower pcesvn",
+                pcesvn: pcesvn - 1,
+                sgx_svn,
+                tdx_svn: Some(tdx_svn),
+                matches: false,
+            },
+            TestCase {
+                name: "higher sgx svn",
+                pcesvn,
+                sgx_svn: {
+                    let mut ss = sgx_svn;
+                    ss[5] += 1;
+                    ss
+                },
+                tdx_svn: Some(tdx_svn),
+                matches: true,
+            },
+            TestCase {
+                name: "lower sgx svn",
+                pcesvn,
+                sgx_svn: {
+                    let mut ss = sgx_svn;
+                    ss[5] -= 1;
+                    ss
+                },
+                tdx_svn: Some(tdx_svn),
+                matches: false,
+            },
+            TestCase {
+                name: "higher tdx svn",
+                pcesvn,
+                sgx_svn,
+                tdx_svn: {
+                    let mut ts = tdx_svn;
+                    ts[5] += 1;
+                    Some(ts)
+                },
+                matches: true,
+            },
+            TestCase {
+                name: "lower tdx svn",
+                pcesvn,
+                sgx_svn,
+                tdx_svn: {
+                    let mut ts = tdx_svn;
+                    ts[5] -= 1;
+                    Some(ts)
+                },
+                matches: false,
+            },
+            TestCase {
+                name: "no tdx svn",
+                pcesvn,
+                sgx_svn,
+                tdx_svn: None,
+                matches: true,
+            },
+        ];
+
+        for tc in tcs {
+            let result = tl.matches(&tc.sgx_svn, tc.tdx_svn.as_ref(), tc.pcesvn);
+            if tc.matches {
+                assert!(result, "tcb level should match when {}", tc.name);
+            } else {
+                assert!(!result, "tcb level should not match when {}", tc.name);
+            }
+        }
+    }
 }
