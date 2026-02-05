@@ -16,6 +16,7 @@ import (
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
@@ -73,6 +74,15 @@ func openConsensusStatestore(dataDir string) (state.Store, error) {
 		return nil, fmt.Errorf("failed to open state db: %w", err)
 	}
 	return cmtDB.OpenStateStore(stateDB), nil
+}
+
+func openRuntimeStateDB(dataDir string, runtimeID common.Namespace) (api.NodeDB, error) {
+	rtDir := runtimeConfig.GetRuntimeStateDir(dataDir, runtimeID)
+	backend, err := storage.NewLocalBackend(rtDir, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open storage backend (runtimeID: %s): %w", runtimeID, err)
+	}
+	return backend.NodeDB(), err
 }
 
 func openRuntimeLightHistory(dataDir string, rt common.Namespace) (history.History, error) {

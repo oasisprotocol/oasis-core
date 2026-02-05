@@ -387,3 +387,35 @@ way they guarantee the node is healthy when it starts.
 
 Following successful pruning, to release disk space, they are encouraged to run
 [the compaction command](#compact-experimental).
+
+### inspect
+
+Run (when the node is not running):
+
+```sh
+oasis-node storage inspect --config /path/to/config/file
+```
+
+to inspect consensus and runtime databases:
+
+```sh
+Consensus:
+  State DB:
+    Ok:  true
+    Latest height:  25499708
+    Last retained height:  16817956
+  Block history:
+    Ok:  true
+    Latest height:  25499708
+    Last retained height:  16817956
+Runtimes:
+  000000000000000000000000000000000000000000000000f80306c9858e7279
+    State DB:
+      Ok:  true
+      Latest round:  9735938
+      Last retained round:  1357486
+    Light History:
+      Ok:  true
+      Latest round:  9735938
+      Last retained round:  1357486
+```
