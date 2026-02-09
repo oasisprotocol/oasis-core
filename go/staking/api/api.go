@@ -426,7 +426,7 @@ type Transfer struct {
 // PrettyPrint writes a pretty-printed representation of Transfer to the given
 // writer.
 func (t Transfer) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sTo:     %s\n", prefix, t.To)
+	fmt.Fprintf(w, "%sTo:     %s\n", prefix, FormatAddress(ctx, t.To))
 
 	fmt.Fprintf(w, "%sAmount: ", prefix)
 	token.PrettyPrintAmount(ctx, t.Amount, w)
@@ -477,7 +477,7 @@ type Escrow struct {
 // PrettyPrint writes a pretty-printed representation of Escrow to the given
 // writer.
 func (e Escrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sTo:     %s\n", prefix, e.Account)
+	fmt.Fprintf(w, "%sTo:     %s\n", prefix, FormatAddress(ctx, e.Account))
 
 	fmt.Fprintf(w, "%sAmount: ", prefix)
 	token.PrettyPrintAmount(ctx, e.Amount, w)
@@ -503,8 +503,8 @@ type ReclaimEscrow struct {
 
 // PrettyPrint writes a pretty-printed representation of ReclaimEscrow to the
 // given writer.
-func (re ReclaimEscrow) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, re.Account)
+func (re ReclaimEscrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, FormatAddress(ctx, re.Account))
 
 	fmt.Fprintf(w, "%sShares: %s\n", prefix, re.Shares)
 }
@@ -552,7 +552,7 @@ type Allow struct {
 
 // PrettyPrint writes a pretty-printed representation of Allow to the given writer.
 func (aw Allow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBeneficiary:   %s\n", prefix, aw.Beneficiary)
+	fmt.Fprintf(w, "%sBeneficiary:   %s\n", prefix, FormatAddress(ctx, aw.Beneficiary))
 
 	sign := "+"
 	if aw.Negative {
@@ -582,7 +582,7 @@ type Withdraw struct {
 
 // PrettyPrint writes a pretty-printed representation of Withdraw to the given writer.
 func (wt Withdraw) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, wt.From)
+	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, FormatAddress(ctx, wt.From))
 
 	fmt.Fprintf(w, "%sAmount: ", prefix)
 	token.PrettyPrintAmount(ctx, wt.Amount, w)

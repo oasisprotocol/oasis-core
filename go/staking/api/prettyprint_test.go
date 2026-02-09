@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -9,6 +10,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
+
+func mustAddress(t *testing.T, raw string) Address {
+	t.Helper()
+
+	var addr Address
+	require.NoError(t, addr.UnmarshalText([]byte(raw)))
+	return addr
+}
 
 func TestPrettyPrintCommissionRatePercentage(t *testing.T) {
 	require := require.New(t)
@@ -52,5 +61,121 @@ func TestPrettyPrintCommissionScheduleIndexInfixes(t *testing.T) {
 		indexInfix, emptyInfix := PrettyPrintCommissionScheduleIndexInfixes(ctx)
 		require.Equal(t.expectedIndexInfix, indexInfix, "obtained index infix didn't match expected value")
 		require.Equal(t.expectedEmptyInfix, emptyInfix, "obtained empty infix didn't match expected value")
+	}
+}
+
+func TestFormatAddressWith(t *testing.T) {
+	require := require.New(t)
+
+	addr := mustAddress(t, "oasis1qrydpazemvuwtnp3efm7vmfvg3tde044qg6cxwzx")
+	native := addr.String()
+
+	for _, tc := range []struct {
+		name     string
+		names    AccountNames
+		expected string
+	}{
+		{
+			name:     "nil names",
+			names:    nil,
+			expected: native,
+		},
+		{
+			name:     "empty names",
+			names:    AccountNames{},
+			expected: native,
+		},
+		{
+			name:     "unknown name",
+			names:    AccountNames{"oasis1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpkfh7w": "ignored"},
+			expected: native,
+		},
+		{
+			name:     "named address",
+			names:    AccountNames{native: "test:bob"},
+			expected: "test:bob (" + native + ")",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(tc.expected, FormatAddressWith(tc.names, addr))
+		})
+	}
+}
+
+func TestFormatAddress(t *testing.T) {
+	require := require.New(t)
+
+	addr := mustAddress(t, "oasis1qrydpazemvuwtnp3efm7vmfvg3tde044qg6cxwzx")
+	native := addr.String()
+
+	t.Run("without context names", func(t *testing.T) {
+		require.Equal(native, FormatAddress(context.Background(), addr))
+	})
+
+	t.Run("with context names", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), ContextKeyAccountNames, AccountNames{
+			native: "test:bob",
+		})
+		require.Equal("test:bob ("+native+")", FormatAddress(ctx, addr))
+	})
+}
+
+func TestStakingTxPrettyPrintUsesNamedAddresses(t *testing.T) {
+	require := require.New(t)
+
+	addr := mustAddress(t, "oasis1qrydpazemvuwtnp3efm7vmfvg3tde044qg6cxwzx")
+	native := addr.String()
+	amt := *quantity.NewFromUint64(1)
+
+	ctx := context.WithValue(context.Background(), ContextKeyAccountNames, AccountNames{
+		native: "test:bob",
+	})
+
+	for _, tc := range []struct {
+		name     string
+		pretty   func(context.Context, *bytes.Buffer)
+		expected string
+	}{
+		{
+			name: "transfer to",
+			pretty: func(ctx context.Context, buf *bytes.Buffer) {
+				Transfer{To: addr, Amount: amt}.PrettyPrint(ctx, "", buf)
+			},
+			expected: "To:     test:bob (" + native + ")",
+		},
+		{
+			name: "escrow account",
+			pretty: func(ctx context.Context, buf *bytes.Buffer) {
+				Escrow{Account: addr, Amount: amt}.PrettyPrint(ctx, "", buf)
+			},
+			expected: "To:     test:bob (" + native + ")",
+		},
+		{
+			name: "reclaim escrow from",
+			pretty: func(ctx context.Context, buf *bytes.Buffer) {
+				ReclaimEscrow{Account: addr, Shares: amt}.PrettyPrint(ctx, "", buf)
+			},
+			expected: "From:   test:bob (" + native + ")",
+		},
+		{
+			name: "allow beneficiary",
+			pretty: func(ctx context.Context, buf *bytes.Buffer) {
+				Allow{Beneficiary: addr, AmountChange: amt}.PrettyPrint(ctx, "", buf)
+			},
+			expected: "Beneficiary:   test:bob (" + native + ")",
+		},
+		{
+			name: "withdraw from",
+			pretty: func(ctx context.Context, buf *bytes.Buffer) {
+				Withdraw{From: addr, Amount: amt}.PrettyPrint(ctx, "", buf)
+			},
+			expected: "From:   test:bob (" + native + ")",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			tc.pretty(ctx, &buf)
+			require.Contains(buf.String(), tc.expected)
+		})
 	}
 }

@@ -9,6 +9,43 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
+type contextKey string
+
+// ContextKeyAccountNames is the key to retrieve native (Bech32) account names from context.
+var ContextKeyAccountNames = contextKey("staking/account-names")
+
+// AccountNames maps native (Bech32) addresses to user-defined account names for pretty printing.
+type AccountNames map[string]string
+
+// FormatAddress is like FormatAddressWith but reads names from ctx.
+func FormatAddress(ctx context.Context, addr Address) string {
+	var names AccountNames
+	if v, ok := ctx.Value(ContextKeyAccountNames).(AccountNames); ok {
+		names = v
+	}
+
+	return FormatAddressWith(names, addr)
+}
+
+// FormatAddressWith formats a staking address for display.
+//
+// Output cases:
+//   - Named address:   "name (oasis1...)"
+//   - Unknown address: "oasis1..."
+func FormatAddressWith(names AccountNames, addr Address) string {
+	native := addr.String()
+	if names == nil {
+		return native
+	}
+
+	name := names[native]
+	if name == "" {
+		return native
+	}
+
+	return fmt.Sprintf("%s (%s)", name, native)
+}
+
 // PrettyPrintCommissionRatePercentage returns the string representing the
 // commission rate (bound) in percentage for the given commission rate (bound)
 // numerator.
