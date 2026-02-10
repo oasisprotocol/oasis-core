@@ -176,9 +176,8 @@ func parseRuntimes(args []string) ([]common.Namespace, error) {
 	return runtimes, nil
 }
 
-func doMigrate(_ *cobra.Command, args []string) error {
+func doMigrate(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
-	ctx := context.Background()
 
 	runtimes, err := parseRuntimes(args)
 	cobra.CheckErr(err)
@@ -201,7 +200,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 			}
 
 			helper := &migrateHelper{
-				ctx:     ctx,
+				ctx:     cmd.Context(),
 				history: history,
 				roots:   map[hash.Hash]node.RootType{},
 			}
@@ -224,9 +223,8 @@ func doMigrate(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func doCheck(_ *cobra.Command, args []string) error {
+func doCheck(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
-	ctx := context.Background()
 
 	runtimes, err := parseRuntimes(args)
 	cobra.CheckErr(err)
@@ -245,7 +243,7 @@ func doCheck(_ *cobra.Command, args []string) error {
 
 			display := &displayHelper{}
 
-			err := badger.CheckSanity(ctx, nodeCfg, display)
+			err := badger.CheckSanity(cmd.Context(), nodeCfg, display)
 			if err != nil {
 				return fmt.Errorf("node database checker returned error: %w", err)
 			}
