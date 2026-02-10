@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	cmtconfig "github.com/cometbft/cometbft/config"
-	cmtBlockstore "github.com/cometbft/cometbft/store"
 	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
 
@@ -21,10 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
-	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
-	cmtDB "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -32,7 +27,6 @@ import (
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -182,9 +176,8 @@ func parseRuntimes(args []string) ([]common.Namespace, error) {
 	return runtimes, nil
 }
 
-func doMigrate(_ *cobra.Command, args []string) error {
+func doMigrate(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
-	ctx := context.Background()
 
 	runtimes, err := parseRuntimes(args)
 	cobra.CheckErr(err)
@@ -195,9 +188,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 		}
 		err := func() error {
 			runtimeDir := runtimeConfig.GetRuntimeStateDir(dataDir, rt)
-
-			prunerFactory := history.NewNonePrunerFactory()
-			history, err := history.New(rt, runtimeDir, prunerFactory, false)
+			history, err := openRuntimeLightHistory(dataDir, rt)
 			if err != nil {
 				return fmt.Errorf("error creating history provider: %w", err)
 			}
@@ -209,7 +200,7 @@ func doMigrate(_ *cobra.Command, args []string) error {
 			}
 
 			helper := &migrateHelper{
-				ctx:     ctx,
+				ctx:     cmd.Context(),
 				history: history,
 				roots:   map[hash.Hash]node.RootType{},
 			}
@@ -232,9 +223,8 @@ func doMigrate(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func doCheck(_ *cobra.Command, args []string) error {
+func doCheck(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
-	ctx := context.Background()
 
 	runtimes, err := parseRuntimes(args)
 	cobra.CheckErr(err)
@@ -253,7 +243,7 @@ func doCheck(_ *cobra.Command, args []string) error {
 
 			display := &displayHelper{}
 
-			err := badger.CheckSanity(ctx, nodeCfg, display)
+			err := badger.CheckSanity(cmd.Context(), nodeCfg, display)
 			if err != nil {
 				return fmt.Errorf("node database checker returned error: %w", err)
 			}
@@ -417,30 +407,6 @@ func compactConsensusNodeDB(dataDir string) error {
 	return ndb.Compact()
 }
 
-func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
-	ldb, ndb, _, err := abci.InitStateStorage(
-		&abci.ApplicationConfig{
-			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
-			StorageBackend:      config.GlobalConfig.Storage.Backend,
-			MemoryOnlyStorage:   false,
-			ReadOnlyStorage:     false,
-			DisableCheckpointer: true,
-		},
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize ABCI storage backend: %w", err)
-	}
-
-	// Close and Cleanup both only close NodeDB. Still closing both explicitly,
-	// to prevent resource leaks if things change in the future.
-	close := func() {
-		ndb.Close()
-		ldb.Cleanup()
-	}
-
-	return ndb, close, nil
-}
-
 func doPrune(_ *cobra.Command, args []string) error {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -554,11 +520,9 @@ func pruneConsensusNodeDB(ndb db.NodeDB, retainHeight uint64) error {
 // In case of no configured runtimes it returns max int64.
 func minReindexedHeight(dataDir string, runtimes []common.Namespace) (int64, error) {
 	fetchLastReindexedHeight := func(runtimeID common.Namespace) (int64, error) {
-		rtDir := runtimeConfig.GetRuntimeStateDir(dataDir, runtimeID)
-
-		history, err := history.New(runtimeID, rtDir, history.NewNonePrunerFactory(), true)
+		history, err := openRuntimeLightHistory(dataDir, runtimeID)
 		if err != nil {
-			return 0, fmt.Errorf("failed to open new light history: %w", err)
+			return 0, fmt.Errorf("failed to open runtime light history: %w", err)
 		}
 		defer history.Close()
 
@@ -586,19 +550,10 @@ func minReindexedHeight(dataDir string, runtimes []common.Namespace) (int64, err
 }
 
 func pruneCometDBs(dataDir string, retainHeight int64) error {
-	cmtConfig := cmtconfig.DefaultConfig()
-	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
-
-	dbProvider, err := cmtDB.Provider()
+	blockstore, err := openConsensusBlockstore(dataDir)
 	if err != nil {
-		return fmt.Errorf("failed to obtain db provider: %w", err)
+		return fmt.Errorf("failed to open consensus blockstore: %w", err)
 	}
-
-	blockstoreDB, err := cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
-	if err != nil {
-		return fmt.Errorf("failed to open blockstore: %w", err)
-	}
-	blockstore := cmtBlockstore.NewBlockStore(blockstoreDB)
 	defer blockstore.Close()
 
 	// Mimic the upstream pruning logic from CometBFT
@@ -623,11 +578,10 @@ func pruneCometDBs(dataDir string, retainHeight int64) error {
 	}
 	logger.Info("blockstore pruning finished", "pruned", n)
 
-	stateDB, err := cmtDB.OpenStateDB(dbProvider, cmtConfig)
+	state, err := openConsensusStatestore(dataDir)
 	if err != nil {
-		return fmt.Errorf("failed to open state db: %w", err)
+		return fmt.Errorf("failed to open consensus state store: %w", err)
 	}
-	state := cmtDB.OpenStateStore(stateDB)
 	defer state.Close()
 
 	logger.Info("pruning consensus states", "base", base, "retain_height", retainHeight)
@@ -648,5 +602,6 @@ func Register(parentCmd *cobra.Command) {
 	storageCmd.AddCommand(storageRenameNsCmd)
 	storageCmd.AddCommand(storageCompactCmd)
 	storageCmd.AddCommand(pruneCmd)
+	storageCmd.AddCommand(newInspectCmd())
 	parentCmd.AddCommand(storageCmd)
 }
