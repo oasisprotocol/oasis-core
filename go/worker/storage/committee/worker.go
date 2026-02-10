@@ -1046,6 +1046,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	fetchPool := workerpool.New("storage_fetch/" + w.commonNode.Runtime.ID().String())
 	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 	defer fetchPool.Stop()
+	poolCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
@@ -1096,11 +1098,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 				rootType := prevRoots[i].Type
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
-					doneCh := fetchPool.Submit(func() {
-						w.fetchDiff(ctx, this.Round, prevRoots[i], this.Roots[i])
-					})
-					wg.Go(func() {
-						<-doneCh
+					_ = fetchPool.Submit(func() {
+						w.fetchDiff(poolCtx, this.Round, prevRoots[i], this.Roots[i])
 					})
 				}
 			}
