@@ -81,18 +81,16 @@ pub fn x509_custom_ts_verify_cb(ts: DateTime<Utc>) -> impl x509::VerifyCallback 
         err.set(
             x509::VerifyError::CERT_EXPIRED,
             ts.naive_utc()
-                > cert
-                    .not_after()?
-                    .try_into()
-                    .map_err(|_| mbedtls::Error::X509InvalidDate)?,
+                > cert.not_after()?.try_into().map_err(|_| {
+                    mbedtls::Error::HighLevel(mbedtls::error::HiError::X509InvalidDate)
+                })?,
         );
         err.set(
             x509::VerifyError::CERT_FUTURE,
             ts.naive_utc()
-                < cert
-                    .not_before()?
-                    .try_into()
-                    .map_err(|_| mbedtls::Error::X509InvalidDate)?,
+                < cert.not_before()?.try_into().map_err(|_| {
+                    mbedtls::Error::HighLevel(mbedtls::error::HiError::X509InvalidDate)
+                })?,
         );
         Ok(())
     }

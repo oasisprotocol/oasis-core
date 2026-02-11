@@ -43,7 +43,7 @@ impl UsercallExtension for HostService {
     ) -> Pin<Box<dyn Future<Output = IoResult<Option<Box<dyn AsyncStream>>>> + 'future>> {
         async move {
             match addr {
-                "worker-host" => {
+                "worker-host" | "worker-host:0" => {
                     // Connect to worker host socket.
                     let stream = UnixStream::connect(self.host_socket.clone()).await?;
                     let async_stream: Box<dyn AsyncStream> = Box::new(stream);

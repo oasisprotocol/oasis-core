@@ -77,7 +77,7 @@ fn connect() -> Result<Stream> {
 
         #[cfg(target_env = "sgx")]
         TeeType::Sgx => {
-            let stream = std::net::TcpStream::connect("worker-host")?;
+            let stream = std::net::TcpStream::connect("worker-host:0")?;
             Ok(Stream::Tcp(stream))
         }
 
