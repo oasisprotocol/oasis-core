@@ -112,7 +112,7 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 	}
 
 	// Check for TDX enablement.
-	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
+	if !cfg.SGX.TDX && sc.Policy != nil && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
 		return fmt.Errorf("TDX policy not supported")
 	}
 
