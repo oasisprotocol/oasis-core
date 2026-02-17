@@ -15,6 +15,9 @@ import (
 //     are allowed to query runtime key shares.
 //   - The `FMSPCWhitelist` field in the quote policy, which defines which processor packages
 //     and platform instances are allowed.
+//   - The `KeyManagerAccessPolicy` field in the `SGXConstraints`, which defines additional
+//     policy that may overwrite the default policy when verifying TEE attestations for nodes
+//     that can access the key manager.
 //   - An updated key manager policy update transaction that applies a new policy at the epoch
 //     boundary.
 //   - A stricter node registration rule where observer nodes must include runtimes.

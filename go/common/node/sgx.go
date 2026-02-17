@@ -32,8 +32,14 @@ type SGXConstraints struct {
 	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
 	Enclaves []sgx.EnclaveIdentity `json:"enclaves,omitempty"`
 
-	// Policy is the quote policy.
+	// Policy is the default quote policy.
 	Policy *quote.Policy `json:"policy,omitempty"`
+
+	// KeyManagerAccessPolicy is the compute runtime quote policy for the enclaves,
+	// requesting runtime key derivation from the key manager.
+	//
+	// If not nil, it replaces the default quote policy for compute and observer nodes.
+	KeyManagerAccessPolicy *quote.Policy `json:"kma_policy,omitempty"`
 
 	// MaxAttestationAge is the maximum attestation age (in blocks).
 	MaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
@@ -111,21 +117,50 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion261 bo
 		return fmt.Errorf("unsupported SGX constraints version: %d", sc.V)
 	}
 
-	if sc.Policy == nil {
-		return nil
+	validatePolicy := func(policy *quote.Policy) error {
+		if policy == nil {
+			return nil
+		}
+
+		// Check for TDX enablement.
+		if !cfg.SGX.TDX && policy.PCS != nil && policy.PCS.TDX != nil {
+			return fmt.Errorf("TDX policy not supported")
+		}
+
+		// Check that policy is compliant with the current feature version.
+		return policy.Validate(isFeatureVersion261)
 	}
 
-	// Check for TDX enablement.
-	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
-		return fmt.Errorf("TDX policy not supported")
+	validateKMAPolicy := func(policy *quote.Policy) error {
+		if policy == nil {
+			return nil
+		}
+		if !isFeatureVersion261 {
+			return fmt.Errorf("policy should be nil")
+		}
+		if policy.IAS != nil {
+			return fmt.Errorf("IAS not allowed")
+		}
+		return validatePolicy(policy)
 	}
 
-	// Check that policy is compliant with the current feature version.
-	if err := sc.Policy.Validate(isFeatureVersion261); err != nil {
-		return fmt.Errorf("invalid policy: %w", err)
+	if err := validatePolicy(sc.Policy); err != nil {
+		return fmt.Errorf("invalid default policy: %w", err)
+	}
+
+	if err := validateKMAPolicy(sc.KeyManagerAccessPolicy); err != nil {
+		return fmt.Errorf("invalid key manager access policy: %w", err)
 	}
 
 	return nil
+}
+
+// ResolvePolicy returns the effective policy.
+func (sc *SGXConstraints) ResolvePolicy(useKMAPolicy bool) *quote.Policy {
+	if sc.KeyManagerAccessPolicy != nil && useKMAPolicy {
+		return sc.KeyManagerAccessPolicy
+	}
+	return sc.Policy
 }
 
 // ContainsEnclave returns true iff the allowed enclave list in SGX constraints contain the given
@@ -223,16 +258,21 @@ func (sa *SGXAttestation) Verify(
 	rak signature.PublicKey,
 	rek *x25519.PublicKey,
 	nodeID signature.PublicKey,
+	useKMAPolicy bool,
 ) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
 	}
 
 	// Use defaults from consensus parameters.
+	// TODO: Handle default constraints overwrite consistently.
+	// See https://github.com/oasisprotocol/oasis-core/issues/6459.
 	cfg.SGX.ApplyDefaultConstraints(sc)
 
+	policy := sc.ResolvePolicy(useKMAPolicy)
+
 	// Verify the quote.
-	verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
+	verifiedQuote, err := sa.Quote.Verify(policy, ts)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -327,6 +329,55 @@ func TestVerifyRuntime(t *testing.T) {
 				})
 			},
 			errContains: "invalid bundle checksum",
+		},
+		{
+			name: "runtime without key manager with key manager access policy",
+			modify: func(rt *Runtime) {
+				rt.KeyManager = nil
+				rt.TEEHardware = node.TEEHardwareIntelSGX
+				rt.Deployments[0].TEE = cbor.Marshal(node.SGXConstraints{
+					Versioned: cbor.NewVersioned(1),
+					Enclaves: []sgx.EnclaveIdentity{
+						{},
+					},
+					KeyManagerAccessPolicy: &quote.Policy{},
+				})
+			},
+			modifyParams: func(cp *ConsensusParameters) {
+				cp.TEEFeatures = &node.TEEFeatures{
+					SGX: node.TEEFeaturesSGX{
+						PCS: true,
+					},
+				}
+			},
+			errContains: "runtime without key manager with key manager access policy",
+		},
+		{
+			name: "key manager runtime with key manager access policy",
+			modify: func(rt *Runtime) {
+				rt.ID = keymanagerID
+				rt.Kind = KindKeyManager
+				rt.TEEHardware = node.TEEHardwareIntelSGX
+				rt.KeyManager = nil
+				rt.Deployments[0].TEE = cbor.Marshal(node.SGXConstraints{
+					Versioned: cbor.NewVersioned(1),
+					Enclaves: []sgx.EnclaveIdentity{
+						{},
+					},
+					KeyManagerAccessPolicy: &quote.Policy{},
+				})
+				rt.AdmissionPolicy.AnyNode = &AnyNodeRuntimeAdmissionPolicy{}
+				rt.AdmissionPolicy.EntityWhitelist = nil
+			},
+			modifyParams: func(cp *ConsensusParameters) {
+				cp.TEEFeatures = &node.TEEFeatures{
+					SGX: node.TEEFeaturesSGX{
+						PCS: true,
+					},
+				}
+				cp.DebugAllowTestRuntimes = true
+			},
+			errContains: "key manager runtime with key manager access policy",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
