@@ -78,6 +78,112 @@ func TestSGXConstraintsV1NilPolicy(t *testing.T) {
 	require.NoError(err, "ValidateBasic V1 SGX constraints with nil policy")
 }
 
+func TestSGXConstraintsKMAPolicyValidation(t *testing.T) {
+	tests := []struct {
+		name                string
+		cfg                 *TEEFeatures
+		isFeatureVersion261 bool
+		kmaPolicy           *quote.Policy
+		errContains         string
+	}{
+		{
+			name:                "non-nil key manager access policy before 26.1 is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion261: false,
+			kmaPolicy:           &quote.Policy{},
+			errContains:         "policy should be nil",
+		},
+		{
+			name:                "key manager access policy is valid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion261: true,
+			kmaPolicy:           &quote.Policy{},
+		},
+		{
+			name:                "tdx policy in key manager access policy requires tdx feature",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion261: true,
+			kmaPolicy: &quote.Policy{
+				PCS: &pcs.QuotePolicy{
+					TDX: &pcs.TdxQuotePolicy{},
+				},
+			},
+			errContains: "TDX policy not supported",
+		},
+		{
+			name:                "non-empty IAS key manager access policy not allowed",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion261: true,
+			kmaPolicy: &quote.Policy{
+				IAS: &ias.QuotePolicy{},
+			},
+			errContains: "IAS not allowed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := SGXConstraints{
+				Versioned:              cbor.NewVersioned(1),
+				KeyManagerAccessPolicy: tc.kmaPolicy,
+			}
+
+			err := sc.ValidateBasic(tc.cfg, tc.isFeatureVersion261)
+			if tc.errContains == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.errContains)
+		})
+	}
+}
+
+func TestSGXConstraintsResolvePolicy(t *testing.T) {
+	defaultPolicy := &quote.Policy{
+		PCS: &pcs.QuotePolicy{TCBValidityPeriod: 20},
+	}
+	kmaPolicy := &quote.Policy{
+		PCS: &pcs.QuotePolicy{TCBValidityPeriod: 10},
+	}
+
+	for _, tc := range []struct {
+		name         string
+		useKMAPolicy bool
+		kmaPolicy    *quote.Policy
+		want         *quote.Policy
+	}{
+		{
+			name:         "use default when no key manager access policy override",
+			useKMAPolicy: true,
+			kmaPolicy:    nil,
+			want:         defaultPolicy,
+		},
+		{
+			name:         "use key manager access policy override",
+			useKMAPolicy: true,
+			kmaPolicy:    kmaPolicy,
+			want:         kmaPolicy,
+		},
+		{
+			name:         "use default when key manager access policy exists but should be ignored",
+			useKMAPolicy: false,
+			kmaPolicy:    kmaPolicy,
+			want:         defaultPolicy,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := SGXConstraints{
+				Versioned:              cbor.NewVersioned(1),
+				Policy:                 defaultPolicy,
+				KeyManagerAccessPolicy: tc.kmaPolicy,
+			}
+			got := sc.ResolvePolicy(tc.useKMAPolicy)
+			require.EqualValues(t, tc.want, got)
+		})
+	}
+}
+
 func TestSGXAttestationV0(t *testing.T) {
 	require := require.New(t)
 
