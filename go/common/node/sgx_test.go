@@ -68,6 +68,16 @@ func TestSGXConstraintsV1(t *testing.T) {
 	require.NoError(err, "ValidateBasic V1 SGX constraints")
 }
 
+func TestSGXConstraintsV1NilPolicy(t *testing.T) {
+	require := require.New(t)
+
+	sc := SGXConstraints{
+		Versioned: cbor.NewVersioned(1),
+	}
+	err := sc.ValidateBasic(&TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}}, true)
+	require.NoError(err, "ValidateBasic V1 SGX constraints with nil policy")
+}
+
 func TestSGXAttestationV0(t *testing.T) {
 	require := require.New(t)
 
