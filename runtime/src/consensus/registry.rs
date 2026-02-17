@@ -703,6 +703,10 @@ pub enum SGXConstraints {
         #[cbor(optional)]
         policy: sgx::QuotePolicy,
 
+        /// The key manager access policy.
+        #[cbor(optional)]
+        kma_policy: sgx::QuotePolicy,
+
         /// The maximum attestation age (in blocks).
         #[cbor(optional)]
         max_attestation_age: u64,
