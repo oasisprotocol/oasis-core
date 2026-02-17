@@ -21,6 +21,7 @@ use crate::{
     },
     consensus::{
         beacon::EpochTime,
+        registry::RolesMask,
         roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_SIGNATURE_CONTEXT},
         state::keymanager::Status as KeyManagerStatus,
         verifier::Verifier,
@@ -988,12 +989,25 @@ impl Dispatcher {
         // Verify and decode the policy.
         let runtime_id = state.protocol.get_host_info().runtime_id;
 
+        // TODO: Why are we passing the quote policy from the host given that it needs to be fetched
+        // using the consensus verifier anyways. This could be signal only (empty struct)? It would be breaking
+        // to change the signature now, but technically we could ignore it.
+        //
+        // Alternative, would be to change the host callsite to only dummy policy, ignore it here and fetch other policies here.
+        // This way we could get rid of effective policy all-together and keep passing slices of policies, but this would change
+        // many function signatures, including sessions update policy, so not sure we profit at all.
+
         tokio::task::spawn_blocking(move || -> Result<(), Error> {
             let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
             let policy =
                 state
                     .policy_verifier
-                    .verify_quote_policy(quote_policy, &key_manager, None)?;
+                    .verify_quote_policy(
+                        quote_policy,
+                        &key_manager,
+                        None,
+                        RolesMask::ROLE_KEY_MANAGER,
+                    )?;
 
             // Dispatch the local RPC call.
             state.rpc_dispatcher.handle_km_quote_policy_update(policy);

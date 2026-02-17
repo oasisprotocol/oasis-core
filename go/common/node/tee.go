@@ -34,17 +34,13 @@ type TEEFeaturesSGX struct {
 
 // ApplyDefaultConstraints applies configured SGX constraint defaults to the given structure.
 func (fs *TEEFeaturesSGX) ApplyDefaultConstraints(sc *SGXConstraints) {
-	// Default policy.
-	if fs.DefaultPolicy != nil {
-		if sc.Policy == nil {
-			sc.Policy = &quote.Policy{}
+	sc.Policy = sc.Policy.ApplyDefault(fs.DefaultPolicy, fs.PCS)
+
+	for role, policy := range sc.PerRolePolicy {
+		if policy == nil {
+			continue
 		}
-		if sc.Policy.IAS == nil {
-			sc.Policy.IAS = fs.DefaultPolicy.IAS
-		}
-		if sc.Policy.PCS == nil && fs.PCS {
-			sc.Policy.PCS = fs.DefaultPolicy.PCS
-		}
+		sc.PerRolePolicy[role] = policy.ApplyDefault(fs.DefaultPolicy, fs.PCS)
 	}
 
 	// Default maximum attestation age.

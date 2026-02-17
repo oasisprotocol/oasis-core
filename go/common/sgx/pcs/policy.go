@@ -2,6 +2,8 @@ package pcs
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 )
 
 // QuotePolicy is the quote validity policy.
@@ -26,6 +28,68 @@ type QuotePolicy struct {
 
 	// TDX is an optional TDX-specific policy. In case this is nil, TDX quotes are disallowed.
 	TDX *TdxQuotePolicy `json:"tdx,omitempty" yaml:"tdx,omitempty"`
+}
+
+// Merge merges two QuotePolicies into one, taking more restrictive configuration into account.
+//
+// TODO:
+//   - What if FMSCPWhitelist has no intersection (same applies for TDXQuotePolicy)?
+//   - Should we even allow registration of such runtime descriptor?
+//   - Finish TDX quote policy merge (ugly).
+//   - Unit tests.
+//   - Merge should produce independent copies to not accidentally mutate stuff.
+func (p *QuotePolicy) Merge(o *QuotePolicy) *QuotePolicy {
+	if p == nil {
+		return o
+	}
+
+	if o == nil {
+		return p
+	}
+
+	merged := &QuotePolicy{
+		Disabled:                   p.Disabled || o.Disabled,
+		TCBValidityPeriod:          min(p.TCBValidityPeriod, o.TCBValidityPeriod),
+		MinTCBEvaluationDataNumber: max(p.MinTCBEvaluationDataNumber, o.MinTCBEvaluationDataNumber),
+	}
+
+	func() {
+		if len(p.FMSPCWhitelist) == 0 {
+			merged.FMSPCWhitelist = o.FMSPCWhitelist
+			return
+		}
+
+		if len(o.FMSPCWhitelist) == 0 {
+			merged.FMSPCWhitelist = p.FMSPCWhitelist
+			return
+		}
+
+		intersect := make(map[string]struct{}, len(p.FMSPCWhitelist))
+		for _, fmspc := range p.FMSPCWhitelist {
+			intersect[fmspc] = struct{}{}
+		}
+		for _, fmspc := range o.FMSPCWhitelist {
+			if _, ok := intersect[fmspc]; ok {
+				merged.FMSPCWhitelist = append(merged.FMSPCWhitelist, fmspc)
+			}
+		}
+
+		// Preventing no intersection meaning allow any.
+		if len(merged.FMSPCWhitelist) == 0 {
+			merged.Disabled = true
+		}
+
+	}()
+
+	union := make(map[string]struct{}, len(p.FMSPCBlacklist)+len(o.FMSPCBlacklist))
+	for _, fmspc := range append(p.FMSPCBlacklist, o.FMSPCBlacklist...) {
+		union[fmspc] = struct{}{}
+	}
+	merged.FMSPCBlacklist = slices.Collect(maps.Keys(union))
+	slices.Sort(merged.FMSPCBlacklist)
+
+	merged.TDX = p.TDX.Merge(o.TDX)
+	return merged
 }
 
 // TdxQuotePolicy is the TDX-specific quote policy.
@@ -54,6 +118,25 @@ func (tp *TdxQuotePolicy) verifyTdxModule(report *TdReport) error {
 	}
 
 	return fmt.Errorf("pcs/quote: TDX module not allowed")
+}
+
+func (tp *TdxQuotePolicy) Merge(o *TdxQuotePolicy) *TdxQuotePolicy {
+	if tp == nil || o == nil {
+		return nil
+	}
+
+	if len(tp.AllowedTdxModules) == 0 {
+		return o
+	}
+
+	if len(o.AllowedTdxModules) == 0 {
+		return tp
+	}
+
+	// TODO
+	// Merge the TDXQuotePolicy.
+
+	return o
 }
 
 // TDX_MrSigner_Intel is the TDX module MRSIGNER for Intel (000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000).

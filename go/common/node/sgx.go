@@ -32,8 +32,11 @@ type SGXConstraints struct {
 	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
 	Enclaves []sgx.EnclaveIdentity `json:"enclaves,omitempty"`
 
-	// Policy is the quote policy.
+	// Policy is the quote policy that all attestations must satisfy.
 	Policy *quote.Policy `json:"policy,omitempty"`
+
+	// PerRolePolicy defines additional role specific quote policies.
+	PerRolePolicy map[RolesMask]*quote.Policy `json:"per_role_policy,omitempty"`
 
 	// MaxAttestationAge is the maximum attestation age (in blocks).
 	MaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
@@ -111,15 +114,37 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 		return fmt.Errorf("unsupported SGX constraints version: %d", sc.V)
 	}
 
-	// Check for TDX enablement.
-	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
-		return fmt.Errorf("TDX policy not supported")
+	validatePolicy := func(policy *quote.Policy) error {
+		// Check for TDX enablement.
+		if !cfg.SGX.TDX && policy.PCS != nil && policy.PCS.TDX != nil {
+			return fmt.Errorf("TDX policy not supported")
+		}
+		if err := policy.Validate(isFeatureVersion242); err != nil {
+			return fmt.Errorf("invalid policy: %w", err)
+		}
+		return nil
 	}
 
-	// Check that policy is compliant with the current feature version.
+	// Check default policy.
 	if sc.Policy != nil {
-		if err := sc.Policy.Validate(isFeatureVersion242); err != nil {
+		if err := validatePolicy(sc.Policy); err != nil {
 			return fmt.Errorf("invalid policy: %w", err)
+		}
+	}
+
+	// Check per-role policies.
+	if !isFeatureVersion242 && sc.PerRolePolicy != nil {
+		return fmt.Errorf("per role policy should be empty")
+	}
+	for role, policy := range sc.PerRolePolicy {
+		if !role.IsSingleRole() {
+			return fmt.Errorf("per-role quote policies should have a single role")
+		}
+		if policy == nil {
+			return fmt.Errorf("per-role policy should not be nil")
+		}
+		if err := validatePolicy(policy); err != nil {
+			return fmt.Errorf("invalid policy (role: %s): %w", role, err)
 		}
 	}
 
@@ -130,6 +155,25 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 // enclave identity.
 func (sc *SGXConstraints) ContainsEnclave(eid sgx.EnclaveIdentity) bool {
 	return slices.Contains(sc.Enclaves, eid)
+}
+
+// EffectivePolicy returns a combined policy. The combined policy may in addition to the default policy,
+// (depending on the specified roles) also include additional per-role policies.
+func (sc *SGXConstraints) EffectivePolicy(roles RolesMask) *quote.Policy {
+	effectivePolicy := sc.Policy // TODO: Make this a deep copy or better yet ensure Merge produces it.
+	if effectivePolicy == nil {
+		effectivePolicy = &quote.Policy{}
+	}
+
+	for role, policy := range sc.PerRolePolicy {
+		if role&roles == 0 {
+			continue
+		}
+		// We are ignoring deprecated IAS part, possibly we could error if if set twice.
+		effectivePolicy.PCS = effectivePolicy.PCS.Merge(policy.PCS)
+	}
+
+	return effectivePolicy
 }
 
 const (
@@ -213,6 +257,7 @@ func (sa *SGXAttestation) ValidateBasic(cfg *TEEFeatures) error {
 }
 
 // Verify verifies the SGX attestation.
+// TODO: Extensive test suite for this function that acts as integration test (consider mocking).
 func (sa *SGXAttestation) Verify(
 	cfg *TEEFeatures,
 	ts time.Time,
@@ -220,7 +265,7 @@ func (sa *SGXAttestation) Verify(
 	sc *SGXConstraints,
 	rak signature.PublicKey,
 	rek *x25519.PublicKey,
-	nodeID signature.PublicKey,
+	n *Node,
 ) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
@@ -229,8 +274,9 @@ func (sa *SGXAttestation) Verify(
 	// Use defaults from consensus parameters.
 	cfg.SGX.ApplyDefaultConstraints(sc)
 
-	// Verify the quote.
-	verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
+	// Verify the quote againt the effective policy.
+	policy := sc.EffectivePolicy(n.Roles)
+	verifiedQuote, err := sa.Quote.Verify(policy, ts)
 	if err != nil {
 		return err
 	}
@@ -254,7 +300,7 @@ func (sa *SGXAttestation) Verify(
 
 	if cfg.SGX.SignedAttestations {
 		// In case the signed attestation feature is enabled, verify the signature.
-		return sa.verifyAttestationSignature(sc, rak, rek, verifiedQuote.ReportData, nodeID, height)
+		return sa.verifyAttestationSignature(sc, rak, rek, verifiedQuote.ReportData, n.ID, height)
 	}
 
 	return nil

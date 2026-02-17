@@ -48,6 +48,16 @@ func GetQuotePolicy(
 				return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
 			}
 
+			// TODO: We should return effective quote policy here. This function is called when node
+			// is creating a TCBBundle. Technically attestation will be verified on both consensus and
+			// runtime site but we want to catch problems early-on to avoid failed transaction.
+			//
+			// Crux: host config does not have access to the registration worker (role providers) roles.
+			//
+			// Possible solutions:
+			//    1. Map config to consensus registry roles(modes &| configured identity &| consesus.validator |& storage.public_rpc_enabled).
+			//    2. Delay this validation and call it from the registration worker just before submitting registration with attestation.
+			//    3. Somehow pass role provider roles here.
 			return sc.Policy, nil
 		}
 		return fallbackPolicy, nil

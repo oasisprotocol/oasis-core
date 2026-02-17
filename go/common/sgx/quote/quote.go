@@ -81,3 +81,22 @@ func (p *Policy) Validate(isFeatureVersion242 bool) error {
 
 	return fmt.Errorf("fmspc whitelist should be empty")
 }
+
+func (p *Policy) ApplyDefault(d *Policy, pcsEnabled bool) *Policy {
+	if d == nil {
+		return p
+	}
+
+	if p == nil {
+		p = &Policy{}
+	}
+
+	if p.IAS == nil {
+		p.IAS = d.IAS
+	}
+	if p.PCS == nil && pcsEnabled {
+		p.PCS = d.PCS
+	}
+
+	return p
+}

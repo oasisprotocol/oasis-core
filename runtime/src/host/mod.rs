@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     common::{crypto::signature::PublicKey, namespace::Namespace},
+    consensus::registry::RolesMask,
     enclave_rpc,
     protocol::Protocol,
     storage::mkvs::sync,
@@ -56,7 +57,7 @@ pub struct TxResult {
 #[async_trait]
 pub trait Host: Send + Sync {
     /// Returns the identity of the host node.
-    async fn identity(&self) -> Result<PublicKey, Error>;
+    async fn identity(&self) -> Result<(PublicKey, RolesMask), Error>;
 
     /// Submit a transaction.
     async fn submit_tx(&self, data: Vec<u8>, opts: SubmitTxOpts)
@@ -77,9 +78,11 @@ pub trait Host: Send + Sync {
 
 #[async_trait]
 impl Host for Protocol {
-    async fn identity(&self) -> Result<PublicKey, Error> {
+    async fn identity(&self) -> Result<(PublicKey, RolesMask), Error> {
         match self.call_host_async(Body::HostIdentityRequest {}).await? {
-            Body::HostIdentityResponse { node_id } => Ok(node_id),
+            Body::HostIdentityResponse { node_id, roles } => {
+                Ok((node_id, roles.unwrap_or(RolesMask::ROLE_EMPTY)))
+            }
             _ => Err(Error::BadResponse),
         }
     }

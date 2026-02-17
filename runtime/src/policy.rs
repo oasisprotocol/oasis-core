@@ -10,7 +10,7 @@ use crate::{
     common::{logger::get_logger, namespace::Namespace, sgx::QuotePolicy, version::Version},
     consensus::{
         keymanager::SignedPolicySGX,
-        registry::{SGXConstraints, TEEHardware},
+        registry::{RolesMask, SGXConstraints, TEEHardware},
         state::{
             beacon::ImmutableState as BeaconState,
             keymanager::{ImmutableState as KeyManagerState, Status},
@@ -60,13 +60,14 @@ impl PolicyVerifier {
         }
     }
 
-    /// Fetch runtime's quote policy from the latest verified consensus layer state.
+    /// Fetch runtime's effective quote policy from the latest verified consensus layer state.
     ///
     /// If the runtime version is not provided, the policy for the active deployment is returned.
-    pub fn quote_policy(
+    pub fn effective_quote_policy(
         &self,
         runtime_id: &Namespace,
         version: Option<Version>,
+        roles: RolesMask,
     ) -> Result<QuotePolicy> {
         // Fetch quote policy from the consensus layer using the given or the active version.
         // TODO: Make this async.
@@ -95,7 +96,7 @@ impl PolicyVerifier {
                 let sc: SGXConstraints = ad
                     .try_decode_tee()
                     .map_err(|_| PolicyVerifierError::BadTEEConstraints)?;
-                sc.policy()
+                sc.effective_policy(roles)
             }
             _ => bail!(PolicyVerifierError::HardwareMismatch),
         };
@@ -103,14 +104,15 @@ impl PolicyVerifier {
         Ok(policy)
     }
 
-    /// Verify that runtime's quote policy has been published in the consensus layer.
+    /// Verify that runtime's effective quote policy has been published in the consensus layer.
     pub fn verify_quote_policy(
         &self,
         policy: QuotePolicy,
         runtime_id: &Namespace,
         version: Option<Version>,
+        roles: RolesMask,
     ) -> Result<QuotePolicy> {
-        let published_policy = self.quote_policy(runtime_id, version)?;
+        let published_policy = self.effective_quote_policy(runtime_id, version, roles)?;
 
         if policy != published_policy {
             debug!(

@@ -699,9 +699,13 @@ pub enum SGXConstraints {
         #[cbor(optional)]
         enclaves: Vec<sgx::EnclaveIdentity>,
 
-        /// The quote policy.
+        /// Default quote policy.
         #[cbor(optional)]
         policy: sgx::QuotePolicy,
+
+        /// Additional per-role quote policies.
+        #[cbor(optional)]
+        per_role_policy: BTreeMap<RolesMask, sgx::QuotePolicy>,
 
         /// The maximum attestation age (in blocks).
         #[cbor(optional)]
@@ -740,6 +744,13 @@ impl SGXConstraints {
             },
             Self::V1 { ref policy, .. } => policy.clone(),
         }
+    }
+
+    /// Effective SGX quote policy for the given roles.
+    ///
+    /// TODO: Implement effective policy and underyling merging.
+    pub fn effective_policy(&self, roles: RolesMask) -> sgx::QuotePolicy {
+         self.policy()
     }
 }
 
