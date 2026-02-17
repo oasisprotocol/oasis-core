@@ -78,6 +78,159 @@ func TestSGXConstraintsV1NilPolicy(t *testing.T) {
 	require.NoError(err, "ValidateBasic V1 SGX constraints with nil policy")
 }
 
+func TestSGXConstraintsPerRolePolicyValidation(t *testing.T) {
+	tests := []struct {
+		name                string
+		cfg                 *TEEFeatures
+		isFeatureVersion242 bool
+		perRolePolicy       map[RolesMask]quote.Policy
+		errContains         string
+	}{
+		{
+			name:                "non-nil per-role policy before 24.2 is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: false,
+			perRolePolicy:       map[RolesMask]quote.Policy{},
+			errContains:         "per role policy should be nil until feature version 24.2",
+		},
+		{
+			name:                "compute role policy is valid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker: {},
+			},
+		},
+		{
+			name:                "multi-role policy key is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker | RoleObserver: {},
+			},
+			errContains: "quote policies should have a single role",
+		},
+		{
+			name:                "key manager role policy is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleKeyManager: {},
+			},
+			errContains: "invalid role: only compute or observer role allowed",
+		},
+		{
+			name:                "empty role policy key is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleEmpty: {},
+			},
+			errContains: "quote policies should have a single role",
+		},
+		{
+			name:                "reserved role policy key is invalid",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				roleReserved3: {},
+			},
+			errContains: "quote policies should have a single role",
+		},
+		{
+			name:                "tdx policy in per-role entry requires tdx feature",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker: {
+					PCS: &pcs.QuotePolicy{
+						TDX: &pcs.TdxQuotePolicy{},
+					},
+				},
+			},
+			errContains: "TDX policy not supported",
+		},
+		{
+			name:                "non-empty IAS per role entry not allowed",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion242: true,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker: {
+					IAS: &ias.QuotePolicy{},
+				},
+			},
+			errContains: "IAS not allowed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := SGXConstraints{
+				Versioned:     cbor.NewVersioned(1),
+				PerRolePolicy: tc.perRolePolicy,
+			}
+
+			err := sc.ValidateBasic(tc.cfg, tc.isFeatureVersion242)
+			if tc.errContains == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.errContains)
+		})
+	}
+}
+
+func TestSGXConstraintsPolicyFor(t *testing.T) {
+	defaultPolicy := quote.Policy{
+		PCS: &pcs.QuotePolicy{TCBValidityPeriod: 20},
+	}
+	rolePolicy := quote.Policy{
+		PCS: &pcs.QuotePolicy{TCBValidityPeriod: 10},
+	}
+
+	for _, tc := range []struct {
+		name          string
+		roles         RolesMask
+		perRolePolicy map[RolesMask]quote.Policy
+		want          quote.Policy
+	}{
+		{
+			name:          "observer with no per-role override should use default",
+			roles:         RoleObserver,
+			perRolePolicy: nil,
+			want:          defaultPolicy,
+		},
+		{
+			name:  "compute with per-role override should use compute policy",
+			roles: RoleComputeWorker,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker: rolePolicy,
+			},
+			want: rolePolicy,
+		},
+		{
+			name:  "client with empty per-role should use default",
+			roles: RoleEmpty,
+			perRolePolicy: map[RolesMask]quote.Policy{
+				RoleComputeWorker: rolePolicy,
+			},
+			want: defaultPolicy,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := SGXConstraints{
+				Versioned:     cbor.NewVersioned(1),
+				Policy:        &defaultPolicy,
+				PerRolePolicy: tc.perRolePolicy,
+			}
+
+			got := sc.PolicyFor(tc.roles)
+			require.EqualValues(t, &tc.want, got)
+		})
+	}
+}
+
 func TestSGXAttestationV0(t *testing.T) {
 	require := require.New(t)
 

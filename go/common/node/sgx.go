@@ -32,8 +32,16 @@ type SGXConstraints struct {
 	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
 	Enclaves []sgx.EnclaveIdentity `json:"enclaves,omitempty"`
 
-	// Policy is the quote policy.
+	// Policy is the default quote policy. The default policy must be satisfied
+	// unless there exists a corresponding per-role policy.
 	Policy *quote.Policy `json:"policy,omitempty"`
+
+	// PerRolePolicy defines additional role specific quote policies, that overwrite
+	// Policy when node with these roles does an attestation.
+	//
+	// A valid entry is for either [RoleComputeWorker] or [RoleObserver]. Single entry
+	// should not encode multiple roles.
+	PerRolePolicy map[RolesMask]quote.Policy `json:"per_role_policy,omitempty"`
 
 	// MaxAttestationAge is the maximum attestation age (in blocks).
 	MaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
@@ -111,21 +119,61 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 		return fmt.Errorf("unsupported SGX constraints version: %d", sc.V)
 	}
 
-	if sc.Policy == nil {
-		return nil
+	validatePolicy := func(policy *quote.Policy) error {
+		if policy == nil {
+			return nil
+		}
+
+		// Check for TDX enablement.
+		if !cfg.SGX.TDX && policy.PCS != nil && policy.PCS.TDX != nil {
+			return fmt.Errorf("TDX policy not supported")
+		}
+
+		// Check that policy is compliant with the current feature version.
+		return policy.Validate(isFeatureVersion242)
 	}
 
-	// Check for TDX enablement.
-	if !cfg.SGX.TDX && sc.Policy.PCS != nil && sc.Policy.PCS.TDX != nil {
-		return fmt.Errorf("TDX policy not supported")
+	validatePerRolePolicyEntry := func(role RolesMask, policy quote.Policy) error {
+		if !role.IsSingleRole() {
+			return fmt.Errorf("quote policies should have a single role")
+		}
+		if role != RoleComputeWorker && role != RoleObserver {
+			return fmt.Errorf("invalid role: only compute or observer role allowed")
+		}
+		if policy.IAS != nil {
+			return fmt.Errorf("invalid policy: IAS not allowed")
+		}
+		return validatePolicy(&policy)
 	}
 
-	// Check that policy is compliant with the current feature version.
-	if err := sc.Policy.Validate(isFeatureVersion242); err != nil {
-		return fmt.Errorf("invalid policy: %w", err)
+	if err := validatePolicy(sc.Policy); err != nil {
+		return fmt.Errorf("invalid default policy: %w", err)
+	}
+
+	if !isFeatureVersion242 && sc.PerRolePolicy != nil {
+		return fmt.Errorf("per role policy should be nil until feature version 24.2")
+	}
+
+	for role, policy := range sc.PerRolePolicy {
+		if err := validatePerRolePolicyEntry(role, policy); err != nil {
+			return fmt.Errorf("invalid per role policy entry (role: %s): %w", role, err)
+		}
 	}
 
 	return nil
+}
+
+// PolicyFor returns a matching per-role policy when present, or otherwise falls back to the default policy.
+//
+// This function expects role mask that has at most one runtime SGX role.
+func (sc *SGXConstraints) PolicyFor(roles RolesMask) *quote.Policy {
+	for role, policy := range sc.PerRolePolicy {
+		if role&roles == 0 {
+			continue
+		}
+		return &policy
+	}
+	return sc.Policy
 }
 
 // ContainsEnclave returns true iff the allowed enclave list in SGX constraints contain the given
@@ -223,16 +271,23 @@ func (sa *SGXAttestation) Verify(
 	rak signature.PublicKey,
 	rek *x25519.PublicKey,
 	nodeID signature.PublicKey,
+	nodeRoles RolesMask,
 ) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
 	}
 
 	// Use defaults from consensus parameters.
+	// TODO: Handle default constraints overwrite consistently.
+	// See https://github.com/oasisprotocol/oasis-core/issues/6459.
 	cfg.SGX.ApplyDefaultConstraints(sc)
 
+	// Prior to 24.2 nodeRoles might have multiple roles, but as per-role policies are guaranteed
+	// to be empty this works fine.
+	policy := sc.PolicyFor(nodeRoles)
+
 	// Verify the quote.
-	verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
+	verifiedQuote, err := sa.Quote.Verify(policy, ts)
 	if err != nil {
 		return err
 	}

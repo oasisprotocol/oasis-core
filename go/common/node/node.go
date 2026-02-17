@@ -593,7 +593,7 @@ func HashRAK(rak signature.PublicKey) hash.Hash {
 }
 
 // Verify verifies the node's TEE capabilities, at the provided timestamp and height.
-func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey, isFeatureVersion242 bool) error {
+func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey, nodeRoles RolesMask, isFeatureVersion242 bool) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		// Parse SGX remote attestation.
@@ -615,7 +615,7 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 		}
 
 		// Verify SGX remote attestation.
-		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, c.REK, nodeID)
+		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, c.REK, nodeID, nodeRoles)
 	default:
 		return ErrInvalidTEEHardware
 	}
