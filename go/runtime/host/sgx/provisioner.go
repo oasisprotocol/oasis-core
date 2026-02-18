@@ -58,8 +58,7 @@ type Config struct {
 
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
-	// QuotePolicy provides the quote policy for RONL deployments.
-	QuotePolicy sgxCommon.QuotePolicyProvider
+
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -85,12 +84,11 @@ type sgxProvisioner struct {
 
 	cfg Config
 
-	sandbox        host.Provisioner
-	pcs            pcs.QuoteService
-	aesm           *aesm.Client
-	policyProvider sgxCommon.QuotePolicyProvider
-	identity       *identity.Identity
-	store          *persistent.CommonStore
+	sandbox  host.Provisioner
+	pcs      pcs.QuoteService
+	aesm     *aesm.Client
+	identity *identity.Identity
+	store    *persistent.CommonStore
 
 	logger *logging.Logger
 }
@@ -105,13 +103,12 @@ func NewProvisioner(cfg Config) (host.Provisioner, error) {
 	sgxCommon.InitMetrics()
 
 	p := &sgxProvisioner{
-		cfg:            cfg,
-		pcs:            cfg.PCS,
-		aesm:           aesm.NewClient(aesmdSocketPath),
-		policyProvider: cfg.QuotePolicy,
-		identity:       cfg.Identity,
-		store:          cfg.CommonStore,
-		logger:         logging.GetLogger("runtime/host/sgx"),
+		cfg:      cfg,
+		pcs:      cfg.PCS,
+		aesm:     aesm.NewClient(aesmdSocketPath),
+		identity: cfg.Identity,
+		store:    cfg.CommonStore,
+		logger:   logging.GetLogger("runtime/host/sgx"),
 	}
 	sp, err := sandbox.NewProvisioner(sandbox.Config{
 		GetSandboxConfig:  p.getSandboxConfig,

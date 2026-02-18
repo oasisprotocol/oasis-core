@@ -55,8 +55,7 @@ type QemuConfig struct {
 
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
-	// QuotePolicy provides the quote policy for RONL deployments.
-	QuotePolicy sgxCommon.QuotePolicyProvider
+
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -77,11 +76,10 @@ type QemuExtraConfig struct {
 type qemuProvisioner struct {
 	cfg QemuConfig
 
-	sandbox     host.Provisioner
-	pcs         pcs.QuoteService
-	quotePolicy sgxCommon.QuotePolicyProvider
-	identity    *identity.Identity
-	cidPool     *CidPool
+	sandbox  host.Provisioner
+	pcs      pcs.QuoteService
+	identity *identity.Identity
+	cidPool  *CidPool
 
 	logger *logging.Logger
 }
@@ -96,12 +94,11 @@ func NewQemuProvisioner(cfg QemuConfig) (host.Provisioner, error) {
 	sgxCommon.InitMetrics()
 
 	p := &qemuProvisioner{
-		cfg:         cfg,
-		pcs:         cfg.PCS,
-		quotePolicy: cfg.QuotePolicy,
-		identity:    cfg.Identity,
-		cidPool:     cfg.CidPool,
-		logger:      logging.GetLogger("runtime/host/tdx/qemu"),
+		cfg:      cfg,
+		pcs:      cfg.PCS,
+		identity: cfg.Identity,
+		cidPool:  cfg.CidPool,
+		logger:   logging.GetLogger("runtime/host/tdx/qemu"),
 	}
 	sp, err := sandbox.NewProvisioner(sandbox.Config{
 		Connector:         newVsockConnector,
@@ -433,15 +430,9 @@ func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 	rekPub := rspRep.RuntimeCapabilityTEERakReportResponse.RekPub
 	rawQuote := rspRep.RuntimeCapabilityTEERakReportResponse.Report
 
-	var quotePolicy *sgxQuote.Policy
-	switch hp.Config.Component.Kind {
-	case component.RONL:
-		quotePolicy, err = p.quotePolicy.Get(ctx, hp.Config.ID, hp.Config.Component.Version)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch RONL quote policy: %w", err)
-		}
-	default:
-		// No policy, use fallback.
+	quotePolicy, err := hp.Config.QuotePolicy.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quote policy: %w", err)
 	}
 
 	// Use the fallback policy for ROFL components and RONL components with no TDX policy so that provisioning can proceed.
