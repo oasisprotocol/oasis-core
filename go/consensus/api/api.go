@@ -378,6 +378,9 @@ type Status struct {
 
 	// P2P is the P2P status of the node.
 	P2P *P2PStatus `json:"p2p,omitempty"`
+
+	// Checkpoint is the checkpoints status of the node.
+	Checkpoint *CheckpointStatus `json:"checkpoint,omitempty"`
 }
 
 // P2PStatus is the P2P status of a node.
@@ -393,6 +396,14 @@ type P2PStatus struct {
 
 	// Peers is a list of node's peers.
 	Peers []string `json:"peers"`
+}
+
+// CheckpointStatus is the checkpoints status of the node.
+type CheckpointStatus struct {
+	// Heights is a list of consensus heights for which the node has checkpoints locally.
+	//
+	// Heights are sorted in descending order.
+	Heights []uint64 `json:"heights"`
 }
 
 // Service is an interface that a consensus backend service must provide.
