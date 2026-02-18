@@ -453,7 +453,8 @@ func (w *Worker) worker() {
 		"version", comp.Version,
 	)
 
-	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
+	attestCfg := host.AttestationCfg{UseKMAPolicy: false}
+	if err := w.ProvisionHostedRuntimeComponent(comp, attestCfg); err != nil {
 		w.logger.Error("failed to provision runtime component",
 			"err", err,
 			"id", comp.ID(),

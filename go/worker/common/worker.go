@@ -157,6 +157,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.LightProvider,
 		w.P2P,
 		w.cfg.TxPool,
+		w.cfg.WillRegisterComputeRuntime,
 	)
 	if err != nil {
 		return err
