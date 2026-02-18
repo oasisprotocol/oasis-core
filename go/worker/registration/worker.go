@@ -28,7 +28,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -1143,7 +1142,7 @@ func (w *Worker) Start() error {
 	}
 
 	go w.doNodeRegistration()
-	if cmmetrics.Enabled() {
+	if w.workerCommonCfg.MetricsEnabled {
 		go w.metricsWorker()
 	}
 

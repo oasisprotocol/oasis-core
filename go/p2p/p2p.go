@@ -26,13 +26,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/config"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
 const (
@@ -100,7 +100,10 @@ func (p *p2p) Start() error {
 	// Unfortunately, we cannot start the host as libp2p starts everything on construction.
 	// However, we can start everything else.
 	p.peerMgr.Start()
-	go p.metricsWorker()
+
+	if metrics.Enabled(config.GlobalConfig.Metrics.Mode) {
+		go p.metricsWorker()
+	}
 
 	return nil
 }
@@ -354,12 +357,7 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 }
 
 // New creates a new P2P node.
-func New(identity *identity.Identity, chainContext string, store *persistent.CommonStore) (api.Service, error) {
-	var cfg Config
-	if err := cfg.Load(); err != nil {
-		return nil, fmt.Errorf("p2p: failed to load peer config: %w", err)
-	}
-
+func New(cfg *Config, identity *identity.Identity, chainContext string, store *persistent.CommonStore) (api.Service, error) {
 	// Create the P2P host.
 	cfg.HostConfig.Signer = identity.P2PSigner
 	host, cg, err := NewHost(&cfg.HostConfig)
@@ -433,98 +431,4 @@ func New(identity *identity.Identity, chainContext string, store *persistent.Com
 		topics:            make(map[string]*topicHandler),
 		logger:            logger,
 	}, nil
-}
-
-// Config describes a set of P2P settings for a peer.
-type Config struct {
-	Addresses []multiaddr.Multiaddr
-
-	HostConfig
-	GossipSubConfig
-	BootstrapDiscoveryConfig
-}
-
-// Load loads P2P configuration.
-func (cfg *Config) Load() error {
-	rawAddresses, err := configparser.ParseAddressList(config.GlobalConfig.P2P.Registration.Addresses)
-	if err != nil {
-		return fmt.Errorf("failed to parse address list: %w", err)
-	}
-	var addresses []multiaddr.Multiaddr
-	for _, addr := range rawAddresses {
-		var mAddr multiaddr.Multiaddr
-		mAddr, err = manet.FromNetAddr(addr.ToTCPAddr())
-		if err != nil {
-			return fmt.Errorf("failed to convert address to multiaddress: %w", err)
-		}
-		addresses = append(addresses, mAddr)
-	}
-
-	var hostCfg HostConfig
-	if err := hostCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load host config: %w", err)
-	}
-
-	var gossipSubCfg GossipSubConfig
-	if err := gossipSubCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load gossipsub config: %w", err)
-	}
-
-	var bootstrapCfg BootstrapDiscoveryConfig
-	if err := bootstrapCfg.Load(); err != nil {
-		return fmt.Errorf("failed to load bootstrap config: %w", err)
-	}
-
-	cfg.Addresses = addresses
-	cfg.HostConfig = hostCfg
-	cfg.GossipSubConfig = gossipSubCfg
-	cfg.BootstrapDiscoveryConfig = bootstrapCfg
-
-	return nil
-}
-
-// GossipSubConfig describes a set of settings for a gossip pubsub.
-type GossipSubConfig struct {
-	// XXX: Main config has int64, but here just int -- investigate.
-	PeerOutboundQueueSize int
-	ValidateQueueSize     int
-	ValidateThrottle      int
-
-	PersistentPeers []peer.AddrInfo
-}
-
-// Load loads gossipsub configuration.
-func (cfg *GossipSubConfig) Load() error {
-	persistentPeers, err := api.AddrInfosFromConsensusAddrs(config.GlobalConfig.P2P.ConnectionManager.PersistentPeers)
-	if err != nil {
-		return fmt.Errorf("failed to convert persistent peers' addresses: %w", err)
-	}
-
-	cfg.PeerOutboundQueueSize = config.GlobalConfig.P2P.Gossipsub.PeerOutboundQueueSize
-	cfg.ValidateQueueSize = config.GlobalConfig.P2P.Gossipsub.ValidateQueueSize
-	cfg.ValidateThrottle = config.GlobalConfig.P2P.Gossipsub.ValidateThrottle
-	cfg.PersistentPeers = persistentPeers
-
-	return nil
-}
-
-// BootstrapDiscoveryConfig describes a set of settings for a discovery.
-type BootstrapDiscoveryConfig struct {
-	Enable          bool
-	Seeds           []peer.AddrInfo
-	RetentionPeriod time.Duration
-}
-
-// Load loads bootstrap discovery configuration.
-func (cfg *BootstrapDiscoveryConfig) Load() error {
-	seeds, err := api.AddrInfosFromConsensusAddrs(config.GlobalConfig.P2P.Seeds)
-	if err != nil {
-		return fmt.Errorf("failed to convert seeds' addresses: %w", err)
-	}
-
-	cfg.Seeds = seeds
-	cfg.Enable = config.GlobalConfig.P2P.Discovery.Bootstrap.Enable
-	cfg.RetentionPeriod = config.GlobalConfig.P2P.Discovery.Bootstrap.RetentionPeriod
-
-	return nil
 }

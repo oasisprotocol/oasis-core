@@ -17,8 +17,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -107,8 +107,8 @@ func (s *pullService) Cleanup() {
 	}
 }
 
-func newPullService() (service.BackgroundService, error) {
-	addr := config.GlobalConfig.Metrics.Address
+func newPullService(cfg *config.Config) (service.BackgroundService, error) {
+	addr := cfg.Address
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
@@ -127,7 +127,7 @@ func newPullService() (service.BackgroundService, error) {
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler(), ReadTimeout: 5 * time.Second},
 		errCh:                 make(chan error),
-		rsvc:                  newResourceService(config.GlobalConfig.Metrics.Interval),
+		rsvc:                  newResourceService(cfg.Interval),
 	}, nil
 }
 
@@ -222,14 +222,14 @@ func (s *pushService) initPusher(isReinit bool) {
 	s.pusher = pusher
 }
 
-func newPushService() (service.BackgroundService, error) {
+func newPushService(cfg *config.Config) (service.BackgroundService, error) {
 	svc := &pushService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("metrics"),
-		addr:                  config.GlobalConfig.Metrics.Address,
-		jobName:               config.GlobalConfig.Metrics.JobName,
-		labels:                config.GlobalConfig.Metrics.Labels,
-		interval:              config.GlobalConfig.Metrics.Interval,
-		rsvc:                  newResourceService(config.GlobalConfig.Metrics.Interval),
+		addr:                  cfg.Address,
+		jobName:               cfg.JobName,
+		labels:                cfg.Labels,
+		interval:              cfg.Interval,
+		rsvc:                  newResourceService(cfg.Interval),
 		stopCh:                make(chan struct{}),
 		quitCh:                make(chan struct{}),
 	}
@@ -247,24 +247,25 @@ func newPushService() (service.BackgroundService, error) {
 }
 
 // New constructs a new metrics service.
-func New() (service.BackgroundService, error) {
-	mode := strings.ToLower(config.GlobalConfig.Metrics.Mode)
+func New(cfg *config.Config) (service.BackgroundService, error) {
+	mode := strings.ToLower(cfg.Mode)
 	switch mode {
 	case MetricsModeNone:
 		return newStubService()
 	case MetricsModePull:
-		return newPullService()
+		return newPullService(cfg)
 	default:
 		if mode == MetricsModePush && flags.DebugDontBlameOasis() {
-			return newPushService()
+			return newPushService(cfg)
 		}
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
 	}
 }
 
 // Enabled returns if metrics are enabled.
-func Enabled() bool {
-	return config.GlobalConfig.Metrics.Mode != MetricsModeNone
+func Enabled(mode string) bool {
+	mode = strings.ToLower(mode)
+	return mode != MetricsModeNone
 }
 
 // EscapeLabelCharacters replaces invalid prometheus label name characters with "_".
@@ -289,7 +290,7 @@ func GetDefaultPushLabels(ti *env.ScenarioInstanceInfo) map[string]string {
 			labels[EscapeLabelCharacters(f.Name)] = f.Value.String()
 		})
 		// Override any labels passed to oasis-test-runner via CLI.
-		for k, v := range config.GlobalConfig.Metrics.Labels {
+		for k, v := range config.DefaultConfig().Labels { // TODO explain in the commit why this is safe.
 			labels[k] = v
 		}
 

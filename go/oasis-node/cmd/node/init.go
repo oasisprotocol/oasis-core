@@ -11,6 +11,8 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics/config"
+
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 )
@@ -81,9 +83,9 @@ func loadOrGenerateIdentity(dataDir string, logger *logging.Logger) (*identity.I
 }
 
 // startMetricServer initializes and starts the metrics reporting server.
-func startMetricServer(svcMgr *background.ServiceManager, logger *logging.Logger) (service.BackgroundService, error) {
+func startMetricServer(svcMgr *background.ServiceManager, logger *logging.Logger, cfg *config.Config) (service.BackgroundService, error) {
 	// Initialize the metrics server.
-	metrics, err := metrics.New()
+	metrics, err := metrics.New(cfg)
 	if err != nil {
 		logger.Error("failed to initialize metrics server",
 			"err", err,
