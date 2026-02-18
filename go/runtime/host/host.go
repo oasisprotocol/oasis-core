@@ -22,6 +22,10 @@ type Config struct {
 	// ID is the runtime identifier.
 	ID common.Namespace
 
+	// RuntimeRoles is the runtime role mask the node will register RONL component with.
+	// In case of ROFL only nodes (no registration) this is expected to be empty role.
+	RuntimeRoles node.RolesMask
+
 	// Component is the component that should be provisioned.
 	Component *bundle.ExplodedComponent
 

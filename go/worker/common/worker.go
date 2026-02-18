@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -25,6 +26,7 @@ type Worker struct {
 	DataDir         string
 	ChainContext    string
 	Identity        *identity.Identity
+	runtimeRoles    node.RolesMask
 	Consensus       consensus.Service
 	LightProvider   consensus.LightProvider
 	P2P             p2p.Service
@@ -161,6 +163,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.Provisioner,
 		w.RuntimeRegistry,
 		w.Identity,
+		w.runtimeRoles,
 		w.KeyManager,
 		w.Consensus,
 		w.LightProvider,
@@ -185,6 +188,7 @@ func New(
 	dataDir string,
 	chainContext string,
 	identity *identity.Identity,
+	runtimeRoles node.RolesMask,
 	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2p p2p.Service,
@@ -215,6 +219,7 @@ func New(
 		DataDir:         dataDir,
 		ChainContext:    chainContext,
 		Identity:        identity,
+		runtimeRoles:    runtimeRoles,
 		Consensus:       consensus,
 		LightProvider:   lightProvider,
 		P2P:             p2p,

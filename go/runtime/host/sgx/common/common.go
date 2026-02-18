@@ -48,7 +48,7 @@ func GetQuotePolicy(
 				return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
 			}
 
-			return sc.Policy, nil
+			return sc.PolicyFor(cfg.RuntimeRoles), nil
 		}
 		return fallbackPolicy, nil
 	case component.ROFL:

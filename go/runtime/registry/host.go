@@ -21,25 +21,27 @@ type RuntimeHostNode struct {
 
 	host *composite.Host
 
-	runtime     Runtime
-	provisioner host.Provisioner
-	handler     host.RuntimeHandler
-	logManager  *log.Manager
+	runtime      Runtime
+	runtimeRoles node.RolesMask
+	provisioner  host.Provisioner
+	handler      host.RuntimeHandler
+	logManager   *log.Manager
 
 	rofls map[component.ID]version.Version
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler host.RuntimeHandler, logManager *log.Manager) (*RuntimeHostNode, error) {
+func NewRuntimeHostNode(runtime Runtime, runtimeRoles node.RolesMask, provisioner host.Provisioner, handler host.RuntimeHandler, logManager *log.Manager) (*RuntimeHostNode, error) {
 	h := composite.NewHost(runtime.ID())
 
 	return &RuntimeHostNode{
-		host:        h,
-		logManager:  logManager,
-		runtime:     runtime,
-		handler:     handler,
-		provisioner: provisioner,
-		rofls:       make(map[component.ID]version.Version),
+		host:         h,
+		logManager:   logManager,
+		runtime:      runtime,
+		runtimeRoles: runtimeRoles,
+		handler:      handler,
+		provisioner:  provisioner,
+		rofls:        make(map[component.ID]version.Version),
 	}, nil
 }
 
@@ -67,6 +69,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 
 	cfg := host.Config{
 		ID:             n.runtime.ID(),
+		RuntimeRoles:   n.runtimeRoles,
 		Component:      comp,
 		MessageHandler: handler,
 		LocalConfig:    getLocalConfig(n.runtime.ID(), comp.ID()),
