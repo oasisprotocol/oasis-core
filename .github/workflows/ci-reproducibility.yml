@@ -16,7 +16,7 @@ on:
 env:
   CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
   GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
-  GORELEASER_VERSION: 2.9.0
+  GORELEASER_VERSION: 2.13.3
   JEMALLOC_URL_PREFIX: https://github.com/jemalloc/jemalloc/releases/download/
   JEMALLOC_VERSION: 5.2.1
   JEMALLOC_CHECKSUM: 34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
