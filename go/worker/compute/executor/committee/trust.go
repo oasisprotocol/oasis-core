@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 )
 
-// startRuntimeTrustSync asks the runtime to start syncing its light client up to the current
+// startRuntimeTrustSyncLocked asks the runtime to start syncing its light client up to the current
 // latest height. If the runtime does not actually use a trust root, this will be a no-op.
 //
 // When syncing is completed, the runtimeTrustSycned flag will be set.
