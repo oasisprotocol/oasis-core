@@ -39,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ">=1.25.5"
+          go-version: ">=1.26.0"
       - name: Set up Rust
         working-directory: build${{ matrix.build_number }}
         run: rustup show
