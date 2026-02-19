@@ -247,7 +247,7 @@ func (s *bundleServer) handleGetMetadata(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Disposition", "attachment; filename=metadata.txt")
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	_, _ = w.Write(content) //nolint:gosec
 
 	atomic.AddUint64(&s.requestCount, 1)
 }
@@ -261,7 +261,7 @@ func (s *bundleServer) handleGetBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		http.Error(w, "Error reading bundle", http.StatusInternalServerError)
 		return
@@ -270,7 +270,7 @@ func (s *bundleServer) handleGetBundle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=bundle.orc")
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	_, _ = w.Write(content) //nolint:gosec
 
 	atomic.AddUint64(&s.requestCount, 1)
 }

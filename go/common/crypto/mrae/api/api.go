@@ -90,10 +90,10 @@ func TestBoxIntegration(t *testing.T, impl Box, ctor func([]byte) (cipher.AEAD, 
 	for i := range n {
 		n[i] = byte(i)
 	}
-	for i := range aad {
+	for i := range len(aad) {
 		aad[i] = byte(i + nonceSize)
 	}
-	for i := range msg {
+	for i := range len(msg) {
 		msg[i] = byte(i + nonceSize + len(aad))
 	}
 

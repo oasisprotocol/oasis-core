@@ -92,13 +92,10 @@ func FromString(s string) (Version, error) {
 	// Take at most four components: major.minor.patch.remainder.
 	split := strings.SplitN(s, ".", 4)
 
+	// Ignore any components following major.minor.patch.
 	semVers := []uint16{0, 0, 0}
-	for i, v := range split {
-		if i >= 3 {
-			// Ignore any components following major.minor.patch.
-			break
-		}
-		ver, err := strconv.ParseUint(v, 10, 16)
+	for i := range min(len(semVers), len(split)) {
+		ver, err := strconv.ParseUint(split[i], 10, 16)
 		if err != nil {
 			return Version{}, fmt.Errorf("version: failed to parse SemVer '%s': %w", s, err)
 		}

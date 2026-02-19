@@ -457,7 +457,7 @@ func (tl *TCBLevel) matches(sgxCompSvn [16]int32, tdxCompSvn *[16]byte, pcesvn u
 	//    otherwise move to the next item on TCB Levels list.
 	for i, comp := range tl.TCB.SGXComponents {
 		// At least one SVN is lower, no match.
-		if sgxCompSvn[i] < comp.SVN {
+		if sgxCompSvn[i] < comp.SVN { //nolint:gosec
 			return false
 		}
 	}
