@@ -68,11 +68,11 @@ func (l *Log) rotate() error {
 	if err := l.file.Close(); err != nil {
 		return fmt.Errorf("failed to close file for rotation: %w", err)
 	}
-	if err := os.Remove(l.file.Name()); err != nil {
+	if err := os.Remove(l.file.Name()); err != nil { //nolint:gosec
 		return fmt.Errorf("failed to remove file for rotation: %w", err)
 	}
 
-	file, err := os.OpenFile(l.file.Name(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(l.file.Name(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to reopen file for rotation: %w", err)
 	}

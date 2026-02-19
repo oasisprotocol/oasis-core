@@ -169,7 +169,7 @@ func TestErrorMapping(t *testing.T) {
 	require.NoError(err, "TempFile")
 	// Remove the file as we only need the name.
 	f.Close()
-	os.Remove(f.Name())
+	os.Remove(f.Name()) //nolint:gosec
 
 	cfg := &ServerConfig{
 		Path: f.Name(),

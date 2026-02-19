@@ -644,7 +644,7 @@ func (m *Manager) fetchBundle(url string) (string, error) {
 	defer func() {
 		file.Close()
 		if err != nil {
-			_ = os.Remove(file.Name())
+			_ = os.Remove(file.Name()) //nolint:gosec
 		}
 	}()
 

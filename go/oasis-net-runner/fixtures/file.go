@@ -17,7 +17,7 @@ const (
 // newFixtureFromFile parses given JSON file and creates new fixture object from it.
 func newFixtureFromFile(path string) (*oasis.NetworkFixture, error) {
 	f := oasis.NetworkFixture{}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		return nil, fmt.Errorf("newFixtureFromFile: failed to open fixture file: %w", err)
 	}

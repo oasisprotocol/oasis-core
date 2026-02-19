@@ -78,9 +78,8 @@ func markdownTable(metrics map[string]Metric) string {
 		}
 		desc := html.EscapeString(m.Help)
 		labels := strings.Join(m.Labels, ", ")
-
-		mdTable.WriteString(fmt.Sprintf("%s | %s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
-			labels, pkg, fileURL))
+		row := fmt.Sprintf("%s | %s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc, labels, pkg, fileURL)
+		mdTable.WriteString(row)
 	}
 
 	return mdTable.String()
