@@ -6,7 +6,7 @@ import (
 
 	cometbftDB "github.com/cometbft/cometbft-db"
 	cmtCfg "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/state"
+	cmtState "github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -73,7 +73,7 @@ func openConsensusStateDB(dataDir string) (cometbftDB.DB, error) {
 	return cmtDB.OpenStateDB(dbProvider, cmtConfig)
 }
 
-func openConsensusStatestore(dataDir string) (state.Store, error) {
+func openConsensusStatestore(dataDir string) (cmtState.Store, error) {
 	stateDB, err := openConsensusStateDB(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open state db: %w", err)

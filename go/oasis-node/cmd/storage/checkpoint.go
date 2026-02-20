@@ -3,7 +3,9 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -12,7 +14,6 @@ import (
 	cmtProto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtState "github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
-	"github.com/cometbft/cometbft/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/cometbft/cometbft/version"
 	"github.com/cosmos/gogoproto/proto"
@@ -76,48 +77,47 @@ func newCreateCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Short: "create storage checkpoints",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			createConsensusCp := func() error {
-				ndb, close, err := openConsensusNodeDB(cmdCommon.DataDir())
+			ctx := cmd.Context()
+			dataDir := cmdCommon.DataDir()
+
+			// Consensus checkpoint:
+			createConsensusCp := func(outputDir string) error {
+				ndb, close, err := openConsensusNodeDB(dataDir)
 				if err != nil {
 					return fmt.Errorf("failed to open consensus state DB: %w", err)
 				}
 				defer close()
 
+				return createCheckpoints(ctx, ndb, common.Namespace{}, height, outputDir)
+			}
+			if height != 0 { // TODO handle zero value vs not set correctly.
 				consensusOutDir := filepath.Join(outDir, consensusSubdir)
-				if err := createConsensusCheckpoint(cmd.Context(), ndb, height, consensusOutDir); err != nil {
-					return err
+				if err := createConsensusCp(consensusOutDir); err != nil {
+					return fmt.Errorf("failed to create consensus checkpoint (height: %d): %w", height, err)
 				}
-				if err := writeConsensusBootstrap(cmd.Context(), cmdCommon.DataDir(), ndb, height, consensusOutDir); err != nil {
+				if err := createCometBFTBootstrapMeta(ctx, dataDir, height, consensusOutDir); err != nil {
 					return fmt.Errorf("failed to write bootstrap metadata: %w", err)
 				}
-				return nil
 			}
 
-			createRuntimeCps := func() error {
-				var ns common.Namespace
-				if err := ns.UnmarshalHex(runtimeID); err != nil {
-					return fmt.Errorf("malformed source runtime ID: %q: %w", ns, err)
-				}
-
-				ndb, err := openRuntimeStateDB(cmdCommon.DataDir(), ns)
+			// Runtime Checkpoints:
+			createRuntimeCps := func(ns common.Namespace, outputDir string) error {
+				ndb, err := openRuntimeStateDB(dataDir, ns)
 				if err != nil {
 					return fmt.Errorf("failed to open runtime state DB: %w", err)
 				}
 				defer ndb.Close()
 
-				rtOutDir := filepath.Join(outDir, runtimesSubdir, ns.Hex())
-				return createRuntimeCheckpoints(cmd.Context(), ndb, round, rtOutDir)
+				return createCheckpoints(ctx, ndb, ns, round, outputDir)
 			}
-
-			if height != 0 { // TODO handle zero value vs not set correctly.
-				if err := createConsensusCp(); err != nil {
-					return fmt.Errorf("failed to create consensus checkpoint (height: %d): %w", height, err)
-				}
-			}
-
 			if runtimeID != "" {
-				if err := createRuntimeCps(); err != nil {
-					return fmt.Errorf("failed to create checkpoints (runtime: %s, round: %d): %w", runtimeID, round, err)
+				var ns common.Namespace
+				if err := ns.UnmarshalHex(runtimeID); err != nil {
+					return fmt.Errorf("malformed source runtime ID: %q: %w", runtimeID, err)
+				}
+				rtOutDir := filepath.Join(outDir, runtimesSubdir, ns.Hex())
+				if err := createRuntimeCps(ns, rtOutDir); err != nil {
+					return fmt.Errorf("failed to create runtime checkpoints (runtime: %s, round: %d): %w", runtimeID, round, err)
 				}
 			}
 
@@ -141,13 +141,33 @@ func newImportCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Short: "import storage checkpoints",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			dataDir := cmdCommon.DataDir()
+
 			// Consensus checkpoint:
+			restoreConsensusCp := func(inputDir string) error {
+				ndb, close, err := openConsensusNodeDB(dataDir)
+				if err != nil {
+					return fmt.Errorf("failed to open consensus state DB: %w", err)
+				}
+				defer close()
+
+				return restoreCheckpoints(ctx, ndb, common.Namespace{}, inputDir)
+			}
 			consensusInputDir := filepath.Join(inputDir, consensusSubdir)
 			_, err := os.ReadDir(consensusInputDir)
 			switch {
 			case err == nil:
-				if err := restoreConsensusCp(cmd.Context(), cmdCommon.DataDir(), consensusInputDir); err != nil {
-					return fmt.Errorf("failed to import consensus checkpoint: %w", err)
+				if err := restoreConsensusCp(consensusInputDir); err != nil {
+					return fmt.Errorf("failed to restore consensus cp (input dir: %s): %w", consensusInputDir, err)
+				}
+
+				meta, err := readCometBFTBootstrapMeta(consensusInputDir)
+				if err != nil {
+					return fmt.Errorf("failed to read bootstrap metadata: %w", err)
+				}
+				if err := bootstrapTrustedState(dataDir, meta); err != nil {
+					return fmt.Errorf("failed to bootstrap CometBFT trusted state: %w", err)
 				}
 			case os.IsNotExist(err):
 				// No consensus checkpoints to restore
@@ -156,13 +176,28 @@ func newImportCmd() *cobra.Command {
 			}
 
 			// Runtime checkpoints:
+			restoreRuntimeCp := func(inputDir string, ns common.Namespace) error {
+				ndb, err := openRuntimeStateDB(dataDir, ns)
+				if err != nil {
+					return err
+				}
+				defer ndb.Close()
+
+				return restoreCheckpoints(ctx, ndb, ns, inputDir)
+			}
 			runtimeInputDir := filepath.Join(inputDir, runtimesSubdir)
 			entries, err := os.ReadDir(runtimeInputDir)
 			switch {
 			case err == nil:
-				for _, ns := range entries {
-					if err := restoreRuntimeCps(cmd.Context(), runtimeInputDir, ns.Name()); err != nil {
-						return fmt.Errorf("failed to import checkpoints (runtime: %s): %w", ns, err)
+				for _, entry := range entries {
+					var ns common.Namespace
+					if err := ns.UnmarshalHex(entry.Name()); err != nil {
+						return fmt.Errorf("malformed source runtime ID: %q: %w", entry.Name(), err)
+					}
+					rtCpsDir := filepath.Join(runtimeInputDir, entry.Name())
+
+					if err := restoreRuntimeCp(rtCpsDir, ns); err != nil {
+						return fmt.Errorf("failed to import checkpoints (checkpoint dir: %s): %w", rtCpsDir, err)
 					}
 				}
 			case os.IsNotExist(err):
@@ -180,31 +215,41 @@ func newImportCmd() *cobra.Command {
 	return cmd
 }
 
-func createConsensusCheckpoint(ctx context.Context, ndb api.NodeDB, height uint64, outputDir string) error {
-	roots, err := ndb.GetRootsForVersion(height)
+func createCheckpoints(ctx context.Context, ndb api.NodeDB, ns common.Namespace, version uint64, outputDir string) error {
+	if err := ensureEmptyDir(outputDir); err != nil {
+		return err
+	}
+
+	latest, ok := ndb.GetLatestVersion()
+	if !ok {
+		return fmt.Errorf("empty state DB")
+	}
+	earliest := ndb.GetEarliestVersion()
+	if version < earliest || version > latest {
+		return fmt.Errorf("version not finalized (finalized range: %d-%d)", earliest, latest)
+	}
+
+	roots, err := ndb.GetRootsForVersion(version)
 	if err != nil {
-		return fmt.Errorf("failed to get roots for height %d: %w", height, err)
+		return fmt.Errorf("failed to get finalized roots %w", err)
 	}
 	if len(roots) == 0 {
-		return fmt.Errorf("empty roots")
+		// Empty roots are implicit in NodeDB and therefore not returned by GetRootsForVersion.
+		// If at this height state DB has an empty state, create a checkpoint for the empty state root,
+		// so that importing it will still finalize this version (making NodeDB non-empty).
+		//
+		// In case of state DB with with multiple empty roots (e.g. state and IO root both empty)
+		// this will create only one empty checkpoint (duplicate hash), which is safe as we only need
+		// it to finalize version with implicitly empty state and IO root.
+		stateRoot := node.Root{
+			Namespace: ns,
+			Version:   version,
+			Type:      node.RootTypeState,
+		}
+		stateRoot.Hash.Empty()
+		roots = []node.Root{stateRoot}
 	}
-	return createCheckpoints(ctx, ndb, roots, outputDir)
-}
 
-func createRuntimeCheckpoints(ctx context.Context, ndb api.NodeDB, round uint64, outputDir string) error {
-	roots, err := ndb.GetRootsForVersion(round)
-	if err != nil {
-		return fmt.Errorf("failed to get roots for round %d: %w", round, err)
-	}
-	// Prevent creating checkpoint for heights where root is missing.
-	// TODO: Instead we should pass empty (implicit) root.
-	if lenRoots := len(roots); lenRoots != 2 {
-		return fmt.Errorf("unexpected number of roots: got %d", lenRoots)
-	}
-	return createCheckpoints(ctx, ndb, roots, outputDir)
-}
-
-func createCheckpoints(ctx context.Context, ndb api.NodeDB, roots []node.Root, outputDir string) error {
 	creator, err := checkpoint.NewFileCreator(outputDir, ndb)
 	if err != nil {
 		return fmt.Errorf("failed to create checkpoint file creator: %w", err)
@@ -220,7 +265,68 @@ func createCheckpoints(ctx context.Context, ndb api.NodeDB, roots []node.Root, o
 	return nil
 }
 
-func writeConsensusBootstrap(ctx context.Context, dataDir string, ndb api.NodeDB, height uint64, outputDir string) error {
+func restoreCheckpoints(ctx context.Context, ndb api.NodeDB, ns common.Namespace, inputDir string) error {
+	isEmpty, err := isEmptyDir(inputDir)
+	if err != nil {
+		return fmt.Errorf("aborting checkpoint restoration: failed to inspect input directory: %w", err)
+	}
+	if isEmpty {
+		return fmt.Errorf("aborting checkpoint restoration: input directory is empty: %s", inputDir)
+	}
+	if _, ok := ndb.GetLatestVersion(); ok {
+		return fmt.Errorf("aborting checkpoint restoration: state db not empty")
+	}
+
+	provider, err := checkpoint.NewFileCreator(inputDir, nil) // ndb = nil since we will only restore checkpoints.
+	if err != nil {
+		return fmt.Errorf("failed to create checkpoint file creator: %w", err)
+	}
+	cps, err := provider.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: ns})
+	if err != nil {
+		return fmt.Errorf("failed to read checkpoints: %w", err)
+	}
+
+	var roots []node.Root
+	for _, cp := range cps {
+		if err := importCp(ctx, ndb, provider, cp); err != nil {
+			return fmt.Errorf("failed to import checkpoint (root hash: %s): %w", cp.Root.Hash, err)
+		}
+		roots = append(roots, cp.Root)
+	}
+	if err := ndb.Finalize(roots); err != nil {
+		return fmt.Errorf("failed to finalize: %w", err)
+	}
+
+	return nil
+}
+
+func importCp(ctx context.Context, ndb api.NodeDB, provider checkpoint.Creator, cp *checkpoint.Metadata) error {
+	if err := ndb.StartMultipartInsert(cp.Root.Version); err != nil {
+		return fmt.Errorf("failed to start multipart insert: %w", err)
+	}
+	defer func() {
+		if err := ndb.AbortMultipartInsert(); err != nil {
+			logger.Error("failed to abort multi-part insert", "err", err)
+		}
+	}()
+
+	for idx := range cp.Chunks {
+		chunk, err := cp.GetChunkMetadata(uint64(idx))
+		if err != nil {
+			return fmt.Errorf("failed to get chunk metadata: %w", err)
+		}
+		var buf bytes.Buffer
+		if err := provider.GetCheckpointChunk(ctx, chunk, &buf); err != nil {
+			return fmt.Errorf("failed to read checkpoint chunk (idx: %d): %w", idx, err)
+		}
+		if err := checkpoint.RestoreChunk(ctx, ndb, chunk, &buf); err != nil {
+			return fmt.Errorf("failed to restore chunk: %w", err)
+		}
+	}
+	return nil
+}
+
+func createCometBFTBootstrapMeta(ctx context.Context, dataDir string, height uint64, outputDir string) error {
 	stateStore, err := openConsensusStatestore(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to open cometbft state store: %w", err)
@@ -233,7 +339,7 @@ func writeConsensusBootstrap(ctx context.Context, dataDir string, ndb api.NodeDB
 	}
 	defer blockStore.Close()
 
-	state, err := State(ctx, height, stateStore, blockStore)
+	state, err := state(height, stateStore, blockStore)
 	if err != nil {
 		return fmt.Errorf("failed to load consensus state at height %d: %w", height, err)
 	}
@@ -246,7 +352,7 @@ func writeConsensusBootstrap(ctx context.Context, dataDir string, ndb api.NodeDB
 		return fmt.Errorf("failed to marshal consensus state: %w", err)
 	}
 
-	commit, err := Commit(ctx, blockStore, height)
+	commit, err := commit(blockStore, height)
 	if err != nil {
 		return fmt.Errorf("failed to load consensus commit at height %d: %w", height, err)
 	}
@@ -266,7 +372,7 @@ func writeConsensusBootstrap(ctx context.Context, dataDir string, ndb api.NodeDB
 	return nil
 }
 
-func readConsensusBootstrap(inputDir string) (bootstrapMeta, error) {
+func readCometBFTBootstrapMeta(inputDir string) (bootstrapMeta, error) {
 	data, err := os.ReadFile(filepath.Join(inputDir, consensusMetaFilename))
 	if err != nil {
 		return bootstrapMeta{}, err
@@ -280,110 +386,6 @@ func readConsensusBootstrap(inputDir string) (bootstrapMeta, error) {
 	return meta, nil
 }
 
-func restoreConsensusCp(ctx context.Context, dataDir, inputDir string) error {
-	ndb, close, err := openConsensusNodeDB(cmdCommon.DataDir())
-	if err != nil {
-		return fmt.Errorf("failed to open consensus state DB: %w", err)
-	}
-	defer close()
-
-	if _, ok := ndb.GetLatestVersion(); ok {
-		return fmt.Errorf("state db not empty")
-	}
-
-	provider, err := checkpoint.NewFileCreator(inputDir, nil) // ndb = nil since we will only restore checkpoints.
-	if err != nil {
-		return fmt.Errorf("failed to create checkpoint file creator: %w", err)
-	}
-
-	cps, err := provider.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1})
-	if err != nil {
-		return fmt.Errorf("failed to read checkpoints: %w", err)
-	}
-
-	if lenCps := len(cps); lenCps != 1 {
-		return fmt.Errorf("unexpected number of checkpoints: got %d, want 1", lenCps)
-	}
-
-	if err := restoreCheckpoints(ctx, provider, ndb, cps); err != nil {
-		return fmt.Errorf("failed to restore checkpoint: %w", err)
-	}
-
-	meta, err := readConsensusBootstrap(inputDir)
-	if err != nil {
-		return fmt.Errorf("failed to read bootstrap metadata: %w", err)
-	}
-
-	return bootstrapTrustedState(ctx, dataDir, meta)
-}
-
-func restoreRuntimeCps(ctx context.Context, inputDir, namespace string) error {
-	var ns common.Namespace
-	if err := ns.UnmarshalHex(namespace); err != nil {
-		return fmt.Errorf("malformed source runtime ID: %q: %w", ns, err)
-	}
-
-	ndb, err := openRuntimeStateDB(cmdCommon.DataDir(), ns)
-	if err != nil {
-		return err
-	}
-	defer ndb.Close()
-
-	if _, ok := ndb.GetLatestVersion(); ok {
-		return fmt.Errorf("state db not empty")
-	}
-
-	cpDir := filepath.Join(inputDir, namespace)
-	provider, err := checkpoint.NewFileCreator(cpDir, nil) // ndb = nil since we will only restore checkpoints.
-	if err != nil {
-		return fmt.Errorf("failed to create checkpoint file creator: %w", err)
-	}
-
-	cps, err := provider.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: ns})
-	if err != nil {
-		return fmt.Errorf("failed to read checkpoints: %w", err)
-	}
-	if err := restoreCheckpoints(ctx, provider, ndb, cps); err != nil {
-		return fmt.Errorf("failed to restore checkpoint: %w", err)
-	}
-
-	return nil
-}
-
-func restoreCheckpoints(ctx context.Context, provider checkpoint.ChunkProvider, ndb api.NodeDB, cps []*checkpoint.Metadata) error {
-	var roots []node.Root
-	for _, cp := range cps {
-		if err := ndb.StartMultipartInsert(cp.Root.Version); err != nil {
-			return fmt.Errorf("failed to start multipart insert: %w", err)
-		}
-		defer func() {
-			if err := ndb.AbortMultipartInsert(); err != nil {
-				logger.Error("failed to abort multi-part insert", "err", err)
-			}
-		}()
-
-		for idx := range cp.Chunks {
-			chunk, err := cp.GetChunkMetadata(uint64(idx))
-			if err != nil {
-				return fmt.Errorf("failed to get chunk metadata: %w", err)
-			}
-			var buf bytes.Buffer
-			if err := provider.GetCheckpointChunk(ctx, chunk, &buf); err != nil {
-				return fmt.Errorf("failed to read checkpoint chunk (idx: %d): %w", idx, err)
-			}
-			if err := checkpoint.RestoreChunk(ctx, ndb, chunk, &buf); err != nil {
-				return fmt.Errorf("failed to restore chunk: %w", err)
-			}
-		}
-		roots = append(roots, cp.Root)
-	}
-	if err := ndb.Finalize(roots); err != nil {
-		return fmt.Errorf("failed to finalize: %w", err)
-	}
-
-	return nil
-}
-
 // bootstrapTrustedState synchronizes the cometbft databases after the state sync
 // has been performed offline.
 //
@@ -391,7 +393,7 @@ func restoreCheckpoints(ctx context.Context, provider checkpoint.ChunkProvider, 
 // function is called.
 //
 // Adapted from https://github.com/oasisprotocol/cometbft/blob/08e22df73d354512fc27bd0c5731b3dcf1f8fef7/node/node.go#L198.
-func bootstrapTrustedState(ctx context.Context, dataDir string, meta bootstrapMeta) error {
+func bootstrapTrustedState(dataDir string, meta bootstrapMeta) error {
 	stateDB, err := openConsensusStateDB(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to open cometbft state store: %w", err)
@@ -451,18 +453,18 @@ func bootstrapTrustedState(ctx context.Context, dataDir string, meta bootstrapMe
 
 	// Once the stores are bootstrapped, we need to set the height at which the node has finished
 	// statesyncing. This will allow the blocksync reactor to fetch blocks at a proper height.
-	// In case this operation fails, it is equivalent to a failure in  online state sync where the operator
+	// In case this operation fails, it is equivalent to a failure in online state sync where the operator
 	// needs to manually delete the state and blockstores and rerun the bootstrapping process.
 	err = stateStore.SetOfflineStateSyncHeight(metaState.LastBlockHeight)
 	if err != nil {
 		return fmt.Errorf("failed to set synced height: %w", err)
 	}
 
-	return err
+	return nil
 }
 
-// Commit is adapted and simplified and mimics StateProvider behaviour used in the upstream BootstrapState.
-func Commit(ctx context.Context, blockStore *store.BlockStore, height uint64) (*types.Commit, error) {
+// commit is adapted and simplified and mimics StateProvider behaviour used in the upstream BootstrapState.
+func commit(blockStore *store.BlockStore, height uint64) (*cmttypes.Commit, error) {
 	commit := blockStore.LoadBlockCommit(int64(height))
 	if commit == nil {
 		return nil, fmt.Errorf("commit not found at height %d", height)
@@ -470,8 +472,8 @@ func Commit(ctx context.Context, blockStore *store.BlockStore, height uint64) (*
 	return commit, nil
 }
 
-// State is adapted and mimics StateProvider behaviour used in the upstream BootstrapState.
-func State(ctx context.Context, height uint64, stateStore cmtState.Store, blockStore *store.BlockStore) (cmtState.State, error) {
+// state is adapted and mimics StateProvider behaviour used in the upstream BootstrapState.
+func state(height uint64, stateStore cmtState.Store, blockStore *store.BlockStore) (cmtState.State, error) {
 	// The snapshot height maps onto the state heights as follows:
 	//
 	// height: last block, i.e. the snapshotted height
@@ -545,4 +547,38 @@ func State(ctx context.Context, height uint64, stateStore cmtState.Store, blockS
 	state.LastHeightConsensusParamsChanged = currentMeta.Header.Height
 
 	return state, nil
+}
+
+func isEmptyDir(dir string) (bool, error) {
+	// Over-engineering?
+	f, err := os.Open(dir)
+	if err != nil {
+		return false, fmt.Errorf("failed to open directory %q: %w", dir, err)
+	}
+	defer f.Close()
+
+	_, err = f.Readdir(1)
+	if errors.Is(err, io.EOF) {
+		return true, nil // empty
+	}
+	if err == nil {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to read directory %q: %w", dir, err)
+}
+
+func ensureEmptyDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	isEmpty, err := isEmptyDir(dir)
+	if err != nil {
+		return err
+	}
+	if !isEmpty {
+		return fmt.Errorf("output directory is not empty: %s", dir)
+	}
+
+	return nil
 }
