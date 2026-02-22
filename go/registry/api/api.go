@@ -145,6 +145,12 @@ var (
 
 	// RuntimesRequiredRoles are the Node roles that require runtimes.
 	RuntimesRequiredRoles = node.RoleComputeWorker |
+		node.RoleObserver |
+		node.RoleKeyManager |
+		node.RoleStorageRPC
+
+	// DeprecatedRuntimesRequiredRoles are the legacy Node roles that require runtimes.
+	DeprecatedRuntimesRequiredRoles = node.RoleComputeWorker |
 		node.RoleKeyManager |
 		node.RoleStorageRPC
 
@@ -574,7 +580,11 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	var runtimes []*Runtime
 	switch len(n.Runtimes) {
 	case 0:
-		if n.HasRoles(RuntimesRequiredRoles) {
+		runtimesRequiredRoles := RuntimesRequiredRoles
+		if !isFeatureVersion242 {
+			runtimesRequiredRoles = DeprecatedRuntimesRequiredRoles
+		}
+		if n.HasRoles(runtimesRequiredRoles) {
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)

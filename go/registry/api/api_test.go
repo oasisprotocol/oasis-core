@@ -116,9 +116,10 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		n   node.Node
-		err error
-		msg string
+		n                   node.Node
+		err                 error
+		msg                 string
+		isFeatureVersion242 bool
 	}{
 		{
 			node.Node{
@@ -145,6 +146,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			},
 			ErrInvalidArgument,
 			"invalid consensus validator node (missing P2P address)",
+			true,
 		},
 		{
 			node.Node{
@@ -172,6 +174,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			},
 			nil,
 			"valid consensus validator node",
+			true,
 		},
 		{
 			node.Node{
@@ -202,6 +205,57 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			},
 			ErrInvalidArgument,
 			"invalid compute worker node (nil runtime)",
+			true,
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+				},
+				P2P: node.P2PInfo{
+					ID:        nodeP2PSigner.Public(),
+					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
+				},
+				VRF: node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleObserver,
+				Expiration: 11,
+			},
+			nil,
+			"observer without runtimes is allowed with old consensus feature version",
+			false,
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+				},
+				P2P: node.P2PInfo{
+					ID:        nodeP2PSigner.Public(),
+					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
+				},
+				VRF: node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleObserver,
+				Expiration: 11,
+			},
+			ErrInvalidArgument,
+			"observer without runtimes is not allowed",
+			true,
 		},
 	} {
 
@@ -211,7 +265,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			&tc.n,
 		)
 		require.NoError(err, "singing node")
-		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), 1, false, false, beacon.EpochTime(10), rtLookup, ndLookup, true)
+		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), 1, false, false, beacon.EpochTime(10), rtLookup, ndLookup, tc.isFeatureVersion242)
 		switch {
 		case tc.err == nil:
 			require.NoError(err, tc.msg)
