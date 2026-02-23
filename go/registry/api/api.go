@@ -524,7 +524,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, ErrInvalidSignature
 	}
-	if err := n.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+	if err := n.ValidateBasic(!isGenesis && !isSanityCheck, isFeatureVersion242); err != nil {
 		logger.Error("RegisterNode: invalid node descriptor",
 			"node", n,
 			"err", err,
@@ -573,9 +573,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: expiration period greater than allowed", ErrInvalidArgument)
 	}
-
-	// TODO: Key manager nodes maybe should be restricted to only being a
-	// key manager at the expense of breaking some of our test configs.
 
 	var runtimes []*Runtime
 	switch len(n.Runtimes) {

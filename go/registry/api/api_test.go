@@ -115,6 +115,9 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 		Nodes: []signature.PublicKey{nodeSigner.Public()},
 	}
 
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("test namespace"), 0)
+	rtLookup.runtimes[runtimeID] = &Runtime{}
+
 	for _, tc := range []struct {
 		n                   node.Node
 		err                 error
@@ -255,6 +258,64 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 			},
 			ErrInvalidArgument,
 			"observer without runtimes is not allowed",
+			true,
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+					Addresses: []node.ConsensusAddress{
+						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
+					},
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+				},
+				P2P: node.P2PInfo{
+					ID:        nodeP2PSigner.Public(),
+					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
+				},
+				VRF: node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleValidator | node.RoleComputeWorker | node.RoleKeyManager,
+				Expiration: 11,
+				Runtimes:   []*node.Runtime{{ID: runtimeID}},
+			},
+			nil,
+			"multiple SGX runtime roles allowed with old consensus feature version",
+			false,
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+					Addresses: []node.ConsensusAddress{
+						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
+					},
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+				},
+				P2P: node.P2PInfo{
+					ID:        nodeP2PSigner.Public(),
+					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
+				},
+				VRF: node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleValidator | node.RoleComputeWorker | node.RoleKeyManager,
+				Expiration: 11,
+				Runtimes:   []*node.Runtime{{ID: runtimeID}},
+			},
+			ErrInvalidArgument,
+			"multiple SGX runtime roles are not allowed",
 			true,
 		},
 	} {
