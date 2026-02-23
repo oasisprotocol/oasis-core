@@ -27,6 +27,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/p2p"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -151,7 +152,7 @@ func (n *Node) waitReady() {
 
 // startRuntimeServices initializes and starts all the services that are required for runtime
 // support to work.
-func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
+func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document, metricsEnabled bool) error {
 	var err error
 	if n.Sentry, err = sentry.New(n.Consensus, n.Identity); err != nil {
 		return err
@@ -169,7 +170,7 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 	vaultAPI.RegisterService(grpcSrv, n.Consensus.Vault())
 
 	// Initialize runtime workers.
-	if err = n.initRuntimeWorkers(genesisDoc); err != nil {
+	if err = n.initRuntimeWorkers(genesisDoc, metricsEnabled); err != nil {
 		n.logger.Error("failed to initialize workers",
 			"err", err,
 		)
@@ -189,11 +190,11 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 	return nil
 }
 
-func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
+func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document, metricsEnabled bool) error {
 	var err error
 
 	// Initialize runtime provisioner.
-	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc)
+	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc, metricsEnabled)
 	if err != nil {
 		return err
 	}
@@ -217,6 +218,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
 		n.Provisioner,
+		metricsEnabled,
 	)
 	if err != nil {
 		n.logger.Error("failed to initialize common worker",
@@ -384,7 +386,7 @@ func (n *Node) startRuntimeWorkers() error {
 //
 // Note: the reason for having the named err return value here is for the
 // deferred func below to propagate the error.
-func NewNode() (node *Node, err error) { // nolint: gocyclo
+func NewNode(cfg *config.Config) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node = &Node{
@@ -414,7 +416,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// binary is from the logs.
 	logger.Info("Starting oasis-node",
 		"version", version.SoftwareVersion,
-		"mode", config.GlobalConfig.Mode,
+		"mode", cfg.Mode,
 	)
 
 	if err = verifyElevatedPrivileges(logger); err != nil {
@@ -449,7 +451,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	crash.LoadViperArgValues()
 
 	// Initialize and start the metrics reporting server.
-	if _, err = startMetricServer(node.svcMgr, logger); err != nil {
+	if _, err = startMetricServer(node.svcMgr, logger, &cfg.Metrics); err != nil {
 		return nil, err
 	}
 
@@ -480,17 +482,23 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
+	metricsEnabled := metrics.Enabled(cfg.Metrics.Mode)
+
 	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
 	// sure that we don't start it if it is not needed.
 	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 		p2p.DebugForceAllowUnroutableAddresses()
 	}
 
-	isArchive := config.GlobalConfig.Mode == config.ModeArchive
+	isArchive := cfg.Mode == config.ModeArchive
 	if isArchive {
 		node.P2P = p2p.NewNop()
 	} else {
-		node.P2P, err = p2p.New(node.Identity, node.chainContext, node.commonStore)
+		var p2pCfg p2p.Config
+		if err := p2pCfg.Load(&cfg.P2P); err != nil {
+			return nil, fmt.Errorf("failed to parse p2p config %w", err)
+		}
+		node.P2P, err = p2p.New(&p2pCfg, node.Identity, node.chainContext, node.commonStore)
 		if err != nil {
 			return nil, err
 		}
@@ -525,7 +533,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Initialize consensus backend.
 	switch backend := genesisDoc.Consensus.Backend; backend {
 	case cometbftAPI.BackendName:
-		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc, node.P2P)
+		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc, node.P2P, metricsEnabled)
 		if err != nil {
 			logger.Error("failed to initialize cometbft consensus backend",
 				"err", err,
@@ -563,7 +571,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
 	if node.Consensus.SupportedFeatures().Has(consensusAPI.FeatureServices) {
-		if err = node.startRuntimeServices(genesisDoc); err != nil {
+		if err = node.startRuntimeServices(genesisDoc, metricsEnabled); err != nil {
 			logger.Error("failed to initialize runtime services",
 				"err", err,
 			)

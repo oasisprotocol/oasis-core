@@ -6,7 +6,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
@@ -47,12 +46,8 @@ var (
 	metricsOnce sync.Once
 )
 
-// UpdateAttestationMetrics updates the attestation metrics if metrics are enabled.
+// UpdateAttestationMetrics updates the attestation metrics.
 func UpdateAttestationMetrics(runtimeID common.Namespace, kind component.TEEKind, err error) {
-	if !metrics.Enabled() {
-		return
-	}
-
 	runtime := runtimeID.String()
 	kindStr := kind.String()
 
@@ -64,12 +59,8 @@ func UpdateAttestationMetrics(runtimeID common.Namespace, kind component.TEEKind
 	}
 }
 
-// InitMetrics registers the metrics collectors if metrics are enabled.
+// InitMetrics registers the metrics collectors.
 func InitMetrics() {
-	if !metrics.Enabled() {
-		return
-	}
-
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(teeCollectors...)
 	})
