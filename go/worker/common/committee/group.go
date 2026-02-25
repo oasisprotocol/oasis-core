@@ -206,7 +206,7 @@ func (g *Group) CommitteeTransition(ctx context.Context, committee *scheduler.Co
 	}
 
 	g.logger.Info("committee transition complete",
-		"epoch", epochNumber,
+		"committee", g.committee.Committee,
 		"executor_roles", g.committee.Roles,
 	)
 
