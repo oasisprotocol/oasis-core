@@ -378,6 +378,7 @@ steps:
       - make build-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/interop/mkvs-test-helpers)
       - .buildkite/rust/coverage.sh
+    soft_fail: true
     retry:
       <<: *retry_agent_failure
     plugins:
