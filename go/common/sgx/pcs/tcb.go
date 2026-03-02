@@ -466,7 +466,7 @@ func (tl *TCBLevel) matches(sgxCompSvn [16]int32, tdxCompSvn *[16]byte, pcesvn u
 	//    in the TCB Level. If it is greater or equal to the value in TCB Level, read status
 	//    assigned to this TCB level (in case of SGX) or go to c (in case of TDX). Otherwise, move
 	//    to the next item on TCB Levels list.
-	if tl.TCB.PCESVN < pcesvn {
+	if pcesvn < tl.TCB.PCESVN {
 		return false
 	}
 
