@@ -12,6 +12,7 @@ import (
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtProtoState "github.com/cometbft/cometbft/proto/tendermint/state"
+	cmtstore "github.com/cometbft/cometbft/proto/tendermint/store"
 	cmtProto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtState "github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
@@ -416,11 +417,12 @@ func bootstrapTrustedState(dataDir string, meta bootstrapMeta) error {
 	}
 	defer stateDB.Close()
 
-	blockStore, err := openConsensusBlockstore(dataDir)
+	blockStoreDB, err := openConsensusBlockstoreDB(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to open consensus blockstore: %w", err)
 	}
-	defer blockStore.Close()
+	defer blockStoreDB.Close()
+	blockStore := store.NewBlockStore(blockStoreDB)
 
 	if !blockStore.IsEmpty() {
 		return fmt.Errorf("blockstore not empty, trying to initialize non empty state")
@@ -466,6 +468,19 @@ func bootstrapTrustedState(dataDir string, meta bootstrapMeta) error {
 	if err != nil {
 		return err
 	}
+
+	// SaveSeenCommit (as used by the upstream) does not persist the BlockStoreState (height/base),
+	// so we save it explicitly here. This ways the blockstore reports the correct height after bootstrap,
+	// so that status works as expected. If this is not done, this blockstore base is kept as unitialized,
+	// and is initialized as soon as the first block is fetche. However we would cut last retained height by 1,
+	// which is the current case for consensus checkpoint sync.
+	store.SaveBlockStoreState(
+		&cmtstore.BlockStoreState{
+			Base:   metaState.LastBlockHeight,
+			Height: metaState.LastBlockHeight,
+		},
+		blockStoreDB,
+	)
 
 	// Once the stores are bootstrapped, we need to set the height at which the node has finished
 	// statesyncing. This will allow the blocksync reactor to fetch blocks at a proper height.

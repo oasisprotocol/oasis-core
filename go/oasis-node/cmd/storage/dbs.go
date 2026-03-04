@@ -44,7 +44,7 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 	return ndb, close, nil
 }
 
-func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
+func openConsensusBlockstoreDB(dataDir string) (cometbftDB.DB, error) {
 	cmtConfig := cmtCfg.DefaultConfig()
 	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
 
@@ -52,14 +52,15 @@ func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain db provider: %w", err)
 	}
+	return cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
+}
 
-	blockstoreDB, err := cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
+func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
+	blockstoreDB, err := openConsensusBlockstoreDB(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open blockstore: %w", err)
 	}
-	blockstore := store.NewBlockStore(blockstoreDB)
-
-	return blockstore, nil
+	return store.NewBlockStore(blockstoreDB), nil
 }
 
 func openConsensusStateDB(dataDir string) (cometbftDB.DB, error) {
