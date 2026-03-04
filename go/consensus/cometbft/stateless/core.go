@@ -275,12 +275,6 @@ func (c *Core) GetParameters(ctx context.Context, height int64) (*consensusAPI.P
 	return params, nil
 }
 
-// GetSignerNonce implements api.Backend.
-func (c *Core) GetSignerNonce(context.Context, *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	// Deprecated and will be removed in the future.
-	return 0, fmt.Errorf("not implemented")
-}
-
 // GetStatus implements api.Backend.
 func (c *Core) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	query, err := c.beaconQuerier.QueryAt(ctx, consensusAPI.HeightLatest)

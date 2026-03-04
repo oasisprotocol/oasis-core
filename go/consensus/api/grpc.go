@@ -37,8 +37,6 @@ var (
 	methodEstimateGas = serviceName.NewMethod("EstimateGas", &EstimateGasRequest{})
 	// methodMinGasPrice is the MinGasPrice method.
 	methodMinGasPrice = serviceName.NewMethod("MinGasPrice", nil)
-	// methodGetSignerNonce is a GetSignerNonce method.
-	methodGetSignerNonce = serviceName.NewMethod("GetSignerNonce", &GetSignerNonceRequest{})
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetBlockResults is the GetBlockResults method.
@@ -109,10 +107,6 @@ var (
 			{
 				MethodName: methodMinGasPrice.ShortName(),
 				Handler:    handlerMinGasPrice,
-			},
-			{
-				MethodName: methodGetSignerNonce.ShortName(),
-				Handler:    handlerGetSignerNonce,
 			},
 			{
 				MethodName: methodGetBlock.ShortName(),
@@ -333,29 +327,6 @@ func handlerMinGasPrice(
 		return srv.(Services).Core().MinGasPrice(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
-}
-
-func handlerGetSignerNonce(
-	srv any,
-	ctx context.Context,
-	dec func(any) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (any, error) {
-	rq := new(GetSignerNonceRequest)
-	if err := dec(rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Services).Core().GetSignerNonce(ctx, rq)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetSignerNonce.FullName(),
-	}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(Services).Core().GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
-	}
-	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerGetBlock(
@@ -850,14 +821,6 @@ func (c *Client) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
 		return nil, err
 	}
 	return &rsp, nil
-}
-
-func (c *Client) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {
-	var nonce uint64
-	if err := c.conn.Invoke(ctx, methodGetSignerNonce.FullName(), req, &nonce); err != nil {
-		return nonce, err
-	}
-	return nonce, nil
 }
 
 func (c *Client) GetBlock(ctx context.Context, height int64) (*Block, error) {

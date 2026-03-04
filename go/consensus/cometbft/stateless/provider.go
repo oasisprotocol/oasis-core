@@ -315,25 +315,6 @@ func (p *CompositeProvider) GetParameters(ctx context.Context, height int64) (*c
 	return params, nil
 }
 
-// GetSignerNonce implements consensusAPI.Backend.
-func (p *CompositeProvider) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	var nonce uint64
-
-	err := p.call(func(provider consensusAPI.Backend) error {
-		var err error
-		if nonce, err = provider.GetSignerNonce(ctx, req); err != nil { //nolint:staticcheck // Suppress SA1019 deprecation warning
-			p.logger.Warn("failed to get signer nonce", "err", err)
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to get signer nonce from any provider: %w", err)
-	}
-
-	return nonce, nil
-}
-
 // GetStatus implements consensusAPI.Backend.
 func (p *CompositeProvider) GetStatus(context.Context) (*consensusAPI.Status, error) {
 	return nil, fmt.Errorf("not implemented")

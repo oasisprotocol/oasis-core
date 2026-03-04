@@ -334,11 +334,6 @@ func (b *mockBackend) GetParameters(context.Context, int64) (*consensusAPI.Param
 	panic("unimplemented")
 }
 
-// GetSignerNonce implements api.Backend.
-func (b *mockBackend) GetSignerNonce(context.Context, *consensusAPI.GetSignerNonceRequest) (uint64, error) {
-	panic("unimplemented")
-}
-
 // GetStatus implements api.Backend.
 func (b *mockBackend) GetStatus(context.Context) (*consensusAPI.Status, error) {
 	panic("unimplemented")
