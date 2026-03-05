@@ -287,7 +287,7 @@ func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, er
 	return annBlk.Block, nil
 }
 
-// CanPruneConsenus returns no error when the specified consensus height has been already reindexed.
+// CanPruneConsensus returns no error when the specified consensus height has been already reindexed.
 //
 // Implements consensus.api.StatePruneHandler
 func (h *runtimeHistory) CanPruneConsensus(height int64) error {
