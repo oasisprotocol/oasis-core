@@ -209,6 +209,8 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("scheduler get committee %s at height %d failed: %w", scheduler.KindComputeExecutor, b.electionHeight, err)
 	}
 
+	b.logger.Debug("executorCommittee", "committee", b.executorCommittee, "round", round, "shouldBePrimaryScheduler", shouldBePrimaryScheduler)
+
 	// Ensure we have the expected executor worker role.
 	b.logger.Debug("ensuring executor worker role")
 	if err = schedulerCheckScheduled(b.executorCommittee, b.identity.NodeSigner.Public(), expectedExecutorRole); err != nil {
@@ -221,7 +223,7 @@ func initializeAndRegisterByzantineNode(
 	if shouldBePrimaryScheduler != isPrimaryScheduler {
 		return nil, fmt.Errorf("not in expected executor primary scheduler role")
 	}
-	b.logger.Debug("executor primary scheduler role ok")
+	b.logger.Debug("executor primary/backup scheduler role ok")
 
 	// Create a stateless storage client.
 	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.chainContext, b.runtimeID)

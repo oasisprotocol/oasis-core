@@ -145,7 +145,7 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 		panic(err)
 	}
 
-	round := uint64(3)
+	round := uint64(2)
 	isTxScheduler := viper.GetBool(CfgPrimarySchedulerExpected)
 	b, err := initializeAndRegisterByzantineNode(
 		runtimeID,
@@ -209,7 +209,7 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 
 	// Update current epoch to mimic the test key-value runtime.
 	var encodedEpoch [8]byte
-	binary.BigEndian.PutUint64(encodedEpoch[:], uint64(b.executorCommittee.ValidFor))
+	binary.BigEndian.PutUint64(encodedEpoch[:], 0)
 
 	if err = cbc.stateTree.Insert(ctx, []byte{0x02}, encodedEpoch[:]); err != nil {
 		panic(fmt.Sprintf("compute state tree set failed: %+v", err))

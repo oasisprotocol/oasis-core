@@ -23,16 +23,16 @@ import (
 )
 
 var (
-	// primarySchedulerIndex is the index of the highest-ranked scheduler in round 3
+	// primarySchedulerIndex is the index of the highest-ranked scheduler in round 2
 	// when the committee consists of 2 workers.
 	//
 	// Formula: `rank = (round + idx) % num_workers`.
-	primarySchedulerIndex uint64 = 1
-	// backupSchedulerIndex in the index of the second-ranked scheduler in round 3
+	primarySchedulerIndex uint64
+	// backupSchedulerIndex in the index of the second-ranked scheduler in round 2
 	// when the committee consists of 2 workers.
 	//
 	// Formula: `rank = (round + idx) % num_workers`.
-	backupSchedulerIndex uint64
+	backupSchedulerIndex uint64 = 1
 )
 
 var (

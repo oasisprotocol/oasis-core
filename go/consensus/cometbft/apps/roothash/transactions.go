@@ -116,6 +116,7 @@ func (app *Application) executorCommit(
 			"round", commit.Header.Header.Round,
 			"node_id", commit.NodeID,
 			"scheduler_id", commit.Header.SchedulerID,
+			"hash", commit.Header.Header.EncodedHash(),
 			"failure", commit.IsIndicatingFailure(),
 		)
 	}
