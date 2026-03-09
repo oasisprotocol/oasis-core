@@ -221,7 +221,7 @@ func initializeAndRegisterByzantineNode(
 	if shouldBePrimaryScheduler != isPrimaryScheduler {
 		return nil, fmt.Errorf("not in expected executor primary scheduler role")
 	}
-	b.logger.Debug("executor primary scheduler role ok")
+	b.logger.Debug("executor primary/backup scheduler role ok")
 
 	// Create a stateless storage client.
 	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.chainContext, b.runtimeID)
