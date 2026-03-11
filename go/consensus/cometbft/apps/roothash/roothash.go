@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -87,22 +88,45 @@ func (app *Application) OnCleanup() {
 
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
+	return app.maybeChangeCommitteeInBeginBlock(ctx)
+}
+
+func (app *Application) maybeChangeCommitteeInBeginBlock(ctx *api.Context) error {
+	ok, err := app.shouldChangeCommitteeInBeginBlock(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	return app.changeCommittee(ctx)
+}
+
+func (app *Application) shouldChangeCommitteeInBeginBlock(ctx *api.Context) (bool, error) {
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return false, err
+	}
+	if isFeatureVersion242 {
+		return false, nil
+	}
+
 	// Check if there was an epoch transition.
 	epochChanged, _ := app.state.EpochChanged(ctx)
 	if epochChanged {
-		return app.onCommitteeChanged(ctx)
+		return true, nil
 	}
 
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
 	if rescheduled {
-		return app.onCommitteeChanged(ctx)
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
-func (app *Application) onCommitteeChanged(ctx *api.Context) error {
+func (app *Application) changeCommittee(ctx *api.Context) error {
 	roothash := roothashState.NewImmutableState(ctx.State())
 	registry := registryState.NewImmutableState(ctx.State())
 
@@ -119,7 +143,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context) error {
 
 	runtimes, _ := registry.Runtimes(ctx)
 	for _, rt := range runtimes {
-		if err := app.onRuntimeCommitteeChanged(ctx, rt, params, stake); err != nil {
+		if err := app.changeRuntimeCommittee(ctx, rt, params, stake); err != nil {
 			return err
 		}
 	}
@@ -127,7 +151,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context) error {
 	return nil
 }
 
-func (app *Application) onRuntimeCommitteeChanged(
+func (app *Application) changeRuntimeCommittee(
 	ctx *api.Context,
 	rt *registry.Runtime,
 	params *roothash.ConsensusParameters,
@@ -430,5 +454,48 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 		return types.ResponseEndBlock{}, err
 	}
 
+	if err := app.maybeChangeCommitteeInEndBlock(ctx); err != nil {
+		return types.ResponseEndBlock{}, err
+	}
+
 	return types.ResponseEndBlock{}, nil
+}
+
+func (app *Application) maybeChangeCommitteeInEndBlock(ctx *api.Context) error {
+	ok, err := app.shouldChangeCommitteeInEndBlock(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	return app.changeCommittee(ctx)
+}
+
+func (app *Application) shouldChangeCommitteeInEndBlock(ctx *api.Context) (bool, error) {
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return false, err
+	}
+	if !isFeatureVersion242 {
+		return false, nil
+	}
+
+	// Check if we are at the end of an epoch.
+	beaconState := beaconState.NewMutableState(ctx.State())
+	future, err := beaconState.GetFutureEpoch(ctx)
+	if err != nil {
+		return false, err
+	}
+	if future != nil && future.Height == ctx.CurrentHeight()+1 {
+		return true, nil
+	}
+
+	// Check if rescheduling has taken place.
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
+	if rescheduled {
+		return true, nil
+	}
+
+	return false, nil
 }
