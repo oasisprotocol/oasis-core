@@ -229,20 +229,25 @@ func (app *Application) changeRuntimeCommittee(
 		}
 	}
 
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		logger.Error("failed to get feature version", "err", err)
+		return err
+	}
+
 	switch suspend {
 	case true:
 		if err = registry.SuspendRuntime(ctx, rt.ID); err != nil {
 			return err
 		}
 
-		// Emit an empty block signalling that the runtime was suspended.
-		app.finalizeBlock(ctx, rtState, block.Suspended, nil)
-		if err = resetCommitments(ctx, rtState, true); err != nil {
-			return fmt.Errorf("failed to reset commitments: %w", err)
+		// Check if we need to emit suspended block signalling that the runtime
+		// was suspended for deprecated suspension logic.
+		if !isFeatureVersion242 {
+			app.finalizeBlock(ctx, rtState, block.Suspended, nil)
 		}
 
-		rtState.Suspended = true
-		rtState.Committee = nil
+		committee = nil
 	case false:
 		logger.Debug("updating committee for runtime",
 			"committee", committee,
@@ -250,24 +255,20 @@ func (app *Application) changeRuntimeCommittee(
 
 		// Check if we need to emit epoch transition block on epoch changes
 		// for deprecated election logic.
-		isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
-		if err != nil {
-			logger.Error("failed to get feature version", "err", err)
-			return err
-		}
 		if !isFeatureVersion242 {
 			// Emit an empty block signaling epoch transition. This is required so that
 			// the clients can be sure what state is final when an epoch transition occurs.
 			app.finalizeBlock(ctx, rtState, block.EpochTransition, nil)
 		}
-		if err := resetCommitments(ctx, rtState, false); err != nil {
-			return fmt.Errorf("failed to reset commitments: %w", err)
-		}
-
-		// Warning: Non-suspended runtimes can still have a nil committee.
-		rtState.Suspended = false
-		rtState.Committee = committee
 	}
+
+	if err := resetCommitments(ctx, rtState, false); err != nil {
+		return fmt.Errorf("failed to reset commitments: %w", err)
+	}
+
+	// Warning: Non-suspended runtimes can still have a nil committee.
+	rtState.Suspended = suspend
+	rtState.Committee = committee
 
 	// Clear liveness statistics.
 	rtState.LivenessStatistics = nil
