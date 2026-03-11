@@ -194,13 +194,13 @@ func (app *Application) changeRuntimeCommittee(
 	}
 
 	// Suspend the runtime if needed.
-	var suspend bool
+	var suspended bool
 	switch {
 	case committee == nil:
 		logger.Debug("suspending runtime: no executor committee")
 		// If there are no committees for this runtime, suspend the runtime
 		// as this means that there is no one to pay the maintenance fees.
-		suspend = true
+		suspended = true
 	case params.DebugDoNotSuspendRuntimes, params.DebugBypassStake:
 		// If the debug flag is set, do not suspend the runtime.
 	default:
@@ -223,26 +223,31 @@ func (app *Application) changeRuntimeCommittee(
 				"entity", rt.EntityID,
 				"account", *addr,
 			)
-			suspend = true
+			suspended = true
 		default:
 			return fmt.Errorf("failed to check stake claims: %w", err)
 		}
 	}
 
-	switch suspend {
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		logger.Error("failed to get feature version", "err", err)
+		return err
+	}
+
+	switch suspended {
 	case true:
 		if err = registry.SuspendRuntime(ctx, rt.ID); err != nil {
 			return err
 		}
 
-		// Emit an empty block signalling that the runtime was suspended.
-		app.finalizeBlock(ctx, rtState, block.Suspended, nil)
-		if err = resetCommitments(ctx, rtState, true); err != nil {
-			return fmt.Errorf("failed to reset commitments: %w", err)
+		// Check if we need to emit suspended block signalling that the runtime
+		// was suspended for deprecated suspension logic.
+		if !isFeatureVersion242 {
+			app.finalizeBlock(ctx, rtState, block.Suspended, nil)
 		}
 
-		rtState.Suspended = true
-		rtState.Committee = nil
+		committee = nil
 	case false:
 		logger.Debug("updating committee for runtime",
 			"committee", committee,
@@ -250,24 +255,20 @@ func (app *Application) changeRuntimeCommittee(
 
 		// Check if we need to emit epoch transition block on epoch changes
 		// for deprecated election logic.
-		isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
-		if err != nil {
-			logger.Error("failed to get feature version", "err", err)
-			return err
-		}
 		if !isFeatureVersion242 {
 			// Emit an empty block signaling epoch transition. This is required so that
 			// the clients can be sure what state is final when an epoch transition occurs.
 			app.finalizeBlock(ctx, rtState, block.EpochTransition, nil)
 		}
-		if err := resetCommitments(ctx, rtState, false); err != nil {
-			return fmt.Errorf("failed to reset commitments: %w", err)
-		}
-
-		// Warning: Non-suspended runtimes can still have a nil committee.
-		rtState.Suspended = false
-		rtState.Committee = committee
 	}
+
+	if err := resetCommitments(ctx, rtState, suspended); err != nil {
+		return fmt.Errorf("failed to reset commitments: %w", err)
+	}
+
+	// Warning: Non-suspended runtimes can still have a nil committee.
+	rtState.Suspended = suspended
+	rtState.Committee = committee
 
 	// Clear liveness statistics.
 	rtState.LivenessStatistics = nil
