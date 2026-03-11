@@ -6,7 +6,6 @@ import (
 
 	"github.com/cometbft/cometbft/abci/types"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -89,21 +88,21 @@ func (app *Application) OnCleanup() {
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
 	// Check if there was an epoch transition.
-	epochChanged, epoch := app.state.EpochChanged(ctx)
+	epochChanged, _ := app.state.EpochChanged(ctx)
 	if epochChanged {
-		return app.onCommitteeChanged(ctx, epoch)
+		return app.onCommitteeChanged(ctx)
 	}
 
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
 	if rescheduled {
-		return app.onCommitteeChanged(ctx, epoch)
+		return app.onCommitteeChanged(ctx)
 	}
 
 	return nil
 }
 
-func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochTime) error {
+func (app *Application) onCommitteeChanged(ctx *api.Context) error {
 	roothash := roothashState.NewImmutableState(ctx.State())
 	registry := registryState.NewImmutableState(ctx.State())
 
@@ -120,7 +119,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochT
 
 	runtimes, _ := registry.Runtimes(ctx)
 	for _, rt := range runtimes {
-		if err := app.onRuntimeCommitteeChanged(ctx, rt, epoch, params, stake); err != nil {
+		if err := app.onRuntimeCommitteeChanged(ctx, rt, params, stake); err != nil {
 			return err
 		}
 	}
@@ -131,7 +130,6 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochT
 func (app *Application) onRuntimeCommitteeChanged(
 	ctx *api.Context,
 	rt *registry.Runtime,
-	epoch beacon.EpochTime,
 	params *roothash.ConsensusParameters,
 	stake *stakingState.StakeAccumulatorCache,
 ) error {
@@ -175,7 +173,7 @@ func (app *Application) onRuntimeCommitteeChanged(
 	var suspend bool
 	switch {
 	case committee == nil:
-		logger.Warn("no executor committee")
+		logger.Debug("suspending runtime: no executor committee")
 		// If there are no committees for this runtime, suspend the runtime
 		// as this means that there is no one to pay the maintenance fees.
 		suspend = true
@@ -197,7 +195,7 @@ func (app *Application) onRuntimeCommitteeChanged(
 		case nil:
 			// Sufficient stake is available.
 		case stakingAPI.ErrInsufficientStake:
-			logger.Debug("insufficient stake for runtime operation",
+			logger.Debug("suspending runtime: insufficient stake",
 				"entity", rt.EntityID,
 				"account", *addr,
 			)
@@ -209,10 +207,6 @@ func (app *Application) onRuntimeCommitteeChanged(
 
 	switch suspend {
 	case true:
-		logger.Debug("suspending runtime, maintenance fees not paid or owner debonded",
-			"epoch", epoch,
-		)
-
 		if err = registry.SuspendRuntime(ctx, rt.ID); err != nil {
 			return err
 		}
@@ -227,7 +221,6 @@ func (app *Application) onRuntimeCommitteeChanged(
 		rtState.Committee = nil
 	case false:
 		logger.Debug("updating committee for runtime",
-			"epoch", epoch,
 			"committee", committee,
 		)
 
