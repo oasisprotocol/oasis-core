@@ -524,7 +524,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, ErrInvalidSignature
 	}
-	if err := n.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+	if err := n.ValidateBasic(!isGenesis && !isSanityCheck, isFeatureVersion242); err != nil {
 		logger.Error("RegisterNode: invalid node descriptor",
 			"node", n,
 			"err", err,
@@ -573,9 +573,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: expiration period greater than allowed", ErrInvalidArgument)
 	}
-
-	// TODO: Key manager nodes maybe should be restricted to only being a
-	// key manager at the expense of breaking some of our test configs.
 
 	var runtimes []*Runtime
 	switch len(n.Runtimes) {
@@ -629,7 +626,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// both validators and compute nodes and have out of date attestation evidence. Removing
 			// such nodes could lead to consensus not having the proper majority. This is safe as
 			// attestation evidence is independently verified before scheduling committees.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, n.Roles, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
 				return nil, nil, err
 			}
 
@@ -806,6 +803,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 func VerifyNodeRuntimeEnclaveIDs(
 	logger *logging.Logger,
 	nodeID signature.PublicKey,
+	nodeRoles node.RolesMask,
 	rt *node.Runtime,
 	regRt *Runtime,
 	teeCfg *node.TEEFeatures,
@@ -840,7 +838,7 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion242); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, nodeRoles, isFeatureVersion242); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"node_id", nodeID,
 				"runtime_id", rt.ID,

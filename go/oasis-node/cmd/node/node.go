@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -205,12 +206,29 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 	n.svcMgr.Register(n.RuntimeRegistry)
 
+	// Determine runtime role.
+	runtimeRoles := node.RoleEmpty
+	switch config.GlobalConfig.Mode {
+	case config.ModeCompute:
+		runtimeRoles = node.RoleComputeWorker
+	case config.ModeKeyManager:
+		runtimeRoles = node.RoleKeyManager
+	case config.ModeClient, config.ModeStatelessClient:
+		if config.GlobalConfig.Registration.Entity != "" || config.GlobalConfig.Registration.EntityID != "" {
+			runtimeRoles |= node.RoleObserver
+		}
+		if config.GlobalConfig.Storage.PublicRPCEnabled {
+			runtimeRoles |= node.RoleStorageRPC
+		}
+	}
+
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		n,
 		n.dataDir,
 		n.chainContext,
 		n.Identity,
+		runtimeRoles,
 		n.Consensus,
 		n.LightService,
 		n.P2P,

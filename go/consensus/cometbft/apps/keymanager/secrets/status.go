@@ -112,7 +112,7 @@ nextNode:
 				continue nextNode
 			}
 
-			initResponse, err := VerifyExtraInfo(ctx.Logger(), n.ID, kmrt, nodeRt, ts, height, params, isFeatureVersion242)
+			initResponse, err := VerifyExtraInfo(ctx.Logger(), n.ID, n.Roles, kmrt, nodeRt, ts, height, params, isFeatureVersion242)
 			if err != nil {
 				ctx.Logger().Error("failed to validate ExtraInfo", append(vars, "err", err)...)
 				continue nextNode
@@ -227,6 +227,7 @@ nextNode:
 func VerifyExtraInfo(
 	logger *logging.Logger,
 	nodeID signature.PublicKey,
+	nodeRoles node.RolesMask,
 	rt *registry.Runtime,
 	nodeRt *node.Runtime,
 	ts time.Time,
@@ -234,7 +235,7 @@ func VerifyExtraInfo(
 	params *registry.ConsensusParameters,
 	isFeatureVersion242 bool,
 ) (*secrets.InitResponse, error) {
-	if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height, isFeatureVersion242); err != nil {
+	if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRoles, nodeRt, rt, params.TEEFeatures, ts, height, isFeatureVersion242); err != nil {
 		return nil, err
 	}
 	if nodeRt.ExtraInfo == nil {

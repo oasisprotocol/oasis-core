@@ -15,9 +15,12 @@ import (
 //     are allowed to query runtime key shares.
 //   - The `FMSPCWhitelist` field in the quote policy, which defines which processor packages
 //     and platform instances are allowed.
+//   - The `PerRolePolicy` field in the `SGXConstraints`, which defines additional role
+//     specific policies that may overwrite the default policy.
 //   - An updated key manager policy update transaction that applies a new policy at the epoch
 //     boundary.
 //   - A stricter node registration rule where observer nodes must include runtimes.
+//   - A stricter node registration rule where at most one runtime SGX role is allowed.
 const Consensus242 = "consensus242"
 
 // Version242 is the Oasis Core 24.2 version.

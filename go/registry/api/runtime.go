@@ -597,6 +597,9 @@ func (r *Runtime) ValidateDeployments(now beacon.EpochTime, params *ConsensusPar
 			if err := cs.ValidateBasic(params.TEEFeatures, isFeatureVersion242); err != nil {
 				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
 			}
+			if r.Kind == KindKeyManager && cs.PerRolePolicy != nil {
+				return fmt.Errorf("%w: invalid SGX TEE constraints: keymanager runtime with per-role policies", ErrInvalidArgument)
+			}
 			if len(cs.Enclaves) == 0 {
 				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrNoEnclaveForRuntime)
 			}

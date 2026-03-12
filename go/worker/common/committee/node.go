@@ -11,6 +11,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -59,6 +60,7 @@ type Node struct {
 	HostNode control.NodeController
 
 	Identity         *identity.Identity
+	RuntimeRoles     node.RolesMask
 	KeyManager       keymanager.Backend
 	KeyManagerClient *KeyManagerClientWrapper
 	Consensus        consensus.Service
@@ -637,6 +639,7 @@ func NewNode(
 	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
+	runtimeRoles node.RolesMask,
 	keymanager keymanager.Backend,
 	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
@@ -664,6 +667,7 @@ func NewNode(
 		Runtime:         runtime,
 		RuntimeRegistry: rtRegistry,
 		Identity:        identity,
+		RuntimeRoles:    runtimeRoles,
 		KeyManager:      keymanager,
 		Consensus:       consensus,
 		LightProvider:   lightProvider,
@@ -686,7 +690,7 @@ func NewNode(
 	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, consensus)
 
 	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, provisioner, handler, rtRegistry.GetLogManager())
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(runtime, runtimeRoles, provisioner, handler, rtRegistry.GetLogManager())
 	if err != nil {
 		return nil, err
 	}

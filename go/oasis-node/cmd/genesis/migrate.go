@@ -285,7 +285,7 @@ NodeLoop:
 			)
 			continue
 		}
-		if err = node.ValidateBasic(false); err != nil {
+		if err = node.ValidateBasic(false, false); err != nil {
 			logger.Warn("removing node not passing basic validation check",
 				"err", err,
 				"node_id", node.ID,

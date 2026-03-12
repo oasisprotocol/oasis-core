@@ -18,6 +18,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -254,6 +256,47 @@ func TestVerifyRuntime(t *testing.T) {
 			nil,
 			nil,
 			"valid runtime",
+		},
+		{
+			Runtime{
+				Versioned:   cbor.NewVersioned(3),
+				EntityID:    signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
+				ID:          keymanagerID,
+				Kind:        KindKeyManager,
+				TEEHardware: node.TEEHardwareIntelSGX,
+				Deployments: []*VersionInfo{
+					{
+						Version: version.Version{
+							Major: 1,
+							Minor: 0,
+							Patch: 0,
+						},
+						TEE: cbor.Marshal(node.SGXConstraints{
+							Versioned: cbor.NewVersioned(1),
+							Enclaves: []sgx.EnclaveIdentity{
+								{},
+							},
+							PerRolePolicy: map[node.RolesMask]quote.Policy{
+								node.RoleComputeWorker: {},
+							},
+						}),
+					},
+				},
+				AdmissionPolicy: RuntimeAdmissionPolicy{
+					AnyNode: &AnyNodeRuntimeAdmissionPolicy{},
+				},
+				GovernanceModel: GovernanceConsensus,
+			},
+			func(cp *ConsensusParameters) {
+				cp.TEEFeatures = &node.TEEFeatures{
+					SGX: node.TEEFeaturesSGX{
+						PCS: true,
+					},
+				}
+				cp.DebugAllowTestRuntimes = true
+			},
+			ErrInvalidArgument,
+			"keymanager runtime with per-role SGX policy should be rejected",
 		},
 		{
 			Runtime{

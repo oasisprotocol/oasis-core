@@ -124,11 +124,11 @@ func TestReservedRoles(t *testing.T) {
 		Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion),
 		Roles:     0xFFFFFFFF,
 	}
-	err := n.ValidateBasic(false)
+	err := n.ValidateBasic(false, false)
 	require.Error(err, "ValidateBasic should fail for reserved roles")
 
 	n.Roles = 0
-	err = n.ValidateBasic(false)
+	err = n.ValidateBasic(false, false)
 	require.Error(err, "ValidateBasic should fail for empty roles")
 }
 
@@ -139,7 +139,7 @@ func TestNodeDescriptorV2(t *testing.T) {
 		Versioned: cbor.NewVersioned(2),
 		Roles:     RoleComputeWorker | roleReserved3,
 	}
-	require.Error(v1.ValidateBasic(false), "V1 descriptors should not be allowed anymore")
+	require.Error(v1.ValidateBasic(false, false), "V1 descriptors should not be allowed anymore")
 
 	v2 := nodeV2{
 		Versioned: cbor.NewVersioned(2),
@@ -156,7 +156,7 @@ func TestNodeDescriptorV2(t *testing.T) {
 	err := cbor.Unmarshal(raw, &v3)
 	require.NoError(err, "cbor.Unmarshal")
 
-	err = v3.ValidateBasic(false)
+	err = v3.ValidateBasic(false, false)
 	require.NoError(err, "ValidateBasic")
 	require.True(v3.HasRoles(RoleComputeWorker))
 	require.False(v3.HasRoles(roleReserved3))
@@ -170,7 +170,7 @@ func TestNodeDescriptorV2(t *testing.T) {
 	err = cbor.Unmarshal(raw, &v3)
 	require.NoError(err, "cbor.Unmarshal")
 
-	err = v3.ValidateBasic(false)
+	err = v3.ValidateBasic(false, false)
 	require.NoError(err, "ValidateBasic")
 	require.True(v3.HasRoles(RoleComputeWorker))
 	require.False(v3.HasRoles(roleReserved3))
@@ -465,6 +465,38 @@ func TestNodeDeserialization(t *testing.T) {
 		err = cbor.Unmarshal(raw, &dec)
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.expectedNode, dec, "Node serialization should round-trip")
+	}
+}
+
+func TestAtMostOneRuntimeSGXRole(t *testing.T) {
+	require := require.New(t)
+
+	for _, tc := range []struct {
+		name  string
+		roles RolesMask
+		want  bool
+	}{
+		// Valid: no SGX roles.
+		{"validator only", RoleValidator, true},
+		{"validator + storage-rpc", RoleValidator | RoleStorageRPC, true},
+		// Valid: single SGX role.
+		{"compute only", RoleComputeWorker, true},
+		{"observer only", RoleObserver, true},
+		{"key manager only", RoleKeyManager, true},
+		{"empty", RoleEmpty, true},
+		// Valid: non-SGX roles are ignored.
+		{"compute + validator", RoleComputeWorker | RoleValidator, true},
+		{"key manager + validator", RoleKeyManager | RoleValidator, true},
+		{"compute + storage-rpc", RoleComputeWorker | RoleStorageRPC, true},
+		{"compute + validator + storage-rpc", RoleComputeWorker | RoleValidator | RoleStorageRPC, true},
+		// Invalid: multiple SGX roles.
+		{"compute + observer", RoleComputeWorker | RoleObserver, false},
+		{"compute + key manager", RoleComputeWorker | RoleKeyManager, false},
+		{"compute + key manager + validator", RoleComputeWorker | RoleKeyManager | RoleValidator, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(tc.want, tc.roles.AtMostOneRuntimeSGXRole())
+		})
 	}
 }
 
