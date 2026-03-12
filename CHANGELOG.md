@@ -12,6 +12,111 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 26.0 (2026-03-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Removals and Breaking Changes
+
+- go/common/sgx/pcs/policy: Add FMSPC whitelist to quote policy
+  ([#6331](https://github.com/oasisprotocol/oasis-core/issues/6331))
+
+### Features
+
+- go/beacon/api: Support fetching next block epoch
+  ([#6409](https://github.com/oasisprotocol/oasis-core/issues/6409))
+
+- go/oasis-node: Add new storage inspect command
+  ([#6427](https://github.com/oasisprotocol/oasis-core/issues/6427))
+
+  The new command enables inspecting storage databases without starting
+  all the node services. It is in particular useful for the node operators
+  doing maintenance, sanity checking and or troubleshooting.
+
+- go/staking/api: Format known addresses in staking transaction PrettyPrint
+  ([#6453](https://github.com/oasisprotocol/oasis-core/issues/6453))
+
+### Bug Fixes
+
+- go/worker/storage/committee: Fix worker teardown
+  ([#6444](https://github.com/oasisprotocol/oasis-core/issues/6444))
+
+- go/worker/storage/committee: Fix prune handler
+  ([#6445](https://github.com/oasisprotocol/oasis-core/issues/6445))
+
+  Prune handler had an edge case when State DB was empty,
+  which could cause runtime light history to be pruned prematurely.
+
+- go/worker/storage: Fix runtime state pruner
+  ([#6446](https://github.com/oasisprotocol/oasis-core/issues/6446))
+
+  Disabling pruning shouldn't prune any data including stale one
+  (data marked as ready to be pruned) from the previous run when
+  node had pruning enabled.
+
+- go/consensus/cometbft/apps/scheduler: Skip key manager runtimes
+  ([#6468](https://github.com/oasisprotocol/oasis-core/issues/6468))
+
+- go/common/sgx/pcs/tcb: Fix pcesvn validation
+  ([#6469](https://github.com/oasisprotocol/oasis-core/issues/6469))
+
+### Internal Changes
+
+- go/consensus/api: Remove GetSignerNonce
+  ([#6208](https://github.com/oasisprotocol/oasis-core/issues/6208))
+
+  The `GetSignerNonce` method was removed as it is no longer used.
+  Nonce information is now available through the staking backend.
+
+- go/worker/common: Replace epoch transitions with committee transitions
+  ([#6425](https://github.com/oasisprotocol/oasis-core/issues/6425))
+
+  The following metric has been removed:
+
+  - `oasis_worker_epoch_transition_count`
+
+  The following metric has been added:
+
+  - `oasis_worker_committee_transition_count`
+
+- go: Bump go-libp2p to v0.46.0
+  ([#6432](https://github.com/oasisprotocol/oasis-core/issues/6432))
+
+- go: Bump Go to 1.25.5
+  ([#6443](https://github.com/oasisprotocol/oasis-core/issues/6443))
+
+- go/common/version: Trim pre-release suffixes
+  ([#6447](https://github.com/oasisprotocol/oasis-core/issues/6447))
+
+  Updated version.FromString to trim 'rc', 'alpha', and 'beta' suffixes without
+  hyphens when parsing version strings. Added test cases to ensure correct
+  parsing of versions with pre-release suffixes.
+
+- go: Bump CometBFT to 0.37.18-oasis1
+  ([#6448](https://github.com/oasisprotocol/oasis-core/issues/6448))
+
+- github/workflows/ci-lint: Limit setuptools to v81.0.0
+  ([#6455](https://github.com/oasisprotocol/oasis-core/issues/6455))
+
+- rust: Bump time to v0.3.47
+  ([#6456](https://github.com/oasisprotocol/oasis-core/issues/6456))
+
+- rust: Bump bytes to v1.11.1
+  ([#6456](https://github.com/oasisprotocol/oasis-core/issues/6456))
+
+- Bump Rust toolchain to 2026-02-11
+  ([#6460](https://github.com/oasisprotocol/oasis-core/issues/6460))
+
+- go: Bump go-libp2p to v0.47.0
+  ([#6464](https://github.com/oasisprotocol/oasis-core/issues/6464))
+
+- go: Bump Go to 1.26.0
+  ([#6465](https://github.com/oasisprotocol/oasis-core/issues/6465))
+
 ## 25.9 (2025-11-28)
 
 | Protocol          | Version   |
