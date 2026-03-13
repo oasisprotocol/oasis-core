@@ -262,7 +262,7 @@ func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
 	return hb.Build(), nil
 }
 
-func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {
+func RestoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {
 	hb := hash.NewBuilder()
 	tr := io.TeeReader(r, hb)
 	sr := snappy.NewReader(tr)
