@@ -6,10 +6,10 @@ import (
 
 	"github.com/cometbft/cometbft/abci/types"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -20,11 +20,13 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // Application is a roothash application.
@@ -86,22 +88,45 @@ func (app *Application) OnCleanup() {
 
 // BeginBlock implements api.Application.
 func (app *Application) BeginBlock(ctx *api.Context) error {
+	return app.maybeChangeCommitteeInBeginBlock(ctx)
+}
+
+func (app *Application) maybeChangeCommitteeInBeginBlock(ctx *api.Context) error {
+	ok, err := app.shouldChangeCommitteeInBeginBlock(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	return app.changeCommittee(ctx)
+}
+
+func (app *Application) shouldChangeCommitteeInBeginBlock(ctx *api.Context) (bool, error) {
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return false, err
+	}
+	if isFeatureVersion242 {
+		return false, nil
+	}
+
 	// Check if there was an epoch transition.
-	epochChanged, epoch := app.state.EpochChanged(ctx)
+	epochChanged, _ := app.state.EpochChanged(ctx)
 	if epochChanged {
-		return app.onCommitteeChanged(ctx, epoch)
+		return true, nil
 	}
 
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
 	if rescheduled {
-		return app.onCommitteeChanged(ctx, epoch)
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
-func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochTime) error {
+func (app *Application) changeCommittee(ctx *api.Context) error {
 	roothash := roothashState.NewImmutableState(ctx.State())
 	registry := registryState.NewImmutableState(ctx.State())
 
@@ -118,7 +143,7 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochT
 
 	runtimes, _ := registry.Runtimes(ctx)
 	for _, rt := range runtimes {
-		if err := app.onRuntimeCommitteeChanged(ctx, rt, epoch, params, stake); err != nil {
+		if err := app.changeRuntimeCommittee(ctx, rt, params, stake); err != nil {
 			return err
 		}
 	}
@@ -126,10 +151,9 @@ func (app *Application) onCommitteeChanged(ctx *api.Context, epoch beacon.EpochT
 	return nil
 }
 
-func (app *Application) onRuntimeCommitteeChanged(
+func (app *Application) changeRuntimeCommittee(
 	ctx *api.Context,
 	rt *registry.Runtime,
-	epoch beacon.EpochTime,
 	params *roothash.ConsensusParameters,
 	stake *stakingState.StakeAccumulatorCache,
 ) error {
@@ -173,7 +197,7 @@ func (app *Application) onRuntimeCommitteeChanged(
 	var suspend bool
 	switch {
 	case committee == nil:
-		logger.Warn("no executor committee")
+		logger.Debug("suspending runtime: no executor committee")
 		// If there are no committees for this runtime, suspend the runtime
 		// as this means that there is no one to pay the maintenance fees.
 		suspend = true
@@ -195,7 +219,7 @@ func (app *Application) onRuntimeCommitteeChanged(
 		case nil:
 			// Sufficient stake is available.
 		case stakingAPI.ErrInsufficientStake:
-			logger.Debug("insufficient stake for runtime operation",
+			logger.Debug("suspending runtime: insufficient stake",
 				"entity", rt.EntityID,
 				"account", *addr,
 			)
@@ -205,39 +229,46 @@ func (app *Application) onRuntimeCommitteeChanged(
 		}
 	}
 
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		logger.Error("failed to get feature version", "err", err)
+		return err
+	}
+
 	switch suspend {
 	case true:
-		logger.Debug("suspending runtime, maintenance fees not paid or owner debonded",
-			"epoch", epoch,
-		)
-
 		if err = registry.SuspendRuntime(ctx, rt.ID); err != nil {
 			return err
 		}
 
-		// Emit an empty block signalling that the runtime was suspended.
-		if err = app.finalizeBlock(ctx, rtState, block.Suspended, nil); err != nil {
-			return fmt.Errorf("failed to emit empty block: %w", err)
+		// Check if we need to emit suspended block signalling that the runtime
+		// was suspended for deprecated suspension logic.
+		if !isFeatureVersion242 {
+			app.finalizeBlock(ctx, rtState, block.Suspended, nil)
 		}
 
-		rtState.Suspended = true
-		rtState.Committee = nil
+		committee = nil
 	case false:
 		logger.Debug("updating committee for runtime",
-			"epoch", epoch,
 			"committee", committee,
 		)
 
-		// Emit an empty block signaling epoch transition. This is required so that
-		// the clients can be sure what state is final when an epoch transition occurs.
-		if err = app.finalizeBlock(ctx, rtState, block.EpochTransition, nil); err != nil {
-			return fmt.Errorf("failed to emit empty block: %w", err)
+		// Check if we need to emit epoch transition block on epoch changes
+		// for deprecated election logic.
+		if !isFeatureVersion242 {
+			// Emit an empty block signaling epoch transition. This is required so that
+			// the clients can be sure what state is final when an epoch transition occurs.
+			app.finalizeBlock(ctx, rtState, block.EpochTransition, nil)
 		}
-
-		// Warning: Non-suspended runtimes can still have a nil committee.
-		rtState.Suspended = false
-		rtState.Committee = committee
 	}
+
+	if err := resetCommitments(ctx, rtState, false); err != nil {
+		return fmt.Errorf("failed to reset commitments: %w", err)
+	}
+
+	// Warning: Non-suspended runtimes can still have a nil committee.
+	rtState.Suspended = suspend
+	rtState.Committee = committee
 
 	// Clear liveness statistics.
 	rtState.LivenessStatistics = nil
@@ -424,5 +455,48 @@ func (app *Application) EndBlock(ctx *api.Context) (types.ResponseEndBlock, erro
 		return types.ResponseEndBlock{}, err
 	}
 
+	if err := app.maybeChangeCommitteeInEndBlock(ctx); err != nil {
+		return types.ResponseEndBlock{}, err
+	}
+
 	return types.ResponseEndBlock{}, nil
+}
+
+func (app *Application) maybeChangeCommitteeInEndBlock(ctx *api.Context) error {
+	ok, err := app.shouldChangeCommitteeInEndBlock(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	return app.changeCommittee(ctx)
+}
+
+func (app *Application) shouldChangeCommitteeInEndBlock(ctx *api.Context) (bool, error) {
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return false, err
+	}
+	if !isFeatureVersion242 {
+		return false, nil
+	}
+
+	// Check if we are at the end of an epoch.
+	beaconState := beaconState.NewMutableState(ctx.State())
+	future, err := beaconState.GetFutureEpoch(ctx)
+	if err != nil {
+		return false, err
+	}
+	if future != nil && future.Height == ctx.CurrentHeight()+1 {
+		return true, nil
+	}
+
+	// Check if rescheduling has taken place.
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, &schedulerAPI.ElectedEvent{})
+	if rescheduled {
+		return true, nil
+	}
+
+	return false, nil
 }

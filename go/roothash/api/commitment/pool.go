@@ -250,7 +250,6 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 			"round", ec.Header.Header.Round,
 			"node_id", ec.NodeID,
 			"scheduler_id", ec.Header.SchedulerID,
-			"rank", rank,
 		)
 		return ErrBadExecutorCommitment
 	}
