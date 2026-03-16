@@ -55,6 +55,12 @@ func SetSkipVerify() {
 	unsafeSkipVerify = true
 }
 
+// UnsetSkipVerify will enable quote signature verification for the remainder of the process'
+// lifetime.
+func UnsetSkipVerify() {
+	unsafeSkipVerify = false
+}
+
 // SetAllowDebugEnclaves will enable running and communicating with enclaves with debug flag enabled
 // in report body for the remainder of the process' lifetime.
 func SetAllowDebugEnclaves() {
