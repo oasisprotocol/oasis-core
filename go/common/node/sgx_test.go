@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -246,6 +247,56 @@ func TestHashAttestation(t *testing.T) {
 
 	h = HashAttestation([]byte("foo bar"), nodeID, 42, &rek)
 	require.EqualValues("9a288bd33ba7a4c2eefdee68e4c08c1a34c369302ef8176a3bfdb4fedcec333e", hex.EncodeToString(h))
+}
+
+// TestKeyManagerAccessPolicySanity checks that attestation verification uses
+// the stricter key manager access policy when requested and falls back to the
+// default policy otherwise.
+func TestKeyManagerAccessPolicySanity(t *testing.T) {
+	require := require.New(t)
+
+	pcs.SetSkipVerify()
+	defer pcs.UnsetSkipVerify()
+
+	// Build a raw SGX report (384 bytes) with a known RAK hash in ReportData.
+	var rak signature.PublicKey
+	rakHash := HashRAK(rak)
+
+	var rawReport [384]byte
+	copy(rawReport[320:], rakHash[:])
+
+	mockQuote, err := pcs.NewMockQuote(rawReport[:])
+	require.NoError(err, "NewMockQuote")
+
+	sa := SGXAttestation{
+		Versioned: cbor.NewVersioned(LatestSGXAttestationVersion),
+		Quote: quote.Quote{
+			PCS: &pcs.QuoteBundle{
+				Quote: mockQuote,
+			},
+		},
+	}
+
+	sc := SGXConstraints{
+		Versioned: cbor.NewVersioned(1),
+		Enclaves:  []sgx.EnclaveIdentity{{}},
+		Policy: &quote.Policy{
+			PCS: &pcs.QuotePolicy{},
+		},
+		KeyManagerAccessPolicy: &quote.Policy{
+			PCS: &pcs.QuotePolicy{Disabled: true},
+		},
+	}
+
+	var nodeID signature.PublicKey
+	cfg := &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}}
+
+	err = sa.Verify(cfg, time.Now(), 0, &sc, rak, nil, nodeID, true)
+	require.Error(err, "attestation should be rejected when key manager access policy is used")
+	require.ErrorContains(err, "PCS quotes are disabled by policy")
+
+	err = sa.Verify(cfg, time.Now(), 0, &sc, rak, nil, nodeID, false)
+	require.NoError(err, "attestation should pass when falling back to default policy")
 }
 
 func FuzzSGXConstraints(f *testing.F) {
