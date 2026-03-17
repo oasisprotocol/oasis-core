@@ -357,7 +357,10 @@ steps:
     command:
       - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts_mocksgx.sh
-      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption
+      - .buildkite/scripts/test_e2e.sh --timeout 20m
+        --scenario e2e/runtime/runtime-encryption
+        --scenario e2e/runtime/keymanager-access-policy
+
     env:
       OASIS_TEE_HARDWARE: intel-sgx
       OASIS_UNSAFE_MOCK_TEE: "1"

@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -48,8 +49,9 @@ type Runtime struct {
 	// of this file is discouraged (if not entirely forbidden).
 	cfgSave runtimeCfgSave
 
-	teeHardware node.TEEHardware
-	mrSigner    *sgx.MrSigner
+	teeHardware            node.TEEHardware
+	mrSigner               *sgx.MrSigner
+	keyManagerAccessPolicy *quote.Policy
 
 	pruner RuntimePrunerCfg
 
@@ -59,12 +61,13 @@ type Runtime struct {
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
 type RuntimeCfg struct {
-	ID          common.Namespace
-	Kind        registry.RuntimeKind
-	Entity      *Entity
-	Keymanager  *Runtime
-	TEEHardware node.TEEHardware
-	MrSigner    *sgx.MrSigner
+	ID                     common.Namespace
+	Kind                   registry.RuntimeKind
+	Entity                 *Entity
+	Keymanager             *Runtime
+	TEEHardware            node.TEEHardware
+	MrSigner               *sgx.MrSigner
+	KeyManagerAccessPolicy *quote.Policy
 
 	Deployments      []DeploymentCfg
 	GenesisRound     uint64
@@ -230,14 +233,19 @@ func (rt *Runtime) toRuntimeBundle(index int, cfg *deploymentCfg) (*bundle.Bundl
 			return fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}
 
-		cfg.versionInfo.TEE = cbor.Marshal(node.SGXConstraints{
+		sc := node.SGXConstraints{
 			Enclaves: []sgx.EnclaveIdentity{
 				{
 					MrEnclave: *mrEnclave,
 					MrSigner:  *rt.mrSigner,
 				},
 			},
-		})
+		}
+		if rt.keyManagerAccessPolicy != nil {
+			sc.Versioned = cbor.NewVersioned(1)
+			sc.KeyManagerAccessPolicy = rt.keyManagerAccessPolicy
+		}
+		cfg.versionInfo.TEE = cbor.Marshal(sc)
 		cfg.mrEnclave = mrEnclave
 		return nil
 	}
@@ -368,12 +376,13 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		cfgSave: runtimeCfgSave{
 			id: cfg.ID,
 		},
-		kind:               cfg.Kind,
-		teeHardware:        cfg.TEEHardware,
-		mrSigner:           cfg.MrSigner,
-		pruner:             cfg.Pruner,
-		excludeFromGenesis: cfg.ExcludeFromGenesis,
-		descriptor:         descriptor,
+		kind:                   cfg.Kind,
+		teeHardware:            cfg.TEEHardware,
+		mrSigner:               cfg.MrSigner,
+		keyManagerAccessPolicy: cfg.KeyManagerAccessPolicy,
+		pruner:                 cfg.Pruner,
+		excludeFromGenesis:     cfg.ExcludeFromGenesis,
+		descriptor:             descriptor,
 	}
 
 	for _, deployCfg := range cfg.Deployments {
