@@ -138,6 +138,8 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 	h.syncRoundLock.Lock()
 	defer h.syncRoundLock.Unlock()
 	switch {
+	case h.lastStorageSyncedRound == roothash.RoundInvalid:
+		// First sync, continue below.
 	case round < h.lastStorageSyncedRound:
 		return fmt.Errorf("runtime/history: storage sync checkpoint at lower round (current: %d wanted: %d)", h.lastStorageSyncedRound, round)
 	case round == h.lastStorageSyncedRound:
@@ -163,10 +165,13 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 	return nil
 }
 
-func (h *runtimeHistory) LastStorageSyncedRound() (uint64, error) {
+func (h *runtimeHistory) LastStorageSyncedRound() (uint64, bool) {
 	h.syncRoundLock.RLock()
 	defer h.syncRoundLock.RUnlock()
-	return h.lastStorageSyncedRound, nil
+	if h.lastStorageSyncedRound == roothash.RoundInvalid {
+		return 0, false
+	}
+	return h.lastStorageSyncedRound, true
 }
 
 func (h *runtimeHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
@@ -227,16 +232,26 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Also take storage sync state into account.
-		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < meta.LastRound {
-			return h.lastStorageSyncedRound, nil
+		if includeStorage && h.hasLocalStorage {
+			if h.lastStorageSyncedRound == roothash.RoundInvalid {
+				return 0, roothash.ErrNotFound
+			}
+			if h.lastStorageSyncedRound < meta.LastRound {
+				return h.lastStorageSyncedRound, nil
+			}
 		}
 		return meta.LastRound, nil
 	default:
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Ensure round exists.
-		if includeStorage && h.hasLocalStorage && h.lastStorageSyncedRound < round {
-			return 0, roothash.ErrNotFound
+		if includeStorage && h.hasLocalStorage {
+			if h.lastStorageSyncedRound == roothash.RoundInvalid {
+				return 0, roothash.ErrNotFound
+			}
+			if h.lastStorageSyncedRound < round {
+				return 0, roothash.ErrNotFound
+			}
 		}
 		return round, nil
 	}
@@ -368,6 +383,7 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 		ctx:                     ctx,
 		cancelCtx:               cancelCtx,
 		db:                      db,
+		lastStorageSyncedRound:  roothash.RoundInvalid,
 		hasLocalStorage:         hasLocalStorage,
 		syncedBlocksNotifier:    pubsub.NewBroker(true),
 		committedBlocksNotifier: pubsub.NewBroker(true),

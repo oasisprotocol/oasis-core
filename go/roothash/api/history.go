@@ -36,7 +36,7 @@ type BlockHistory interface {
 	StorageSyncCheckpoint(round uint64) error
 
 	// LastStorageSyncedRound returns the last runtime round which was synced to storage.
-	LastStorageSyncedRound() (uint64, error)
+	LastStorageSyncedRound() (uint64, bool)
 
 	// WatchBlocks returns a channel watching block rounds as they are committed.
 	// If node has local storage this includes waiting for the round to be synced into storage.
