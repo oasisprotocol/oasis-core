@@ -291,31 +291,6 @@ func (n *Node) updateState(ctx context.Context, minRank uint64, maxRank uint64, 
 	}
 }
 
-func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
-	rq := &roothash.RuntimeRequest{
-		RuntimeID: n.commonNode.Runtime.ID(),
-		Height:    height,
-	}
-	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, rq)
-	if err != nil {
-		n.logger.Error("failed to query runtime state",
-			"err", err,
-			"height", height,
-		)
-		return nil, nil, err
-	}
-	roundResults, err := n.commonNode.Consensus.RootHash().GetLastRoundResults(ctx, rq)
-	if err != nil {
-		n.logger.Error("failed to query round last normal round results",
-			"err", err,
-			"height", height,
-		)
-		return nil, nil, err
-	}
-
-	return state, roundResults, nil
-}
-
 func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	n.logger.Debug("trying to schedule a batch",
 		"round", round,
@@ -516,8 +491,10 @@ func (n *Node) runtimeExecuteTxBatch(
 ) (*protocol.RuntimeExecuteTxBatchResponse, error) {
 	// Ensure block round is synced to storage.
 	n.logger.Debug("ensuring block round is synced", "round", blk.Header.Round)
-	if _, err := n.commonNode.Runtime.History().WaitRoundSynced(ctx, blk.Header.Round); err != nil {
-		return nil, err
+	if blk.Header.Round > 0 {
+		if _, err := n.commonNode.Runtime.History().WaitRoundSynced(ctx, blk.Header.Round); err != nil {
+			return nil, err
+		}
 	}
 
 	rq := &protocol.Body{
@@ -931,7 +908,10 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 // nudgeAvailabilityLocked checks whether the executor worker should declare itself available.
 func (n *Node) nudgeAvailabilityLocked(force bool) {
 	// Check availability of the last round which is needed for round processing.
-	_, _, err := n.getRtStateAndRoundResults(n.ctx, consensus.HeightLatest)
+	_, err := n.commonNode.Consensus.RootHash().GetLastRoundResults(n.ctx, &roothash.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    consensus.HeightLatest,
+	})
 	lastRoundAvailable := (err == nil)
 
 	// Make sure the key manager is available (or not needed).
@@ -1399,13 +1379,30 @@ func (n *Node) roundWorker(ctx context.Context) {
 	}
 	n.rt = host.NewRichRuntime(rt)
 
-	// Fetch state and round results upfront.
+	// Fetch the runtime state upfront. We need the latest state so that
+	// we can check if the runtime is suspended.
 	var err error
-	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, n.dispatchInfo.BlockInfo.ConsensusBlock.Height)
+	n.rtState, err = n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    consensus.HeightLatest,
+	})
 	if err != nil {
-		n.logger.Debug("skipping round, failed to fetch state and round results",
-			"err", err,
-		)
+		n.logger.Error("skipping round, failed to query runtime state", "err", err)
+		return
+	}
+
+	if n.rtState.Suspended {
+		n.logger.Debug("skipping round, runtime is suspended")
+		return
+	}
+
+	// Fetch the latest round results upfront.
+	n.roundResults, err = n.commonNode.Consensus.RootHash().GetLastRoundResults(ctx, &roothash.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    n.dispatchInfo.BlockInfo.ConsensusBlock.Height,
+	})
+	if err != nil {
+		n.logger.Error("skipping round, failed to query round last normal round results", "err", err)
 		return
 	}
 
