@@ -39,8 +39,8 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "LastConsensusHeight")
 	require.EqualValues(0, lastHeight)
 
-	lastRound, err := history.LastStorageSyncedRound()
-	require.NoError(err, "LastStorageSyncedRound")
+	lastRound, ok := history.LastStorageSyncedRound()
+	require.False(ok, "LastStorageSyncedRound")
 	require.EqualValues(0, lastRound)
 
 	_, err = history.GetBlock(ctx, 10)
@@ -95,8 +95,8 @@ func TestHistory(t *testing.T) {
 	err = history.StorageSyncCheckpoint(5)
 	require.Error(err, "StorageSyncCheckpoint should fail for lower height")
 
-	lastRound, err = history.LastStorageSyncedRound()
-	require.NoError(err, "LastStorageSyncedRound")
+	lastRound, ok = history.LastStorageSyncedRound()
+	require.True(ok, "LastStorageSyncedRound")
 	require.EqualValues(10, lastRound)
 
 	gotBlk, err := history.GetBlock(ctx, 10)
