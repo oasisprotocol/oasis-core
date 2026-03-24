@@ -1016,11 +1016,11 @@ func (w *Worker) WillNeverRegister() bool {
 func GetRegistrationSigner(identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
 	var defaultPk signature.PublicKey
 
-	// If the test entity is enabled, use the entity signing key for signing
-	// registrations.
+	// If the test entity is enabled, use it as the owning entity while still
+	// signing registrations with the node identity key.
 	if flags.DebugTestEntity() {
-		testEntity, testSigner, _ := entity.TestEntity()
-		return testEntity.ID, testSigner, nil
+		testEntity, _, _ := entity.TestEntity()
+		return testEntity.ID, identity.NodeSigner, nil
 	}
 
 	// Determine the owning entity ID.
