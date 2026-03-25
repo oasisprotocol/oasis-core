@@ -15,12 +15,12 @@ import (
 )
 
 func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
-	entityID, registrationSigner, err := registration.GetRegistrationSigner(id)
+	entityID, ok, err := registration.GetRegistrationEntityID()
 	if err != nil {
-		return fmt.Errorf("registration GetRegistrationSigner: %w", err)
+		return fmt.Errorf("failed to get node's entity ID: %w", err)
 	}
-	if registrationSigner == nil {
-		return fmt.Errorf("nil registrationSigner")
+	if !ok {
+		return fmt.Errorf("no entity ID configured")
 	}
 
 	var runtimes []*node.Runtime
@@ -63,7 +63,7 @@ func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddre
 	}
 	signedNode, err := node.MultiSignNode(
 		[]signature.Signer{
-			registrationSigner,
+			id.NodeSigner,
 			id.P2PSigner,
 			id.ConsensusSigner,
 			id.VRFSigner,
@@ -77,7 +77,7 @@ func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddre
 	}
 
 	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
-	if err := consensus.SignAndSubmitTx(context.Background(), svc, registrationSigner, tx); err != nil {
+	if err := consensus.SignAndSubmitTx(context.Background(), svc, id.NodeSigner, tx); err != nil {
 		return fmt.Errorf("consensus RegisterNode tx: %w", err)
 	}
 	return nil
