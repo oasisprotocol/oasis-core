@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 )
 
 // Config is the registration worker configuration structure.
@@ -35,6 +36,30 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// ResolveEntityID resolves the owning entity ID.
+//
+// In case of no configured entity a nil value is returned.
+func (c *Config) ResolveEntityID() (*signature.PublicKey, error) {
+	switch {
+	case c.Entity != "":
+		ent, err := entity.LoadDescriptor(c.Entity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load entity descriptor: %w", err)
+		}
+
+		return &ent.ID, nil
+	case c.EntityID != "":
+		var entityID signature.PublicKey
+		if err := entityID.UnmarshalText([]byte(c.EntityID)); err != nil {
+			return nil, fmt.Errorf("malformed entity ID: %w", err)
+		}
+
+		return &entityID, nil
+	default:
+		return nil, nil
+	}
 }
 
 // DefaultConfig returns the default configuration settings.

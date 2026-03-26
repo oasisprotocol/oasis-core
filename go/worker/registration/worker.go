@@ -17,7 +17,6 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -27,7 +26,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -177,6 +175,8 @@ func (rp *roleProvider) SetUnavailable() {
 type Worker struct {
 	sync.RWMutex
 
+	enabled bool
+
 	workerCommonCfg *workerCommon.Config
 
 	store            *persistent.ServiceStore
@@ -184,8 +184,7 @@ type Worker struct {
 	deregRequested   uint32
 	delegate         Delegate
 
-	entityID    signature.PublicKey
-	hasEntityID bool
+	entityID signature.PublicKey
 
 	sentryAddresses []node.TLSAddress
 
@@ -1003,41 +1002,7 @@ func (w *Worker) RequestDeregistration() error {
 
 // WillNeverRegister returns true iff the worker will never register.
 func (w *Worker) WillNeverRegister() bool {
-	return !w.entityID.IsValid() || !w.hasEntityID
-}
-
-// GetRegistrationEntityID resolves the owning entity ID as configured by this package's flags.
-func GetRegistrationEntityID() (signature.PublicKey, bool, error) {
-	// If the test entity is enabled, use it as the owning entity.
-	if flags.DebugTestEntity() {
-		testEntity, _, _ := entity.TestEntity()
-		return testEntity.ID, true, nil
-	}
-
-	// Determine the owning entity ID.
-	cfgEntityFn := config.GlobalConfig.Registration.Entity
-	cfgEntityID := config.GlobalConfig.Registration.EntityID
-
-	switch {
-	case cfgEntityFn != "":
-		// Attempt to load the entity descriptor.
-		entity, err := entity.LoadDescriptor(cfgEntityFn)
-		if err != nil {
-			return signature.PublicKey{}, false, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
-		}
-
-		return entity.ID, true, nil
-	case cfgEntityID != "":
-		// Attempt to parse the entity ID.
-		var entityID signature.PublicKey
-		if err := entityID.UnmarshalText([]byte(cfgEntityID)); err != nil {
-			return signature.PublicKey{}, false, fmt.Errorf("worker/registration: malformed entity ID: %w", err)
-		}
-
-		return entityID, true, nil
-	default:
-		return signature.PublicKey{}, false, nil
-	}
+	return !w.enabled
 }
 
 // New constructs a new worker node registration service.
@@ -1045,6 +1010,7 @@ func New(
 	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
+	entityID *signature.PublicKey,
 	consensus consensus.Service,
 	p2p p2p.Service,
 	workerCommonCfg *workerCommon.Config,
@@ -1056,13 +1022,8 @@ func New(
 
 	serviceStore := store.GetServiceStore(DBBucketName)
 
-	entityID, hasEntityID, err := GetRegistrationEntityID()
-	if err != nil {
-		return nil, err
-	}
-
 	var storedDeregister bool
-	err = serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
+	err := serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
 	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
 	}
@@ -1071,8 +1032,6 @@ func New(
 		workerCommonCfg: workerCommonCfg,
 		store:           serviceStore,
 		delegate:        delegate,
-		entityID:        entityID,
-		hasEntityID:     hasEntityID,
 		sentryAddresses: workerCommonCfg.SentryAddresses,
 		runtimeRegistry: runtimeRegistry,
 		beacon:          beacon,
@@ -1090,6 +1049,12 @@ func New(
 	}
 
 	w.storedDeregister = storedDeregister
+
+	// If node has no entity it will not register.
+	if entityID != nil {
+		w.entityID = *entityID
+		w.enabled = true
+	}
 
 	if config.GlobalConfig.Consensus.Validator || config.GlobalConfig.Mode == config.ModeValidator {
 		rp, err := w.NewRoleProvider(node.RoleValidator)

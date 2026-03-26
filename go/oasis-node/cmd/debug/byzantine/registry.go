@@ -11,18 +11,17 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
-	entityID, ok, err := registration.GetRegistrationEntityID()
-	if err != nil {
-		return fmt.Errorf("failed to get node's entity ID: %w", err)
-	}
-	if !ok {
-		return fmt.Errorf("no entity ID configured")
-	}
-
+func registryRegisterNode(
+	svc consensus.Service,
+	id *identity.Identity,
+	entityID signature.PublicKey,
+	p2pAddresses []node.Address,
+	runtimeID common.Namespace,
+	capabilities *node.Capabilities,
+	roles node.RolesMask,
+) error {
 	var runtimes []*node.Runtime
 	if roles&registry.RuntimesRequiredRoles != 0 {
 		runtimes = []*node.Runtime{
@@ -57,9 +56,11 @@ func registryRegisterNode(svc consensus.Service, id *identity.Identity, p2pAddre
 		nodeDesc.Runtimes[0].Capabilities = *capabilities
 	}
 	if roles&node.RoleValidator != 0 {
-		if nodeDesc.Consensus.Addresses, err = svc.GetAddresses(); err != nil {
-			return fmt.Errorf("consensus GetAddresses: %w", err)
+		addrs, err := svc.GetAddresses()
+		if err != nil {
+			return fmt.Errorf("failed to get consensus backend addresses: %w", err)
 		}
+		nodeDesc.Consensus.Addresses = addrs
 	}
 	signedNode, err := node.MultiSignNode(
 		[]signature.Signer{
