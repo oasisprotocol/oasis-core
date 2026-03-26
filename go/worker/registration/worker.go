@@ -1000,12 +1000,9 @@ func (w *Worker) RequestDeregistration() error {
 	return nil
 }
 
-// WillNeverRegister returns true iff the worker will never register.
-func (w *Worker) WillNeverRegister() bool {
-	return !w.enabled
-}
-
 // New constructs a new worker node registration service.
+//
+// Entity ID is optional. If not provided this will be a no-op worker.
 func New(
 	beacon beacon.Backend,
 	registry registry.Backend,
@@ -1078,9 +1075,9 @@ func (w *Worker) Name() string {
 func (w *Worker) Start() error {
 	w.logger.Info("starting node registration service")
 
-	// HACK: This can be ok in certain configurations.
-	if w.WillNeverRegister() {
-		w.logger.Warn("no entity ID configured for this node, registration will NEVER succeed")
+	// TODO: stop abusing no-op workers. Instead worker should never be started
+	// if configuration says so.
+	if !w.enabled {
 		// Make sure the node is stopped on quit and that it can still respond to
 		// shutdown requests from the control api.
 		go func() {

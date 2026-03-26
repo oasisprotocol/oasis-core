@@ -259,7 +259,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.BeaconWorker, err = workerBeacon.New(
 		n.Identity,
 		n.Consensus,
-		n.RegistrationWorker,
+		n.EntityID != nil,
 	)
 	if err != nil {
 		return err
