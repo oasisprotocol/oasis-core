@@ -104,9 +104,9 @@ func createHistoryFactory() (history.Factory, error) {
 	// Archive node won't commit any new blocks, so disable waiting for storage
 	// sync commits.
 	mode := config.GlobalConfig.Mode
-	hasLocalStorage := mode.HasLocalStorage() && !mode.IsArchive()
+	honorStorageSync := mode.HasLocalStorage() && !mode.IsArchive()
 
-	historyFactory := history.NewFactory(pruneFactory, hasLocalStorage)
+	historyFactory := history.NewFactory(pruneFactory, honorStorageSync)
 
 	return historyFactory, nil
 }
