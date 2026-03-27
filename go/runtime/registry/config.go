@@ -75,10 +75,10 @@ func GetConfiguredRuntimeIDs() ([]common.Namespace, error) {
 		if len(runtimes) > 0 && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("no runtimes should be configured when in validator or seed modes")
 		}
-	case config.ModeCompute, config.ModeKeyManager:
+	case config.ModeCompute, config.ModeKeyManager, config.ModeObserver:
 		// At least one runtime should be configured.
 		if len(runtimes) == 0 && !cmdFlags.DebugDontBlameOasis() {
-			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, or client-stateless modes")
+			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, or observer modes")
 		}
 	default:
 		// In any other mode, runtimes can be optionally configured.
@@ -103,8 +103,7 @@ func createHistoryFactory() (history.Factory, error) {
 
 	// Archive node won't commit any new blocks, so disable waiting for storage
 	// sync commits.
-	mode := config.GlobalConfig.Mode
-	honorStorageSync := mode.HasLocalStorage() && !mode.IsArchive()
+	honorStorageSync := config.GlobalConfig.Consensus.LocalStorage && !config.GlobalConfig.Mode.IsArchive()
 
 	historyFactory := history.NewFactory(pruneFactory, honorStorageSync)
 

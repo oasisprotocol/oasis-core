@@ -270,7 +270,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Take storage into account for last retained round.
-		if config.GlobalConfig.Mode.HasLocalStorage() {
+		if config.GlobalConfig.Consensus.LocalStorage {
 			lsb, ok := rt.Storage().(storage.LocalBackend)
 			switch ok {
 			case false:

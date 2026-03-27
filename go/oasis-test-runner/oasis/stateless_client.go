@@ -58,7 +58,8 @@ func (client *StatelessClient) ModifyConfig() error {
 
 	client.Config.P2P.Port = client.p2pPort
 
-	client.Config.Mode = config.ModeStatelessClient
+	client.Config.Mode = config.ModeClient
+	client.Config.Consensus.LocalStorage = false
 	client.Config.Runtime.Provisioner = client.runtimeProvisioner
 	client.Config.Runtime.SGX.Loader = client.net.cfg.RuntimeSGXLoaderBinary
 	client.Config.Runtime.AttestInterval = client.net.cfg.RuntimeAttestInterval

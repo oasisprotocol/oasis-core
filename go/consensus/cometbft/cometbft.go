@@ -37,26 +37,27 @@ func New(
 		return nil, err
 	}
 
-	switch config.GlobalConfig.Mode {
-	case config.ModeArchive:
+	if config.GlobalConfig.Mode == config.ModeArchive {
 		node, err := createArchiveNode(ctx, dataDir, identity, genesis, doc, genesisDoc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create archive node: %w", err)
 		}
 		return node, nil
-	case config.ModeStatelessClient:
+	}
+
+	if !config.GlobalConfig.Consensus.LocalStorage {
 		node, err := createStatelessNode(ctx, dataDir, identity, genesis, doc, genesisDoc, p2p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stateless node: %w", err)
 		}
 		return node, nil
-	default:
-		node, err := createFullNode(ctx, dataDir, identity, genesis, doc, genesisDoc, upgrader, p2p)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create full node: %w", err)
-		}
-		return node, nil
 	}
+
+	node, err := createFullNode(ctx, dataDir, identity, genesis, doc, genesisDoc, upgrader, p2p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create full node: %w", err)
+	}
+	return node, nil
 }
 
 func createArchiveNode(

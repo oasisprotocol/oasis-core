@@ -277,7 +277,11 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.svcMgr.Register(n.BeaconWorker)
 
 	// Initialize the storage worker.
+	storageCfg := workerStorage.Config{
+		HasLocalStorage: config.GlobalConfig.Consensus.LocalStorage,
+	}
 	n.StorageWorker, err = workerStorage.New(
+		storageCfg,
 		n.grpcInternal,
 		n.CommonWorker,
 		n.RegistrationWorker,

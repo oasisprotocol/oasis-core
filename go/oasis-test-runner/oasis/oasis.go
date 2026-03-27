@@ -303,12 +303,12 @@ func (n *Node) Start() error {
 		n.Config.Mode = config.ModeArchive
 	}
 
-	switch n.Config.Mode {
-	case config.ModeStatelessClient:
+	if !n.Config.Consensus.LocalStorage {
 		for _, worker := range n.net.computeWorkers {
 			n.Config.Consensus.Providers = append(n.Config.Consensus.Providers, "unix:"+worker.SocketPath())
 		}
-	case config.ModeSeed:
+	}
+	if n.Config.Mode == config.ModeSeed {
 		n.Config.P2P.Discovery.Bootstrap.AllowPrivateIPs = true
 	}
 

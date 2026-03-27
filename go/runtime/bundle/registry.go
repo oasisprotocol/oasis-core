@@ -109,7 +109,7 @@ func (r *Registry) AddManifest(manifest *ExplodedManifest) error {
 			hasSGXLoader := config.GlobalConfig.Runtime.SGX.Loader != ""
 			hasSGXLoader = hasSGXLoader || config.GlobalConfig.Runtime.SGXLoader != ""
 			insecureMock := config.GlobalConfig.Runtime.DebugMockTEE
-			if comp.ID().IsRONL() && config.GlobalConfig.Mode.IsClientOnly() && isEnvAuto && !hasSGXLoader && !insecureMock {
+			if comp.ID().IsRONL() && config.GlobalConfig.Mode == config.ModeClient && isEnvAuto && !hasSGXLoader && !insecureMock {
 				teeKind = component.TEEKindNone
 			}
 		}
