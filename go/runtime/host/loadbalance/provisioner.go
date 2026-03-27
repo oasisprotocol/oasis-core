@@ -13,13 +13,15 @@ type lbProvisioner struct {
 }
 
 // NewProvisioner creates a load-balancing runtime provisioner.
-func NewProvisioner(inner host.Provisioner, numInstances int) host.Provisioner {
+func NewProvisioner(inner host.Provisioner, numInstances int, metricsEnabled bool) host.Provisioner {
 	if numInstances < 2 {
 		// If there is only a single instance configured just return the inner provisioner.
 		return inner
 	}
 
-	initMetrics()
+	if metricsEnabled {
+		initMetrics()
+	}
 
 	return &lbProvisioner{
 		inner:        inner,

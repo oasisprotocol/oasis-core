@@ -1514,7 +1514,9 @@ func NewNode(
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
-	initMetrics()
+	if commonCfg.MetricsEnabled {
+		initMetrics()
+	}
 
 	committeeTopic := p2pProtocol.NewTopicKindCommitteeID(commonNode.ChainContext, commonNode.Runtime.ID())
 
