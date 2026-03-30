@@ -31,7 +31,6 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasisprotocol/oasis-core/go/sentry/client"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
 
 const (
@@ -176,8 +175,6 @@ type Worker struct {
 	sync.RWMutex
 
 	enabled bool
-
-	workerCommonCfg *workerCommon.Config
 
 	store            *persistent.ServiceStore
 	storedDeregister bool
@@ -1010,7 +1007,7 @@ func New(
 	entityID *signature.PublicKey,
 	consensus consensus.Service,
 	p2p p2p.Service,
-	workerCommonCfg *workerCommon.Config,
+	sentryAddresses []node.TLSAddress,
 	store *persistent.CommonStore,
 	delegate Delegate,
 	runtimeRegistry runtimeRegistry.Registry,
@@ -1026,10 +1023,9 @@ func New(
 	}
 
 	w := &Worker{
-		workerCommonCfg: workerCommonCfg,
 		store:           serviceStore,
 		delegate:        delegate,
-		sentryAddresses: workerCommonCfg.SentryAddresses,
+		sentryAddresses: sentryAddresses,
 		runtimeRegistry: runtimeRegistry,
 		beacon:          beacon,
 		registry:        registry,

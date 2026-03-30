@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -193,9 +194,18 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 }
 
 func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
-	var err error
+	// Parse sentry configuration.
+	var sentryAddresses []node.TLSAddress
+	for _, v := range config.GlobalConfig.Runtime.SentryAddresses {
+		var tlsAddr node.TLSAddress
+		if err := tlsAddr.UnmarshalText([]byte(v)); err != nil {
+			return fmt.Errorf("bad sentry address (%s): %w", v, err)
+		}
+		sentryAddresses = append(sentryAddresses, tlsAddr)
+	}
 
 	// Initialize runtime provisioner.
+	var err error
 	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc)
 	if err != nil {
 		return err
@@ -229,8 +239,6 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 	n.svcMgr.Register(n.CommonWorker)
 
-	workerCommonCfg := n.CommonWorker.GetConfig()
-
 	// Initialize the registration worker.
 	n.RegistrationWorker, err = workerRegistration.New(
 		n.Consensus.Beacon(),
@@ -239,7 +247,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 		n.EntityID,
 		n.Consensus,
 		n.P2P,
-		&workerCommonCfg,
+		sentryAddresses,
 		n.commonStore,
 		n, // the delegate to be called on registration shutdown
 		n.RuntimeRegistry,
