@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
@@ -55,8 +54,6 @@ type Node struct {
 
 	Runtime         runtimeRegistry.Runtime
 	RuntimeRegistry runtimeRegistry.Registry
-
-	HostNode control.NodeController
 
 	Identity         *identity.Identity
 	KeyManager       keymanager.Backend
@@ -632,7 +629,6 @@ func (n *Node) handleDispatchInfo() {
 
 func NewNode(
 	chainContext string,
-	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
 	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
@@ -660,7 +656,6 @@ func NewNode(
 
 	n := &Node{
 		ChainContext:    chainContext,
-		HostNode:        hostNode,
 		Runtime:         runtime,
 		RuntimeRegistry: rtRegistry,
 		Identity:        identity,

@@ -148,7 +148,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	// Create committee node for the given runtime.
 	node, err := committee.NewNode(
 		commonNode,
-		w.commonWorker.GetConfig(),
 		rp,
 	)
 	if err != nil {

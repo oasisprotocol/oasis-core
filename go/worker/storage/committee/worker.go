@@ -27,7 +27,6 @@ import (
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
@@ -148,8 +147,6 @@ type Worker struct {
 
 	undefinedRound uint64
 
-	workerCommonCfg workerCommon.Config
-
 	checkpointer         checkpoint.Checkpointer
 	checkpointSyncCfg    *CheckpointSyncConfig
 	checkpointSyncForced bool
@@ -181,7 +178,6 @@ func New(
 	commonNode *committee.Node,
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
-	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointSyncCfg *CheckpointSyncConfig,
 	pruneCfg PruneConfig,
@@ -195,8 +191,6 @@ func New(
 		rpcRoleProvider: rpcRoleProvider,
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
-
-		workerCommonCfg: workerCommonCfg,
 
 		localStorage: localStorage,
 

@@ -219,9 +219,11 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.svcMgr.Register(n.RuntimeRegistry)
 
 	// Initialize the common worker.
+	commonCfg := workerCommon.Config{
+		TxPool: config.GlobalConfig.Runtime.TxPool,
+	}
 	n.CommonWorker, err = workerCommon.New(
-		n,
-		n.dataDir,
+		commonCfg,
 		n.chainContext,
 		n.Identity,
 		n.Consensus,
