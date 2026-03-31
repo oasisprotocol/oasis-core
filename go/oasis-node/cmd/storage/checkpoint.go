@@ -300,6 +300,18 @@ func importCheckpoints(ctx context.Context, ndb api.NodeDB, ns common.Namespace,
 		return fmt.Errorf("failed to read checkpoints: %w", err)
 	}
 
+	if len(cps) == 0 {
+		return fmt.Errorf("no checkpoints found")
+	}
+
+	if err := ndb.StartMultipartInsert(cps[0].Root.Version); err != nil {
+		return fmt.Errorf("failed to start multipart insert: %w", err)
+	}
+	defer func() {
+		if err := ndb.AbortMultipartInsert(); err != nil {
+			logger.Error("failed to abort multi-part insert", "err", err)
+		}
+	}()
 	var roots []node.Root
 	for _, cp := range cps {
 		if err := importCp(ctx, ndb, provider, cp); err != nil {
@@ -315,15 +327,6 @@ func importCheckpoints(ctx context.Context, ndb api.NodeDB, ns common.Namespace,
 }
 
 func importCp(ctx context.Context, ndb api.NodeDB, provider checkpoint.Creator, cp *checkpoint.Metadata) error {
-	if err := ndb.StartMultipartInsert(cp.Root.Version); err != nil {
-		return fmt.Errorf("failed to start multipart insert: %w", err)
-	}
-	defer func() {
-		if err := ndb.AbortMultipartInsert(); err != nil {
-			logger.Error("failed to abort multi-part insert", "err", err)
-		}
-	}()
-
 	for idx := range cp.Chunks {
 		chunk, err := cp.GetChunkMetadata(uint64(idx))
 		if err != nil {
