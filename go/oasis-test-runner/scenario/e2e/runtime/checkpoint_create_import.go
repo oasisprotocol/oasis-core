@@ -48,43 +48,57 @@ func (sc *checkpointCreateImportImpl) Run(ctx context.Context, childEnv *env.Env
 		return err
 	}
 
+	src := sc.Net.ComputeWorkers()[0]
+	srcCtrl, err := oasis.NewController(src.SocketPath())
+	if err != nil {
+		return fmt.Errorf("failed to create controller for the source node: %w", err)
+	}
+
 	// Use height - 3 so that blocks at h, h+1, h+2 all exist in the block store.
-	blk, err := sc.Net.Controller().Consensus.GetBlock(ctx, consensus.HeightLatest)
+	blk, err := srcCtrl.Consensus.GetBlock(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to get latest consensus block: %w", err)
 	}
-	height := blk.Height - 3
-
-	rtBlk, err := sc.Net.ClientController().Roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{
+	candidateHeight := blk.Height - 3
+	rtState, err := srcCtrl.Roothash.GetRuntimeState(ctx, &roothash.RuntimeRequest{
 		RuntimeID: KeyValueRuntimeID,
-		Height:    height,
+		Height:    candidateHeight,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get runtime block at height %d: %w", height, err)
+		return fmt.Errorf("failed to get runtime state for height %d: %w", candidateHeight, err)
 	}
-	round := rtBlk.Header.Round
 
-	sc.Logger.Info("creating checkpoints",
-		"height", height,
-		"round", round,
-		"runtime_id", KeyValueRuntimeID,
-	)
+	// Pick runtime state's LastBlockHeight as the consensus checkpoint height else
+	// runtime light history indexer might miss authoritative light block for the
+	// corresponding runtime round.
+	cpRound := rtState.LastBlock.Header.Round
+	cpHeight := rtState.LastBlockHeight
 
-	cpDir := filepath.Join(childEnv.Dir(), "checkpoint")
+	// Ensure runtime round is synced before stopping the node and creating a checkpoint for it.
+	if err := srcCtrl.WaitRuntimeRound(ctx, KeyValueRuntimeID, cpRound); err != nil {
+		return fmt.Errorf("waiting runtime round %d: %w", cpRound, err)
+	}
 
 	// Stop compute worker 0 (source node).
-	source := sc.Net.ComputeWorkers()[0]
-	if err := source.StopGracefully(); err != nil {
+	if err := src.StopGracefully(); err != nil {
 		return fmt.Errorf("failed to stop source compute worker: %w", err)
 	}
 
 	// Create checkpoints from the source node's data.
+	cpDir := filepath.Join(childEnv.Dir(), "checkpoint")
+
+	sc.Logger.Info("creating checkpoints",
+		"height", cpHeight,
+		"round", cpRound,
+		"runtime_id", KeyValueRuntimeID,
+	)
+
 	args := []string{
 		"storage", "checkpoint", "create",
-		"--config", source.ConfigFile(),
-		"--height", fmt.Sprintf("%d", height),
+		"--config", src.ConfigFile(),
+		"--height", fmt.Sprintf("%d", cpHeight),
 		"--runtime", KeyValueRuntimeID.Hex(),
-		"--round", fmt.Sprintf("%d", round),
+		"--round", fmt.Sprintf("%d", cpRound),
 		"--output-dir", cpDir,
 		"--debug.dont_blame_oasis",
 		"--debug.allow_test_keys",
@@ -96,7 +110,7 @@ func (sc *checkpointCreateImportImpl) Run(ctx context.Context, childEnv *env.Env
 	sc.Logger.Info("checkpoints created successfully")
 
 	// Start the source compute worker again.
-	if err := source.Start(); err != nil {
+	if err := src.Start(); err != nil {
 		return fmt.Errorf("failed to restart source compute worker: %w", err)
 	}
 
@@ -135,15 +149,48 @@ func (sc *checkpointCreateImportImpl) Run(ctx context.Context, childEnv *env.Env
 		return fmt.Errorf("failed to start target node: %w", err)
 	}
 
-	// Wait for the target node to sync.
-	sc.Logger.Info("waiting for target node to sync")
-	ctrl, err := oasis.NewController(target.SocketPath())
+	targetCtrl, err := oasis.NewController(target.SocketPath())
 	if err != nil {
 		return fmt.Errorf("failed to create controller for target node: %w", err)
 	}
-	if err := ctrl.WaitReady(ctx); err != nil {
+
+	// Ensure target node syncs to the tip of the chain from the imported checkpoints.
+	sc.Logger.Info("waiting for target node to sync")
+	if err := targetCtrl.WaitReady(ctx); err != nil {
 		return fmt.Errorf("target node failed to sync: %w", err)
 	}
+	sc.Logger.Info("target node is ready")
+
+	// Manually ensure that runtime state was synced up to the latest round as
+	// WaitReady only guarantees consensus sync.
+	latestBlk, err := sc.Net.ClientController().Roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{
+		RuntimeID: KeyValueRuntimeID,
+		Height:    consensus.HeightLatest,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get latest runtime block: %w", err)
+	}
+	latestRound := latestBlk.Header.Round
+	sc.Logger.Info("waiting the target node to have runtime state synced")
+	if err := targetCtrl.WaitRuntimeRound(ctx, KeyValueRuntimeID, latestRound); err != nil {
+		return fmt.Errorf("waiting synced runtime round %d: %w", latestRound, err)
+	}
+	sc.Logger.Info("target node has runtime state synced")
+
+	// Ensure target synced from the imported checkpoint and not from the genesis.
+	status, err := targetCtrl.NodeController.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get target node status: %w", err)
+	}
+	if lastRetainedHeight := status.Consensus.LastRetainedHeight; lastRetainedHeight != cpHeight {
+		sc.Logger.Info("last retained height is not equal to the imported checkpoint height",
+			"cp_height", cpHeight,
+			"last_retained_height", lastRetainedHeight)
+		return fmt.Errorf("failed to ensure consensus synced from the imported checkpoint")
+	}
+	// No need to assert target node didn't sync runtime state from the genesis,
+	// since runtime genesis sync cannot succeed with a missing runtime light history
+	// (the case when consensus is synced using an imported checkpoint, asserted above).
 
 	return nil
 }
