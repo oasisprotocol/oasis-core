@@ -94,7 +94,6 @@ type Node struct {
 	latestRound  uint64
 	latestHeight int64
 
-	committeeRound   uint64
 	lastBlockInfo    *runtime.BlockInfo
 	dispatchInfoCh   chan struct{}
 	activeDescriptor *registry.Runtime
@@ -400,6 +399,18 @@ func (n *Node) worker() { //nolint: gocyclo
 			return
 		}
 	}
+
+	// Start watching epochs so that we know when to recheck runtime suspension
+	// and transactions.
+	epochCh, epochSub, err := n.Consensus.Beacon().WatchEpochs(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to watch epochs",
+			"err", err,
+		)
+		return
+	}
+	defer epochSub.Close()
+
 	// Start watching runtime committees so we know when the runtime committee
 	// changes and can update our worker role accordingly.
 	cmCh, cmSub, err := n.Consensus.Scheduler().WatchCommittees(n.ctx)
@@ -459,6 +470,8 @@ func (n *Node) worker() { //nolint: gocyclo
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
+		case epoch := <-epochCh:
+			n.handleEpoch(n.ctx, epoch)
 		case cm := <-cmCh:
 			n.handleCommittee(n.ctx, cm)
 		case blk := <-blkCh:
@@ -498,14 +511,7 @@ func (n *Node) worker() { //nolint: gocyclo
 	}
 }
 
-func (n *Node) handleCommittee(ctx context.Context, committee *scheduler.Committee) {
-	if committee.Kind != scheduler.KindComputeExecutor {
-		return
-	}
-	if committee.RuntimeID != n.Runtime.ID() {
-		return
-	}
-
+func (n *Node) handleEpoch(ctx context.Context, _ beacon.EpochTime) {
 	rs, err := n.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
 		RuntimeID: n.Runtime.ID(),
 		Height:    consensus.HeightLatest,
@@ -526,17 +532,28 @@ func (n *Node) handleCommittee(ctx context.Context, committee *scheduler.Committ
 		n.handleSuspend()
 		atomic.StoreUint32(&n.runtimeSuspended, 1)
 	case false:
-		n.handleCommitteeTransition(rs.Committee)
 		atomic.StoreUint32(&n.runtimeSuspended, 0)
 	}
 
-	n.committeeRound = rs.LastBlock.Header.Round
 	n.activeDescriptor = rs.Runtime
 
 	select {
 	case n.dispatchInfoCh <- struct{}{}:
 	default:
 	}
+
+	n.TxPool.RecheckTxs()
+}
+
+func (n *Node) handleCommittee(ctx context.Context, committee *scheduler.Committee) {
+	if committee.Kind != scheduler.KindComputeExecutor {
+		return
+	}
+	if committee.RuntimeID != n.Runtime.ID() {
+		return
+	}
+
+	n.handleCommitteeTransition(committee)
 }
 
 func (n *Node) handleRuntimeBlock(ctx context.Context, blk *roothash.AnnotatedBlock) {
@@ -610,20 +627,12 @@ func (n *Node) handleDispatchInfo() {
 		return
 	}
 
-	if n.lastBlockInfo.RuntimeBlock.Header.Round < n.committeeRound {
-		return
-	}
-
 	di := &runtime.DispatchInfo{
 		BlockInfo:        n.lastBlockInfo,
 		ActiveDescriptor: n.activeDescriptor,
 	}
 
 	n.TxPool.ProcessDispatchInfo(di)
-
-	if n.lastBlockInfo.RuntimeBlock.Header.Round == n.committeeRound {
-		n.TxPool.RecheckTxs()
-	}
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewDispatchInfo(di)

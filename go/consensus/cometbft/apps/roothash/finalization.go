@@ -276,10 +276,15 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	}
 
 	// Generate the final block.
-	return app.finalizeBlock(ctx, rtState, block.Normal, &sc.Commitment.Header.Header)
+	app.finalizeBlock(ctx, rtState, block.Normal, &sc.Commitment.Header.Header)
+	if err := resetCommitments(ctx, rtState, false); err != nil {
+		return fmt.Errorf("failed to reset commitments: %w", err)
+	}
+
+	return nil
 }
 
-func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.RuntimeState, hdrType block.HeaderType, hdr *commitment.ComputeResultsHeader) error {
+func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.RuntimeState, hdrType block.HeaderType, hdr *commitment.ComputeResultsHeader) {
 	// Generate a new block.
 	blk := block.NewEmptyBlock(rtState.LastBlock, uint64(ctx.Now().Unix()), hdrType)
 
@@ -315,12 +320,13 @@ func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.Runt
 			TypedAttribute(&roothash.FinalizedEvent{Round: blk.Header.Round}).
 			TypedAttribute(&roothash.RuntimeIDAttribute{ID: rtState.Runtime.ID}),
 	)
+}
 
+func resetCommitments(ctx *tmapi.Context, rtState *roothash.RuntimeState, suspended bool) error {
 	// Reset scheduler commitments.
-	switch hdrType {
-	case block.Suspended:
+	if suspended {
 		rtState.CommitmentPool = nil
-	default:
+	} else {
 		rtState.CommitmentPool = commitment.NewPool()
 	}
 
@@ -328,7 +334,7 @@ func (app *Application) finalizeBlock(ctx *tmapi.Context, rtState *roothash.Runt
 	prevTimeout := rtState.NextTimeout
 	rtState.NextTimeout = roothash.TimeoutNever
 
-	return rearmRoundTimeout(ctx, rtState.Runtime.ID, blk.Header.Round, prevTimeout, rtState.NextTimeout)
+	return rearmRoundTimeout(ctx, rtState.Runtime.ID, rtState.LastBlock.Header.Round, prevTimeout, rtState.NextTimeout)
 }
 
 func (app *Application) failRound(
@@ -353,8 +359,9 @@ func (app *Application) failRound(
 
 	rtState.LivenessStatistics.MissedProposals[firstSchedulerIdx]++
 
-	if err := app.finalizeBlock(ctx, rtState, block.RoundFailed, nil); err != nil {
-		return fmt.Errorf("failed to emit empty block: %w", err)
+	app.finalizeBlock(ctx, rtState, block.RoundFailed, nil)
+	if err := resetCommitments(ctx, rtState, false); err != nil {
+		return fmt.Errorf("failed to reset commitments: %w", err)
 	}
 
 	return nil
