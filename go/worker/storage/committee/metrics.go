@@ -49,14 +49,24 @@ var (
 	prometheusOnce sync.Once
 )
 
-func (w *Worker) getMetricLabels() prometheus.Labels {
-	return prometheus.Labels{
-		"runtime": w.commonNode.Runtime.ID().String(),
-	}
-}
-
 func initMetrics() {
 	prometheusOnce.Do(func() {
 		prometheus.MustRegister(storageWorkerCollectors...)
 	})
+}
+
+type metrics struct {
+	lastFullRound    prometheus.Gauge
+	lastSyncedRound  prometheus.Gauge
+	lastPendingRound prometheus.Gauge
+	roundSyncLatency prometheus.Observer
+}
+
+func newMetrics(runtime string) *metrics {
+	return &metrics{
+		lastFullRound:    storageWorkerLastFullRound.WithLabelValues(runtime),
+		lastSyncedRound:  storageWorkerLastSyncedRound.WithLabelValues(runtime),
+		lastPendingRound: storageWorkerLastPendingRound.WithLabelValues(runtime),
+		roundSyncLatency: storageWorkerRoundSyncLatency.WithLabelValues(runtime),
+	}
 }

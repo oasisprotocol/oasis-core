@@ -163,6 +163,8 @@ type Worker struct {
 	pruneCfg PruneConfig
 
 	initCh chan struct{}
+
+	metrics *metrics
 }
 
 // PruneConfig configures pruning of the state DB.
@@ -204,6 +206,8 @@ func New(
 		pruneCfg: pruneCfg,
 
 		initCh: make(chan struct{}),
+
+		metrics: newMetrics(commonNode.Runtime.ID().String()),
 	}
 
 	// Validate checkpoint sync configuration.
@@ -1062,7 +1066,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 				syncingRounds[i] = syncing
 
 				if i == latestBlockRound {
-					storageWorkerLastPendingRound.With(w.getMetricLabels()).Set(float64(i))
+					w.metrics.lastPendingRound.Set(float64(i))
 				}
 			}
 			w.logger.Debug("preparing round sync",
@@ -1172,8 +1176,8 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 			delete(summaryCache, lastDiff.round-1)
 			lastFullyAppliedRound = lastDiff.round
 
-			storageWorkerLastSyncedRound.With(w.getMetricLabels()).Set(float64(lastDiff.round))
-			storageWorkerRoundSyncLatency.With(w.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
+			w.metrics.lastSyncedRound.Set(float64(lastDiff.round))
+			w.metrics.roundSyncLatency.Observe(time.Since(syncing.startedAt).Seconds())
 
 			// Finalize storage for this round. This happens asynchronously
 			// with respect to Apply operations for subsequent rounds.
@@ -1291,7 +1295,7 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 					"err", err,
 				)
 			}
-			storageWorkerLastFullRound.With(w.getMetricLabels()).Set(float64(finalized.summary.Round))
+			w.metrics.lastFullRound.Set(float64(finalized.summary.Round))
 
 			// Check if we're far enough to reasonably register as available.
 			w.nudgeAvailability(cachedLastRound, latestBlockRound)
