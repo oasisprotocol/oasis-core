@@ -147,6 +147,7 @@ oasis_worker_processed_event_count | Counter | Number of processed roothash even
 oasis_worker_storage_commit_latency | Summary | Latency of storage commit calls (state + outputs) (seconds). | runtime | [worker/compute/executor/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/compute/executor/committee/metrics.go)
 oasis_worker_storage_full_round | Gauge | The last round that was fully synced and finalized. | runtime | [worker/storage/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/storage/committee/metrics.go)
 oasis_worker_storage_pending_round | Gauge | The last round that is in-flight for syncing. | runtime | [worker/storage/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/storage/committee/metrics.go)
+oasis_worker_storage_prune_latency | Summary | Storage pruner per-round latency (seconds). | runtime | [worker/storage/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/storage/committee/metrics.go)
 oasis_worker_storage_round_sync_latency | Summary | Storage round sync latency (seconds). | runtime | [worker/storage/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/storage/committee/metrics.go)
 oasis_worker_storage_synced_round | Gauge | The last round that was synced but not yet finalized. | runtime | [worker/storage/committee](https://github.com/oasisprotocol/oasis-core/tree/master/go/worker/storage/committee/metrics.go)
 

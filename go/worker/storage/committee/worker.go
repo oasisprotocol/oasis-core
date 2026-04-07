@@ -1019,7 +1019,12 @@ func (w *Worker) Serve(ctx context.Context) error { // nolint: gocyclo
 	w.logger.Info("initialized")
 
 	if w.pruneCfg.Enabled {
-		statePruner := newPruner(w.localStorage.NodeDB(), w.commonNode.Runtime.History(), w.pruneCfg.Interval)
+		statePruner := newPruner(
+			w.localStorage.NodeDB(),
+			w.commonNode.Runtime.History(),
+			w.pruneCfg.Interval,
+			w.metrics,
+		)
 		wg.Go(func() {
 			if err := statePruner.serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				w.logger.Error("state pruner failed: %w", err)
