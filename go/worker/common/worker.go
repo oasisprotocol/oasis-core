@@ -1,8 +1,6 @@
 package common
 
 import (
-	"fmt"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -22,7 +20,6 @@ type Worker struct {
 	cfg     Config
 
 	HostNode        control.NodeController
-	DataDir         string
 	ChainContext    string
 	Identity        *identity.Identity
 	Consensus       consensus.Service
@@ -131,11 +128,6 @@ func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }
 
-// GetConfig returns the worker's configuration.
-func (w *Worker) GetConfig() Config {
-	return w.cfg
-}
-
 // GetRuntimes returns a map of configured runtimes.
 func (w *Worker) GetRuntimes() map[common.Namespace]*committee.Node {
 	return w.runtimes
@@ -156,7 +148,6 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 
 	node, err := committee.NewNode(
 		w.ChainContext,
-		w.HostNode,
 		runtime,
 		w.Provisioner,
 		w.RuntimeRegistry,
@@ -181,8 +172,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 
 // New creates a new worker.
 func New(
-	hostNode control.NodeController,
-	dataDir string,
+	cfg Config,
 	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Service,
@@ -203,16 +193,9 @@ func New(
 		enabled = true
 	}
 
-	cfg, err := NewConfig()
-	if err != nil {
-		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
-	}
-
 	w := &Worker{
 		enabled:         enabled,
-		cfg:             *cfg,
-		HostNode:        hostNode,
-		DataDir:         dataDir,
+		cfg:             cfg,
 		ChainContext:    chainContext,
 		Identity:        identity,
 		Consensus:       consensus,

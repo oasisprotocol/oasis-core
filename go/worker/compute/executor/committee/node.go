@@ -29,7 +29,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -56,7 +55,6 @@ type Node struct {
 	runtimeTrustSyncCancel context.CancelFunc
 
 	commonNode   *committee.Node
-	commonCfg    commonWorker.Config
 	roleProvider registration.RoleProvider
 
 	committeeTopic string
@@ -1511,7 +1509,6 @@ func (n *Node) roundWorker(ctx context.Context) {
 // NewNode initializes a new executor node.
 func NewNode(
 	commonNode *committee.Node,
-	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
 	initMetrics()
@@ -1522,7 +1519,6 @@ func NewNode(
 
 	n := &Node{
 		commonNode:       commonNode,
-		commonCfg:        commonCfg,
 		roleProvider:     roleProvider,
 		committeeTopic:   committeeTopic,
 		proposals:        newPendingProposals(),

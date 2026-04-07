@@ -10,9 +10,11 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -124,6 +126,23 @@ func initializeAndRegisterByzantineNode(
 		"id", b.identity.NodeSigner.Public(),
 	)
 
+	var entityID *signature.PublicKey
+	if cmdFlags.DebugTestEntity() {
+		testEntity, _, _ := entity.TestEntity()
+		entityID = &testEntity.ID
+	} else {
+		entityID, err = config.GlobalConfig.Registration.ResolveEntityID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve entity ID: %w", err)
+		}
+	}
+	if entityID == nil {
+		return nil, fmt.Errorf("no entity ID configured")
+	}
+	if !entityID.IsValid() {
+		return nil, fmt.Errorf("invalid entity ID")
+	}
+
 	// Initialize the genesis provider.
 	genesis := genesis.NewProvider(cmdFlags.GenesisFile())
 
@@ -172,6 +191,7 @@ func initializeAndRegisterByzantineNode(
 	if err = registryRegisterNode(
 		b.cometbft.service,
 		b.identity,
+		*entityID,
 		b.p2p.service.Addresses(),
 		b.runtimeID,
 		b.capabilities,

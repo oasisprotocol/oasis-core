@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const workerName = "worker/beacon"
@@ -60,7 +59,7 @@ func (w *Worker) Name() string {
 func New(
 	identity *identity.Identity,
 	consensus consensus.Service,
-	registrationWorker *registration.Worker,
+	enabled bool,
 ) (*Worker, error) {
 	var (
 		err     error
@@ -74,9 +73,8 @@ func New(
 	}
 
 	initLogger := logging.GetLogger(workerName)
-	if registrationWorker.WillNeverRegister() {
-		// Some node configurations never register, and that's ok.
-		initLogger.Info("registration worker disabled, also disabling beacon worker")
+	if !enabled {
+		initLogger.Info("beacon worker disabled")
 		close(w.allQuitCh)
 		return w, nil
 	}

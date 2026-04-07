@@ -8,9 +8,12 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -72,6 +75,7 @@ type Node struct {
 
 	Upgrader upgradeAPI.Backend
 	Identity *identity.Identity
+	EntityID *signature.PublicKey
 	Sentry   sentryAPI.Backend
 
 	RuntimeRegistry runtimeRegistry.Registry
@@ -190,9 +194,18 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 }
 
 func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
-	var err error
+	// Parse sentry configuration.
+	var sentryAddresses []node.TLSAddress
+	for _, v := range config.GlobalConfig.Runtime.SentryAddresses {
+		var tlsAddr node.TLSAddress
+		if err := tlsAddr.UnmarshalText([]byte(v)); err != nil {
+			return fmt.Errorf("bad sentry address (%s): %w", v, err)
+		}
+		sentryAddresses = append(sentryAddresses, tlsAddr)
+	}
 
 	// Initialize runtime provisioner.
+	var err error
 	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc)
 	if err != nil {
 		return err
@@ -206,9 +219,11 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.svcMgr.Register(n.RuntimeRegistry)
 
 	// Initialize the common worker.
+	commonCfg := workerCommon.Config{
+		TxPool: config.GlobalConfig.Runtime.TxPool,
+	}
 	n.CommonWorker, err = workerCommon.New(
-		n,
-		n.dataDir,
+		commonCfg,
 		n.chainContext,
 		n.Identity,
 		n.Consensus,
@@ -226,16 +241,15 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 	n.svcMgr.Register(n.CommonWorker)
 
-	workerCommonCfg := n.CommonWorker.GetConfig()
-
 	// Initialize the registration worker.
 	n.RegistrationWorker, err = workerRegistration.New(
 		n.Consensus.Beacon(),
 		n.Consensus.Registry(),
 		n.Identity,
+		n.EntityID,
 		n.Consensus,
 		n.P2P,
-		&workerCommonCfg,
+		sentryAddresses,
 		n.commonStore,
 		n, // the delegate to be called on registration shutdown
 		n.RuntimeRegistry,
@@ -255,7 +269,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.BeaconWorker, err = workerBeacon.New(
 		n.Identity,
 		n.Consensus,
-		n.RegistrationWorker,
+		n.EntityID != nil,
 	)
 	if err != nil {
 		return err
@@ -444,6 +458,22 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	if err != nil {
 		return nil, err
 	}
+
+	// Load the owning node's entity ID.
+	var entityID *signature.PublicKey
+	if flags.DebugTestEntity() {
+		testEntity, _, _ := entity.TestEntity()
+		entityID = &testEntity.ID
+	} else {
+		entityID, err = config.GlobalConfig.Registration.ResolveEntityID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve entity ID: %w", err)
+		}
+	}
+	if entityID != nil && !entityID.IsValid() {
+		return nil, fmt.Errorf("invalid entity ID")
+	}
+	node.EntityID = entityID
 
 	// Load configured values for all registered crash points.
 	crash.LoadViperArgValues()

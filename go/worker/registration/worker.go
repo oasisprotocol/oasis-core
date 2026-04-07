@@ -17,7 +17,6 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -27,13 +26,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasisprotocol/oasis-core/go/sentry/client"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
 
 const (
@@ -177,15 +174,14 @@ func (rp *roleProvider) SetUnavailable() {
 type Worker struct {
 	sync.RWMutex
 
-	workerCommonCfg *workerCommon.Config
+	enabled bool
 
 	store            *persistent.ServiceStore
 	storedDeregister bool
 	deregRequested   uint32
 	delegate         Delegate
 
-	entityID           signature.PublicKey
-	registrationSigner signature.Signer
+	entityID signature.PublicKey
 
 	sentryAddresses []node.TLSAddress
 
@@ -919,17 +915,11 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 	}
 
 	nodeSigners := []signature.Signer{
-		w.registrationSigner,
+		w.identity.NodeSigner,
 		w.identity.P2PSigner,
 		w.identity.ConsensusSigner,
 		w.identity.VRFSigner,
 		w.identity.TLSSigner,
-	}
-	if !w.identity.NodeSigner.Public().Equal(w.registrationSigner.Public()) {
-		// In the case where the registration signer is the entity signer
-		// then we prepend the node signer so that the descriptor is always
-		// signed by the node itself.
-		nodeSigners = append([]signature.Signer{w.identity.NodeSigner}, nodeSigners...)
 	}
 
 	sigNode, grr := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, &nodeDesc)
@@ -941,7 +931,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 	}
 
 	tx := registry.NewRegisterNodeTx(0, nil, sigNode)
-	if err = consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
+	if err = consensus.SignAndSubmitTx(w.ctx, w.consensus, w.identity.NodeSigner, tx); err != nil {
 		w.logger.Error("failed to register node",
 			"err", err,
 		)
@@ -1007,60 +997,17 @@ func (w *Worker) RequestDeregistration() error {
 	return nil
 }
 
-// WillNeverRegister returns true iff the worker will never register.
-func (w *Worker) WillNeverRegister() bool {
-	return !w.entityID.IsValid() || w.registrationSigner == nil
-}
-
-// GetRegistrationSigner loads the signing credentials as configured by this package's flags.
-func GetRegistrationSigner(identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
-	var defaultPk signature.PublicKey
-
-	// If the test entity is enabled, use the entity signing key for signing
-	// registrations.
-	if flags.DebugTestEntity() {
-		testEntity, testSigner, _ := entity.TestEntity()
-		return testEntity.ID, testSigner, nil
-	}
-
-	// Determine the owning entity ID.
-	cfgEntityFn := config.GlobalConfig.Registration.Entity
-	cfgEntityID := config.GlobalConfig.Registration.EntityID
-
-	switch {
-	case cfgEntityFn != "":
-		// Attempt to load the entity descriptor.
-		entity, err := entity.LoadDescriptor(cfgEntityFn)
-		if err != nil {
-			return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
-		}
-
-		return entity.ID, identity.NodeSigner, nil
-	case cfgEntityID != "":
-		// Attempt to parse the entity ID.
-		var entityID signature.PublicKey
-		if err := entityID.UnmarshalText([]byte(cfgEntityID)); err != nil {
-			return defaultPk, nil, fmt.Errorf("worker/registration: malformed entity ID: %w", err)
-		}
-
-		return entityID, identity.NodeSigner, nil
-	default:
-		// TODO: There are certain configurations (eg: the test client) that
-		// spin up workers, which require a registration worker, but don't
-		// need it, and do not have an owning entity.  The registration worker
-		// should not be initialized in this case.
-		return defaultPk, nil, nil
-	}
-}
-
 // New constructs a new worker node registration service.
+//
+// Entity ID is optional. If not provided this will be a no-op worker.
 func New(
 	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
+	entityID *signature.PublicKey,
 	consensus consensus.Service,
 	p2p p2p.Service,
-	workerCommonCfg *workerCommon.Config,
+	sentryAddresses []node.TLSAddress,
 	store *persistent.CommonStore,
 	delegate Delegate,
 	runtimeRegistry runtimeRegistry.Registry,
@@ -1069,40 +1016,38 @@ func New(
 
 	serviceStore := store.GetServiceStore(DBBucketName)
 
-	entityID, registrationSigner, err := GetRegistrationSigner(identity)
-	if err != nil {
-		return nil, err
-	}
-
 	var storedDeregister bool
-	err = serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
+	err := serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
 	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
 	}
 
 	w := &Worker{
-		workerCommonCfg:    workerCommonCfg,
-		store:              serviceStore,
-		delegate:           delegate,
-		entityID:           entityID,
-		sentryAddresses:    workerCommonCfg.SentryAddresses,
-		registrationSigner: registrationSigner,
-		runtimeRegistry:    runtimeRegistry,
-		beacon:             beacon,
-		registry:           registry,
-		identity:           identity,
-		stopCh:             make(chan struct{}),
-		quitCh:             make(chan struct{}),
-		initialRegCh:       make(chan struct{}),
-		stopRegCh:          make(chan struct{}),
-		ctx:                context.Background(),
-		logger:             logger,
-		consensus:          consensus,
-		p2p:                p2p,
-		registerCh:         make(chan struct{}, 1),
+		store:           serviceStore,
+		delegate:        delegate,
+		sentryAddresses: sentryAddresses,
+		runtimeRegistry: runtimeRegistry,
+		beacon:          beacon,
+		registry:        registry,
+		identity:        identity,
+		stopCh:          make(chan struct{}),
+		quitCh:          make(chan struct{}),
+		initialRegCh:    make(chan struct{}),
+		stopRegCh:       make(chan struct{}),
+		ctx:             context.Background(),
+		logger:          logger,
+		consensus:       consensus,
+		p2p:             p2p,
+		registerCh:      make(chan struct{}, 1),
 	}
 
 	w.storedDeregister = storedDeregister
+
+	// If node has no entity it will not register.
+	if entityID != nil {
+		w.entityID = *entityID
+		w.enabled = true
+	}
 
 	if config.GlobalConfig.Consensus.Validator || config.GlobalConfig.Mode == config.ModeValidator {
 		rp, err := w.NewRoleProvider(node.RoleValidator)
@@ -1126,9 +1071,9 @@ func (w *Worker) Name() string {
 func (w *Worker) Start() error {
 	w.logger.Info("starting node registration service")
 
-	// HACK: This can be ok in certain configurations.
-	if w.WillNeverRegister() {
-		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
+	// TODO: stop abusing no-op workers. Instead worker should never be started
+	// if configuration says so.
+	if !w.enabled {
 		// Make sure the node is stopped on quit and that it can still respond to
 		// shutdown requests from the control api.
 		go func() {
