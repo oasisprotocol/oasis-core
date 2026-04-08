@@ -39,24 +39,45 @@ var (
 		[]string{"runtime"},
 	)
 
+	storageWorkerPruneLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "oasis_worker_storage_prune_latency",
+			Help: "Storage pruner per-round latency (seconds).",
+		},
+		[]string{"runtime"},
+	)
+
 	storageWorkerCollectors = []prometheus.Collector{
 		storageWorkerLastFullRound,
 		storageWorkerLastSyncedRound,
 		storageWorkerLastPendingRound,
 		storageWorkerRoundSyncLatency,
+		storageWorkerPruneLatency,
 	}
 
 	prometheusOnce sync.Once
 )
 
-func (w *Worker) getMetricLabels() prometheus.Labels {
-	return prometheus.Labels{
-		"runtime": w.commonNode.Runtime.ID().String(),
-	}
-}
-
 func initMetrics() {
 	prometheusOnce.Do(func() {
 		prometheus.MustRegister(storageWorkerCollectors...)
 	})
+}
+
+type metrics struct {
+	lastFullRound    prometheus.Gauge
+	lastSyncedRound  prometheus.Gauge
+	lastPendingRound prometheus.Gauge
+	roundSyncLatency prometheus.Observer
+	pruneLatency     prometheus.Observer
+}
+
+func newMetrics(runtime string) *metrics {
+	return &metrics{
+		lastFullRound:    storageWorkerLastFullRound.WithLabelValues(runtime),
+		lastSyncedRound:  storageWorkerLastSyncedRound.WithLabelValues(runtime),
+		lastPendingRound: storageWorkerLastPendingRound.WithLabelValues(runtime),
+		roundSyncLatency: storageWorkerRoundSyncLatency.WithLabelValues(runtime),
+		pruneLatency:     storageWorkerPruneLatency.WithLabelValues(runtime),
+	}
 }

@@ -51,15 +51,22 @@ type statePruner struct {
 	history  history.History
 	interval time.Duration
 	logger   *logging.Logger
+	metrics  *metrics
 }
 
 // newPruner creates new runtime state pruner.
-func newPruner(ndb mkvsDB.NodeDB, history history.History, interval time.Duration) *statePruner {
+func newPruner(
+	ndb mkvsDB.NodeDB,
+	history history.History,
+	interval time.Duration,
+	metrics *metrics,
+) *statePruner {
 	return &statePruner{
 		state:    ndb,
 		history:  history,
 		interval: max(interval, time.Second),
 		logger:   logging.GetLogger("/worker/storage/state-pruner").With("runtime_id", history.RuntimeID()),
+		metrics:  metrics,
 	}
 }
 
@@ -92,9 +99,12 @@ func (p *statePruner) prune(ctx context.Context) error {
 
 	for round := p.state.GetEarliestVersion(); round < blk.Header.Round; round++ {
 		p.logger.Debug("pruning", "round", round)
+
+		start := time.Now()
 		if err := p.state.Prune(round); err != nil {
 			return fmt.Errorf("failed to prune round %d: %w", round, err)
 		}
+		p.metrics.pruneLatency.Observe(time.Since(start).Seconds())
 	}
 
 	return nil
