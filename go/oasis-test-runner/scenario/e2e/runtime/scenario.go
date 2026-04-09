@@ -419,6 +419,8 @@ func RegisterScenarios() error {
 		// it is identical to the txsource-multi-short, only using fewer nodes
 		// due to SGX CI instance resource constrains.
 		TxSourceMultiShortSGX,
+		// Observer tests
+		ObserverMode,
 	} {
 		if err := cmd.RegisterNondefault(s); err != nil {
 			return err

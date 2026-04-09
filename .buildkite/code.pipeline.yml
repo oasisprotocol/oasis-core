@@ -262,6 +262,7 @@ steps:
         --scenario e2e/runtime/rofl
         --scenario e2e/runtime/trust-root/.+
         --scenario e2e/runtime/keymanager-.+
+        --scenario e2e/runtime/observer
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"

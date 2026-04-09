@@ -458,8 +458,7 @@ func (n *Node) setProvisionedIdentity(seed string) error {
 		return err
 	}
 
-	if n.entity != nil {
-		// Client nodes may need a provisioned identity. They never need an entity, however.
+	if n.entity != nil { // client nodes don't have entity id.
 		if err := n.entity.addNode(nodeSigner); err != nil {
 			return err
 		}
