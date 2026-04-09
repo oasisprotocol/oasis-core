@@ -31,6 +31,8 @@ type DiscoveryConfig struct {
 type BootstrapConfig struct {
 	// Enable bootstrap discovery protocol.
 	Enable bool `yaml:"enable"`
+	// Allow private IPs in peer addresses discovered through seed nodes.
+	AllowPrivateIPs bool `yaml:"allow_private_ips"`
 	// Retention period for peers discovered through seed nodes.
 	RetentionPeriod time.Duration `yaml:"retention_period"`
 }
@@ -107,7 +109,7 @@ func DefaultConfig() Config {
 		Discovery: DiscoveryConfig{
 			BootstrapConfig{
 				Enable:          true,
-				RetentionPeriod: 1 * time.Hour,
+				RetentionPeriod: time.Hour,
 			},
 		},
 		Registration: RegistrationConfig{

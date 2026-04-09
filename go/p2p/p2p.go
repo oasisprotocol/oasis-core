@@ -511,6 +511,7 @@ func (cfg *GossipSubConfig) Load() error {
 // BootstrapDiscoveryConfig describes a set of settings for a discovery.
 type BootstrapDiscoveryConfig struct {
 	Enable          bool
+	AllowPrivateIPs bool
 	Seeds           []peer.AddrInfo
 	RetentionPeriod time.Duration
 }
@@ -524,6 +525,7 @@ func (cfg *BootstrapDiscoveryConfig) Load() error {
 
 	cfg.Seeds = seeds
 	cfg.Enable = config.GlobalConfig.P2P.Discovery.Bootstrap.Enable
+	cfg.AllowPrivateIPs = config.GlobalConfig.P2P.Discovery.Bootstrap.AllowPrivateIPs
 	cfg.RetentionPeriod = config.GlobalConfig.P2P.Discovery.Bootstrap.RetentionPeriod
 
 	return nil

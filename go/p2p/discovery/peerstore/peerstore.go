@@ -195,18 +195,18 @@ func (s *Store) Add(ns string, info peer.AddrInfo) (time.Duration, error) {
 }
 
 // Remove removes the peer from the given namespace.
-func (s *Store) Remove(ns string, pid peer.ID) {
+func (s *Store) Remove(ns string, pid peer.ID) time.Duration {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	peers, ok := s.registrations[ns]
 	if !ok {
-		return
+		return PeerRegistrationTTL
 	}
 
 	reg, ok := peers[pid]
 	if !ok {
-		return
+		return PeerRegistrationTTL
 	}
 
 	delete(peers, pid)
@@ -220,6 +220,8 @@ func (s *Store) Remove(ns string, pid peer.ID) {
 	if len(s.peerNamespaces[pid]) == 0 {
 		delete(s.peerNamespaces, pid)
 	}
+
+	return PeerRegistrationTTL
 }
 
 // NamespacePeers returns a random selection of peers from the given namespace.

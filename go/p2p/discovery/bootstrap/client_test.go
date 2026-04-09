@@ -59,16 +59,16 @@ func (s *BootstrapTestSuite) SetupSuite() {
 		return host
 	}
 
-	newSeed := func() rpc.Server {
+	newSeed := func(host host.Host) rpc.Server {
 		store := peerstore.NewStore(backup.NewInMemoryBackend())
-		srv := NewServer(store)
+		srv := NewServer(host, store, true)
 
 		return srv
 	}
 
 	// Prepare a seed node.
 	s.seedHost = newHost()
-	seedSrv := newSeed()
+	seedSrv := newSeed(s.seedHost)
 	s.seedHost.SetStreamHandler(ProtocolID(), seedSrv.HandleStream)
 
 	// Prepare seed address for the peers.

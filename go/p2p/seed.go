@@ -52,7 +52,7 @@ func NewSeedNode(cfg *SeedConfig) (api.SeedService, error) {
 
 	var bootSrv rpc.Server
 	if cfg.BootstrapDiscoveryConfig.Enable {
-		bootSrv = bootstrap.NewServer(store)
+		bootSrv = bootstrap.NewServer(host, store, cfg.BootstrapDiscoveryConfig.AllowPrivateIPs)
 	}
 
 	return &seedNode{
