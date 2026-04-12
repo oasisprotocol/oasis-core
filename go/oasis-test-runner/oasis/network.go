@@ -59,6 +59,7 @@ type Network struct {
 	runtimes         []*Runtime
 	keymanagers      []*Keymanager
 	computeWorkers   []*Compute
+	observers        []*Observer
 	sentries         []*Sentry
 	clients          []*Client
 	statelessClients []*StatelessClient
@@ -229,6 +230,11 @@ func (net *Network) ComputeWorkers() []*Compute {
 	return net.computeWorkers
 }
 
+// Observers returns the observer nodes associated with the network.
+func (net *Network) Observers() []*Observer {
+	return net.observers
+}
+
 // Sentries returns the sentry nodes associated with the network.
 func (net *Network) Sentries() []*Sentry {
 	return net.sentries
@@ -249,7 +255,7 @@ func (net *Network) Byzantine() []*Byzantine {
 	return net.byzantine
 }
 
-// Nodes returns all the validator, compute, storage, keymanager and client nodes associated with
+// Nodes returns all the validator, compute, observer, keymanager and client nodes associated with
 // the network.
 //
 // Seed, sentry, byzantine and IAS proxy nodes are omitted if they're only hosting these single features.
@@ -260,6 +266,9 @@ func (net *Network) Nodes() []*Node {
 		nodes = append(nodes, v.Node)
 	}
 	for _, c := range net.ComputeWorkers() {
+		nodes = append(nodes, c.Node)
+	}
+	for _, c := range net.Observers() {
 		nodes = append(nodes, c.Node)
 	}
 	for _, k := range net.Keymanagers() {
@@ -349,6 +358,7 @@ func (net *Network) NumRegisterNodes() int {
 	return len(net.validators) +
 		len(net.keymanagers) +
 		len(net.computeWorkers) +
+		len(net.observers) +
 		len(net.byzantine)
 }
 

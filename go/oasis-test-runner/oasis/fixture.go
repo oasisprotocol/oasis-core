@@ -28,6 +28,7 @@ type NetworkFixture struct {
 	Keymanagers        []KeymanagerFixture       `json:"keymanagers,omitempty"`
 	KeymanagerPolicies []KeymanagerPolicyFixture `json:"keymanager_policies,omitempty"`
 	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
+	Observers          []ObserverFixture         `json:"observers,omitempty"`
 	Sentries           []SentryFixture           `json:"sentries,omitempty"`
 	Clients            []ClientFixture           `json:"clients,omitempty"`
 	StatelessClients   []StatelessClientFixture  `json:"stateless_clients,omitempty"`
@@ -102,6 +103,13 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision the compute workers.
 	for _, fx := range f.ComputeWorkers {
+		if _, err = fx.Create(net); err != nil {
+			return nil, err
+		}
+	}
+
+	// Provision the observers.
+	for _, fx := range f.Observers {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -455,6 +463,53 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		RuntimeConfig:          f.RuntimeConfig,
 		RuntimeProvisioner:     f.RuntimeProvisioner,
 		RuntimeStatePaths:      f.RuntimeStatePaths,
+	})
+}
+
+// ObserverFixture is an observer node fixture.
+type ObserverFixture struct {
+	NodeFixture
+
+	// Entity is the index of the entity the node will be provisioned with.
+	Entity int `json:"entity"`
+
+	AllowErrorTermination bool `json:"allow_error_termination"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
+
+	// Runtimes contains the indexes of the runtimes to enable.
+	Runtimes []int `json:"runtimes,omitempty"`
+
+	// RuntimeProvisioner is the runtime provisioner configuration.
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
+
+	// RuntimeConfig contains the per-runtime node-local configuration.
+	RuntimeConfig map[int]map[string]any `json:"runtime_config,omitempty"`
+}
+
+// Create instantiates the observer node described by the fixture.
+func (f *ObserverFixture) Create(net *Network) (*Observer, error) {
+	entity, err := resolveEntity(net, f.Entity)
+	if err != nil {
+		return nil, err
+	}
+
+	return net.NewObserver(&ObserverCfg{
+		NodeCfg: NodeCfg{
+			Name:                        f.Name,
+			Consensus:                   f.Consensus,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			NoAutoStart:                 f.NoAutoStart,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
+		},
+		Runtimes:           f.Runtimes,
+		RuntimeProvisioner: f.RuntimeProvisioner,
+		RuntimeConfig:      f.RuntimeConfig,
 	})
 }
 
