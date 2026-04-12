@@ -260,6 +260,11 @@ impl TxnDispatcher for Dispatcher {
                 Methods::get_runtime_id,
             ),
             "get" => Self::dispatch_call(&mut ctx, cbor::from_slice(&args).unwrap(), Methods::get),
+            "enc_get" => Self::dispatch_call(
+                &mut ctx,
+                cbor::from_slice(&args).unwrap(),
+                Methods::enc_get_using_secrets,
+            ),
             _ => Err("method not found".to_string()),
         };
 
