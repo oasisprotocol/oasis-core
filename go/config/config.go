@@ -87,6 +87,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("unknown node mode: %s", c.Mode)
 	}
 
+	if !c.Consensus.LocalStorage {
+		if c.Consensus.Validator {
+			return fmt.Errorf("local storage not available in specified mode")
+		}
+		switch c.Mode {
+		case ModeClient, ModeObserver:
+		default:
+			return fmt.Errorf("local storage not available in specified mode")
+		}
+	}
+
 	if err = c.Common.Validate(); err != nil {
 		return fmt.Errorf("common: %w", err)
 	}
