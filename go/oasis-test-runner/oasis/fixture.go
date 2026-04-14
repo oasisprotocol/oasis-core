@@ -7,6 +7,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
@@ -28,6 +29,7 @@ type NetworkFixture struct {
 	Keymanagers        []KeymanagerFixture       `json:"keymanagers,omitempty"`
 	KeymanagerPolicies []KeymanagerPolicyFixture `json:"keymanager_policies,omitempty"`
 	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
+	Observers          []ObserverFixture         `json:"observers,omitempty"`
 	Sentries           []SentryFixture           `json:"sentries,omitempty"`
 	Clients            []ClientFixture           `json:"clients,omitempty"`
 	StatelessClients   []StatelessClientFixture  `json:"stateless_clients,omitempty"`
@@ -102,6 +104,13 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision the compute workers.
 	for _, fx := range f.ComputeWorkers {
+		if _, err = fx.Create(net); err != nil {
+			return nil, err
+		}
+	}
+
+	// Provision the observers.
+	for _, fx := range f.Observers {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -241,7 +250,7 @@ type RuntimeFixture struct {
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
 
-	AdmissionPolicy registry.RuntimeAdmissionPolicy                                               `json:"admission_policy"`
+	AdmissionPolicy RuntimeAdmissionPolicyFixture                                                 `json:"admission_policy"`
 	Constraints     map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints `json:"constraints,omitempty"`
 	Staking         registry.RuntimeStakingParameters                                             `json:"staking,omitempty"`
 
@@ -256,6 +265,10 @@ type RuntimeFixture struct {
 // Create instantiates the runtime described by the fixture.
 func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runtime, error) {
 	entity, err := resolveEntity(net, f.Entity)
+	if err != nil {
+		return nil, err
+	}
+	admissionPolicy, err := f.AdmissionPolicy.Resolve(net)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +295,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Executor:           f.Executor,
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
-		AdmissionPolicy:    f.AdmissionPolicy,
+		AdmissionPolicy:    admissionPolicy,
 		Staking:            f.Staking,
 		GenesisRound:       f.GenesisRound,
 		GenesisStateRoot:   f.GenesisStateRoot,
@@ -292,6 +305,69 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		GovernanceModel:    f.GovernanceModel,
 		Deployments:        f.Deployments,
 	})
+}
+
+type RuntimeAdmissionPolicyFixture struct {
+	AnyNode         bool                                             `json:"any_node,omitempty"`
+	EntityWhitelist *EntityWhitelistRuntimeAdmissionPolicyFixture    `json:"entity_whitelist,omitempty"`
+	PerRole         map[node.RolesMask]PerRoleAdmissionPolicyFixture `json:"per_role,omitempty"`
+}
+
+type EntityWhitelistRuntimeAdmissionPolicyFixture struct {
+	Entities map[int]registry.EntityWhitelistConfig `json:"entities"`
+}
+
+type PerRoleAdmissionPolicyFixture struct {
+	EntityWhitelist *EntityWhitelistRoleAdmissionPolicyFixture `json:"entity_whitelist,omitempty"`
+}
+
+type EntityWhitelistRoleAdmissionPolicyFixture struct {
+	Entities map[int]registry.EntityWhitelistRoleConfig `json:"entities"`
+}
+
+func (f RuntimeAdmissionPolicyFixture) Resolve(net *Network) (registry.RuntimeAdmissionPolicy, error) {
+	var policy registry.RuntimeAdmissionPolicy
+
+	if f.AnyNode {
+		policy.AnyNode = &registry.AnyNodeRuntimeAdmissionPolicy{}
+	}
+
+	if f.EntityWhitelist != nil {
+		whitelist := &registry.EntityWhitelistRuntimeAdmissionPolicy{
+			Entities: make(map[signature.PublicKey]registry.EntityWhitelistConfig),
+		}
+		for idx, cfg := range f.EntityWhitelist.Entities {
+			ent, err := resolveEntity(net, idx)
+			if err != nil {
+				return registry.RuntimeAdmissionPolicy{}, err
+			}
+			whitelist.Entities[ent.ID()] = cfg
+		}
+		policy.EntityWhitelist = whitelist
+	}
+
+	if f.PerRole != nil {
+		policy.PerRole = make(map[node.RolesMask]registry.PerRoleAdmissionPolicy)
+		for role, prap := range f.PerRole {
+			var perRolePolicy registry.PerRoleAdmissionPolicy
+			if prap.EntityWhitelist != nil {
+				whitelist := &registry.EntityWhitelistRoleAdmissionPolicy{
+					Entities: make(map[signature.PublicKey]registry.EntityWhitelistRoleConfig),
+				}
+				for idx, cfg := range prap.EntityWhitelist.Entities {
+					ent, err := resolveEntity(net, idx)
+					if err != nil {
+						return registry.RuntimeAdmissionPolicy{}, err
+					}
+					whitelist.Entities[ent.ID()] = cfg
+				}
+				perRolePolicy.EntityWhitelist = whitelist
+			}
+			policy.PerRole[role] = perRolePolicy
+		}
+	}
+
+	return policy, nil
 }
 
 // KeymanagerPolicyFixture is a key manager policy fixture.
@@ -455,6 +531,53 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		RuntimeConfig:          f.RuntimeConfig,
 		RuntimeProvisioner:     f.RuntimeProvisioner,
 		RuntimeStatePaths:      f.RuntimeStatePaths,
+	})
+}
+
+// ObserverFixture is an observer node fixture.
+type ObserverFixture struct {
+	NodeFixture
+
+	// Entity is the index of the entity the node will be provisioned with.
+	Entity int `json:"entity"`
+
+	AllowErrorTermination bool `json:"allow_error_termination"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
+
+	// Runtimes contains the indexes of the runtimes to enable.
+	Runtimes []int `json:"runtimes,omitempty"`
+
+	// RuntimeProvisioner is the runtime provisioner configuration.
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
+
+	// RuntimeConfig contains the per-runtime node-local configuration.
+	RuntimeConfig map[int]map[string]any `json:"runtime_config,omitempty"`
+}
+
+// Create instantiates the observer node described by the fixture.
+func (f *ObserverFixture) Create(net *Network) (*Observer, error) {
+	entity, err := resolveEntity(net, f.Entity)
+	if err != nil {
+		return nil, err
+	}
+
+	return net.NewObserver(&ObserverCfg{
+		NodeCfg: NodeCfg{
+			Name:                        f.Name,
+			Consensus:                   f.Consensus,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			NoAutoStart:                 f.NoAutoStart,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
+		},
+		Runtimes:           f.Runtimes,
+		RuntimeProvisioner: f.RuntimeProvisioner,
+		RuntimeConfig:      f.RuntimeConfig,
 	})
 }
 

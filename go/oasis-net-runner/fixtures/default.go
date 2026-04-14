@@ -143,8 +143,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
 				Keymanager: -1,
-				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				AdmissionPolicy: oasis.RuntimeAdmissionPolicyFixture{
+					AnyNode: true,
 				},
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
@@ -234,8 +234,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					BatchFlushTimeout: time.Second,
 					ProposerTimeout:   2 * time.Second,
 				},
-				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				AdmissionPolicy: oasis.RuntimeAdmissionPolicyFixture{
+					AnyNode: true,
 				},
 				GenesisRound:    0,
 				GovernanceModel: registry.GovernanceEntity,

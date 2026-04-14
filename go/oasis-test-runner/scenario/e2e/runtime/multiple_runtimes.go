@@ -100,8 +100,8 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				BatchFlushTimeout: time.Second,
 				ProposerTimeout:   2 * time.Second,
 			},
-			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			AdmissionPolicy: oasis.RuntimeAdmissionPolicyFixture{
+				AnyNode: true,
 			},
 			Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
 				scheduler.KindComputeExecutor: {

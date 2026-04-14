@@ -105,8 +105,8 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				BatchFlushTimeout: time.Second,
 				ProposerTimeout:   2 * time.Second,
 			},
-			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			AdmissionPolicy: oasis.RuntimeAdmissionPolicyFixture{
+				AnyNode: true,
 			},
 			GovernanceModel: registry.GovernanceRuntime,
 			Deployments:     []oasis.DeploymentCfg{*runtimeDeployment}, // Copy deployment.
