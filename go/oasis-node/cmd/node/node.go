@@ -489,7 +489,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, fmt.Errorf("node has no entity configured but expects one")
 	}
 
-	if config.GlobalConfig.Mode == config.ModeClient && entityID != nil {
+	if config.GlobalConfig.Mode == config.ModeClient && !config.GlobalConfig.Consensus.Validator && entityID != nil {
 		return nil, fmt.Errorf("client node must not have entity configured, try using observer mode instead")
 	}
 
