@@ -7,6 +7,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 )
 
+// maxBatchSize is the maximum number of transactions that can be scheduled
+// at once.
+const maxBatchSize = 100
+
 // mainQueueScheduler manages and prepares transactions for scheduling.
 type mainQueueScheduler struct {
 	// capacity is the maximum number of transactions that can be stored
@@ -187,9 +191,9 @@ func (s *mainQueueScheduler) handleTxUsed(hash hash.Hash) {
 
 // schedule returns the highest-priority transactions pending execution.
 func (s *mainQueueScheduler) schedule(limit int) []*TxQueueMeta {
-	txs := make([]*TxQueueMeta, 0, limit)
+	txs := make([]*TxQueueMeta, 0, min(limit, maxBatchSize))
 
-	for range limit {
+	for range cap(txs) {
 		tx, ok := s.scheduleOne()
 		if !ok {
 			break
