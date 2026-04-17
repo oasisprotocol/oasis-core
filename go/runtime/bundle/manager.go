@@ -60,7 +60,7 @@ type ManifestStore interface {
 	// RemoveManifestsWithLabels removes all manifests matching the provided labels.
 	//
 	// Returns the number of removed manifests.
-	RemoveManifestsWithLabels(labels map[string]string) int
+	RemoveManifestsWithLabels(runtimeID common.Namespace, labels map[string]string) int
 
 	// Manifests returns all known exploded manifests.
 	Manifests() []*ExplodedManifest
@@ -79,6 +79,7 @@ type ValidatorFunc func(*Bundle) error
 type AddOptions struct {
 	labels           map[string]string
 	manifestHash     *hash.Hash
+	runtimeID        *common.Namespace
 	manifestRewriter ManifestRewriterFunc
 	validator        ValidatorFunc
 	volumes          map[string]*volume.Volume
@@ -107,6 +108,13 @@ func WithBundleLabels(labels map[string]string) AddOption {
 func WithBundleManifestHash(h hash.Hash) AddOption {
 	return func(o *AddOptions) {
 		o.manifestHash = &h
+	}
+}
+
+// WithBundleRuntimeID sets the runtime ID to validate when adding a bundle.
+func WithBundleRuntimeID(id common.Namespace) AddOption {
+	return func(o *AddOptions) {
+		o.runtimeID = &id
 	}
 }
 
@@ -356,12 +364,12 @@ func (m *Manager) AddTemporary(tmpPath string, opts ...AddOption) error {
 }
 
 // Remove removes bundles matching the given labels.
-func (m *Manager) Remove(labels map[string]string) {
+func (m *Manager) Remove(runtimeID common.Namespace, labels map[string]string) {
 	if err := validateLabels(labels); err != nil {
 		return
 	}
 
-	m.store.RemoveManifestsWithLabels(labels)
+	m.store.RemoveManifestsWithLabels(runtimeID, labels)
 }
 
 // WriteTemporary writes the given data to a temporary file that can later be referenced as a
@@ -859,6 +867,9 @@ func (m *Manager) explodeBundle(path string, opts ...AddOption) (*ExplodedManife
 	var openOpts []OpenOption
 	if options.manifestHash != nil {
 		openOpts = append(openOpts, WithManifestHash(*options.manifestHash))
+	}
+	if options.runtimeID != nil {
+		openOpts = append(openOpts, WithRuntimeID(*options.runtimeID))
 	}
 
 	bnd, err := Open(path, openOpts...)

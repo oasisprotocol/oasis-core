@@ -144,6 +144,7 @@ func (rh *roflHostHandler) handleBundleAdd(rq *rofl.BundleAddRequest) (*rofl.Bun
 	tmpPath := rh.getBundleTemporaryPath(rq.TemporaryName)
 	opts := []bundle.AddOption{
 		bundle.WithBundleManifestHash(rq.ManifestHash),
+		bundle.WithBundleRuntimeID(rh.parent.runtime.ID()),
 		bundle.WithBundleLabels(labels),
 		bundle.WithManifestRewriter(managedManifestRewriter(labels)),
 		bundle.WithBundleValidator(validateManagedBundle),
@@ -171,7 +172,7 @@ func (rh *roflHostHandler) handleBundleRemove(rq *rofl.BundleRemoveRequest) (*ro
 	labels := maps.Clone(rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
-	rh.getBundleManager().Remove(labels)
+	rh.getBundleManager().Remove(rh.parent.runtime.ID(), labels)
 
 	return &rofl.BundleRemoveResponse{}, nil
 }

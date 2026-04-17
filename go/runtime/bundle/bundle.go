@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
@@ -569,6 +570,11 @@ func Open(fn string, opts ...OpenOption) (_ *Bundle, err error) {
 		return nil, fmt.Errorf("runtime/bundle: invalid manifest (got: %s, expected: %s)", manifestHash.Hex(), h.Hex())
 	}
 
+	// Verify the runtime ID, if requested.
+	if id := options.runtimeID; id != nil && !manifest.ID.Equal(id) {
+		return nil, fmt.Errorf("runtime/bundle: invalid runtime ID (got: %s, expected: %s)", manifest.ID, id)
+	}
+
 	// Ensure the bundle is well-formed.
 	bnd := &Bundle{
 		Manifest:     &manifest,
@@ -639,6 +645,7 @@ type ManifestRewriterFunc func(*Manifest)
 // OpenOptions are options for opening bundle files.
 type OpenOptions struct {
 	manifestHash *hash.Hash
+	runtimeID    *common.Namespace
 }
 
 // NewOpenOptions creates options using default and given values.
@@ -657,5 +664,12 @@ type OpenOption func(o *OpenOptions)
 func WithManifestHash(manifestHash hash.Hash) OpenOption {
 	return func(o *OpenOptions) {
 		o.manifestHash = &manifestHash
+	}
+}
+
+// WithRuntimeID sets the runtime ID for verification.
+func WithRuntimeID(id common.Namespace) OpenOption {
+	return func(o *OpenOptions) {
+		o.runtimeID = &id
 	}
 }
