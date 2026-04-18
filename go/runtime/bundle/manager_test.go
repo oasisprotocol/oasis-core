@@ -43,7 +43,7 @@ func (r *mockStore) RemoveManifest(hash.Hash) bool {
 	panic("not implemented")
 }
 
-func (r *mockStore) RemoveManifestsWithLabels(map[string]string) int {
+func (r *mockStore) RemoveManifestsWithLabels(common.Namespace, map[string]string) int {
 	panic("not implemented")
 }
 

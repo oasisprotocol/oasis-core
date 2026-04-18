@@ -214,13 +214,16 @@ func (r *Registry) removeManifestLocked(hash hash.Hash) bool {
 // RemoveManifestsWithLabels removes all manifests matching the provided labels.
 //
 // Returns the number of removed manifests.
-func (r *Registry) RemoveManifestsWithLabels(labels map[string]string) int {
+func (r *Registry) RemoveManifestsWithLabels(runtimeID common.Namespace, labels map[string]string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	// TODO: Index labels when there are a lot of manifests to manage.
 	var result int
 	for manifestHash, manifest := range r.manifests {
+		if manifest.ID != runtimeID {
+			continue
+		}
 		if !manifest.HasLabels(labels) {
 			continue
 		}
