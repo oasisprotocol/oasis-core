@@ -1,6 +1,7 @@
 package staking
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,10 +12,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -35,9 +39,18 @@ func TestOnEvidenceByzantineConsensus(t *testing.T) {
 
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
+	consState := consensusState.NewMutableState(ctx.State())
+
+	// Initialize consensus state.
+	err := consState.SetConsensusParameters(ctx, &consensusGenesis.Parameters{
+		FeatureVersion: &version.Version{
+			Major: math.MaxUint16,
+		},
+	})
+	require.NoError(err)
 
 	// Validator address is not known as there are no nodes.
-	err := onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress)
 	require.NoError(err, "should not fail when validator address is not known")
 
 	// Add entity.

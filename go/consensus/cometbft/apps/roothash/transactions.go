@@ -10,10 +10,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // getRuntimeState fetches the current runtime state and performs common
@@ -280,11 +282,16 @@ func (app *Application) submitEvidence(
 		return err
 	}
 
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return err
+	}
 	if err = onEvidenceRuntimeEquivocation(
 		ctx,
 		pk,
 		rtState.Runtime,
 		&slash,
+		isFeatureVersion242,
 	); err != nil {
 		return fmt.Errorf("error slashing runtime node: %w", err)
 	}

@@ -458,7 +458,7 @@ func TestRewardAndSlash(t *testing.T) {
 	defer ctx.Close()
 
 	// Slash 40 base units
-	slashed, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40))
+	slashed, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40), true)
 	require.NoError(err, "slash escrow")
 	require.False(slashed.IsZero(), "slashed nonzero")
 

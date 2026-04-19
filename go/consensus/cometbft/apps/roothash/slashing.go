@@ -14,7 +14,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func onRuntimeLivenessFailure(ctx *abciAPI.Context, nodeID signature.PublicKey, penaltyAmount *quantity.Quantity) error {
+func onRuntimeLivenessFailure(ctx *abciAPI.Context, nodeID signature.PublicKey, penaltyAmount *quantity.Quantity, isFeatureVersion242 bool) error {
 	if penaltyAmount.IsZero() {
 		return nil
 	}
@@ -30,7 +30,7 @@ func onRuntimeLivenessFailure(ctx *abciAPI.Context, nodeID signature.PublicKey, 
 
 	// Slash runtime node entity.
 	entityAddr := staking.NewAddress(node.EntityID)
-	_, err = stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount)
+	_, err = stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount, isFeatureVersion242)
 	if err != nil {
 		return fmt.Errorf("error slashing account %s: %w", entityAddr, err)
 	}
@@ -43,6 +43,7 @@ func onEvidenceRuntimeEquivocation(
 	pk signature.PublicKey,
 	runtime *registry.Runtime,
 	penaltyAmount *quantity.Quantity,
+	isFeatureVersion242 bool,
 ) error {
 	if penaltyAmount.IsZero() {
 		return nil
@@ -64,7 +65,7 @@ func onEvidenceRuntimeEquivocation(
 
 	// Slash runtime node entity.
 	entityAddr := staking.NewAddress(node.EntityID)
-	totalSlashed, err := stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount)
+	totalSlashed, err := stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount, isFeatureVersion242)
 	if err != nil {
 		return fmt.Errorf("cometbft/roothash: error slashing account %s: %w", entityAddr, err)
 	}
@@ -102,6 +103,7 @@ func onRuntimeIncorrectResults(
 	discrepancyResolvers []signature.PublicKey,
 	runtime *registry.Runtime,
 	penaltyAmount *quantity.Quantity,
+	isFeatureVersion242 bool,
 ) error {
 	if penaltyAmount.IsZero() {
 		return nil
@@ -114,7 +116,7 @@ func onRuntimeIncorrectResults(
 		entityAddr := staking.NewAddress(pk)
 
 		// Slash entity.
-		slashed, err := stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount)
+		slashed, err := stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount, isFeatureVersion242)
 		if err != nil {
 			return fmt.Errorf("cometbft/roothash: error slashing account %s: %w", entityAddr, err)
 		}

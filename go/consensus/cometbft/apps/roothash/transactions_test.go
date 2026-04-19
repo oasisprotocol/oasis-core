@@ -14,13 +14,16 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/consensus/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -250,6 +253,15 @@ func TestEvidence(t *testing.T) {
 	nonExistingSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "NewSigner")
 	entitySigner := memorySigner.NewTestSigner("consensus/cometbft/apps/roothash: entity signer")
+
+	// Initialize consensus state.
+	consState := consensusState.NewMutableState(ctx.State())
+	err = consState.SetConsensusParameters(ctx, &consensusGenesis.Parameters{
+		FeatureVersion: &version.Version{
+			Major: math.MaxUint16,
+		},
+	})
+	require.NoError(err)
 
 	// Initialize staking state.
 	stakingState := stakingState.NewMutableState(ctx.State())

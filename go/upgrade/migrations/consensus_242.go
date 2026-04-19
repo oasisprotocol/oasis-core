@@ -18,6 +18,7 @@ import (
 //   - An updated key manager policy update transaction that applies a new policy at the epoch
 //     boundary.
 //   - A stricter node registration rule where observer nodes must include runtimes.
+//   - Delegation cleanup when escrow balance is zero.
 const Consensus242 = "consensus242"
 
 // Version242 is the Oasis Core 24.2 version.

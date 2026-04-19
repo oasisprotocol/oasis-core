@@ -800,6 +800,7 @@ func (s *MutableState) SlashEscrow(
 	ctx *abciAPI.Context,
 	addr staking.Address,
 	amount *quantity.Quantity,
+	isFeatureVersion242 bool,
 ) (*quantity.Quantity, error) {
 	var activeSlashed quantity.Quantity
 	var debondingSlashed quantity.Quantity
@@ -836,39 +837,41 @@ func (s *MutableState) SlashEscrow(
 		return totalSlashed, nil
 	}
 
-	// Clear delegation shares if the escrow balance is zero.
-	if account.Escrow.Active.Balance.IsZero() {
-		delegations, err := s.DelegationsTo(ctx, addr)
-		if err != nil {
-			return nil, fmt.Errorf("cometbft/staking: failed to query delegations: %w", err)
-		}
-		for from := range delegations {
-			if err := s.RemoveDelegation(ctx, from, addr); err != nil {
-				return nil, fmt.Errorf("cometbft/staking: failed to remove delegation for delegator %s and escrow %s: %w", from, addr, err)
+	if isFeatureVersion242 {
+		// Clear delegation shares if the escrow balance is zero.
+		if account.Escrow.Active.Balance.IsZero() {
+			delegations, err := s.DelegationsTo(ctx, addr)
+			if err != nil {
+				return nil, fmt.Errorf("cometbft/staking: failed to query delegations: %w", err)
 			}
-		}
-
-		account.Escrow.Active.TotalShares = *quantity.NewQuantity()
-	}
-
-	// Clear debonding delegation shares if the escrow balance is zero.
-	if account.Escrow.Debonding.Balance.IsZero() {
-		delegations, err := s.DebondingDelegationsTo(ctx, addr)
-		if err != nil {
-			return nil, fmt.Errorf("cometbft/staking: failed to query debonding delegations: %w", err)
-		}
-		for from, ds := range delegations {
-			for _, d := range ds {
-				if err := s.RemoveDebondingDelegation(ctx, from, addr, d.DebondEndTime); err != nil {
-					return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
-				}
-				if err := s.RemoveFromDebondingQueue(ctx, d.DebondEndTime, from, addr); err != nil {
-					return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation from queue for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
+			for from := range delegations {
+				if err := s.RemoveDelegation(ctx, from, addr); err != nil {
+					return nil, fmt.Errorf("cometbft/staking: failed to remove delegation for delegator %s and escrow %s: %w", from, addr, err)
 				}
 			}
+
+			account.Escrow.Active.TotalShares = *quantity.NewQuantity()
 		}
 
-		account.Escrow.Debonding.TotalShares = *quantity.NewQuantity()
+		// Clear debonding delegation shares if the escrow balance is zero.
+		if account.Escrow.Debonding.Balance.IsZero() {
+			delegations, err := s.DebondingDelegationsTo(ctx, addr)
+			if err != nil {
+				return nil, fmt.Errorf("cometbft/staking: failed to query debonding delegations: %w", err)
+			}
+			for from, ds := range delegations {
+				for _, d := range ds {
+					if err := s.RemoveDebondingDelegation(ctx, from, addr, d.DebondEndTime); err != nil {
+						return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
+					}
+					if err := s.RemoveFromDebondingQueue(ctx, d.DebondEndTime, from, addr); err != nil {
+						return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation from queue for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
+					}
+				}
+			}
+
+			account.Escrow.Debonding.TotalShares = *quantity.NewQuantity()
+		}
 	}
 
 	if err = quantity.Move(commonPool, totalSlashed.Clone(), totalSlashed); err != nil {
