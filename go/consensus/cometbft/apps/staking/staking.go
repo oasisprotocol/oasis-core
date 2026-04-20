@@ -292,7 +292,7 @@ func (app *Application) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) 
 		}
 
 		// Update state.
-		if err = state.RemoveFromDebondingQueue(ctx, e.Epoch, e.DelegatorAddr, e.EscrowAddr); err != nil {
+		if err = state.RemoveFromDebondingQueue(ctx, e.Delegation.DebondEndTime, e.DelegatorAddr, e.EscrowAddr); err != nil {
 			return fmt.Errorf("failed to remove from debonding queue: %w", err)
 		}
 		if err = state.SetDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Delegation.DebondEndTime, nil); err != nil {

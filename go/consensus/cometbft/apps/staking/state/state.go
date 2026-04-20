@@ -472,7 +472,6 @@ func (s *ImmutableState) DebondingDelegationsTo(
 }
 
 type DebondingQueueEntry struct {
-	Epoch         beacon.EpochTime
 	DelegatorAddr staking.Address
 	EscrowAddr    staking.Address
 	Delegation    *staking.DebondingDelegation
@@ -496,7 +495,6 @@ func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon
 			return nil, err
 		}
 		entries = append(entries, &DebondingQueueEntry{
-			Epoch:         beacon.EpochTime(decEpoch),
 			DelegatorAddr: delegatorAddr,
 			EscrowAddr:    escrowAddr,
 			Delegation:    deb,
