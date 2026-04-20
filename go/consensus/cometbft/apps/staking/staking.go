@@ -295,8 +295,8 @@ func (app *Application) onEpochChange(ctx *api.Context, epoch beacon.EpochTime) 
 		if err = state.RemoveFromDebondingQueue(ctx, e.Delegation.DebondEndTime, e.DelegatorAddr, e.EscrowAddr); err != nil {
 			return fmt.Errorf("failed to remove from debonding queue: %w", err)
 		}
-		if err = state.SetDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Delegation.DebondEndTime, nil); err != nil {
-			return fmt.Errorf("failed to set debonding delegation: %w", err)
+		if err = state.RemoveDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Delegation.DebondEndTime); err != nil {
+			return fmt.Errorf("failed to remove debonding delegation: %w", err)
 		}
 		if err = state.SetAccount(ctx, e.DelegatorAddr, delegator); err != nil {
 			return fmt.Errorf("failed to set delegator (%s) account: %w", e.DelegatorAddr, err)

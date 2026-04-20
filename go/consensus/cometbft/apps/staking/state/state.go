@@ -663,12 +663,7 @@ func (s *MutableState) SetDelegation(
 ) error {
 	// Remove delegation if there are no more shares in it.
 	if d.Shares.IsZero() {
-		if err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr)); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
-
-		err := s.ms.Remove(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr))
-		return abciAPI.UnavailableStateError(err)
+		return s.RemoveDelegation(ctx, delegatorAddr, escrowAddr)
 	}
 
 	if err := s.ms.Insert(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr), cbor.Marshal(d)); err != nil {
@@ -685,12 +680,6 @@ func (s *MutableState) SetDebondingDelegation(
 	d *staking.DebondingDelegation,
 ) error {
 	key := debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch))
-
-	if d == nil {
-		// Remove descriptor.
-		err := s.ms.Remove(ctx, key)
-		return abciAPI.UnavailableStateError(err)
-	}
 
 	// Create a copy so we don't modify the passed in object in case we are merging
 	// it with an existing delegation.
@@ -731,6 +720,24 @@ func (s *MutableState) SetDebondingDelegation(
 		return abciAPI.UnavailableStateError(err)
 	}
 	return nil
+}
+
+func (s *MutableState) RemoveDelegation(ctx context.Context, delegatorAddr, escrowAddr staking.Address) error {
+	if err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	err := s.ms.Remove(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr))
+	return abciAPI.UnavailableStateError(err)
+}
+
+func (s *MutableState) RemoveDebondingDelegation(
+	ctx context.Context,
+	delegatorAddr, escrowAddr staking.Address,
+	epoch beacon.EpochTime,
+) error {
+	err := s.ms.Remove(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
+	return abciAPI.UnavailableStateError(err)
 }
 
 func (s *MutableState) RemoveFromDebondingQueue(
