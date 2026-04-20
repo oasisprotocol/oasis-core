@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	fxcbor "github.com/fxamacker/cbor/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	mkvsAPI "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
@@ -16,7 +19,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
-const v1 = 1
+const (
+	v1             = 1
+	autoEndVersion = ^uint64(0)
+)
 
 type writeLogMetadata struct {
 	cbor.Versioned
@@ -235,10 +241,6 @@ func newWriteLogImporter(
 	end uint64,
 	r io.Reader,
 ) (*writeLogImporter, error) {
-	if end == 0 {
-		return nil, fmt.Errorf("end version must be at least 1")
-	}
-
 	latest, ok := ndb.GetLatestVersion()
 	startVersion := uint64(1)
 	if ok {
@@ -251,8 +253,14 @@ func newWriteLogImporter(
 	if err := decoder.Decode(&meta); err != nil {
 		return nil, fmt.Errorf("failed to decode metadata: %w", err)
 	}
+	if end == autoEndVersion {
+		end = meta.End
+	}
 	if meta.V != v1 {
 		return nil, fmt.Errorf("unsupported metadata version: %d", meta.V)
+	}
+	if meta.End == 0 {
+		return nil, fmt.Errorf("metadata end version must be at least 1")
 	}
 	if meta.End < end {
 		return nil, fmt.Errorf("metadata ends before requested end version")
@@ -321,4 +329,156 @@ func (w *writeLogImporter) importUntrusted(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func newWriteLogCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "writelog",
+		Short: "export and import storage write logs",
+		PersistentPreRunE: func(_ *cobra.Command, args []string) error {
+			if err := cmdCommon.Init(); err != nil {
+				cmdCommon.EarlyLogAndExit(err)
+			}
+			running, err := cmdCommon.IsNodeRunning()
+			if err != nil {
+				return fmt.Errorf("failed to ensure the node is not running: %w", err)
+			}
+			if running {
+				return fmt.Errorf("write log operations can only be done when the node is not running")
+			}
+			return nil
+		},
+	}
+
+	cmd.AddCommand(newWriteLogExportCmd())
+	cmd.AddCommand(newWriteLogImportCmd())
+
+	return cmd
+}
+
+func newWriteLogExportCmd() *cobra.Command {
+	var (
+		runtimeID  string
+		outputFile string
+		start      uint64
+		end        uint64
+	)
+
+	cmd := &cobra.Command{
+		Use:   "export",
+		Args:  cobra.NoArgs,
+		Short: "export runtime storage write logs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			dataDir := cmdCommon.DataDir()
+
+			var ns common.Namespace
+			if err := ns.UnmarshalHex(runtimeID); err != nil {
+				return fmt.Errorf("malformed runtime ID: %q: %w", runtimeID, err)
+			}
+
+			ndb, err := openRuntimeStateDB(dataDir, ns)
+			if err != nil {
+				return fmt.Errorf("failed to open runtime state DB: %w", err)
+			}
+			defer ndb.Close()
+
+			latest, ok := ndb.GetLatestVersion()
+			if !ok {
+				return fmt.Errorf("empty state DB")
+			}
+			earliest := ndb.GetEarliestVersion()
+
+			if start == 0 {
+				start = earliest + 1
+			}
+			if end == 0 {
+				end = latest
+			}
+
+			f, err := os.Create(outputFile)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %w", err)
+			}
+			defer f.Close()
+
+			exporter, err := newWriteLogExporter(ndb, ns, start, end, f)
+			if err != nil {
+				return fmt.Errorf("failed to create write log exporter: %w", err)
+			}
+			if err = exporter.export(ctx); err != nil {
+				return fmt.Errorf("failed to export write logs: %w", err)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&runtimeID, "runtime", "", "hex encoded runtime ID")
+	cmd.Flags().StringVar(&outputFile, "output-file", "", "output file")
+	cmd.Flags().Uint64Var(&start, "start", 0, "first version to export (defaults to earliest + 1 version)")
+	cmd.Flags().Uint64Var(&end, "end", 0, "last version to export (defaults to latest version)")
+	_ = cmd.MarkFlagRequired("runtime")
+	_ = cmd.MarkFlagRequired("output-file")
+
+	return cmd
+}
+
+func newWriteLogImportCmd() *cobra.Command {
+	var (
+		runtimeID string
+		inputFile string
+		end       uint64 = autoEndVersion
+	)
+
+	cmd := &cobra.Command{
+		Use:   "import",
+		Args:  cobra.NoArgs,
+		Short: "import runtime storage write logs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			dataDir := cmdCommon.DataDir()
+
+			var ns common.Namespace
+			if err := ns.UnmarshalHex(runtimeID); err != nil {
+				return fmt.Errorf("malformed runtime ID: %q: %w", runtimeID, err)
+			}
+
+			ndb, err := openRuntimeStateDB(dataDir, ns)
+			if err != nil {
+				return fmt.Errorf("failed to open runtime state DB: %w", err)
+			}
+			defer ndb.Close()
+
+			h, err := openRuntimeLightHistory(dataDir, ns)
+			if err != nil {
+				return fmt.Errorf("failed to open runtime history: %w", err)
+			}
+			defer h.Close()
+
+			f, err := os.Open(inputFile)
+			if err != nil {
+				return fmt.Errorf("failed to open input file: %w", err)
+			}
+			defer f.Close()
+
+			importer, err := newWriteLogImporter(ndb, ns, historyTrustedRoots{history: h}, end, f)
+			if err != nil {
+				return fmt.Errorf("failed to create write log importer: %w", err)
+			}
+			if err = importer.importUntrusted(ctx); err != nil {
+				return fmt.Errorf("failed to import write logs: %w", err)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&runtimeID, "runtime", "", "hex encoded runtime ID")
+	cmd.Flags().StringVar(&inputFile, "input-file", "", "input file")
+	cmd.Flags().Uint64Var(&end, "end", autoEndVersion, "last version to import (defaults to the end of the stream)")
+	_ = cmd.MarkFlagRequired("runtime")
+	_ = cmd.MarkFlagRequired("input-file")
+
+	return cmd
 }
