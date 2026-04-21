@@ -131,6 +131,8 @@ func (s *TxTestSuite) SetupTest() {
 
 		err = s.regState.SetRuntime(s.ctx, s.computeRuntimes[i], false)
 		require.NoError(s.T(), err)
+		err = s.regState.SetRuntimeOwner(s.ctx, s.computeRuntimes[i].ID, s.computeRuntimes[i].EntityID)
+		require.NoError(s.T(), err)
 	}
 
 	for i := 0; i < numKeyManagerRuntimes; i++ {
@@ -142,6 +144,8 @@ func (s *TxTestSuite) SetupTest() {
 		})
 
 		err = s.regState.SetRuntime(s.ctx, s.keymanagerRuntimes[i], false)
+		require.NoError(s.T(), err)
+		err = s.regState.SetRuntimeOwner(s.ctx, s.keymanagerRuntimes[i].ID, s.keymanagerRuntimes[i].EntityID)
 		require.NoError(s.T(), err)
 	}
 

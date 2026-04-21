@@ -779,6 +779,15 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, fmt.Errorf("failed to set runtime: %w", err)
 	}
 
+	if err = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID); err != nil {
+		ctx.Logger().Error("RegisterRuntime: failed to set runtime owner",
+			"err", err,
+			"runtime", rt,
+			"entity", rt.EntityID,
+		)
+		return nil, fmt.Errorf("failed to set runtime owner: %w", err)
+	}
+
 	if !suspended {
 		ctx.Logger().Debug("RegisterRuntime: registered",
 			"runtime", rt,

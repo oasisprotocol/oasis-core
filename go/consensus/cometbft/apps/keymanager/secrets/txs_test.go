@@ -81,6 +81,8 @@ func (s *TxTestSuite) SetupSuite() {
 	}
 	err = s.regState.SetRuntime(s.ctx, &rt, false)
 	require.NoError(s.T(), err, "registry.SetRuntime")
+	err = s.regState.SetRuntimeOwner(s.ctx, rt.ID, rt.EntityID)
+	require.NoError(s.T(), err, "registry.SetRuntimeOwner")
 
 	s.kmIDs = make([]common.Namespace, 2)
 
@@ -94,6 +96,8 @@ func (s *TxTestSuite) SetupSuite() {
 	}
 	err = s.regState.SetRuntime(s.ctx, &firstKmRt, false)
 	require.NoError(s.T(), err, "registry.SetRuntime")
+	err = s.regState.SetRuntimeOwner(s.ctx, firstKmRt.ID, firstKmRt.EntityID)
+	require.NoError(s.T(), err, "registry.SetRuntimeOwner")
 
 	err = s.kmIDs[1].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002")
 	require.NoError(s.T(), err, "failed to unmarshal keymanager id")
@@ -105,6 +109,8 @@ func (s *TxTestSuite) SetupSuite() {
 	}
 	err = s.regState.SetRuntime(s.ctx, &secondKmRt, false)
 	require.NoError(s.T(), err, "registry.SetRuntime")
+	err = s.regState.SetRuntimeOwner(s.ctx, secondKmRt.ID, secondKmRt.EntityID)
+	require.NoError(s.T(), err, "registry.SetRuntimeOwner")
 
 	// Prepare nodes.
 	numNodes := 3
