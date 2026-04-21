@@ -244,6 +244,8 @@ func (s *ImmutableState) IncomingMessageQueueMeta(ctx context.Context, runtimeID
 
 // IncomingMessageQueue returns a list of queued messages, starting with the passed offset.
 func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
+	hashedRuntimeID := keyformat.PreHashed(runtimeID.Hash())
+
 	it := s.state.NewIterator(ctx)
 	defer it.Close()
 
@@ -254,6 +256,9 @@ func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID com
 			decID        uint64
 		)
 		if !inMsgQueueKeyFmt.Decode(it.Key(), &decRuntimeID, &decID) {
+			break
+		}
+		if decRuntimeID != hashedRuntimeID {
 			break
 		}
 		if decID < offset {
