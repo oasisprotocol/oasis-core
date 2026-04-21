@@ -148,6 +148,7 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -175,6 +176,7 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -202,6 +204,7 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				// Add bonded stake (hacky, without a self-delegation).
 				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
@@ -240,11 +243,13 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt1, false)
+				_ = state.SetRuntimeOwner(ctx, rt1.ID, rt1.EntityID)
 
 				// Create another runtime with a different identifier.
 				rt2 := rt1
 				rt2.ID = common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStakeMulti 2"), 0)
 				_ = state.SetRuntime(ctx, &rt2, false)
+				_ = state.SetRuntimeOwner(ctx, rt2.ID, rt2.EntityID)
 
 				// Add bonded stake (hacky, without a self-delegation).
 				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
@@ -279,11 +284,13 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt1, false)
+				_ = state.SetRuntimeOwner(ctx, rt1.ID, rt1.EntityID)
 
 				// Create another runtime with a different identifier.
 				rt2 := rt1
 				rt2.ID = common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ComputeNodeWithoutGlobalStakeMulti 2"), 0)
 				_ = state.SetRuntime(ctx, &rt2, false)
+				_ = state.SetRuntimeOwner(ctx, rt2.ID, rt2.EntityID)
 
 				// Add bonded stake (hacky, without a self-delegation).
 				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
@@ -334,6 +341,7 @@ func TestRegisterNode(t *testing.T) {
 					},
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -365,6 +373,7 @@ func TestRegisterNode(t *testing.T) {
 					},
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -397,6 +406,7 @@ func TestRegisterNode(t *testing.T) {
 					},
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleObserver)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -432,6 +442,7 @@ func TestRegisterNode(t *testing.T) {
 					},
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleObserver)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -467,6 +478,7 @@ func TestRegisterNode(t *testing.T) {
 					},
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
@@ -536,6 +548,7 @@ func TestRegisterNode(t *testing.T) {
 				}
 
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 				*tcd = *tcData["Validator"]
 				tcd.node.Expiration++
 				tcd.node.Roles = node.RoleComputeWorker
@@ -557,6 +570,7 @@ func TestRegisterNode(t *testing.T) {
 					GovernanceModel: registry.GovernanceEntity,
 				}
 				_ = state.SetRuntime(ctx, &rt, false)
+				_ = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID)
 				*tcd = *tcData["Validator"]
 				tcd.node.Roles = node.RoleComputeWorker
 				tcd.node.Runtimes = []*node.Runtime{{ID: rt.ID}}

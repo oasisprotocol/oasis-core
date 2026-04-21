@@ -651,12 +651,20 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 	return nil
 }
 
+// SetRuntimeOwner sets the owner of a runtime.
+func (s *MutableState) SetRuntimeOwner(ctx context.Context, id common.Namespace, entityID signature.PublicKey) error {
+	err := s.ms.Insert(ctx, runtimeByEntityKeyFmt.Encode(&entityID, &id), []byte(""))
+	return abciAPI.UnavailableStateError(err)
+}
+
+// RemoveRuntimeOwner removes the owner of a runtime.
+func (s *MutableState) RemoveRuntimeOwner(ctx context.Context, id common.Namespace, entityID signature.PublicKey) error {
+	err := s.ms.Remove(ctx, runtimeByEntityKeyFmt.Encode(&entityID, &id))
+	return abciAPI.UnavailableStateError(err)
+}
+
 // SetRuntime sets a runtime descriptor for a registered runtime.
 func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, suspended bool) error {
-	if err := s.ms.Insert(ctx, runtimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte("")); err != nil {
-		return abciAPI.UnavailableStateError(err)
-	}
-
 	var err error
 	if suspended {
 		err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(rt))

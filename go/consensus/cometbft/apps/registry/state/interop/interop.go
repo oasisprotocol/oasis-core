@@ -187,6 +187,9 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 		if err := state.SetRuntime(ctx, fix.rt, fix.suspended); err != nil {
 			return fmt.Errorf("setting runtime: %w", err)
 		}
+		if err := state.SetRuntimeOwner(ctx, fix.rt.ID, fix.rt.EntityID); err != nil {
+			return fmt.Errorf("setting runtime owner: %w", err)
+		}
 	}
 
 	return nil
