@@ -39,6 +39,12 @@ type Config struct {
 	// Average amount of time to delay shutting down the node on upgrade.
 	UpgradeStopDelay time.Duration `yaml:"upgrade_stop_delay,omitempty"`
 
+	// LocalStorage specifies whether consensus state is stored locally.
+	//
+	// If false and the node has additional runtime storage configured,
+	// that runtime storage is also accessed remotely.
+	LocalStorage bool `yaml:"local_storage,omitempty"`
+
 	// ABCI state pruning configuration.
 	Prune PruneConfig `yaml:"prune,omitempty"`
 
@@ -233,6 +239,7 @@ func DefaultConfig() Config {
 			MaxFee: 10_000_000_000,
 		},
 		UpgradeStopDelay: time.Minute,
+		LocalStorage:     true,
 		Prune: PruneConfig{
 			Strategy: PruneStrategyNone,
 			NumKept:  250_000,

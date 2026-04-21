@@ -55,7 +55,7 @@ type runtimeHistory struct {
 	syncRoundLock          sync.RWMutex
 	lastStorageSyncedRound uint64
 
-	hasLocalStorage bool
+	honorStorageSync bool
 
 	pruner  Pruner
 	pruneCh *channels.RingChannel
@@ -117,7 +117,7 @@ func (h *runtimeHistory) Commit(blks []*roothash.AnnotatedBlock) error {
 	// otherwise the storage-sync-checkpoint will do the notification.
 	for _, blk := range blks {
 		h.committedBlocksNotifier.Broadcast(blk)
-		if !h.hasLocalStorage {
+		if !h.honorStorageSync {
 			h.syncedBlocksNotifier.Broadcast(blk)
 		}
 	}
@@ -131,7 +131,7 @@ func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 		return nil
 	}
 
-	if !h.hasLocalStorage {
+	if !h.honorStorageSync {
 		panic("received storage sync checkpoint when local storage worker is disabled")
 	}
 
@@ -232,7 +232,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Also take storage sync state into account.
-		if includeStorage && h.hasLocalStorage {
+		if includeStorage && h.honorStorageSync {
 			if h.lastStorageSyncedRound == roothash.RoundInvalid {
 				return 0, roothash.ErrNotFound
 			}
@@ -245,7 +245,7 @@ func (h *runtimeHistory) resolveRound(round uint64, includeStorage bool) (uint64
 		h.syncRoundLock.RLock()
 		defer h.syncRoundLock.RUnlock()
 		// Ensure round exists.
-		if includeStorage && h.hasLocalStorage {
+		if includeStorage && h.honorStorageSync {
 			if h.lastStorageSyncedRound == roothash.RoundInvalid {
 				return 0, roothash.ErrNotFound
 			}
@@ -364,7 +364,10 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, hasLocalStorage bool) (History, error) {
+//
+// If honorStorageSync is true, synced block notifications and block lookups honor the last storage round
+// which was synced to runtime storage (see [History.StorageSyncCheckpoint]).
+func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, honorStorageSync bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
@@ -384,7 +387,7 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 		cancelCtx:               cancelCtx,
 		db:                      db,
 		lastStorageSyncedRound:  roothash.RoundInvalid,
-		hasLocalStorage:         hasLocalStorage,
+		honorStorageSync:        honorStorageSync,
 		syncedBlocksNotifier:    pubsub.NewBroker(true),
 		committedBlocksNotifier: pubsub.NewBroker(true),
 		pruner:                  pruner,
@@ -400,8 +403,8 @@ func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory
 }
 
 // NewFactory creates a new runtime history keeper factory.
-func NewFactory(prunerFactory PrunerFactory, haveLocalStorageWorker bool) Factory {
+func NewFactory(prunerFactory PrunerFactory, honorStorageSync bool) Factory {
 	return func(runtimeID common.Namespace, dataDir string) (History, error) {
-		return New(runtimeID, dataDir, prunerFactory, haveLocalStorageWorker)
+		return New(runtimeID, dataDir, prunerFactory, honorStorageSync)
 	}
 }

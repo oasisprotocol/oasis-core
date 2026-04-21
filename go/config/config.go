@@ -31,40 +31,21 @@ const (
 	ModeValidator NodeMode = "validator"
 	// ModeCompute is the name of the compute node mode.
 	ModeCompute NodeMode = "compute"
+	// ModeObserver is the name of the observer node mode.
+	ModeObserver NodeMode = "observer"
 	// ModeKeyManager is the name of the key manager node mode.
 	ModeKeyManager NodeMode = "keymanager"
 	// ModeClient is the name of the client node mode.
 	ModeClient NodeMode = "client"
-	// ModeStatelessClient is the name of the stateless client node mode.
-	ModeStatelessClient NodeMode = "client-stateless"
 	// ModeSeed is the name of the seed node mode.
 	ModeSeed NodeMode = "seed"
 	// ModeArchive is the name of the archive node mode.
 	ModeArchive NodeMode = "archive"
 )
 
-// IsClientOnly returns true iff the mode is one that has the node running
-// as a client for all configured runtimes.
-func (m NodeMode) IsClientOnly() bool {
-	switch m {
-	case ModeClient, ModeStatelessClient:
-		return true
-	}
-	return false
-}
-
 // IsArchive returns true iff the mode is set to archive node mode.
 func (m NodeMode) IsArchive() bool {
 	return m == ModeArchive
-}
-
-// HasLocalStorage returns true iff the mode is one that has local storage.
-func (m NodeMode) HasLocalStorage() bool {
-	switch m {
-	case ModeClient, ModeCompute, ModeArchive:
-		return true
-	}
-	return false
 }
 
 // GlobalConfig holds the global configuration options.
@@ -97,13 +78,24 @@ func (c *Config) Validate() error {
 	switch c.Mode {
 	case ModeValidator:
 	case ModeCompute:
+	case ModeObserver:
 	case ModeKeyManager:
 	case ModeClient:
-	case ModeStatelessClient:
 	case ModeSeed:
 	case ModeArchive:
 	default:
 		return fmt.Errorf("unknown node mode: %s", c.Mode)
+	}
+
+	if !c.Consensus.LocalStorage {
+		if c.Consensus.Validator {
+			return fmt.Errorf("local storage not available in specified mode")
+		}
+		switch c.Mode {
+		case ModeClient, ModeObserver:
+		default:
+			return fmt.Errorf("local storage not available in specified mode")
+		}
 	}
 
 	if err = c.Common.Validate(); err != nil {

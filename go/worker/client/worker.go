@@ -135,10 +135,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	)
 
 	switch config.GlobalConfig.Mode {
-	case config.ModeClient, config.ModeStatelessClient:
-		// When a node is a client node and it has an entity configured,
-		// we register it with the observer role as this may be needed
-		// for confidential runtimes.
+	case config.ModeObserver:
 		rp, err = w.registration.NewRuntimeRoleProvider(node.RoleObserver, id)
 		if err != nil {
 			return fmt.Errorf("failed to create role provider: %w", err)
@@ -158,8 +155,10 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return err
 	}
 
-	// If we are running in stateless client mode, register remote storage.
-	if config.GlobalConfig.Mode == config.ModeStatelessClient {
+	// If we have stateless storage, register remote storage.
+	// TODO: Client worker should not be responsible for storage initialization and registration.
+	// See https://github.com/oasisprotocol/oasis-core/issues/6504.
+	if !config.GlobalConfig.Consensus.LocalStorage {
 		commonNode.Runtime.RegisterStorage(NewStatelessStorage(commonNode.P2P, w.commonWorker.ChainContext, id))
 	}
 

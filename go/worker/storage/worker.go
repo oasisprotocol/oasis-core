@@ -18,6 +18,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
+// Config is the storage worker config.
+type Config struct {
+	// HasLocalStorage is true when node stores state locally.
+	HasLocalStorage bool
+}
+
 // Worker is a worker handling storage operations for all common worker runtimes.
 type Worker struct {
 	enabled bool
@@ -37,12 +43,13 @@ type Worker struct {
 
 // New constructs a new storage worker.
 func New(
+	cfg Config,
 	grpcInternal *grpc.Server,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	enabled := config.GlobalConfig.Mode.HasLocalStorage() && len(commonWorker.GetRuntimes()) > 0
+	enabled := cfg.HasLocalStorage && len(commonWorker.GetRuntimes()) > 0
 
 	s := &Worker{
 		enabled:      enabled,

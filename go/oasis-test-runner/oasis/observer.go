@@ -72,7 +72,7 @@ func (o *Observer) ModifyConfig() error {
 		o.Config.Registration.EntityID = string(entityID)
 	}
 
-	o.Config.Mode = config.ModeClient
+	o.Config.Mode = config.ModeObserver
 	o.Config.Runtime.Provisioner = o.runtimeProvisioner
 	o.Config.Runtime.SGX.Loader = o.net.cfg.RuntimeSGXLoaderBinary
 	o.Config.Runtime.AttestInterval = o.net.cfg.RuntimeAttestInterval

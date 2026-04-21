@@ -277,7 +277,11 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	n.svcMgr.Register(n.BeaconWorker)
 
 	// Initialize the storage worker.
+	storageCfg := workerStorage.Config{
+		HasLocalStorage: config.GlobalConfig.Consensus.LocalStorage,
+	}
 	n.StorageWorker, err = workerStorage.New(
+		storageCfg,
 		n.grpcInternal,
 		n.CommonWorker,
 		n.RegistrationWorker,
@@ -474,6 +478,20 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, fmt.Errorf("invalid entity ID")
 	}
 	node.EntityID = entityID
+
+	requiresEntity := config.GlobalConfig.Consensus.Validator
+	switch config.GlobalConfig.Mode {
+	case config.ModeValidator, config.ModeCompute, config.ModeKeyManager, config.ModeObserver:
+		requiresEntity = true
+	}
+
+	if requiresEntity && entityID == nil {
+		return nil, fmt.Errorf("node has no entity configured but expects one")
+	}
+
+	if config.GlobalConfig.Mode == config.ModeClient && !config.GlobalConfig.Consensus.Validator && entityID != nil {
+		return nil, fmt.Errorf("client node must not have entity configured, try using observer mode instead")
+	}
 
 	// Load configured values for all registered crash points.
 	crash.LoadViperArgValues()

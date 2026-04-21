@@ -36,19 +36,17 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey,
 
 	tx := msg.([]byte) // Ensured by DecodeMessage.
 
-	switch config.GlobalConfig.Mode {
-	case config.ModeStatelessClient:
-		// Ignore transactions on stateless clients.
+	if !config.GlobalConfig.Consensus.LocalStorage {
+		return nil // Ignore transactions when no local storage.
+	}
+
+	result, err := h.n.TxPool.SubmitTx(ctx, tx, false, false)
+	switch {
+	case err != nil:
+		return p2pError.Permanent(err)
+	case !result.IsSuccess():
+		return p2pError.Permanent(fmt.Errorf("transaction check failed: %s", result.Error))
 	default:
-		// Queue in local transaction pool if we are not running a stateless client.
-		result, err := h.n.TxPool.SubmitTx(ctx, tx, false, false)
-		switch {
-		case err != nil:
-			return p2pError.Permanent(err)
-		case !result.IsSuccess():
-			return p2pError.Permanent(fmt.Errorf("transaction check failed: %s", result.Error))
-		default:
-		}
 	}
 
 	return nil
