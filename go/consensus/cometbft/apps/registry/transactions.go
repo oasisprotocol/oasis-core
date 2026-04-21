@@ -779,13 +779,48 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, fmt.Errorf("failed to set runtime: %w", err)
 	}
 
-	if err = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID); err != nil {
-		ctx.Logger().Error("RegisterRuntime: failed to set runtime owner",
-			"err", err,
-			"runtime", rt,
-			"entity", rt.EntityID,
-		)
-		return nil, fmt.Errorf("failed to set runtime owner: %w", err)
+	switch isFeatureVersion242 {
+	case true:
+		switch existingRt {
+		case nil:
+			if err = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID); err != nil {
+				ctx.Logger().Error("RegisterRuntime: failed to set runtime owner",
+					"err", err,
+					"runtime", rt,
+					"entity", rt.EntityID,
+				)
+				return nil, fmt.Errorf("failed to set runtime owner: %w", err)
+			}
+		default:
+			if existingRt.EntityID == rt.EntityID {
+				break
+			}
+			if err = state.RemoveRuntimeOwner(ctx, rt.ID, existingRt.EntityID); err != nil {
+				ctx.Logger().Error("RegisterRuntime: failed to remove runtime owner",
+					"err", err,
+					"runtime", rt,
+					"entity", existingRt.EntityID,
+				)
+				return nil, fmt.Errorf("failed to remove runtime owner: %w", err)
+			}
+			if err = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID); err != nil {
+				ctx.Logger().Error("RegisterRuntime: failed to set runtime owner",
+					"err", err,
+					"runtime", rt,
+					"entity", rt.EntityID,
+				)
+				return nil, fmt.Errorf("failed to set runtime owner: %w", err)
+			}
+		}
+	case false:
+		if err = state.SetRuntimeOwner(ctx, rt.ID, rt.EntityID); err != nil {
+			ctx.Logger().Error("RegisterRuntime: failed to set runtime owner",
+				"err", err,
+				"runtime", rt,
+				"entity", rt.EntityID,
+			)
+			return nil, fmt.Errorf("failed to set runtime owner: %w", err)
+		}
 	}
 
 	if !suspended {
