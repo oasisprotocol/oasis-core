@@ -7,10 +7,12 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // processLivenessStatistics checks the liveness statistics for the last epoch and penalizes any
@@ -94,7 +96,11 @@ func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtSta
 				}
 
 				// Slash if configured.
-				err = onRuntimeLivenessFailure(ctx, n.PublicKey, &slashParams.Amount)
+				isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+				if err != nil {
+					return err
+				}
+				err = onRuntimeLivenessFailure(ctx, n.PublicKey, &slashParams.Amount, isFeatureVersion242)
 				if err != nil {
 					return fmt.Errorf("failed to slash node %s: %w", n.PublicKey, err)
 				}

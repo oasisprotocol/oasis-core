@@ -472,7 +472,6 @@ func (s *ImmutableState) DebondingDelegationsTo(
 }
 
 type DebondingQueueEntry struct {
-	Epoch         beacon.EpochTime
 	DelegatorAddr staking.Address
 	EscrowAddr    staking.Address
 	Delegation    *staking.DebondingDelegation
@@ -496,7 +495,6 @@ func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon
 			return nil, err
 		}
 		entries = append(entries, &DebondingQueueEntry{
-			Epoch:         beacon.EpochTime(decEpoch),
 			DelegatorAddr: delegatorAddr,
 			EscrowAddr:    escrowAddr,
 			Delegation:    deb,
@@ -665,12 +663,7 @@ func (s *MutableState) SetDelegation(
 ) error {
 	// Remove delegation if there are no more shares in it.
 	if d.Shares.IsZero() {
-		if err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr)); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
-
-		err := s.ms.Remove(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr))
-		return abciAPI.UnavailableStateError(err)
+		return s.RemoveDelegation(ctx, delegatorAddr, escrowAddr)
 	}
 
 	if err := s.ms.Insert(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr), cbor.Marshal(d)); err != nil {
@@ -687,12 +680,6 @@ func (s *MutableState) SetDebondingDelegation(
 	d *staking.DebondingDelegation,
 ) error {
 	key := debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch))
-
-	if d == nil {
-		// Remove descriptor.
-		err := s.ms.Remove(ctx, key)
-		return abciAPI.UnavailableStateError(err)
-	}
 
 	// Create a copy so we don't modify the passed in object in case we are merging
 	// it with an existing delegation.
@@ -733,6 +720,24 @@ func (s *MutableState) SetDebondingDelegation(
 		return abciAPI.UnavailableStateError(err)
 	}
 	return nil
+}
+
+func (s *MutableState) RemoveDelegation(ctx context.Context, delegatorAddr, escrowAddr staking.Address) error {
+	if err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	err := s.ms.Remove(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr))
+	return abciAPI.UnavailableStateError(err)
+}
+
+func (s *MutableState) RemoveDebondingDelegation(
+	ctx context.Context,
+	delegatorAddr, escrowAddr staking.Address,
+	epoch beacon.EpochTime,
+) error {
+	err := s.ms.Remove(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
+	return abciAPI.UnavailableStateError(err)
 }
 
 func (s *MutableState) RemoveFromDebondingQueue(
@@ -793,8 +798,9 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quan
 // and MUST NOT be exposed outside of backend implementations.
 func (s *MutableState) SlashEscrow(
 	ctx *abciAPI.Context,
-	fromAddr staking.Address,
+	addr staking.Address,
 	amount *quantity.Quantity,
+	isFeatureVersion242 bool,
 ) (*quantity.Quantity, error) {
 	var activeSlashed quantity.Quantity
 	var debondingSlashed quantity.Quantity
@@ -804,21 +810,21 @@ func (s *MutableState) SlashEscrow(
 		return nil, fmt.Errorf("cometbft/staking: failed to query common pool for slash: %w", err)
 	}
 
-	from, err := s.Account(ctx, fromAddr)
+	account, err := s.Account(ctx, addr)
 	if err != nil {
-		return nil, fmt.Errorf("cometbft/staking: failed to query account %s: %w", fromAddr, err)
+		return nil, fmt.Errorf("cometbft/staking: failed to query account %s: %w", addr, err)
 	}
 
 	// Compute the amount we need to slash each pool. The amount is split
 	// between the pools based on relative total balance.
-	total := from.Escrow.Active.Balance.Clone()
-	if err = total.Add(&from.Escrow.Debonding.Balance); err != nil {
+	total := account.Escrow.Active.Balance.Clone()
+	if err = total.Add(&account.Escrow.Debonding.Balance); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: account total balance: %w", err)
 	}
-	if err = slashPool(&activeSlashed, &from.Escrow.Active, amount, total); err != nil {
+	if err = slashPool(&activeSlashed, &account.Escrow.Active, amount, total); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: failed slashing active escrow: %w", err)
 	}
-	if err = slashPool(&debondingSlashed, &from.Escrow.Debonding, amount, total); err != nil {
+	if err = slashPool(&debondingSlashed, &account.Escrow.Debonding, amount, total); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: failed slashing debonding escrow: %w", err)
 	}
 
@@ -831,6 +837,43 @@ func (s *MutableState) SlashEscrow(
 		return totalSlashed, nil
 	}
 
+	if isFeatureVersion242 {
+		// Clear delegation shares if the escrow balance is zero.
+		if account.Escrow.Active.Balance.IsZero() {
+			delegations, err := s.DelegationsTo(ctx, addr)
+			if err != nil {
+				return nil, fmt.Errorf("cometbft/staking: failed to query delegations: %w", err)
+			}
+			for from := range delegations {
+				if err := s.RemoveDelegation(ctx, from, addr); err != nil {
+					return nil, fmt.Errorf("cometbft/staking: failed to remove delegation for delegator %s and escrow %s: %w", from, addr, err)
+				}
+			}
+
+			account.Escrow.Active.TotalShares = *quantity.NewQuantity()
+		}
+
+		// Clear debonding delegation shares if the escrow balance is zero.
+		if account.Escrow.Debonding.Balance.IsZero() {
+			delegations, err := s.DebondingDelegationsTo(ctx, addr)
+			if err != nil {
+				return nil, fmt.Errorf("cometbft/staking: failed to query debonding delegations: %w", err)
+			}
+			for from, ds := range delegations {
+				for _, d := range ds {
+					if err := s.RemoveDebondingDelegation(ctx, from, addr, d.DebondEndTime); err != nil {
+						return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
+					}
+					if err := s.RemoveFromDebondingQueue(ctx, d.DebondEndTime, from, addr); err != nil {
+						return nil, fmt.Errorf("cometbft/staking: failed to remove debonding delegation from queue for delegator %s, escrow %s and epoch %d: %w", from, addr, d.DebondEndTime, err)
+					}
+				}
+			}
+
+			account.Escrow.Debonding.TotalShares = *quantity.NewQuantity()
+		}
+	}
+
 	if err = quantity.Move(commonPool, totalSlashed.Clone(), totalSlashed); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: failed moving stake to common pool: %w", err)
 	}
@@ -838,13 +881,13 @@ func (s *MutableState) SlashEscrow(
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: failed to set common pool: %w", err)
 	}
-	if err = s.SetAccount(ctx, fromAddr, from); err != nil {
+	if err = s.SetAccount(ctx, addr, account); err != nil {
 		return nil, fmt.Errorf("cometbft/staking: failed to set account: %w", err)
 	}
 
 	if !ctx.IsCheckOnly() {
 		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TakeEscrowEvent{
-			Owner:           fromAddr,
+			Owner:           addr,
 			Amount:          *totalSlashed,
 			DebondingAmount: debondingSlashed,
 		}))

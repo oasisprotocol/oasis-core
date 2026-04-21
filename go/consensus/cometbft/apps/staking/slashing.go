@@ -11,8 +11,10 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func onEvidenceByzantineConsensus(
@@ -85,8 +87,12 @@ func onEvidenceByzantineConsensus(
 	}
 
 	// Slash validator.
+	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	if err != nil {
+		return err
+	}
 	entityAddr := staking.NewAddress(node.EntityID)
-	_, err = stakeState.SlashEscrow(ctx, entityAddr, &penalty.Amount)
+	_, err = stakeState.SlashEscrow(ctx, entityAddr, &penalty.Amount, isFeatureVersion242)
 	if err != nil {
 		ctx.Logger().Error("failed to slash validator entity",
 			"err", err,

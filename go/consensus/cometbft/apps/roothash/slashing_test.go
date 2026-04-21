@@ -44,6 +44,7 @@ func TestOnEvidenceRuntimeEquivocation(t *testing.T) {
 		testNodeSigner.Public(),
 		runtime,
 		amount,
+		true,
 	)
 	require.Error(err, "should fail when evidence signer address is not known")
 
@@ -72,6 +73,7 @@ func TestOnEvidenceRuntimeEquivocation(t *testing.T) {
 		testNodeSigner.Public(),
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "should not fail when entity has no stake")
 
@@ -108,6 +110,7 @@ func TestOnEvidenceRuntimeEquivocation(t *testing.T) {
 		testNodeSigner.Public(),
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "slashing should succeed")
 
@@ -146,6 +149,7 @@ func TestOnEvidenceRuntimeEquivocation(t *testing.T) {
 		testNodeSigner.Public(),
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "slashing should succeed")
 
@@ -188,6 +192,7 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 		[]signature.PublicKey{},
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "should not fail when there's no nodes to be slashed")
 
@@ -198,6 +203,7 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 		[]signature.PublicKey{},
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "should not fail when node to be slashed cannot be found")
 
@@ -239,6 +245,7 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 		[]signature.PublicKey{testNodes[1].ID},
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "should not fail when entity to be slashed has no stake")
 
@@ -276,6 +283,7 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 		toReward,
 		runtime,
 		amount,
+		true,
 	)
 	require.NoError(err, "should not fail")
 	runtimePercentage := quantity.NewFromUint64(uint64(runtime.Staking.RewardSlashBadResultsRuntimePercent))

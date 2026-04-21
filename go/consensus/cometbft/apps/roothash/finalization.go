@@ -11,11 +11,13 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (app *Application) tryFinalizeRounds(
@@ -252,12 +254,17 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		}
 
 		// Slash for incorrect results.
+		isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+		if err != nil {
+			return err
+		}
 		if err = onRuntimeIncorrectResults(
 			ctx,
 			badComputeEntities,
 			goodComputeEntities,
 			rtState.Runtime,
 			&penalty.Amount,
+			isFeatureVersion242,
 		); err != nil {
 			return fmt.Errorf("failed to slash for incorrect results: %w", err)
 		}
