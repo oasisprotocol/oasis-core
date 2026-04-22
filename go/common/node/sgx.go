@@ -258,7 +258,6 @@ func (sa *SGXAttestation) Verify(
 	rak signature.PublicKey,
 	rek *x25519.PublicKey,
 	nodeID signature.PublicKey,
-	useKMAPolicy bool,
 ) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
@@ -269,7 +268,7 @@ func (sa *SGXAttestation) Verify(
 	// See https://github.com/oasisprotocol/oasis-core/issues/6459.
 	cfg.SGX.ApplyDefaultConstraints(sc)
 
-	policy := sc.ResolvePolicy(useKMAPolicy)
+	policy := sc.ResolvePolicy(true)
 
 	// Verify the quote.
 	verifiedQuote, err := sa.Quote.Verify(policy, ts)

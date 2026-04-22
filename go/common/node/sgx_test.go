@@ -291,12 +291,9 @@ func TestKeyManagerAccessPolicySanity(t *testing.T) {
 	var nodeID signature.PublicKey
 	cfg := &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}}
 
-	err = sa.Verify(cfg, time.Now(), 0, &sc, rak, nil, nodeID, true)
+	err = sa.Verify(cfg, time.Now(), 0, &sc, rak, nil, nodeID)
 	require.Error(err, "attestation should be rejected when key manager access policy is used")
 	require.ErrorContains(err, "PCS quotes are disabled by policy")
-
-	err = sa.Verify(cfg, time.Now(), 0, &sc, rak, nil, nodeID, false)
-	require.NoError(err, "attestation should pass when falling back to default policy")
 }
 
 func FuzzSGXConstraints(f *testing.F) {

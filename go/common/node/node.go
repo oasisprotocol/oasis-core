@@ -590,10 +590,6 @@ type CapabilityTEEVerifyParams struct {
 	// NodeID is the node identity the attestation must be bound to.
 	NodeID signature.PublicKey
 
-	// UseKMAPolicy specifies whether optional key manager access policy
-	// overrides default policy.
-	UseKMAPolicy bool
-
 	// IsFeatureVersion261 is true for consensus at version 26.1 or higher.
 	IsFeatureVersion261 bool
 }
@@ -629,7 +625,6 @@ func (c *CapabilityTEE) Verify(params CapabilityTEEVerifyParams) error {
 			c.RAK,
 			c.REK,
 			params.NodeID,
-			params.UseKMAPolicy,
 		)
 	default:
 		return ErrInvalidTEEHardware

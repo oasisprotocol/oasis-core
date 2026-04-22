@@ -439,7 +439,6 @@ func isSuitableExecutorWorker(
 				Height:              uint64(ctx.LastHeight()),
 				Constraints:         activeDeployment.TEE,
 				NodeID:              n.node.ID,
-				UseKMAPolicy:        true,
 				IsFeatureVersion261: isFeatureVersion261,
 			}); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestation",

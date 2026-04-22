@@ -840,17 +840,12 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		// Use the key manager access policy (if it exists) for compute runtimes.
-		// This is safe because only nodes with TEE capabilities reach this point,
-		// which implies a compute or observer role.
-		useKMAPolicy := regRt.Kind == KindCompute
 		if err := rt.Capabilities.TEE.Verify(node.CapabilityTEEVerifyParams{
 			Features:            teeCfg,
 			Now:                 ts,
 			Height:              height,
 			Constraints:         rtVersionInfo.TEE,
 			NodeID:              nodeID,
-			UseKMAPolicy:        useKMAPolicy,
 			IsFeatureVersion261: isFeatureVersion261,
 		}); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
