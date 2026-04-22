@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -168,10 +167,9 @@ func TestVerifyRuntime(t *testing.T) {
 	h.FromBytes([]byte("stateroot hash"))
 
 	for _, tc := range []struct {
-		rr   Runtime
-		cpFn func(*ConsensusParameters)
-		err  error
-		msg  string
+		rr          Runtime
+		cpFn        func(*ConsensusParameters)
+		errContains string
 	}{
 		{
 			Runtime{
@@ -252,8 +250,7 @@ func TestVerifyRuntime(t *testing.T) {
 				},
 			},
 			nil,
-			nil,
-			"valid runtime",
+			"",
 		},
 		{
 			Runtime{
@@ -335,8 +332,7 @@ func TestVerifyRuntime(t *testing.T) {
 				},
 			},
 			nil,
-			ErrInvalidArgument,
-			"invalid runtime (nil deployment)",
+			"nil deployment",
 		},
 		{
 			Runtime{
@@ -434,8 +430,7 @@ func TestVerifyRuntime(t *testing.T) {
 				},
 			},
 			nil,
-			ErrInvalidArgument,
-			"invalid runtime (too many deployments)",
+			"too many deployments",
 		},
 		{
 			Runtime{
@@ -537,8 +532,7 @@ func TestVerifyRuntime(t *testing.T) {
 				// Increase the maximum number of allowed deployments.
 				cp.MaxRuntimeDeployments = 5
 			},
-			ErrInvalidArgument,
-			"invalid runtime (deployment with invalid checkusm)",
+			"invalid bundle checksum",
 		},
 		{
 			Runtime{
@@ -640,8 +634,7 @@ func TestVerifyRuntime(t *testing.T) {
 				// Increase the maximum number of allowed deployments.
 				cp.MaxRuntimeDeployments = 5
 			},
-			nil,
-			"valid runtime",
+			"",
 		},
 	} {
 		cp := ConsensusParameters{
@@ -657,12 +650,13 @@ func TestVerifyRuntime(t *testing.T) {
 		}
 
 		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &tc.rr, false, true, beacon.EpochTime(10), true)
-		switch {
-		case tc.err == nil:
-			require.NoError(err, tc.msg)
-		default:
-			require.True(errors.Is(err, tc.err), fmt.Sprintf("expected err: '%v', got: '%v', for: %s", tc.err, err, tc.msg))
+		if tc.errContains == "" {
+			require.NoError(err)
+			continue
 		}
+		require.Error(err)
+		require.ErrorContains(err, tc.errContains)
+		require.True(errors.Is(err, ErrInvalidArgument))
 	}
 }
 
