@@ -458,15 +458,7 @@ func TestVerifyRuntime(t *testing.T) {
 							Minor: 0,
 							Patch: 2,
 						},
-						ValidFrom: 1,
-					},
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 3,
-						},
-						ValidFrom:      2,
+						ValidFrom:      1,
 						BundleChecksum: []byte{1, 2, 3, 4, 5, 6, 7},
 					},
 				},
@@ -528,10 +520,7 @@ func TestVerifyRuntime(t *testing.T) {
 					MinInMessageFee:                      quantity.Quantity{},
 				},
 			},
-			func(cp *ConsensusParameters) {
-				// Increase the maximum number of allowed deployments.
-				cp.MaxRuntimeDeployments = 5
-			},
+			nil,
 			"invalid bundle checksum",
 		},
 		{
