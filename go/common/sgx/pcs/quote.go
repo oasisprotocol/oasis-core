@@ -767,18 +767,17 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 
 	// Verify quote header and report body signature.
 	attPkWithTag := append([]byte{0x04}, qs.attestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
-	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)           //nolint:staticcheck
-	if x == nil {
-		return fmt.Errorf("pcs/quote: invalid attestation public key")
+	attPk, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), attPkWithTag)
+	if err != nil {
+		return fmt.Errorf("pcs/quote: invalid attestation public key: %w", err)
 	}
-	attPk := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 
 	h := sha256.New()
 	h.Write(header.Raw())
 	h.Write(reportBody.Raw())
 	expectedHash := h.Sum(nil)
 
-	if !qs.signature.Verify(&attPk, expectedHash) {
+	if !qs.signature.Verify(attPk, expectedHash) {
 		return fmt.Errorf("pcs/quote: failed to verify quote signature")
 	}
 
