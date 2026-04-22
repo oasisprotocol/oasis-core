@@ -8,7 +8,7 @@ import (
 type Config struct {
 	TxPool tpConfig.Config
 
-	// WillRegisterComputeRuntime specifies whether hosted RONL components will
-	// be registered on the consensus layer as compute/observer runtimes.
+	// WillRegisterComputeRuntime specifies whether the node hosting RONL
+	// components will be registered on the consensus layer as compute/observer node.
 	WillRegisterComputeRuntime bool
 }
