@@ -147,10 +147,16 @@ func SanityCheckRuntimes(
 	now beacon.EpochTime,
 	isFeatureVersion242 bool,
 ) (RuntimeLookup, error) {
+	verifyOpts := VerifyRuntimeOptions{
+		IsGenesis:           isGenesis,
+		IsSanityCheck:       true,
+		IsFeatureVersion242: isFeatureVersion242,
+	}
+
 	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
 	for _, rt := range runtimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now, isFeatureVersion242); err != nil {
+		if err := VerifyRuntime(params, logger, rt, now, verifyOpts); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenRuntimes = append(seenRuntimes, rt)
@@ -158,7 +164,7 @@ func SanityCheckRuntimes(
 
 	seenSuspendedRuntimes := []*Runtime{}
 	for _, rt := range suspendedRuntimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now, isFeatureVersion242); err != nil {
+		if err := VerifyRuntime(params, logger, rt, now, verifyOpts); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenSuspendedRuntimes = append(seenSuspendedRuntimes, rt)

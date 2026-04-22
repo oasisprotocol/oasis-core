@@ -347,7 +347,8 @@ func TestVerifyRuntime(t *testing.T) {
 				tc.modifyParams(&cp)
 			}
 
-			err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, false, true, beacon.EpochTime(10), true)
+			verifyOpts := VerifyRuntimeOptions{IsSanityCheck: true, IsFeatureVersion242: true}
+			err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, beacon.EpochTime(10), verifyOpts)
 			if tc.errContains == "" {
 				require.NoError(t, err)
 				return

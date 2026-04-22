@@ -598,7 +598,8 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		}
 	}
 
-	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch, isFeatureVersion242); err != nil {
+	verifyOpts := registry.VerifyRuntimeOptions{IsGenesis: ctx.IsInitChain(), IsFeatureVersion242: isFeatureVersion242}
+	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, epoch, verifyOpts); err != nil {
 		return nil, err
 	}
 
