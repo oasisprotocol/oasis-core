@@ -47,6 +47,14 @@ type NodeHooks interface {
 	Initialized() <-chan struct{}
 }
 
+// Config contains committee node specific configuration.
+type Config struct {
+	ChainContext               string
+	Identity                   *identity.Identity
+	TxPool                     tpConfig.Config
+	WillRegisterComputeRuntime bool
+}
+
 // Node is a committee node.
 type Node struct {
 	*runtimeRegistry.RuntimeHostNode
@@ -639,17 +647,14 @@ func (n *Node) handleDispatchInfo() {
 }
 
 func NewNode(
-	chainContext string,
+	cfg Config,
 	runtime runtimeRegistry.Runtime,
 	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
-	identity *identity.Identity,
 	keymanager keymanager.Backend,
 	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
-	txPoolCfg tpConfig.Config,
-	willRegisterComputeRuntime bool,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -658,25 +663,25 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), identity, consensus, p2pHost)
+	group, err := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 
-	txTopic := p2pProtocol.NewTopicKindTxID(chainContext, runtime.ID())
+	txTopic := p2pProtocol.NewTopicKindTxID(cfg.ChainContext, runtime.ID())
 
 	n := &Node{
-		ChainContext:               chainContext,
+		ChainContext:               cfg.ChainContext,
 		Runtime:                    runtime,
 		RuntimeRegistry:            rtRegistry,
-		Identity:                   identity,
+		Identity:                   cfg.Identity,
 		KeyManager:                 keymanager,
 		Consensus:                  consensus,
 		LightProvider:              lightProvider,
 		Group:                      group,
 		P2P:                        p2pHost,
-		willRegisterComputeRuntime: willRegisterComputeRuntime,
+		willRegisterComputeRuntime: cfg.WillRegisterComputeRuntime,
 		txTopic:                    txTopic,
 		ctx:                        ctx,
 		cancelCtx:                  cancel,
@@ -688,7 +693,7 @@ func NewNode(
 	}
 
 	// Prepare the key manager client wrapper.
-	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
+	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, cfg.ChainContext, n.logger)
 
 	// Prepare the runtime host handler.
 	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, consensus)
@@ -711,13 +716,13 @@ func NewNode(
 	n.services = service.NewGroup(notifier, lbNotifier, kmNotifier, n.roflNotifier)
 
 	// Prepare transaction pool.
-	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)
+	n.TxPool = txpool.New(runtime.ID(), cfg.TxPool, rhn.GetHostedRuntime(), runtime.History(), n)
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})
 
 	// Register transaction sync service.
-	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), n.TxPool))
+	p2pHost.RegisterProtocolServer(txsync.NewServer(cfg.ChainContext, runtime.ID(), n.TxPool))
 
 	return n, nil
 }

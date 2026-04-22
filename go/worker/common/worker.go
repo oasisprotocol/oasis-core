@@ -146,18 +146,22 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		"runtime_id", id,
 	)
 
+	cfg := committee.Config{
+		ChainContext:               w.ChainContext,
+		Identity:                   w.Identity,
+		TxPool:                     w.cfg.TxPool,
+		WillRegisterComputeRuntime: w.cfg.WillRegisterComputeRuntime,
+	}
+
 	node, err := committee.NewNode(
-		w.ChainContext,
+		cfg,
 		runtime,
 		w.Provisioner,
 		w.RuntimeRegistry,
-		w.Identity,
 		w.KeyManager,
 		w.Consensus,
 		w.LightProvider,
 		w.P2P,
-		w.cfg.TxPool,
-		w.cfg.WillRegisterComputeRuntime,
 	)
 	if err != nil {
 		return err
