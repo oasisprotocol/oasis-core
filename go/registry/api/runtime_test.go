@@ -285,20 +285,6 @@ func TestVerifyRuntime(t *testing.T) {
 		},
 		{
 			modify: func(rt *Runtime) {
-				rt.Deployments = append(rt.Deployments, &VersionInfo{
-					Version: version.Version{
-						Major: 44,
-						Minor: 0,
-						Patch: 2,
-					},
-					ValidFrom:      1,
-					BundleChecksum: []byte{1, 2, 3, 4, 5, 6, 7},
-				})
-			},
-			errContains: "invalid bundle checksum",
-		},
-		{
-			modify: func(rt *Runtime) {
 				rt.Deployments = append(rt.Deployments,
 					&VersionInfo{
 						Version: version.Version{
@@ -323,6 +309,20 @@ func TestVerifyRuntime(t *testing.T) {
 				cp.MaxRuntimeDeployments = 5
 			},
 			errContains: "",
+		},
+		{
+			modify: func(rt *Runtime) {
+				rt.Deployments = append(rt.Deployments, &VersionInfo{
+					Version: version.Version{
+						Major: 44,
+						Minor: 0,
+						Patch: 2,
+					},
+					ValidFrom:      1,
+					BundleChecksum: []byte{1, 2, 3, 4, 5, 6, 7},
+				})
+			},
+			errContains: "invalid bundle checksum",
 		},
 	} {
 		rt := newValidRuntime()
