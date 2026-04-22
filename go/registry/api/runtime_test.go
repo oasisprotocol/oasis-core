@@ -157,12 +157,10 @@ func TestRuntimeSerialization(t *testing.T) {
 }
 
 func TestVerifyRuntime(t *testing.T) {
-	require := require.New(t)
-
 	var runtimeID common.Namespace
-	require.NoError(runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000"), "runtime id")
+	require.NoError(t, runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000"), "runtime id")
 	var keymanagerID common.Namespace
-	require.NoError(keymanagerID.UnmarshalHex("c000000000000000000000000000000000000000000000000000000000000001"), "keymanager id")
+	require.NoError(t, keymanagerID.UnmarshalHex("c000000000000000000000000000000000000000000000000000000000000001"), "keymanager id")
 	var h hash.Hash
 	h.FromBytes([]byte("stateroot hash"))
 
@@ -247,20 +245,24 @@ func TestVerifyRuntime(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
+		name         string
 		modify       func(*Runtime)
 		modifyParams func(*ConsensusParameters)
 		errContains  string
 	}{
 		{
+			name:        "valid",
 			errContains: "",
 		},
 		{
+			name: "nil deployment",
 			modify: func(rt *Runtime) {
 				rt.Deployments = append(rt.Deployments, nil)
 			},
 			errContains: "nil deployment",
 		},
 		{
+			name: "too many deployments",
 			modify: func(rt *Runtime) {
 				rt.Deployments = append(rt.Deployments,
 					&VersionInfo{
@@ -284,6 +286,7 @@ func TestVerifyRuntime(t *testing.T) {
 			errContains: "too many deployments",
 		},
 		{
+			name: "max runtime deployment config increases allowed deployments",
 			modify: func(rt *Runtime) {
 				rt.Deployments = append(rt.Deployments,
 					&VersionInfo{
@@ -311,6 +314,7 @@ func TestVerifyRuntime(t *testing.T) {
 			errContains: "",
 		},
 		{
+			name: "invalid bundle checksum",
 			modify: func(rt *Runtime) {
 				rt.Deployments = append(rt.Deployments, &VersionInfo{
 					Version: version.Version{
@@ -325,30 +329,33 @@ func TestVerifyRuntime(t *testing.T) {
 			errContains: "invalid bundle checksum",
 		},
 	} {
-		rt := newValidRuntime()
-		if tc.modify != nil {
-			tc.modify(&rt)
-		}
-		cp := ConsensusParameters{
-			MaxNodeExpiration: 10,
-			EnableRuntimeGovernanceModels: map[RuntimeGovernanceModel]bool{
-				GovernanceConsensus: true,
-				GovernanceEntity:    true,
-				GovernanceRuntime:   true,
-			},
-		}
-		if tc.modifyParams != nil {
-			tc.modifyParams(&cp)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			rt := newValidRuntime()
+			if tc.modify != nil {
+				tc.modify(&rt)
+			}
 
-		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, false, true, beacon.EpochTime(10), true)
-		if tc.errContains == "" {
-			require.NoError(err)
-			continue
-		}
-		require.Error(err)
-		require.ErrorContains(err, tc.errContains)
-		require.True(errors.Is(err, ErrInvalidArgument))
+			cp := ConsensusParameters{
+				MaxNodeExpiration: 10,
+				EnableRuntimeGovernanceModels: map[RuntimeGovernanceModel]bool{
+					GovernanceConsensus: true,
+					GovernanceEntity:    true,
+					GovernanceRuntime:   true,
+				},
+			}
+			if tc.modifyParams != nil {
+				tc.modifyParams(&cp)
+			}
+
+			err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, false, true, beacon.EpochTime(10), true)
+			if tc.errContains == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.errContains)
+			require.True(t, errors.Is(err, ErrInvalidArgument))
+		})
 	}
 }
 
