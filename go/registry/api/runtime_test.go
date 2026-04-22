@@ -166,195 +166,104 @@ func TestVerifyRuntime(t *testing.T) {
 	var h hash.Hash
 	h.FromBytes([]byte("stateroot hash"))
 
+	newValidRuntime := func() Runtime {
+		return Runtime{
+			Versioned: cbor.NewVersioned(3),
+			EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
+			ID:        runtimeID,
+			Genesis: RuntimeGenesis{
+				Round:     43,
+				StateRoot: h,
+			},
+			Kind:        KindCompute,
+			TEEHardware: node.TEEHardwareInvalid,
+			Deployments: []*VersionInfo{
+				{
+					Version: version.Version{
+						Major: 44,
+						Minor: 0,
+						Patch: 1,
+					},
+				},
+			},
+			KeyManager: &keymanagerID,
+			Executor: ExecutorParameters{
+				GroupSize:                  9,
+				GroupBackupSize:            8,
+				AllowedStragglers:          7,
+				RoundTimeout:               6,
+				MaxMessages:                5,
+				MinLiveRoundsPercent:       4,
+				MaxMissedProposalsPercent:  3,
+				MinLiveRoundsForEvaluation: 2,
+				MaxLivenessFailures:        1,
+			},
+			TxnScheduler: TxnSchedulerParameters{
+				BatchFlushTimeout: time.Second,
+				MaxBatchSize:      10_000,
+				MaxBatchSizeBytes: 10_000_000,
+				MaxInMessages:     32,
+				ProposerTimeout:   2 * time.Second,
+			},
+			Storage: StorageParameters{
+				CheckpointInterval:  33,
+				CheckpointNumKept:   6,
+				CheckpointChunkSize: 1_000_000_000,
+			},
+			AdmissionPolicy: RuntimeAdmissionPolicy{
+				EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
+					Entities: map[signature.PublicKey]EntityWhitelistConfig{
+						signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
+							MaxNodes: map[node.RolesMask]uint16{
+								node.RoleComputeWorker: 3,
+								node.RoleKeyManager:    1,
+							},
+						},
+					},
+				},
+			},
+			Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
+				api.KindComputeExecutor: {
+					api.RoleWorker: {
+						MaxNodes: &MaxNodesConstraint{
+							Limit: 10,
+						},
+						MinPoolSize: &MinPoolSizeConstraint{
+							Limit: 5,
+						},
+						ValidatorSet: &ValidatorSetConstraint{},
+					},
+				},
+			},
+			GovernanceModel: GovernanceConsensus,
+			Staking: RuntimeStakingParameters{
+				Thresholds:                           nil,
+				Slashing:                             nil,
+				RewardSlashBadResultsRuntimePercent:  10,
+				RewardSlashEquvocationRuntimePercent: 0,
+				MinInMessageFee:                      quantity.Quantity{},
+			},
+		}
+	}
+
 	for _, tc := range []struct {
-		rr          Runtime
-		cpFn        func(*ConsensusParameters)
-		errContains string
+		modify       func(*Runtime)
+		modifyParams func(*ConsensusParameters)
+		errContains  string
 	}{
 		{
-			Runtime{
-				Versioned: cbor.NewVersioned(3),
-				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
-				ID:        runtimeID,
-				Genesis: RuntimeGenesis{
-					Round:     43,
-					StateRoot: h,
-				},
-				Kind:        KindCompute,
-				TEEHardware: node.TEEHardwareInvalid,
-				Deployments: []*VersionInfo{
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 1,
-						},
-					},
-				},
-				KeyManager: &keymanagerID,
-				Executor: ExecutorParameters{
-					GroupSize:                  9,
-					GroupBackupSize:            8,
-					AllowedStragglers:          7,
-					RoundTimeout:               6,
-					MaxMessages:                5,
-					MinLiveRoundsPercent:       4,
-					MaxMissedProposalsPercent:  3,
-					MinLiveRoundsForEvaluation: 2,
-					MaxLivenessFailures:        1,
-				},
-				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: time.Second,
-					MaxBatchSize:      10_000,
-					MaxBatchSizeBytes: 10_000_000,
-					MaxInMessages:     32,
-					ProposerTimeout:   2 * time.Second,
-				},
-				Storage: StorageParameters{
-					CheckpointInterval:  33,
-					CheckpointNumKept:   6,
-					CheckpointChunkSize: 1_000_000_000,
-				},
-				AdmissionPolicy: RuntimeAdmissionPolicy{
-					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]EntityWhitelistConfig{
-							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
-								MaxNodes: map[node.RolesMask]uint16{
-									node.RoleComputeWorker: 3,
-									node.RoleKeyManager:    1,
-								},
-							},
-						},
-					},
-				},
-				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
-					api.KindComputeExecutor: {
-						api.RoleWorker: {
-							MaxNodes: &MaxNodesConstraint{
-								Limit: 10,
-							},
-							MinPoolSize: &MinPoolSizeConstraint{
-								Limit: 5,
-							},
-							ValidatorSet: &ValidatorSetConstraint{},
-						},
-					},
-				},
-				GovernanceModel: GovernanceConsensus,
-				Staking: RuntimeStakingParameters{
-					Thresholds:                           nil,
-					Slashing:                             nil,
-					RewardSlashBadResultsRuntimePercent:  10,
-					RewardSlashEquvocationRuntimePercent: 0,
-					MinInMessageFee:                      quantity.Quantity{},
-				},
-			},
-			nil,
-			"",
+			errContains: "",
 		},
 		{
-			Runtime{
-				Versioned: cbor.NewVersioned(3),
-				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
-				ID:        runtimeID,
-				Genesis: RuntimeGenesis{
-					Round:     43,
-					StateRoot: h,
-				},
-				Kind:        KindCompute,
-				TEEHardware: node.TEEHardwareInvalid,
-				Deployments: []*VersionInfo{
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 1,
-						},
-					},
-					nil,
-				},
-				KeyManager: &keymanagerID,
-				Executor: ExecutorParameters{
-					GroupSize:                  9,
-					GroupBackupSize:            8,
-					AllowedStragglers:          7,
-					RoundTimeout:               6,
-					MaxMessages:                5,
-					MinLiveRoundsPercent:       4,
-					MaxMissedProposalsPercent:  3,
-					MinLiveRoundsForEvaluation: 2,
-					MaxLivenessFailures:        1,
-				},
-				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: time.Second,
-					MaxBatchSize:      10_000,
-					MaxBatchSizeBytes: 10_000_000,
-					MaxInMessages:     32,
-					ProposerTimeout:   2 * time.Second,
-				},
-				Storage: StorageParameters{
-					CheckpointInterval:  33,
-					CheckpointNumKept:   6,
-					CheckpointChunkSize: 1_000_000_000,
-				},
-				AdmissionPolicy: RuntimeAdmissionPolicy{
-					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]EntityWhitelistConfig{
-							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
-								MaxNodes: map[node.RolesMask]uint16{
-									node.RoleComputeWorker: 3,
-									node.RoleKeyManager:    1,
-								},
-							},
-						},
-					},
-				},
-				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
-					api.KindComputeExecutor: {
-						api.RoleWorker: {
-							MaxNodes: &MaxNodesConstraint{
-								Limit: 10,
-							},
-							MinPoolSize: &MinPoolSizeConstraint{
-								Limit: 5,
-							},
-							ValidatorSet: &ValidatorSetConstraint{},
-						},
-					},
-				},
-				GovernanceModel: GovernanceConsensus,
-				Staking: RuntimeStakingParameters{
-					Thresholds:                           nil,
-					Slashing:                             nil,
-					RewardSlashBadResultsRuntimePercent:  10,
-					RewardSlashEquvocationRuntimePercent: 0,
-					MinInMessageFee:                      quantity.Quantity{},
-				},
+			modify: func(rt *Runtime) {
+				rt.Deployments = append(rt.Deployments, nil)
 			},
-			nil,
-			"nil deployment",
+			errContains: "nil deployment",
 		},
 		{
-			Runtime{
-				Versioned: cbor.NewVersioned(3),
-				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
-				ID:        runtimeID,
-				Genesis: RuntimeGenesis{
-					Round:     43,
-					StateRoot: h,
-				},
-				Kind:        KindCompute,
-				TEEHardware: node.TEEHardwareInvalid,
-				Deployments: []*VersionInfo{
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 1,
-						},
-						ValidFrom: 0,
-					},
-					{
+			modify: func(rt *Runtime) {
+				rt.Deployments = append(rt.Deployments,
+					&VersionInfo{
 						Version: version.Version{
 							Major: 44,
 							Minor: 0,
@@ -362,7 +271,7 @@ func TestVerifyRuntime(t *testing.T) {
 						},
 						ValidFrom: 1,
 					},
-					{
+					&VersionInfo{
 						Version: version.Version{
 							Major: 44,
 							Minor: 0,
@@ -370,180 +279,28 @@ func TestVerifyRuntime(t *testing.T) {
 						},
 						ValidFrom: 2,
 					},
-				},
-				KeyManager: &keymanagerID,
-				Executor: ExecutorParameters{
-					GroupSize:                  9,
-					GroupBackupSize:            8,
-					AllowedStragglers:          7,
-					RoundTimeout:               6,
-					MaxMessages:                5,
-					MinLiveRoundsPercent:       4,
-					MaxMissedProposalsPercent:  3,
-					MinLiveRoundsForEvaluation: 2,
-					MaxLivenessFailures:        1,
-				},
-				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: time.Second,
-					MaxBatchSize:      10_000,
-					MaxBatchSizeBytes: 10_000_000,
-					MaxInMessages:     32,
-					ProposerTimeout:   2 * time.Second,
-				},
-				Storage: StorageParameters{
-					CheckpointInterval:  33,
-					CheckpointNumKept:   6,
-					CheckpointChunkSize: 1_000_000_000,
-				},
-				AdmissionPolicy: RuntimeAdmissionPolicy{
-					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]EntityWhitelistConfig{
-							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
-								MaxNodes: map[node.RolesMask]uint16{
-									node.RoleComputeWorker: 3,
-									node.RoleKeyManager:    1,
-								},
-							},
-						},
-					},
-				},
-				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
-					api.KindComputeExecutor: {
-						api.RoleWorker: {
-							MaxNodes: &MaxNodesConstraint{
-								Limit: 10,
-							},
-							MinPoolSize: &MinPoolSizeConstraint{
-								Limit: 5,
-							},
-							ValidatorSet: &ValidatorSetConstraint{},
-						},
-					},
-				},
-				GovernanceModel: GovernanceConsensus,
-				Staking: RuntimeStakingParameters{
-					Thresholds:                           nil,
-					Slashing:                             nil,
-					RewardSlashBadResultsRuntimePercent:  10,
-					RewardSlashEquvocationRuntimePercent: 0,
-					MinInMessageFee:                      quantity.Quantity{},
-				},
+				)
 			},
-			nil,
-			"too many deployments",
+			errContains: "too many deployments",
 		},
 		{
-			Runtime{
-				Versioned: cbor.NewVersioned(3),
-				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
-				ID:        runtimeID,
-				Genesis: RuntimeGenesis{
-					Round:     43,
-					StateRoot: h,
-				},
-				Kind:        KindCompute,
-				TEEHardware: node.TEEHardwareInvalid,
-				Deployments: []*VersionInfo{
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 1,
-						},
-						ValidFrom: 0,
+			modify: func(rt *Runtime) {
+				rt.Deployments = append(rt.Deployments, &VersionInfo{
+					Version: version.Version{
+						Major: 44,
+						Minor: 0,
+						Patch: 2,
 					},
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 2,
-						},
-						ValidFrom:      1,
-						BundleChecksum: []byte{1, 2, 3, 4, 5, 6, 7},
-					},
-				},
-				KeyManager: &keymanagerID,
-				Executor: ExecutorParameters{
-					GroupSize:                  9,
-					GroupBackupSize:            8,
-					AllowedStragglers:          7,
-					RoundTimeout:               6,
-					MaxMessages:                5,
-					MinLiveRoundsPercent:       4,
-					MaxMissedProposalsPercent:  3,
-					MinLiveRoundsForEvaluation: 2,
-					MaxLivenessFailures:        1,
-				},
-				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: time.Second,
-					MaxBatchSize:      10_000,
-					MaxBatchSizeBytes: 10_000_000,
-					MaxInMessages:     32,
-					ProposerTimeout:   2 * time.Second,
-				},
-				Storage: StorageParameters{
-					CheckpointInterval:  33,
-					CheckpointNumKept:   6,
-					CheckpointChunkSize: 1_000_000_000,
-				},
-				AdmissionPolicy: RuntimeAdmissionPolicy{
-					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]EntityWhitelistConfig{
-							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
-								MaxNodes: map[node.RolesMask]uint16{
-									node.RoleComputeWorker: 3,
-									node.RoleKeyManager:    1,
-								},
-							},
-						},
-					},
-				},
-				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
-					api.KindComputeExecutor: {
-						api.RoleWorker: {
-							MaxNodes: &MaxNodesConstraint{
-								Limit: 10,
-							},
-							MinPoolSize: &MinPoolSizeConstraint{
-								Limit: 5,
-							},
-							ValidatorSet: &ValidatorSetConstraint{},
-						},
-					},
-				},
-				GovernanceModel: GovernanceConsensus,
-				Staking: RuntimeStakingParameters{
-					Thresholds:                           nil,
-					Slashing:                             nil,
-					RewardSlashBadResultsRuntimePercent:  10,
-					RewardSlashEquvocationRuntimePercent: 0,
-					MinInMessageFee:                      quantity.Quantity{},
-				},
+					ValidFrom:      1,
+					BundleChecksum: []byte{1, 2, 3, 4, 5, 6, 7},
+				})
 			},
-			nil,
-			"invalid bundle checksum",
+			errContains: "invalid bundle checksum",
 		},
 		{
-			Runtime{
-				Versioned: cbor.NewVersioned(3),
-				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
-				ID:        runtimeID,
-				Genesis: RuntimeGenesis{
-					Round:     43,
-					StateRoot: h,
-				},
-				Kind:        KindCompute,
-				TEEHardware: node.TEEHardwareInvalid,
-				Deployments: []*VersionInfo{
-					{
-						Version: version.Version{
-							Major: 44,
-							Minor: 0,
-							Patch: 1,
-						},
-						ValidFrom: 0,
-					},
-					{
+			modify: func(rt *Runtime) {
+				rt.Deployments = append(rt.Deployments,
+					&VersionInfo{
 						Version: version.Version{
 							Major: 44,
 							Minor: 0,
@@ -551,7 +308,7 @@ func TestVerifyRuntime(t *testing.T) {
 						},
 						ValidFrom: 1,
 					},
-					{
+					&VersionInfo{
 						Version: version.Version{
 							Major: 44,
 							Minor: 0,
@@ -560,72 +317,18 @@ func TestVerifyRuntime(t *testing.T) {
 						ValidFrom:      2,
 						BundleChecksum: bytes.Repeat([]byte{0x01}, 32),
 					},
-				},
-				KeyManager: &keymanagerID,
-				Executor: ExecutorParameters{
-					GroupSize:                  9,
-					GroupBackupSize:            8,
-					AllowedStragglers:          7,
-					RoundTimeout:               6,
-					MaxMessages:                5,
-					MinLiveRoundsPercent:       4,
-					MaxMissedProposalsPercent:  3,
-					MinLiveRoundsForEvaluation: 2,
-					MaxLivenessFailures:        1,
-				},
-				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: time.Second,
-					MaxBatchSize:      10_000,
-					MaxBatchSizeBytes: 10_000_000,
-					MaxInMessages:     32,
-					ProposerTimeout:   2 * time.Second,
-				},
-				Storage: StorageParameters{
-					CheckpointInterval:  33,
-					CheckpointNumKept:   6,
-					CheckpointChunkSize: 1_000_000_000,
-				},
-				AdmissionPolicy: RuntimeAdmissionPolicy{
-					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]EntityWhitelistConfig{
-							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
-								MaxNodes: map[node.RolesMask]uint16{
-									node.RoleComputeWorker: 3,
-									node.RoleKeyManager:    1,
-								},
-							},
-						},
-					},
-				},
-				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
-					api.KindComputeExecutor: {
-						api.RoleWorker: {
-							MaxNodes: &MaxNodesConstraint{
-								Limit: 10,
-							},
-							MinPoolSize: &MinPoolSizeConstraint{
-								Limit: 5,
-							},
-							ValidatorSet: &ValidatorSetConstraint{},
-						},
-					},
-				},
-				GovernanceModel: GovernanceConsensus,
-				Staking: RuntimeStakingParameters{
-					Thresholds:                           nil,
-					Slashing:                             nil,
-					RewardSlashBadResultsRuntimePercent:  10,
-					RewardSlashEquvocationRuntimePercent: 0,
-					MinInMessageFee:                      quantity.Quantity{},
-				},
+				)
 			},
-			func(cp *ConsensusParameters) {
-				// Increase the maximum number of allowed deployments.
+			modifyParams: func(cp *ConsensusParameters) {
 				cp.MaxRuntimeDeployments = 5
 			},
-			"",
+			errContains: "",
 		},
 	} {
+		rt := newValidRuntime()
+		if tc.modify != nil {
+			tc.modify(&rt)
+		}
 		cp := ConsensusParameters{
 			MaxNodeExpiration: 10,
 			EnableRuntimeGovernanceModels: map[RuntimeGovernanceModel]bool{
@@ -634,11 +337,11 @@ func TestVerifyRuntime(t *testing.T) {
 				GovernanceRuntime:   true,
 			},
 		}
-		if tc.cpFn != nil {
-			tc.cpFn(&cp)
+		if tc.modifyParams != nil {
+			tc.modifyParams(&cp)
 		}
 
-		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &tc.rr, false, true, beacon.EpochTime(10), true)
+		err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, false, true, beacon.EpochTime(10), true)
 		if tc.errContains == "" {
 			require.NoError(err)
 			continue
