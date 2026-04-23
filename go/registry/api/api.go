@@ -1101,21 +1101,29 @@ func VerifyNodeUpdate(
 	return nil
 }
 
+// VerifyRuntimeOptions contains the options for VerifyRuntime.
+type VerifyRuntimeOptions struct {
+	// IsGenesis is true if the runtime is being verified during genesis.
+	IsGenesis bool
+	// IsSanityCheck is true if this is a sanity check and not a live transaction verification.
+	IsSanityCheck bool
+	// IsFeatureVersion242 is true if consensus version 24.2 or higher is active.
+	IsFeatureVersion242 bool
+}
+
 // VerifyRuntime verifies the given runtime.
-func VerifyRuntime( // nolint: gocyclo
+func VerifyRuntime(
 	params *ConsensusParameters,
 	logger *logging.Logger,
 	rt *Runtime,
-	isGenesis bool,
-	isSanityCheck bool,
 	now beacon.EpochTime,
-	isFeatureVersion242 bool,
+	opts VerifyRuntimeOptions,
 ) error {
 	if rt == nil {
 		return fmt.Errorf("%w: no runtime given", ErrInvalidArgument)
 	}
 
-	if err := rt.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+	if err := rt.ValidateBasic(!opts.IsGenesis && !opts.IsSanityCheck); err != nil {
 		logger.Error("RegisterRuntime: invalid runtime descriptor",
 			"runtime", rt,
 			"err", err,
@@ -1130,7 +1138,7 @@ func VerifyRuntime( // nolint: gocyclo
 		return fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
 	}
 
-	if err := rt.Genesis.SanityCheck(isGenesis); err != nil {
+	if err := rt.Genesis.SanityCheck(opts.IsGenesis); err != nil {
 		return err
 	}
 
@@ -1154,7 +1162,7 @@ func VerifyRuntime( // nolint: gocyclo
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	if err := rt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := rt.ValidateDeployments(now, params, opts.IsFeatureVersion242); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
