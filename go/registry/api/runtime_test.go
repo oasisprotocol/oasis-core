@@ -347,7 +347,7 @@ func TestVerifyRuntime(t *testing.T) {
 				tc.modifyParams(&cp)
 			}
 
-			verifyOpts := VerifyRuntimeOptions{IsFeatureVersion242: true}
+			verifyOpts := VerifyRuntimeOptions{IsFeatureVersion261: true}
 			err := VerifyRuntime(&cp, logging.GetLogger("runtime/tests"), &rt, beacon.EpochTime(10), verifyOpts)
 			if tc.errContains == "" {
 				require.NoError(t, err)

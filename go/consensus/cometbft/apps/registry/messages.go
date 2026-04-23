@@ -28,7 +28,7 @@ func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) 
 		return nil, fmt.Errorf("registry: failed to unmarshal consensus parameter changes: %w", err)
 	}
 
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (app *Application) changeParameters(ctx *api.Context, msg any, apply bool) 
 	if err = changes.Apply(params); err != nil {
 		return nil, fmt.Errorf("registry: failed to apply consensus parameter changes: %w", err)
 	}
-	if err = params.SanityCheck(isFeatureVersion242); err != nil {
+	if err = params.SanityCheck(isFeatureVersion261); err != nil {
 		return nil, fmt.Errorf("registry: failed to validate consensus parameters: %w", err)
 	}
 

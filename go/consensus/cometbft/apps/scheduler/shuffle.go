@@ -125,7 +125,7 @@ func electCommittee(
 	kind scheduler.CommitteeKind,
 	entropy []byte,
 	vrf *beacon.PrevVRFState,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) error {
 	ctx.Logger().Debug("electing committee",
 		"epoch", epoch,
@@ -134,7 +134,7 @@ func electCommittee(
 	)
 
 	// Only generic compute runtimes need to elect all the committees.
-	switch isFeatureVersion242 {
+	switch isFeatureVersion261 {
 	case false:
 		if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
 			return nil
@@ -159,7 +159,7 @@ func electCommittee(
 		kind,
 		entropy,
 		vrf,
-		isFeatureVersion242,
+		isFeatureVersion261,
 	)
 	if err != nil {
 		return err
@@ -205,7 +205,7 @@ func electCommitteeMembers( //nolint: gocyclo
 	kind scheduler.CommitteeKind,
 	entropy []byte,
 	vrf *beacon.PrevVRFState,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) ([]*scheduler.CommitteeNode, error) {
 	// Workers must be listed before backup workers, as other parts of the code depend on this
 	// order for better performance.
@@ -274,7 +274,7 @@ func electCommitteeMembers( //nolint: gocyclo
 		}
 
 		// Check general node compatibility.
-		if !isSuitableFn(ctx, n, rt, epoch, registryParameters, isFeatureVersion242) {
+		if !isSuitableFn(ctx, n, rt, epoch, registryParameters, isFeatureVersion261) {
 			continue
 		}
 

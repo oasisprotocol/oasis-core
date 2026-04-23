@@ -28,7 +28,7 @@ func (ext *secretsExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime)
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (ext *secretsExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime)
 			return fmt.Errorf("failed to query key manager master secret: %w", err)
 		}
 
-		newStatus := generateStatus(ctx, rt, oldStatus, secret, nodes, params, epoch, isFeatureVersion242)
+		newStatus := generateStatus(ctx, rt, oldStatus, secret, nodes, params, epoch, isFeatureVersion261)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,
