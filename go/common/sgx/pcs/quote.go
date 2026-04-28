@@ -474,37 +474,51 @@ func (qe *CertificationData_QEReport) CertificationDataType() CertificationDataT
 
 // UnmarshalBinary decodes CertificationData_QEReport from a byte array.
 func (qe *CertificationData_QEReport) UnmarshalBinary(data []byte) error {
-	if len(data) < reportBodySgxLen {
-		return fmt.Errorf("pcs/quote: malformed certification data")
-	}
-
 	var offset int
+
+	if len(data) < reportBodySgxLen {
+		return fmt.Errorf("pcs/quote: missing report body")
+	}
 	if err := qe.QEReport.UnmarshalBinary(data[offset : offset+reportBodySgxLen]); err != nil {
 		return err
 	}
 	offset += reportBodySgxLen
 
 	if len(data) < offset+len(qe.QEReportSignature[:]) {
-		return fmt.Errorf("pcs/quote: malformed certification data")
+		return fmt.Errorf("pcs/quote: missing report signature")
 	}
 	copy(qe.QEReportSignature[:], data[offset:])
 	offset += len(qe.QEReportSignature)
 
+	if len(data) < offset+2 {
+		return fmt.Errorf("pcs/quote: missing authentication data size")
+	}
 	authDataSize := int(binary.LittleEndian.Uint16(data[offset:]))
 	offset += 2
+
 	if len(data) < offset+authDataSize {
-		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature authentication data size")
+		return fmt.Errorf("pcs/quote: invalid authentication data size")
 	}
 	qe.AuthenticationData = make([]byte, authDataSize)
 	copy(qe.AuthenticationData[:], data[offset:offset+authDataSize])
 	offset += authDataSize
 
-	certificationDataType := CertificationDataType(binary.LittleEndian.Uint16(data[offset:]))
-	certDataSize := int(binary.LittleEndian.Uint32(data[offset+2:]))
-	if len(data) < offset+6+certDataSize {
-		return fmt.Errorf("pcs/quote: invalid ECDSA-P256 quote signature certification data size")
+	if len(data) < offset+2 {
+		return fmt.Errorf("pcs/quote: missing certification data type")
 	}
-	certData := data[offset+6 : offset+6+certDataSize]
+	certificationDataType := CertificationDataType(binary.LittleEndian.Uint16(data[offset:]))
+	offset += 2
+
+	if len(data) < offset+4 {
+		return fmt.Errorf("pcs/quote: missing certification data size")
+	}
+	certDataSize := int(binary.LittleEndian.Uint32(data[offset:]))
+	offset += 4
+
+	if len(data) < offset+certDataSize {
+		return fmt.Errorf("pcs/quote: invalid certification data size")
+	}
+	certData := data[offset : offset+certDataSize]
 
 	switch certificationDataType {
 	case CertificationDataPPIDCleartext, CertificationDataPPIDEncryptedRSA2048, CertificationDataPPIDEncryptedRSA3072:
