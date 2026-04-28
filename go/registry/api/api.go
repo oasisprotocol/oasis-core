@@ -503,7 +503,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	epoch beacon.EpochTime,
 	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) (*node.Node, []*Runtime, error) {
 	var n node.Node
 	if sigNode == nil {
@@ -581,7 +581,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	switch len(n.Runtimes) {
 	case 0:
 		runtimesRequiredRoles := RuntimesRequiredRoles
-		if !isFeatureVersion242 {
+		if !isFeatureVersion261 {
 			runtimesRequiredRoles = DeprecatedRuntimesRequiredRoles
 		}
 		if n.HasRoles(runtimesRequiredRoles) {
@@ -629,7 +629,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// both validators and compute nodes and have out of date attestation evidence. Removing
 			// such nodes could lead to consensus not having the proper majority. This is safe as
 			// attestation evidence is independently verified before scheduling committees.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion242); err != nil && !isSanityCheck && !isGenesis {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height, isFeatureVersion261); err != nil && !isSanityCheck && !isGenesis {
 				return nil, nil, err
 			}
 
@@ -811,7 +811,7 @@ func VerifyNodeRuntimeEnclaveIDs(
 	teeCfg *node.TEEFeatures,
 	ts time.Time,
 	height uint64,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) error {
 	// Verify that the node is running on the same hardware as the runtime.
 	hw := node.TEEHardwareInvalid
@@ -840,7 +840,7 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion242); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion261); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"node_id", nodeID,
 				"runtime_id", rt.ID,
@@ -1107,8 +1107,8 @@ type VerifyRuntimeOptions struct {
 	IsGenesis bool
 	// IsSanityCheck is true if this is a sanity check and not a live transaction verification.
 	IsSanityCheck bool
-	// IsFeatureVersion242 is true if consensus version 24.2 or higher is active.
-	IsFeatureVersion242 bool
+	// IsFeatureVersion261 is true if consensus version 26.1 or higher is active.
+	IsFeatureVersion261 bool
 }
 
 // VerifyRuntime verifies the given runtime.
@@ -1162,7 +1162,7 @@ func VerifyRuntime(
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	if err := rt.ValidateDeployments(now, params, opts.IsFeatureVersion242); err != nil {
+	if err := rt.ValidateDeployments(now, params, opts.IsFeatureVersion261); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
@@ -1236,7 +1236,7 @@ func VerifyRuntimeUpdate(
 	currentRt, newRt *Runtime,
 	now beacon.EpochTime,
 	params *ConsensusParameters,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) error {
 	if !currentRt.ID.Equal(&newRt.ID) {
 		logger.Error("RegisterRuntime: trying to update runtime ID",
@@ -1292,7 +1292,7 @@ func VerifyRuntimeUpdate(
 
 	// Validate the deployments.
 	activeDeployment := currentRt.ActiveDeployment(now)
-	if err := currentRt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := currentRt.ValidateDeployments(now, params, isFeatureVersion261); err != nil {
 		// Invariant violation, this should NEVER happen.
 		logger.Error("RegisterRuntime: malformed deployments present in state",
 			"runtime_id", currentRt.ID,
@@ -1306,7 +1306,7 @@ func VerifyRuntimeUpdate(
 	}
 
 	newActiveDeployment := newRt.ActiveDeployment(now)
-	if err := newRt.ValidateDeployments(now, params, isFeatureVersion242); err != nil {
+	if err := newRt.ValidateDeployments(now, params, isFeatureVersion261); err != nil {
 		logger.Error("RegisterRuntime: malformed deployments",
 			"runtime_id", currentRt.ID,
 			"err", err,

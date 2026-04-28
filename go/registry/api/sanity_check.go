@@ -16,7 +16,7 @@ import (
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.
-func (p *ConsensusParameters) SanityCheck(isFeatureVersion242 bool) error {
+func (p *ConsensusParameters) SanityCheck(isFeatureVersion261 bool) error {
 	if !flags.DebugDontBlameOasis() {
 		if p.DebugAllowUnroutableAddresses || p.DebugDeployImmediately {
 			return fmt.Errorf("one or more unsafe debug flags set")
@@ -29,7 +29,7 @@ func (p *ConsensusParameters) SanityCheck(isFeatureVersion242 bool) error {
 	if p.TEEFeatures != nil {
 		defaultPolicy := p.TEEFeatures.SGX.DefaultPolicy
 		if defaultPolicy != nil {
-			if err := defaultPolicy.Validate(isFeatureVersion242); err != nil {
+			if err := defaultPolicy.Validate(isFeatureVersion261); err != nil {
 				return err
 			}
 		}
@@ -145,12 +145,12 @@ func SanityCheckRuntimes(
 	suspendedRuntimes []*Runtime,
 	isGenesis bool,
 	now beacon.EpochTime,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) (RuntimeLookup, error) {
 	verifyOpts := VerifyRuntimeOptions{
 		IsGenesis:           isGenesis,
 		IsSanityCheck:       true,
-		IsFeatureVersion242: isFeatureVersion242,
+		IsFeatureVersion261: isFeatureVersion261,
 	}
 
 	// First go through all runtimes and perform general sanity checks.
@@ -202,7 +202,7 @@ func SanityCheckNodes(
 	epoch beacon.EpochTime,
 	now time.Time,
 	height uint64,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) (NodeLookup, error) { // nolint: gocyclo
 
 	nodeLookup := &sanityCheckNodeLookup{
@@ -237,7 +237,7 @@ func SanityCheckNodes(
 			epoch,
 			runtimesLookup,
 			nodeLookup,
-			isFeatureVersion242,
+			isFeatureVersion261,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("registry: node sanity check failed: ID: %s, error: %w", n.ID.String(), err)

@@ -61,12 +61,12 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
 
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
 	if err != nil {
 		return err
 	}
 
-	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false, now, isFeatureVersion242)
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false, now, isFeatureVersion261)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
@@ -76,7 +76,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.LastHeight()), isFeatureVersion242)
+	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now, ctx.Now(), uint64(ctx.LastHeight()), isFeatureVersion261)
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}

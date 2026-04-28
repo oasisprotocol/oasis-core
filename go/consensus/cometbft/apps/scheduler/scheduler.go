@@ -260,8 +260,8 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		return fmt.Errorf("cometbft/scheduler: couldn't elect validators: %w", err)
 	}
 
-	// Check if the current feature version is at least 24.2.
-	isFeatureVersion242, err := features.IsFeatureVersion(ctx, migrations.Version242)
+	// Check if the current feature version is at least 26.1.
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (app *Application) elect(ctx *api.Context, epoch beacon.EpochTime, reward b
 		committeeNodes,
 		entropy,
 		vrf,
-		isFeatureVersion242,
+		isFeatureVersion261,
 	); err != nil {
 		return fmt.Errorf("cometbft/scheduler: couldn't elect committees: %w", err)
 	}
@@ -398,7 +398,7 @@ func isSuitableExecutorWorker(
 	rt *registry.Runtime,
 	epoch beacon.EpochTime,
 	registryParams *registry.ConsensusParameters,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) bool {
 	if !n.node.HasRoles(node.RoleComputeWorker) {
 		return false
@@ -439,7 +439,7 @@ func isSuitableExecutorWorker(
 				uint64(ctx.LastHeight()),
 				activeDeployment.TEE,
 				n.node.ID,
-				isFeatureVersion242,
+				isFeatureVersion261,
 			); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestation",
 					"err", err,
@@ -467,7 +467,7 @@ func (app *Application) electCommittees(
 	nodes []*nodeWithStatus,
 	entropy []byte,
 	vrf *beacon.PrevVRFState,
-	isFeatureVersion242 bool,
+	isFeatureVersion261 bool,
 ) error {
 	runtimes, err := fetchRuntimes(ctx)
 	if err != nil {
@@ -494,7 +494,7 @@ func (app *Application) electCommittees(
 				kind,
 				entropy,
 				vrf,
-				isFeatureVersion242,
+				isFeatureVersion261,
 			); err != nil {
 				return err
 			}

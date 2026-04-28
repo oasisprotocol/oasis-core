@@ -97,7 +97,7 @@ func (sc *SGXConstraints) MarshalCBOR() ([]byte, error) {
 }
 
 // ValidateBasic performs basic structure validity checks.
-func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bool) error {
+func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion261 bool) error {
 	if cfg == nil {
 		cfg = &emptyFeatures
 	}
@@ -121,7 +121,7 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion242 bo
 	}
 
 	// Check that policy is compliant with the current feature version.
-	if err := sc.Policy.Validate(isFeatureVersion242); err != nil {
+	if err := sc.Policy.Validate(isFeatureVersion261); err != nil {
 		return fmt.Errorf("invalid policy: %w", err)
 	}
 

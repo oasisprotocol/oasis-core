@@ -238,9 +238,9 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	return nil
 }
 
-type upgrade242Checker struct{}
+type upgrade261Checker struct{}
 
-func (c *upgrade242Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (c *upgrade261Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	// Check consensus parameters.
 	consParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -255,15 +255,15 @@ func (c *upgrade242Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 	return nil
 }
 
-func (c *upgrade242Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (c *upgrade261Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	// Check updated consensus parameters.
 	consParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("can't get consensus parameters: %w", err)
 	}
-	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != migrations.Version242 {
+	if consParams.Parameters.FeatureVersion == nil || *consParams.Parameters.FeatureVersion != migrations.Version261 {
 		return fmt.Errorf("consensus parameter FeatureVersion not updated correctly (expected: %s actual: %s)",
-			migrations.Version242,
+			migrations.Version261,
 			consParams.Parameters.FeatureVersion,
 		)
 	}
@@ -278,8 +278,8 @@ var (
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{}, false)
 	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
 	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{}, false)
-	// NodeUpgradeConsensus242 is the node upgrade scenario for migrating to consensus 24.2.
-	NodeUpgradeConsensus242 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus242, &upgrade242Checker{}, false)
+	// NodeUpgradeConsensus261 is the node upgrade scenario for migrating to consensus 26.1.
+	NodeUpgradeConsensus261 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus261, &upgrade261Checker{}, false)
 
 	malformedDescriptor = []byte(`{
 		"v": 1,

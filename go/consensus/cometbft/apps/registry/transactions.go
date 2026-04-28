@@ -228,9 +228,9 @@ func (app *Application) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	isFeatureVersion242 := true
+	isFeatureVersion261 := true
 	if !ctx.IsInitChain() {
-		isFeatureVersion242, err = features.IsFeatureVersion(ctx, migrations.Version242)
+		isFeatureVersion261, err = features.IsFeatureVersion(ctx, migrations.Version261)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		epoch,
 		state,
 		state,
-		isFeatureVersion242,
+		isFeatureVersion261,
 	)
 	if err != nil {
 		return err
@@ -590,15 +590,15 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, err
 	}
 
-	isFeatureVersion242 := true
+	isFeatureVersion261 := true
 	if !ctx.IsInitChain() {
-		isFeatureVersion242, err = features.IsFeatureVersion(ctx, migrations.Version242)
+		isFeatureVersion261, err = features.IsFeatureVersion(ctx, migrations.Version261)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	verifyOpts := registry.VerifyRuntimeOptions{IsGenesis: ctx.IsInitChain(), IsFeatureVersion242: isFeatureVersion242}
+	verifyOpts := registry.VerifyRuntimeOptions{IsGenesis: ctx.IsInitChain(), IsFeatureVersion261: isFeatureVersion261}
 	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, epoch, verifyOpts); err != nil {
 		return nil, err
 	}
@@ -649,7 +649,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 	switch {
 	case existingRt != nil:
 		// Existing runtime, verify update.
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch, params, isFeatureVersion242)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch, params, isFeatureVersion261)
 	default:
 		// New runtime, verify new descriptor.
 		err = registry.VerifyRuntimeNew(ctx.Logger(), rt, epoch, params, ctx.IsInitChain())
@@ -780,7 +780,7 @@ func (app *Application) registerRuntime( // nolint: gocyclo
 		return nil, fmt.Errorf("failed to set runtime: %w", err)
 	}
 
-	switch isFeatureVersion242 {
+	switch isFeatureVersion261 {
 	case true:
 		switch existingRt {
 		case nil:

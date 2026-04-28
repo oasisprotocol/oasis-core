@@ -66,8 +66,8 @@ type Policy struct {
 }
 
 // Validate validates the policy.
-func (p *Policy) Validate(isFeatureVersion242 bool) error {
-	if isFeatureVersion242 {
+func (p *Policy) Validate(isFeatureVersion261 bool) error {
+	if isFeatureVersion261 {
 		return nil
 	}
 
