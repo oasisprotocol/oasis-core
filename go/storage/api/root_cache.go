@@ -9,19 +9,17 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
-// RootCache is a LRU based tree cache.
+// RootCache helps accessing and applying roots in the local DB.
 type RootCache struct {
 	localDB nodedb.NodeDB
 }
 
-// GetTree gets a tree entry from the cache by the root iff present, or creates
-// a new tree with the specified root in the node database.
+// GetTree returns a tree for the given root.
 func (rc *RootCache) GetTree(root Root) (mkvs.Tree, error) {
 	return mkvs.NewWithRoot(nil, rc.localDB, root), nil
 }
 
-// Apply applies the write log, bypassing the apply operation iff the new root
-// already is in the node database.
+// Apply applies a write log unless the expected new root already exists locally.
 func (rc *RootCache) Apply(
 	ctx context.Context,
 	root Root,
@@ -35,24 +33,24 @@ func (rc *RootCache) Apply(
 
 	r := expectedNewRoot.Hash
 
-	// Check if we already have the expected new root in our local DB.
-	if !rc.localDB.HasRoot(expectedNewRoot) {
-		// We don't, apply operations.
-		tree := mkvs.NewWithRoot(nil, rc.localDB, root)
-		defer tree.Close()
+	if rc.localDB.HasRoot(expectedNewRoot) {
+		return &r, nil
+	}
 
-		if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
-			return nil, err
-		}
+	tree := mkvs.NewWithRoot(nil, rc.localDB, root)
+	defer tree.Close()
 
-		_, err := tree.CommitKnown(ctx, expectedNewRoot)
-		switch err {
-		case nil:
-		case mkvs.ErrKnownRootMismatch:
-			return nil, ErrExpectedRootMismatch
-		default:
-			return nil, err
-		}
+	if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
+		return nil, err
+	}
+
+	_, err := tree.CommitKnown(ctx, expectedNewRoot)
+	switch err {
+	case nil:
+	case mkvs.ErrKnownRootMismatch:
+		return nil, ErrExpectedRootMismatch
+	default:
+		return nil, err
 	}
 
 	return &r, nil
