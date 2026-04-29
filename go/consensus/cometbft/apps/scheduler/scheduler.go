@@ -433,14 +433,14 @@ func isSuitableExecutorWorker(
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(
-				registryParams.TEEFeatures,
-				ctx.Now(),
-				uint64(ctx.LastHeight()),
-				activeDeployment.TEE,
-				n.node.ID,
-				isFeatureVersion261,
-			); err != nil {
+			if err := nrt.Capabilities.TEE.Verify(node.CapabilityTEEVerifyParams{
+				Features:            registryParams.TEEFeatures,
+				Now:                 ctx.Now(),
+				Height:              uint64(ctx.LastHeight()),
+				Constraints:         activeDeployment.TEE,
+				NodeID:              n.node.ID,
+				IsFeatureVersion261: isFeatureVersion261,
+			}); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestation",
 					"err", err,
 					"node_id", n.node.ID,

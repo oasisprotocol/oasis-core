@@ -218,9 +218,19 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 	n.svcMgr.Register(n.RuntimeRegistry)
 
+	// Determine whether hosted RONL components will be registered on the
+	// consensus layer. This is the case for compute and observer nodes.
+	var willRegisterComputeRuntime bool
+	switch config.GlobalConfig.Mode {
+	case config.ModeCompute, config.ModeObserver:
+		willRegisterComputeRuntime = true
+	default:
+	}
+
 	// Initialize the common worker.
 	commonCfg := workerCommon.Config{
-		TxPool: config.GlobalConfig.Runtime.TxPool,
+		TxPool:                     config.GlobalConfig.Runtime.TxPool,
+		WillRegisterComputeRuntime: willRegisterComputeRuntime,
 	}
 	n.CommonWorker, err = workerCommon.New(
 		commonCfg,

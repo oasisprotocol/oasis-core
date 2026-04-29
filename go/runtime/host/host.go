@@ -22,6 +22,9 @@ type Config struct {
 	// ID is the runtime identifier.
 	ID common.Namespace
 
+	// Attestation contains attestation related configuration for the provisioned component.
+	Attestation AttestationCfg
+
 	// Component is the component that should be provisioned.
 	Component *bundle.ExplodedComponent
 
@@ -36,6 +39,13 @@ type Config struct {
 
 	// Log is the runtime log handle to use for writing logs to this runtime.
 	Log *log.Log
+}
+
+// AttestationCfg contains attestation related configuration for the provisioned component.
+type AttestationCfg struct {
+	// UseKMAPolicy specifies if the key manager access policy
+	// should be respected during local attestation verification.
+	UseKMAPolicy bool
 }
 
 // Provisioner is the runtime provisioner interface.
