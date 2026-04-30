@@ -555,11 +555,11 @@ func (d *badgerNodeDB) Prune(version uint64) error {
 
 	// Delete data for all root types that cannot have children.
 	for _, rootType := range api.RootTypesWithPolicy(func(p *api.RootPolicy) bool { return p.NoChildRoots }) {
-		// Delete all finalized nodes.
+		// Delete all finalized nodes for this version.
 		wtx := d.db.NewTransactionAt(versionToTs(version), false)
 		defer wtx.Discard()
 
-		prefix := finalizedNodeKeyFmt.Encode(byte(rootType))
+		prefix := finalizedNodeKeyFmt.Encode(byte(rootType), encodeVersionKey(version))
 		it := wtx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 		defer it.Close()
 
