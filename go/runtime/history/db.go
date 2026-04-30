@@ -243,6 +243,40 @@ func (d *DB) getEarliestBlock() (*roothash.AnnotatedBlock, error) {
 	return &blk, nil
 }
 
+func (d *DB) pruneBefore(roundLimit uint64) (uint64, error) {
+	var pruned uint64
+	if err := d.db.Update(func(tx *badger.Txn) error {
+		it := tx.NewIterator(badger.IteratorOptions{
+			Prefix: blockKeyFmt.Encode(),
+		})
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+
+			var round uint64
+			if !blockKeyFmt.Decode(item.Key(), &round) {
+				panic("bad iterator: unable to decode key") // cannot happen.
+			}
+
+			if round >= roundLimit {
+				break
+			}
+
+			if err := tx.Delete(item.KeyCopy(nil)); err != nil {
+				return err
+			}
+
+			pruned++
+		}
+
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	return pruned, nil
+}
+
 func (d *DB) getLastBlock() (*roothash.AnnotatedBlock, error) {
 	var blk roothash.AnnotatedBlock
 	txErr := d.db.View(func(tx *badger.Txn) error {

@@ -35,6 +35,9 @@ type History interface {
 	// Pruner returns the history pruner.
 	Pruner() Pruner
 
+	// PruneBefore prunes runtime history before the given round.
+	PruneBefore(round uint64) (uint64, error)
+
 	// Close closes the history keeper.
 	Close()
 }
@@ -302,6 +305,10 @@ func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, er
 	return annBlk.Block, nil
 }
 
+func (h *runtimeHistory) PruneBefore(round uint64) (uint64, error) {
+	return h.db.pruneBefore(round)
+}
+
 // CanPruneConsenus returns no error when the specified consensus height has been already reindexed.
 //
 // Implements consensus.api.StatePruneHandler
@@ -367,7 +374,7 @@ func (h *runtimeHistory) pruneWorker() {
 //
 // If honorStorageSync is true, synced block notifications and block lookups honor the last storage round
 // which was synced to runtime storage (see [History.StorageSyncCheckpoint]).
-func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, honorStorageSync bool) (History, error) {
+func New(runtimeID common.Namespace, dataDir string, prunerFactory PrunerFactory, honorStorageSync bool) (*runtimeHistory, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
