@@ -421,6 +421,8 @@ func RegisterScenarios() error {
 		TxSourceMultiShortSGX,
 		// Observer tests
 		ObserverMode,
+		// SGXConstraints tests.
+		KeyManagerAccessPolicy,
 	} {
 		if err := cmd.RegisterNondefault(s); err != nil {
 			return err

@@ -48,7 +48,7 @@ func GetQuotePolicy(
 				return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
 			}
 
-			return sc.Policy, nil
+			return sc.ResolvePolicy(cfg.Attestation.UseKMAPolicy), nil
 		}
 		return fallbackPolicy, nil
 	case component.ROFL:

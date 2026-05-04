@@ -23,6 +23,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
@@ -46,6 +47,14 @@ type NodeHooks interface {
 	Initialized() <-chan struct{}
 }
 
+// Config contains committee node specific configuration.
+type Config struct {
+	ChainContext               string
+	Identity                   *identity.Identity
+	TxPool                     tpConfig.Config
+	WillRegisterComputeRuntime bool
+}
+
 // Node is a committee node.
 type Node struct {
 	*runtimeRegistry.RuntimeHostNode
@@ -63,6 +72,8 @@ type Node struct {
 	Group            *Group
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
+
+	willRegisterComputeRuntime bool
 
 	services     *service.Group
 	roflNotifier *runtimeRegistry.ROFLNotifier
@@ -388,7 +399,8 @@ func (n *Node) worker() { //nolint: gocyclo
 
 	// Provision all known components.
 	for _, comp := range bundleRegistry.Components(n.Runtime.ID()) {
-		if err := n.ProvisionHostedRuntimeComponent(comp); err != nil {
+		attestCfg := n.attestationCfg(comp)
+		if err := n.ProvisionHostedRuntimeComponent(comp, attestCfg); err != nil {
 			n.logger.Error("failed to provision runtime component",
 				"err", err,
 				"id", comp.ID(),
@@ -471,7 +483,8 @@ func (n *Node) worker() { //nolint: gocyclo
 			switch {
 			case compNotify.Added != nil:
 				// Received a new version of a runtime component.
-				if err := n.ProvisionHostedRuntimeComponent(compNotify.Added); err != nil {
+				attestCfg := n.attestationCfg(compNotify.Added)
+				if err := n.ProvisionHostedRuntimeComponent(compNotify.Added, attestCfg); err != nil {
 					n.logger.Error("failed to provision hosted runtime",
 						"err", err,
 						"id", compNotify.Added.ID(),
@@ -492,6 +505,12 @@ func (n *Node) worker() { //nolint: gocyclo
 				}
 			}
 		}
+	}
+}
+
+func (n *Node) attestationCfg(comp *bundle.ExplodedComponent) host.AttestationCfg {
+	return host.AttestationCfg{
+		UseKMAPolicy: comp.ID().IsRONL() && n.willRegisterComputeRuntime,
 	}
 }
 
@@ -628,16 +647,14 @@ func (n *Node) handleDispatchInfo() {
 }
 
 func NewNode(
-	chainContext string,
+	cfg Config,
 	runtime runtimeRegistry.Runtime,
 	provisioner host.Provisioner,
 	rtRegistry runtimeRegistry.Registry,
-	identity *identity.Identity,
 	keymanager keymanager.Backend,
 	consensus consensus.Service,
 	lightProvider consensus.LightProvider,
 	p2pHost p2pAPI.Service,
-	txPoolCfg tpConfig.Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -646,36 +663,37 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), identity, consensus, p2pHost)
+	group, err := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 
-	txTopic := p2pProtocol.NewTopicKindTxID(chainContext, runtime.ID())
+	txTopic := p2pProtocol.NewTopicKindTxID(cfg.ChainContext, runtime.ID())
 
 	n := &Node{
-		ChainContext:    chainContext,
-		Runtime:         runtime,
-		RuntimeRegistry: rtRegistry,
-		Identity:        identity,
-		KeyManager:      keymanager,
-		Consensus:       consensus,
-		LightProvider:   lightProvider,
-		Group:           group,
-		P2P:             p2pHost,
-		txTopic:         txTopic,
-		ctx:             ctx,
-		cancelCtx:       cancel,
-		stopCh:          make(chan struct{}),
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		dispatchInfoCh:  make(chan struct{}, 1),
-		logger:          logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		ChainContext:               cfg.ChainContext,
+		Runtime:                    runtime,
+		RuntimeRegistry:            rtRegistry,
+		Identity:                   cfg.Identity,
+		KeyManager:                 keymanager,
+		Consensus:                  consensus,
+		LightProvider:              lightProvider,
+		Group:                      group,
+		P2P:                        p2pHost,
+		willRegisterComputeRuntime: cfg.WillRegisterComputeRuntime,
+		txTopic:                    txTopic,
+		ctx:                        ctx,
+		cancelCtx:                  cancel,
+		stopCh:                     make(chan struct{}),
+		quitCh:                     make(chan struct{}),
+		initCh:                     make(chan struct{}),
+		dispatchInfoCh:             make(chan struct{}, 1),
+		logger:                     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
 	// Prepare the key manager client wrapper.
-	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
+	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, cfg.ChainContext, n.logger)
 
 	// Prepare the runtime host handler.
 	handler := runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, consensus)
@@ -698,13 +716,13 @@ func NewNode(
 	n.services = service.NewGroup(notifier, lbNotifier, kmNotifier, n.roflNotifier)
 
 	// Prepare transaction pool.
-	n.TxPool = txpool.New(runtime.ID(), txPoolCfg, rhn.GetHostedRuntime(), runtime.History(), n)
+	n.TxPool = txpool.New(runtime.ID(), cfg.TxPool, rhn.GetHostedRuntime(), runtime.History(), n)
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})
 
 	// Register transaction sync service.
-	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), n.TxPool))
+	p2pHost.RegisterProtocolServer(txsync.NewServer(cfg.ChainContext, runtime.ID(), n.TxPool))
 
 	return n, nil
 }

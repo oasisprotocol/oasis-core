@@ -840,7 +840,14 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID, isFeatureVersion261); err != nil {
+		if err := rt.Capabilities.TEE.Verify(node.CapabilityTEEVerifyParams{
+			Features:            teeCfg,
+			Now:                 ts,
+			Height:              height,
+			Constraints:         rtVersionInfo.TEE,
+			NodeID:              nodeID,
+			IsFeatureVersion261: isFeatureVersion261,
+		}); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"node_id", nodeID,
 				"runtime_id", rt.ID,

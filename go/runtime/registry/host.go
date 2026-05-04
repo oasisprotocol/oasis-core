@@ -44,7 +44,7 @@ func NewRuntimeHostNode(runtime Runtime, provisioner host.Provisioner, handler h
 }
 
 // ProvisionHostedRuntimeComponent provisions the given runtime component.
-func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedComponent) error {
+func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedComponent, attestationCfg host.AttestationCfg) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -67,6 +67,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntimeComponent(comp *bundle.ExplodedC
 
 	cfg := host.Config{
 		ID:             n.runtime.ID(),
+		Attestation:    attestationCfg,
 		Component:      comp,
 		MessageHandler: handler,
 		LocalConfig:    getLocalConfig(n.runtime.ID(), comp.ID()),
