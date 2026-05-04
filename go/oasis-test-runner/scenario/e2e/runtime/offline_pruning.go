@@ -130,6 +130,23 @@ func (sc *offlinePruningImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return fmt.Errorf("consensus block history not pruned as expected: %w", err)
 	}
 
+	beforeRuntimePrune := beforePrune.Runtimes[KeyValueRuntimeID]
+	afterRuntimePrune := afterPrune.Runtimes[KeyValueRuntimeID]
+
+	if err := ensurePruned( // Runtime state
+		beforeRuntimePrune.StateDB.LatestVersion-offlinePruningNumKept,
+		afterRuntimePrune.StateDB.LastRetainedVersion,
+	); err != nil {
+		return fmt.Errorf("runtime state not pruned as expected: %w", err)
+	}
+
+	if err := ensurePruned( // Runtime light history
+		beforeRuntimePrune.LightHistory.LatestVersion-offlinePruningNumKept,
+		afterRuntimePrune.LightHistory.LastRetainedVersion,
+	); err != nil {
+		return fmt.Errorf("runtime light history not pruned as expected: %w", err)
+	}
+
 	if err := client.Start(); err != nil {
 		return fmt.Errorf("failed to start client node: %w", err)
 	}
@@ -172,6 +189,8 @@ func (sc *offlinePruningImpl) setPruningConfig(node *oasis.Node, numKept uint64)
 	}
 	cfg.Consensus.Prune.Strategy = abci.PruneKeepN.String()
 	cfg.Consensus.Prune.NumKept = numKept
+	cfg.Runtime.Prune.Strategy = "keep_last"
+	cfg.Runtime.Prune.NumKept = numKept
 
 	cfgBytes, err = yaml.Marshal(&cfg)
 	if err != nil {
@@ -187,7 +206,7 @@ func (sc *offlinePruningImpl) setPruningConfig(node *oasis.Node, numKept uint64)
 func (sc *offlinePruningImpl) runOfflinePruning(childEnv *env.Env, node *oasis.Node) error {
 	args := []string{
 		"storage",
-		"prune-experimental",
+		"prune",
 		"--config", node.ConfigFile(),
 	}
 	if err := oasisCli.RunSubCommand(childEnv, sc.Logger, "offline-pruning", sc.Net.Config().NodeBinary, args); err != nil {

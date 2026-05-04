@@ -18,9 +18,9 @@ var pruneDiskSyncInterval uint64 = 10_000
 
 func newPruneCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "prune-experimental",
+		Use:   "prune",
 		Args:  cobra.NoArgs,
-		Short: "EXPERIMENTAL: trigger pruning for all consensus databases",
+		Short: "trigger pruning of all databases",
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			if err := cmdCommon.Init(); err != nil {
 				cmdCommon.EarlyLogAndExit(err)
@@ -37,24 +37,42 @@ func newPruneCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if config.GlobalConfig.Consensus.Prune.Strategy == cmtConfig.PruneStrategyNone {
-				logger.Info("skipping consensus pruning since disabled in the config")
-				return nil
-			}
-
 			runtimes, err := registry.GetConfiguredRuntimeIDs()
 			if err != nil {
 				return fmt.Errorf("failed to get configured runtimes: %w", err)
 			}
 
-			logger.Info("Starting consensus databases pruning. This may take a while...")
+			logger.Info("Starting databases pruning. This may take a while...")
 
-			if err := pruneConsensusDBs(
-				cmdCommon.DataDir(),
+			dataDir := cmdCommon.DataDir()
+
+			// Consensus pruning
+			if config.GlobalConfig.Consensus.Prune.Strategy == cmtConfig.PruneStrategyNone {
+				logger.Info("skipping consensus pruning since disabled in the config")
+			} else if err := pruneConsensusDBs(
+				dataDir,
 				config.GlobalConfig.Consensus.Prune.NumKept,
 				runtimes,
 			); err != nil {
 				return fmt.Errorf("failed to prune consensus databases: %w", err)
+			}
+
+			// Runtime pruning
+			if len(runtimes) == 0 {
+				return nil
+			}
+			if config.GlobalConfig.Runtime.Prune.Strategy == "none" {
+				logger.Info("skipping runtime pruning since disabled in the config")
+				return nil
+			}
+			for _, rt := range runtimes {
+				if err := pruneRuntimeDBs(
+					dataDir,
+					rt,
+					config.GlobalConfig.Runtime.Prune.NumKept,
+				); err != nil {
+					return fmt.Errorf("failed to prune runtime databases (runtime ID: %s): %w", rt, err)
+				}
 			}
 
 			return nil
@@ -209,5 +227,38 @@ func pruneCometDBs(dataDir string, retainHeight int64) error {
 	}
 	logger.Info("state db pruning finished")
 
+	return nil
+}
+
+func pruneRuntimeDBs(dataDir string, runtimeID common.Namespace, numKept uint64) error {
+	ndb, err := openRuntimeStateDB(dataDir, runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to open runtime StateDB: %w", err)
+	}
+	defer ndb.Close()
+	latest, ok := ndb.GetLatestVersion()
+	if !ok {
+		logger.Info("skipping pruning as state db is empty")
+		return nil
+	}
+
+	if latest < numKept {
+		logger.Info("skipping pruning as the latest version is smaller than the number of versions to keep")
+		return nil
+	}
+
+	retainRound := latest - numKept
+	if err := pruneNodeDB(ndb, retainRound); err != nil {
+		return fmt.Errorf("failed to prune nodeDB: %w", err)
+	}
+
+	history, err := openRuntimeLightHistory(dataDir, runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to open runtime light history: %w", err)
+	}
+	defer history.Close()
+	if _, err := history.PruneBefore(retainRound); err != nil {
+		return fmt.Errorf("failed to prune runtime history before round %d: %w", retainRound, err)
+	}
 	return nil
 }

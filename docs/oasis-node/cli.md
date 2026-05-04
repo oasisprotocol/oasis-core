@@ -365,19 +365,19 @@ may stay constant or not be reclaimed for a very long time.
 This command gives operators manual control to release disk space during
 maintenance periods.
 
-### prune-experimental
+### prune
 
 Run (when the node is not running):
 
 ```sh
-oasis-node storage prune-experimental --config /path/to/config/file
+oasis-node storage prune --config /path/to/config/file
 ```
 
-to trigger manual pruning of consensus database instances:
+to trigger manual pruning of all configured database instances:
 
 ```sh
-{"caller":"storage.go:433","level":"info","module":"cmd/storage", \
-"msg":"Starting consensus databases pruning. This may take a while...", \
+{"caller":"prune.go:47","level":"info","module":"cmd/storage", \
+"msg":"Starting databases pruning. This may take a while...", \
 "ts":"2025-10-23T11:02:11.129822974Z"}
 ```
 
