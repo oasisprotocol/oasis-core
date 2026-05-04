@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -77,11 +80,14 @@ func InternalSocketPath() string {
 func IsNodeRunning() (bool, error) {
 	path := InternalSocketPath()
 
-	if _, err := os.Stat(path); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
-		return false, fmt.Errorf("stat %s: %w", path, err)
+	conn, err := net.DialTimeout("unix", path, time.Second)
+	switch {
+	case err == nil:
+		_ = conn.Close()
+	case errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED):
+		return false, nil
+	default:
+		return false, fmt.Errorf("failed to dial internal socket %s: %w", path, err)
 	}
 
 	return true, nil
