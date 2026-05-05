@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	cometbftDB "github.com/cometbft/cometbft-db"
 	cmtCfg "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/state"
+	cmtState "github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -43,7 +44,7 @@ func openConsensusNodeDB(dataDir string) (api.NodeDB, func(), error) {
 	return ndb, close, nil
 }
 
-func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
+func openConsensusBlockstoreDB(dataDir string) (cometbftDB.DB, error) {
 	cmtConfig := cmtCfg.DefaultConfig()
 	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
 
@@ -51,17 +52,18 @@ func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain db provider: %w", err)
 	}
+	return cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
+}
 
-	blockstoreDB, err := cmtDB.OpenBlockstoreDB(dbProvider, cmtConfig)
+func openConsensusBlockstore(dataDir string) (*store.BlockStore, error) {
+	blockstoreDB, err := openConsensusBlockstoreDB(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open blockstore: %w", err)
 	}
-	blockstore := store.NewBlockStore(blockstoreDB)
-
-	return blockstore, nil
+	return store.NewBlockStore(blockstoreDB), nil
 }
 
-func openConsensusStatestore(dataDir string) (state.Store, error) {
+func openConsensusStateDB(dataDir string) (cometbftDB.DB, error) {
 	cmtConfig := cmtCfg.DefaultConfig()
 	cmtConfig.SetRoot(filepath.Join(dataDir, cmtCommon.StateDir))
 
@@ -69,7 +71,11 @@ func openConsensusStatestore(dataDir string) (state.Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain db provider: %w", err)
 	}
-	stateDB, err := cmtDB.OpenStateDB(dbProvider, cmtConfig)
+	return cmtDB.OpenStateDB(dbProvider, cmtConfig)
+}
+
+func openConsensusStatestore(dataDir string) (cmtState.Store, error) {
+	stateDB, err := openConsensusStateDB(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open state db: %w", err)
 	}

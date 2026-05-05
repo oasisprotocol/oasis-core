@@ -1,10 +1,14 @@
 package oasis
 
 import (
+	"context"
+	"fmt"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -44,6 +48,52 @@ type Controller struct {
 // Close closes the gRPC connection with the node the controller is controlling.
 func (c *Controller) Close() {
 	c.conn.Close()
+}
+
+// WaitConsensusHeight waits until the controller observes at least specified consensus height.
+func (c *Controller) WaitConsensusHeight(ctx context.Context, height int64) error {
+	blkCh, sub, err := c.Consensus.WatchBlocks(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to watch consensus blocks: %w", err)
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case blk, ok := <-blkCh:
+			if !ok {
+				return fmt.Errorf("consensus block channel closed")
+			}
+			if blk.Height >= height {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// WaitRuntimeRound waits until the controller observes at least specified runtime round.
+func (c *Controller) WaitRuntimeRound(ctx context.Context, runtimeID common.Namespace, round uint64) error {
+	blkCh, sub, err := c.RuntimeClient.WatchBlocks(ctx, runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to watch runtime blocks: %w", err)
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case annBlk, ok := <-blkCh:
+			if !ok {
+				return fmt.Errorf("runtime block channel closed")
+			}
+			if annBlk.Block.Header.Round >= round {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // NewController creates a new node controller given the path to
