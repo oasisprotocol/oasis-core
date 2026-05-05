@@ -14,6 +14,8 @@ import (
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
+var pruneDiskSyncInterval uint64 = 10_000
+
 func newPruneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prune-experimental",
@@ -91,7 +93,7 @@ func pruneConsensusDBs(dataDir string, numKept uint64, runtimes []common.Namespa
 		uint64(minReindexed),
 	)
 
-	if err := pruneConsensusNodeDB(ndb, retainHeight); err != nil {
+	if err := pruneNodeDB(ndb, retainHeight); err != nil {
 		return fmt.Errorf("failed to prune application state: %w", err)
 	}
 
@@ -102,21 +104,21 @@ func pruneConsensusDBs(dataDir string, numKept uint64, runtimes []common.Namespa
 	return nil
 }
 
-func pruneConsensusNodeDB(ndb db.NodeDB, retainHeight uint64) error {
-	startHeight := ndb.GetEarliestVersion()
+func pruneNodeDB(ndb db.NodeDB, retainVersion uint64) error {
+	startVersion := ndb.GetEarliestVersion()
 
-	if retainHeight <= startHeight {
-		logger.Info("consensus state already pruned", "retain_height", retainHeight, "start_height", startHeight)
+	if retainVersion <= startVersion {
+		logger.Info("db state already pruned", "retain_version", retainVersion, "start_version", startVersion)
 		return nil
 	}
 
-	logger.Info("pruning consensus state", "start_height", startHeight, "retain_height", retainHeight)
-	for h := startHeight; h < retainHeight; h++ {
+	logger.Info("pruning db state", "start_version", startVersion, "retain_version", retainVersion)
+	for h := startVersion; h < retainVersion; h++ {
 		if err := ndb.Prune(h); err != nil {
 			return fmt.Errorf("failed to prune version %d: %w", h, err)
 		}
 
-		if h%10_000 == 0 { // periodically sync to disk
+		if pruneDiskSyncInterval != 0 && h%pruneDiskSyncInterval == 0 { // periodically sync to disk
 			if err := ndb.Sync(); err != nil {
 				return fmt.Errorf("failed to sync NodeDB: %w", err)
 			}
