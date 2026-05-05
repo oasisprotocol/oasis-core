@@ -304,6 +304,10 @@ func (d *DB) getLastBlock() (*roothash.AnnotatedBlock, error) {
 	return &blk, nil
 }
 
+func (d *DB) flatten() error {
+	return d.db.Flatten(1)
+}
+
 func (d *DB) close() {
 	d.gc.Stop()
 	d.db.Close()

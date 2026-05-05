@@ -38,6 +38,9 @@ type History interface {
 	// PruneBefore prunes runtime history before the given round.
 	PruneBefore(round uint64) (uint64, error)
 
+	// Compact triggers compaction of the History underlying storage engine.
+	Compact() error
+
 	// Close closes the history keeper.
 	Close()
 }
@@ -323,6 +326,18 @@ func (h *runtimeHistory) CanPruneConsensus(height int64) error {
 	if height > lastHeight {
 		return fmt.Errorf("height %d not yet indexed for %s", height, h.RuntimeID())
 	}
+
+	return nil
+}
+
+func (h *runtimeHistory) Compact() error {
+	h.logger.Info("compacting")
+
+	if err := h.db.flatten(); err != nil {
+		return fmt.Errorf("failed to flatten db: %w", err)
+	}
+
+	h.logger.Info("compaction completed")
 
 	return nil
 }

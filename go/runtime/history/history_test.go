@@ -425,6 +425,45 @@ func TestPruneBefore(t *testing.T) {
 	})
 }
 
+func TestCompact(t *testing.T) {
+	ctx := t.Context()
+
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("compact test namespace"), 0)
+	h, err := New(runtimeID, t.TempDir(), NewNonePrunerFactory(), false)
+	require.NoError(t, err, "New")
+	defer h.Close()
+
+	t.Run("compact empty", func(t *testing.T) {
+		require.NoError(t, h.Compact())
+	})
+
+	blks := createBlocks(runtimeID)
+	t.Run("compact without pruning", func(t *testing.T) {
+		require.NoError(t, h.Commit(blks), "Commit")
+		require.NoError(t, h.Compact())
+
+		for _, blk := range blks {
+			got, err := h.GetBlock(ctx, blk.Block.Header.Round)
+			require.NoError(t, err, "GetBlock(%d)", blk.Block.Header.Round)
+			require.Equal(t, blk.Block, got)
+		}
+	})
+
+	t.Run("compact after prune", func(t *testing.T) {
+		firstRound := blks[0].Block.Header.Round
+		_, err := h.PruneBefore(firstRound + 1)
+		require.NoError(t, err)
+		require.NoError(t, h.Compact())
+
+		_, err = h.GetBlock(ctx, blks[0].Block.Header.Round)
+		require.ErrorIs(t, err, roothash.ErrNotFound)
+
+		got, err := h.GetBlock(ctx, blks[1].Block.Header.Round)
+		require.NoError(t, err, "GetBlock(%d)", blks[1].Block.Header.Round)
+		require.Equal(t, blks[1].Block, got)
+	})
+}
+
 type testPruneHandler struct {
 	done         bool
 	doneCh       chan struct{}
