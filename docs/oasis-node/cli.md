@@ -334,15 +334,15 @@ oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7
 
 ## storage
 
-### compact-experimental
+### compact
 
 Run (when the node is not running):
 
 ```sh
-oasis-node storage compact-experimental --config /path/to/config/file
+oasis-node storage compact --config /path/to/config/file
 ```
 
-to trigger manual compaction of consensus database instances:
+to trigger manual compaction of all configured database instances:
 
 ```sh
 {"caller":"storage.go:310","level":"info","module":"cmd/storage", \
@@ -386,7 +386,7 @@ enabling it for the first time, or later changing it to retain less data. This
 way they guarantee the node is healthy when it starts.
 
 Following successful pruning, to release disk space, they are encouraged to run
-[the compaction command](#compact-experimental).
+[the compaction command](#compact).
 
 ### inspect
 

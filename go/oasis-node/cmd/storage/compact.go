@@ -12,14 +12,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 func newCompactCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "compact-experimental",
+		Use:   "compact",
 		Args:  cobra.NoArgs,
-		Short: "EXPERIMENTAL: trigger compaction for all consensus databases",
-		Long: `EXPERIMENTAL: Optimize the storage for all consensus databases by manually compacting the underlying storage engines.
+		Short: "trigger compaction for all databases",
+		Long: `Optimize the storage for all databases by manually compacting the underlying storage engines.
 
 WARNING: Ensure you have at least as much of a free disk as your largest database.
 `,
@@ -48,8 +49,38 @@ WARNING: Ensure you have at least as much of a free disk as your largest databas
 				return fmt.Errorf("failed to compact CometBFT managed databases: %w", err)
 			}
 
+			// Compact consensus NodeDB (application state).
 			if err := compactConsensusNodeDB(dataDir); err != nil {
 				return fmt.Errorf("failed to compact consensus NodeDB: %w", err)
+			}
+
+			// Compact Runtime Databases (history and state DB).
+			runtimes, err := registry.GetConfiguredRuntimeIDs()
+			if err != nil {
+				return fmt.Errorf("failed to get configured runtimes: %w", err)
+			}
+			for _, rt := range runtimes {
+				if err := func() error {
+					history, err := openRuntimeLightHistory(dataDir, rt)
+					if err != nil {
+						return fmt.Errorf("failed to open runtime history: %w", err)
+					}
+					defer history.Close()
+					if err := history.Compact(); err != nil {
+						return fmt.Errorf("failed to compact runtime history: %w", err)
+					}
+					ndb, err := openRuntimeStateDB(dataDir, rt)
+					if err != nil {
+						return fmt.Errorf("failed to open runtime state DB: %w", err)
+					}
+					defer ndb.Close()
+					if err := ndb.Compact(); err != nil {
+						return fmt.Errorf("failed to compact runtime state DB: %w", err)
+					}
+					return nil
+				}(); err != nil {
+					return fmt.Errorf("failed to compact runtime dbs (runtime ID: %s): %w", rt, err)
+				}
 			}
 
 			return nil
