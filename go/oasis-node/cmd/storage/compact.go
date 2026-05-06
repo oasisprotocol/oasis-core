@@ -78,6 +78,7 @@ func compactCometDB(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open BadgerDB: %w", err)
 	}
+	defer db.Close()
 
 	if err := flattenBadgerDB(db, logger); err != nil {
 		return fmt.Errorf("failed to compact %s: %w", path, err)
@@ -100,7 +101,7 @@ func findCometDBs(dataDir string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to walk dir %s: %w", dataDir, err)
+		return nil, fmt.Errorf("failed to walk dir %s: %w", dir, err)
 	}
 
 	if len(dbDirs) == 0 {
