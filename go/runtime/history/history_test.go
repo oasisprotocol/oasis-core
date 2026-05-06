@@ -364,6 +364,106 @@ func TestWatchBlocksWithoutHistory(t *testing.T) {
 	})
 }
 
+func TestPruneBefore(t *testing.T) {
+	ctx := t.Context()
+
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
+	require.NoError(t, err, "TempDir")
+	defer os.RemoveAll(dataDir)
+
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("prune test namespace"), 0)
+
+	h, err := New(runtimeID, dataDir, NewNonePrunerFactory(), false)
+	require.NoError(t, err, "New")
+	defer h.Close()
+
+	// Commit blocks for rounds 10-20.
+	blks := make([]*roothash.AnnotatedBlock, 11)
+	for i := range blks {
+		blk := &roothash.AnnotatedBlock{
+			Height: int64(1000 + i), // height is different then round.
+			Block:  block.NewGenesisBlock(runtimeID, 0),
+		}
+		blk.Block.Header.Round = uint64(10 + i)
+		blks[i] = blk
+	}
+	require.NoError(t, h.Commit(blks), "Commit")
+
+	t.Run("prune before earliest: no-op", func(t *testing.T) {
+		pruned, err := h.PruneBefore(10)
+		require.NoError(t, err)
+		require.EqualValues(t, 0, pruned, "no blocks should be pruned")
+
+		earliest, err := h.GetEarliestBlock(ctx)
+		require.NoError(t, err)
+		require.EqualValues(t, 10, earliest.Header.Round, "earliest round should still be 10")
+	})
+
+	t.Run("prune some versions", func(t *testing.T) {
+		pruned, err := h.PruneBefore(12)
+		require.NoError(t, err)
+		require.EqualValues(t, 2, pruned, "rounds 10-11 should be pruned")
+
+		earliest, err := h.GetEarliestBlock(ctx)
+		require.NoError(t, err)
+		require.EqualValues(t, 12, earliest.Header.Round, "earliest round should now be 12")
+	})
+
+	t.Run("prune everything", func(t *testing.T) {
+		pruned, err := h.PruneBefore(21)
+		require.NoError(t, err)
+		require.EqualValues(t, 9, pruned, "rounds 12-20 should all be pruned")
+
+		_, err = h.GetEarliestBlock(ctx)
+		require.ErrorIs(t, err, roothash.ErrNotFound, "history should be empty")
+	})
+
+	t.Run("prune on empty: no-op", func(t *testing.T) {
+		pruned, err := h.PruneBefore(2)
+		require.NoError(t, err)
+		require.EqualValues(t, 0, pruned, "nothing to prune on empty history")
+	})
+}
+
+func TestCompact(t *testing.T) {
+	ctx := t.Context()
+
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("compact test namespace"), 0)
+	h, err := New(runtimeID, t.TempDir(), NewNonePrunerFactory(), false)
+	require.NoError(t, err, "New")
+	defer h.Close()
+
+	t.Run("compact empty", func(t *testing.T) {
+		require.NoError(t, h.Compact())
+	})
+
+	blks := createBlocks(runtimeID)
+	t.Run("compact without pruning", func(t *testing.T) {
+		require.NoError(t, h.Commit(blks), "Commit")
+		require.NoError(t, h.Compact())
+
+		for _, blk := range blks {
+			got, err := h.GetBlock(ctx, blk.Block.Header.Round)
+			require.NoError(t, err, "GetBlock(%d)", blk.Block.Header.Round)
+			require.Equal(t, blk.Block, got)
+		}
+	})
+
+	t.Run("compact after prune", func(t *testing.T) {
+		firstRound := blks[0].Block.Header.Round
+		_, err := h.PruneBefore(firstRound + 1)
+		require.NoError(t, err)
+		require.NoError(t, h.Compact())
+
+		_, err = h.GetBlock(ctx, blks[0].Block.Header.Round)
+		require.ErrorIs(t, err, roothash.ErrNotFound)
+
+		got, err := h.GetBlock(ctx, blks[1].Block.Header.Round)
+		require.NoError(t, err, "GetBlock(%d)", blks[1].Block.Header.Round)
+		require.Equal(t, blks[1].Block, got)
+	})
+}
+
 type testPruneHandler struct {
 	done         bool
 	doneCh       chan struct{}

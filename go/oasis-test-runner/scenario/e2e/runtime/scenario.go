@@ -405,6 +405,8 @@ func RegisterScenarios() error {
 		ROFL,
 		// Stateless client tests.
 		StatelessClient,
+		// Offline pruning test.
+		OfflinePruning,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err
