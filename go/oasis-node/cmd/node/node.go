@@ -174,18 +174,12 @@ func (n *Node) startRuntimeServices(genesisDoc *genesisAPI.Document) error {
 
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(genesisDoc); err != nil {
-		n.logger.Error("failed to initialize workers",
-			"err", err,
-		)
-		return err
+		return fmt.Errorf("failed to initialize workers: %w", err)
 	}
 
 	// Start workers (requires NodeController for checking, if nodes are synced).
 	if err = n.startRuntimeWorkers(); err != nil {
-		n.logger.Error("failed to start workers",
-			"err", err,
-		)
-		return err
+		return fmt.Errorf("failed to start workers: %w", err)
 	}
 
 	n.logger.Debug("runtime services started")
@@ -234,10 +228,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 		n.Provisioner,
 	)
 	if err != nil {
-		n.logger.Error("failed to initialize common worker",
-			"err", err,
-		)
-		return err
+		return fmt.Errorf("failed to initialize common worker: %w", err)
 	}
 	n.svcMgr.Register(n.CommonWorker)
 
@@ -258,10 +249,7 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 		workerRegistration.DebugForceAllowUnroutableAddresses()
 	}
 	if err != nil {
-		n.logger.Error("failed to initialize worker registration",
-			"err", err,
-		)
-		return err
+		return fmt.Errorf("failed to initialize worker registration: %w", err)
 	}
 	n.svcMgr.Register(n.RegistrationWorker)
 
@@ -443,10 +431,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	genesis := genesisFile.DefaultProvider()
 	genesisDoc, err := genesis.GetGenesisDocument()
 	if err != nil {
-		logger.Error("failed to get genesis document",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to get genesis document: %w", err)
 	}
 	genesisDoc.SetChainContext()
 	node.chainContext = genesisDoc.ChainContext()
@@ -509,10 +494,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Initialize the internal gRPC server.
 	node.grpcInternal, err = cmdGrpc.NewServerLocal(false)
 	if err != nil {
-		logger.Error("failed to initialize internal gRPC server",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize internal gRPC server: %w", err)
 	}
 	node.svcMgr.Register(node.grpcInternal)
 
@@ -522,10 +504,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Open the common node store.
 	node.commonStore, err = persistent.NewCommonStore(node.dataDir)
 	if err != nil {
-		logger.Error("failed to open common node store",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to open common node store: %w", err)
 	}
 
 	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
@@ -546,27 +525,18 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	node.svcMgr.Register(node.P2P)
 
 	if err = node.P2P.Start(); err != nil {
-		logger.Error("failed to start P2P service",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to start P2P service: %w", err)
 	}
 
 	// Initialize upgrader backend.
 	node.Upgrader, err = upgrade.New(node.commonStore, node.dataDir, !isArchive)
 	if err != nil {
-		logger.Error("failed to initialize upgrade backend",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize upgrade backend: %w", err)
 	}
 	// If not an archive mode, check if we can even launch.
 	if !isArchive {
 		if err = node.Upgrader.StartupUpgrade(); err != nil {
-			logger.Error("error occurred during startup upgrade",
-				"err", err,
-			)
-			return nil, err
+			return nil, fmt.Errorf("error occurred during startup upgrade: %w", err)
 		}
 	}
 
@@ -575,10 +545,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	case cometbftAPI.BackendName:
 		node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, genesis, genesisDoc, node.P2P)
 		if err != nil {
-			logger.Error("failed to initialize cometbft consensus backend",
-				"err", err,
-			)
-			return nil, err
+			return nil, fmt.Errorf("failed to initialize cometbft consensus backend: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported consensus backend: %s", backend)
@@ -589,10 +556,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Initialize CometBFT light client.
 	node.LightService, err = cometbft.NewLightService(node.svcMgr.Ctx, genesisDoc, node.P2P)
 	if err != nil {
-		logger.Error("failed to initialize cometbft light client service",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize cometbft light client service: %w", err)
 	}
 
 	// Register consensus light client P2P protocol server.
@@ -601,10 +565,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Register the consensus service with the peer registry.
 	if mgr := node.P2P.PeerManager(); mgr != nil {
 		if err = mgr.PeerRegistry().RegisterConsensus(node.chainContext, node.Consensus); err != nil {
-			logger.Error("failed to register consensus with peer registry",
-				"err", err,
-			)
-			return nil, err
+			return nil, fmt.Errorf("failed to register consensus with peer registry: %w", err)
 		}
 	}
 
@@ -612,10 +573,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// all services required for runtime operation.
 	if node.Consensus.SupportedFeatures().Has(consensusAPI.FeatureServices) {
 		if err = node.startRuntimeServices(genesisDoc); err != nil {
-			logger.Error("failed to initialize runtime services",
-				"err", err,
-			)
-			return nil, err
+			return nil, fmt.Errorf("failed to initialize runtime services: %w", err)
 		}
 
 		if flags.DebugDontBlameOasis() {
@@ -629,18 +587,12 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 
 	// Start the internal gRPC server.
 	if err = node.grpcInternal.Start(); err != nil {
-		logger.Error("failed to start internal gRPC server",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to start internal gRPC server: %w", err)
 	}
 
 	// Start the consensus backend service.
 	if err = node.Consensus.Start(); err != nil {
-		logger.Error("failed to start consensus backend service",
-			"err", err,
-		)
-		return nil, err
+		return nil, fmt.Errorf("failed to start consensus backend service: %w", err)
 	}
 
 	logger.Info("initialization complete: ready to serve")
