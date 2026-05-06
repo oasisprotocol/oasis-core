@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	badgerDB "github.com/dgraph-io/badger/v4"
 	"github.com/spf13/cobra"
 
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	cmtDBProvider "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -44,41 +43,16 @@ WARNING: Ensure you have at least as much of a free disk as your largest databas
 
 			logger.Info("Starting database compactions. This may take a while...")
 
-			// Compact CometBFT managed databases: block store, evidence and state (NOT application state).
-			if err := compactCometDBs(dataDir); err != nil {
-				return fmt.Errorf("failed to compact CometBFT managed databases: %w", err)
+			if err := compactConsensusDBs(dataDir); err != nil {
+				return fmt.Errorf("failed to compact consensus databases: %w", err)
 			}
 
-			// Compact consensus NodeDB (application state).
-			if err := compactConsensusNodeDB(dataDir); err != nil {
-				return fmt.Errorf("failed to compact consensus NodeDB: %w", err)
-			}
-
-			// Compact Runtime Databases (history and state DB).
 			runtimes, err := registry.GetConfiguredRuntimeIDs()
 			if err != nil {
 				return fmt.Errorf("failed to get configured runtimes: %w", err)
 			}
 			for _, rt := range runtimes {
-				if err := func() error {
-					history, err := openRuntimeLightHistory(dataDir, rt)
-					if err != nil {
-						return fmt.Errorf("failed to open runtime history: %w", err)
-					}
-					defer history.Close()
-					if err := history.Compact(); err != nil {
-						return fmt.Errorf("failed to compact runtime history: %w", err)
-					}
-					ndb, err := openRuntimeStateDB(dataDir, rt)
-					if err != nil {
-						return fmt.Errorf("failed to open runtime state DB: %w", err)
-					}
-					defer ndb.Close()
-					if err := ndb.Compact(); err != nil {
-						return fmt.Errorf("failed to compact runtime state DB: %w", err)
-					}
-					return nil
-				}(); err != nil {
+				if err := compactRuntimeDBs(dataDir, rt); err != nil {
 					return fmt.Errorf("failed to compact runtime dbs (runtime ID: %s): %w", rt, err)
 				}
 			}
@@ -90,35 +64,27 @@ WARNING: Ensure you have at least as much of a free disk as your largest databas
 	return cmd
 }
 
+func compactConsensusDBs(dataDir string) error {
+	// Compact CometBFT managed databases: block store, evidence and state (NOT application state).
+	if err := compactCometDBs(dataDir); err != nil {
+		return fmt.Errorf("failed to compact CometBFT managed databases: %w", err)
+	}
+
+	// Compact consensus NodeDB (application state).
+	ndb, close, err := openConsensusNodeDB(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to open consensus NodeDB: %w", err)
+	}
+	defer close()
+
+	if err := ndb.Compact(); err != nil {
+		return fmt.Errorf("failed to compact consensus node DB: %w", err)
+	}
+
+	return nil
+}
+
 func compactCometDBs(dataDir string) error {
-	paths, err := findCometDBs(dataDir)
-	if err != nil {
-		return fmt.Errorf("failed to find database instances: %w", err)
-	}
-	for _, path := range paths {
-		if err := compactCometDB(path); err != nil {
-			return fmt.Errorf("failed to compact %s: %w", path, err)
-		}
-	}
-	return nil
-}
-
-func compactCometDB(path string) error {
-	logger := logger.With("path", path)
-	db, err := cmtDBProvider.OpenBadger(path, logger)
-	if err != nil {
-		return fmt.Errorf("failed to open BadgerDB: %w", err)
-	}
-	defer db.Close()
-
-	if err := flattenBadgerDB(db, logger); err != nil {
-		return fmt.Errorf("failed to compact %s: %w", path, err)
-	}
-
-	return nil
-}
-
-func findCometDBs(dataDir string) ([]string, error) {
 	dir := fmt.Sprintf("%s/consensus/data", dataDir)
 
 	var dbDirs []string
@@ -132,17 +98,29 @@ func findCometDBs(dataDir string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to walk dir %s: %w", dir, err)
+		return fmt.Errorf("failed to walk dir %s: %w", dir, err)
 	}
 
 	if len(dbDirs) == 0 {
-		return nil, fmt.Errorf("zero database instances found")
+		return fmt.Errorf("zero database instances found")
 	}
 
-	return dbDirs, nil
+	for _, dbDir := range dbDirs {
+		if err := compactCometDB(dbDir); err != nil {
+			return fmt.Errorf("failed to compact %s: %w", dbDir, err)
+		}
+	}
+	return nil
 }
 
-func flattenBadgerDB(db *badgerDB.DB, logger *logging.Logger) error {
+func compactCometDB(path string) error {
+	logger := logger.With("path", path)
+	db, err := cmtDBProvider.OpenBadger(path, logger)
+	if err != nil {
+		return fmt.Errorf("failed to open BadgerDB: %w", err)
+	}
+	defer db.Close()
+
 	logger.Info("compacting")
 
 	if err := db.Flatten(1); err != nil {
@@ -154,12 +132,22 @@ func flattenBadgerDB(db *badgerDB.DB, logger *logging.Logger) error {
 	return nil
 }
 
-func compactConsensusNodeDB(dataDir string) error {
-	ndb, close, err := openConsensusNodeDB(dataDir)
+func compactRuntimeDBs(dataDir string, rt common.Namespace) error {
+	history, err := openRuntimeLightHistory(dataDir, rt)
 	if err != nil {
-		return fmt.Errorf("failed to open consensus NodeDB: %w", err)
+		return fmt.Errorf("failed to open runtime history: %w", err)
 	}
-	defer close()
-
-	return ndb.Compact()
+	defer history.Close()
+	if err := history.Compact(); err != nil {
+		return fmt.Errorf("failed to compact runtime history: %w", err)
+	}
+	ndb, err := openRuntimeStateDB(dataDir, rt)
+	if err != nil {
+		return fmt.Errorf("failed to open runtime state DB: %w", err)
+	}
+	defer ndb.Close()
+	if err := ndb.Compact(); err != nil {
+		return fmt.Errorf("failed to compact runtime state DB: %w", err)
+	}
+	return nil
 }
