@@ -39,6 +39,7 @@ func Run(_ *cobra.Command, _ []string) {
 		// Shutdown requested during startup.
 		return
 	default:
+		cmdCommon.Logger().Error("failed to start oasis node", "err", err)
 		os.Exit(1)
 	}
 
