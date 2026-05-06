@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
@@ -257,8 +261,41 @@ func pruneRuntimeDBs(dataDir string, runtimeID common.Namespace, numKept uint64)
 		return fmt.Errorf("failed to open runtime light history: %w", err)
 	}
 	defer history.Close()
-	if _, err := history.PruneBefore(retainRound); err != nil {
+	if _, err := pruneRuntimeHistory(context.TODO(), history, retainRound); err != nil {
 		return fmt.Errorf("failed to prune runtime history before round %d: %w", retainRound, err)
 	}
 	return nil
+}
+
+func pruneRuntimeHistory(ctx context.Context, history history.History, limitRound uint64) (uint64, error) {
+	earliest, err := history.GetEarliestBlock(ctx)
+	switch {
+	case err == nil:
+	case errors.Is(err, roothash.ErrNotFound): // empty
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("failed to get earliest runtime block: %w", err)
+	}
+
+	var totalPruned uint64
+	const pruneBatchSize uint64 = 10_000
+	for pruneUntil := earliest.Header.Round; pruneUntil < limitRound; {
+		if err = ctx.Err(); err != nil {
+			return 0, err
+		}
+
+		pruneUntil = min(pruneUntil+pruneBatchSize, limitRound)
+
+		pruned, err := history.PruneBefore(pruneUntil)
+		if err != nil {
+			return 0, fmt.Errorf("failed to prune runtime history before round %d: %w", pruneUntil, err)
+		}
+		totalPruned += pruned
+		logger.Debug("pruned runtime history",
+			"last_retained", pruneUntil,
+			"pruned", pruned,
+		)
+	}
+
+	return totalPruned, nil
 }
