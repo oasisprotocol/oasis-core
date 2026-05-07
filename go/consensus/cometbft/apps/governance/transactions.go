@@ -246,18 +246,27 @@ func (app *Application) castVote(
 
 	// Query signer entity descriptor.
 	var submitterNodes []signature.PublicKey
-	registryState := registryState.NewMutableState(ctx.State())
-	submitterEntity, err := registryState.Entity(ctx, ctx.TxSigner())
-	switch err {
-	case nil:
-		submitterNodes = submitterEntity.Nodes
-	case registryAPI.ErrNoSuchEntity:
+	switch ctx.IsMessageExecution() {
+	case true:
+		// Runtime messages are not real consensus transactions as they
+		// don't have a transaction signer.
 		if !params.AllowVoteWithoutEntity {
 			return governance.ErrNotEligible
 		}
-		// Default to an empty set of nodes so delegators without entities can vote.
-	default:
-		return fmt.Errorf("governance: failed to query entity: %w", err)
+	case false:
+		registryState := registryState.NewMutableState(ctx.State())
+		submitterEntity, err := registryState.Entity(ctx, ctx.TxSigner())
+		switch err {
+		case nil:
+			submitterNodes = submitterEntity.Nodes
+		case registryAPI.ErrNoSuchEntity:
+			if !params.AllowVoteWithoutEntity {
+				return governance.ErrNotEligible
+			}
+			// Default to an empty set of nodes so delegators without entities can vote.
+		default:
+			return fmt.Errorf("governance: failed to query entity: %w", err)
+		}
 	}
 
 	// Load current validator sets.
