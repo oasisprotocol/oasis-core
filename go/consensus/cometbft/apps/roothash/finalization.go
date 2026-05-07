@@ -179,10 +179,7 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	if err = app.removeRuntimeMessages(ctx, state, rtState.Runtime.ID, msgs, round); err != nil {
 		return err
 	}
-	msgEvents, err := app.processRuntimeMessages(ctx, rtState, sc.Commitment.Messages)
-	if err != nil {
-		return fmt.Errorf("failed to process runtime messages: %w", err)
-	}
+	msgEvents := app.processRuntimeMessages(ctx, rtState, sc.Commitment.Messages)
 
 	// Compute good and bad entities.
 	var (
