@@ -107,7 +107,7 @@ func (app *Application) processRuntimeMessages(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	msgs []message.Message,
-) ([]*roothash.MessageEvent, error) {
+) []*roothash.MessageEvent {
 	ctx = ctx.WithMessageExecution()
 	defer ctx.Close()
 	ctx = ctx.WithCallerAddress(staking.NewRuntimeAddress(rtState.Runtime.ID))
@@ -165,7 +165,7 @@ func (app *Application) processRuntimeMessages(
 			Result: cbor.Marshal(result),
 		})
 	}
-	return events, nil
+	return events
 }
 
 func (app *Application) doBeforeSchedule(ctx *tmapi.Context, msg any) (any, error) {

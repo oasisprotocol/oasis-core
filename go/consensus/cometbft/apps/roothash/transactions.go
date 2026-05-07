@@ -87,8 +87,8 @@ func (app *Application) executorCommit(
 		msgCtx := ctx.WithSimulation()
 		defer msgCtx.Close()
 
-		_, msgErr := app.processRuntimeMessages(msgCtx, rtState, msgs)
-		return msgErr
+		_ = app.processRuntimeMessages(msgCtx, rtState, msgs)
+		return nil
 	}
 
 	// Verify and add commitments to the pool.
