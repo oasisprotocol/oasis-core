@@ -36,7 +36,7 @@ type RuntimeHostHandlerEnvironment interface {
 	GetNodeIdentity() (*identity.Identity, error)
 
 	// GetLightProvider returns the consensus light provider.
-	GetLightProvider() (consensus.LightProvider, error)
+	GetLightProvider() consensus.LightProvider
 
 	// GetRuntimeRegistry returns the runtime registry.
 	GetRuntimeRegistry() Registry
@@ -268,15 +268,12 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 	ctx context.Context,
 	rq *protocol.HostFetchConsensusBlockRequest,
 ) (*protocol.HostFetchConsensusBlockResponse, error) {
-	blk, err := h.consensus.Core().GetLightBlock(ctx, int64(rq.Height))
+	height := int64(rq.Height)
+	blk, err := h.consensus.Core().GetLightBlock(ctx, height)
 	if err != nil {
-		lc, err := h.env.GetLightProvider()
+		blk, err = h.env.GetLightProvider().LightBlock(ctx, height)
 		if err != nil {
-			return nil, err
-		}
-		blk, err = lc.LightBlock(ctx, int64(rq.Height))
-		if err != nil {
-			return nil, fmt.Errorf("light block fetch failure: %w", err)
+			return nil, fmt.Errorf("failed to fetch light block for height %d: %w", height, err)
 		}
 	}
 	return &protocol.HostFetchConsensusBlockResponse{Block: *blk}, nil
@@ -286,16 +283,12 @@ func (h *runtimeHostHandler) handleHostFetchConsensusValidators(
 	ctx context.Context,
 	rq *protocol.HostFetchConsensusValidatorsRequest,
 ) (*protocol.HostFetchConsensusValidatorsResponse, error) {
-	vs, err := h.consensus.Core().GetValidators(ctx, int64(rq.Height))
+	height := int64(rq.Height)
+	vs, err := h.consensus.Core().GetValidators(ctx, height)
 	if err != nil {
-		lp, err := h.env.GetLightProvider()
+		vs, err = h.env.GetLightProvider().Validators(ctx, height)
 		if err != nil {
-			return nil, err
-		}
-
-		vs, err = lp.Validators(ctx, int64(rq.Height))
-		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to fetch validator for height %d: %w", height, err)
 		}
 	}
 
