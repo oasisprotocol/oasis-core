@@ -3,7 +3,6 @@ package light
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -35,11 +34,6 @@ func (c *ClientService) GetStatus() (*consensus.LightClientStatus, error) {
 	}
 
 	return status, nil
-}
-
-// TrustedLightBlock implements the LightClient interface.
-func (c *ClientService) TrustedLightBlock(int64) (*consensus.LightBlock, error) {
-	return nil, fmt.Errorf("light block not found")
 }
 
 // LightBlock implements the LightProvider interface.
