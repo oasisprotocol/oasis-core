@@ -23,7 +23,7 @@ type ClientService struct {
 	providers []*Provider
 }
 
-// GetStatus implements api.LightService.
+// GetStatus implements [consensus.LightService].
 func (c *ClientService) GetStatus() (*consensus.LightClientStatus, error) {
 	status := &consensus.LightClientStatus{}
 
@@ -36,7 +36,7 @@ func (c *ClientService) GetStatus() (*consensus.LightClientStatus, error) {
 	return status, nil
 }
 
-// LightBlock implements the LightProvider interface.
+// LightBlock implements the [consensus.LightProvider] interface.
 func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
 	rsp, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*lightBlock, rpc.PeerFeedback, error) {
 		return p.getLightBlock(ctx, height)
@@ -51,7 +51,7 @@ func (c *ClientService) LightBlock(ctx context.Context, height int64) (*consensu
 	return rsp.lb, nil
 }
 
-// Validators implements the LightProvider interface.
+// Validators implements the [consensus.LightProvider] interface.
 func (c *ClientService) Validators(ctx context.Context, height int64) (*consensus.Validators, error) {
 	validators, _, err := tryProviders(ctx, c.providers, func(p *Provider) (*consensus.Validators, rpc.PeerFeedback, error) {
 		return p.getValidators(ctx, height)
@@ -66,9 +66,7 @@ func (c *ClientService) Validators(ctx context.Context, height int64) (*consensu
 	return validators, nil
 }
 
-// New creates a new CometBFT light client service backed by the local full node.
-//
-// This light client is initialized with a trusted blocks obtained from the local consensus backend.
+// New creates a new CometBFT light client service backed by remote P2P peers.
 func New(ctx context.Context, chainContext string, p2p rpc.P2P) (*ClientService, error) {
 	pool := NewProviderPool(ctx, chainContext, p2p)
 	providers := make([]*Provider, 0, numWitnesses)
