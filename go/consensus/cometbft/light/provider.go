@@ -341,3 +341,30 @@ func (p *Provider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmt
 	}
 	return rsp.clb, string(pf.PeerID()), nil
 }
+
+func tryProviders[R any](
+	ctx context.Context,
+	providers []*Provider,
+	fn func(*Provider) (R, rpc.PeerFeedback, error),
+) (R, rpc.PeerFeedback, error) {
+	var (
+		result R
+		err    error
+	)
+	for _, provider := range providers {
+		if ctx.Err() != nil {
+			return result, nil, ctx.Err()
+		}
+
+		var pf rpc.PeerFeedback
+		result, pf, err = fn(provider)
+		if err == nil {
+			return result, pf, nil
+		}
+	}
+
+	// Trigger primary provider refresh if everything fails.
+	providers[0].RefreshPeer()
+
+	return result, nil, err
+}
