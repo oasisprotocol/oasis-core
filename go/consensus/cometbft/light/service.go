@@ -9,11 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
-const (
-	// numProviders is the number of libp2p backed CometBFT light-block providers used by the light client service.
-	numProviders = 2
-)
-
 type ClientService struct {
 	logger *logging.Logger
 
@@ -65,6 +60,10 @@ func (c *ClientService) Validators(ctx context.Context, height int64) (*consensu
 
 // New creates a new CometBFT light client service backed by remote P2P peers.
 func New(ctx context.Context, chainContext string, p2p rpc.P2P) (*ClientService, error) {
+	// The service should be able to fetch light blocks with arbitrary age.
+	// Since most of the nodes are pruning, we try to maintain more providers,
+	// to increase the likelihood of success.
+	const numProviders = 10
 	pool := NewProviderPool(ctx, chainContext, p2p)
 	providers := make([]*Provider, 0, numProviders)
 	for range numProviders {
