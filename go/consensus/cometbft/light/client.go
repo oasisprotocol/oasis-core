@@ -33,6 +33,12 @@ const (
 	// storeLowWatermark is the number of blocks to retain in the pruned store
 	// after pruning is triggered.
 	storeLowWatermark = 20_000
+
+	// numWitnesses is the number of libp2p backed CometBFT light-block witnesses to be instantiated.
+	numWitnesses = 2
+	// lcMaxRetryAttempts is the number of retry attempts the CometBFT light client does,
+	// before switching the primary provider.
+	lcMaxRetryAttempts = 5
 )
 
 // Config is the configuration for the light client.

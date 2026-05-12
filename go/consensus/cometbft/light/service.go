@@ -10,11 +10,8 @@ import (
 )
 
 const (
-	// numWitnesses is the number of libp2p backed CometBFT light-block witnesses to be instantiated.
-	numWitnesses = 2
-	// lcMaxRetryAttempts is the number of retry attempts the CometBFT light client does,
-	// before switching the primary provider.
-	lcMaxRetryAttempts = 5
+	// numProviders is the number of libp2p backed CometBFT light-block providers used by the light client service.
+	numProviders = 2
 )
 
 type ClientService struct {
@@ -69,8 +66,8 @@ func (c *ClientService) Validators(ctx context.Context, height int64) (*consensu
 // New creates a new CometBFT light client service backed by remote P2P peers.
 func New(ctx context.Context, chainContext string, p2p rpc.P2P) (*ClientService, error) {
 	pool := NewProviderPool(ctx, chainContext, p2p)
-	providers := make([]*Provider, 0, numWitnesses)
-	for range numWitnesses {
+	providers := make([]*Provider, 0, numProviders)
+	for range numProviders {
 		p := pool.NewProvider()
 		providers = append(providers, p)
 	}
