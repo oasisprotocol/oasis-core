@@ -14,7 +14,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -45,8 +44,6 @@ var (
 	// ErrAttestationFromFuture is the error returned when the TEE attestation appears
 	// to be from the future.
 	ErrAttestationFromFuture = errors.New("node: TEE attestation from the future")
-
-	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
 	// AttestationSignatureContext is the signature context used for TEE attestation signatures.
 	AttestationSignatureContext = signature.NewContext("oasis-core/node: TEE attestation signature")
@@ -563,14 +560,6 @@ type CapabilityTEE struct {
 
 	// Attestation.
 	Attestation []byte `json:"attestation"`
-}
-
-// HashRAK computes the expected report data hash bound to a given public RAK.
-func HashRAK(rak signature.PublicKey) hash.Hash {
-	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
-	hData = append(hData, teeHashContext...)
-	hData = append(hData, rak[:]...)
-	return hash.NewFromBytes(hData)
 }
 
 // Verify verifies the node's TEE capabilities, at the provided timestamp and height.
