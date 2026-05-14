@@ -286,6 +286,14 @@ func (sa *SGXAttestation) verifyAttestationSignature(
 	return nil
 }
 
+// HashRAK computes the expected report data hash bound to a given public RAK.
+func HashRAK(rak signature.PublicKey) hash.Hash {
+	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
+	hData = append(hData, teeHashContext...)
+	hData = append(hData, rak[:]...)
+	return hash.NewFromBytes(hData)
+}
+
 // HashAttestation hashes the required data that needs to be signed by RAK producing the attestation
 // signature. The hash is computed as follows:
 //
