@@ -193,6 +193,8 @@ func (c *Client) VerifyParametersAt(ctx context.Context, height int64) (*cmttype
 		)
 	}
 
+	pf.RecordSuccess()
+
 	return &cmtparams, nil
 }
 
