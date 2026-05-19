@@ -89,6 +89,9 @@ type Status struct {
 	Consensus *consensus.Status `json:"consensus,omitempty"`
 
 	// LightClient is the status overview of the light client service.
+	//
+	// TODO: Fix light client (service) status.
+	// See https://github.com/oasisprotocol/oasis-core/issues/6388.
 	LightClient *consensus.LightClientStatus `json:"light_client,omitempty"`
 
 	// Runtimes is the status overview for each runtime supported by the node.
