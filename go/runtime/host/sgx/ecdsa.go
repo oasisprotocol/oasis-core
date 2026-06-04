@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/aesm"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
@@ -18,15 +17,6 @@ type teeStateECDSA struct {
 }
 
 func (ec *teeStateECDSA) Init(ctx context.Context, sp *sgxProvisioner, cfg *host.Config) ([]byte, error) {
-	// Check whether the consensus layer even supports ECDSA attestations.
-	regParams, err := sp.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine registry consensus parameters: %w", err)
-	}
-	if regParams.TEEFeatures == nil || !regParams.TEEFeatures.SGX.PCS {
-		return nil, fmt.Errorf("ECDSA not supported by the registry")
-	}
-
 	// Fetch supported attestation keys.
 	akeys, err := sp.aesm.GetAttestationKeyIDs(ctx)
 	if err != nil {

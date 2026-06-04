@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -30,10 +31,14 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 		return nil, fmt.Errorf("already initialized")
 	}
 
-	var (
-		targetInfo []byte
-		err        error
-	)
+	// Check whether the consensus layer even supports ECDSA attestations.
+	regParams, err := sp.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine registry consensus parameters: %w", err)
+	}
+	if regParams.TEEFeatures == nil || !regParams.TEEFeatures.SGX.PCS {
+		return nil, fmt.Errorf("ECDSA not supported by the registry")
+	}
 
 	// When insecure mock SGX is enabled, use mock implementation.
 	if ts.insecureMock {
@@ -41,21 +46,12 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 		return ts.impl.Init(ctx, sp, ts.cfg)
 	}
 
-	// Try ECDSA first. If it fails, try EPID.
 	implECDSA := &teeStateECDSA{}
-	if targetInfo, err = implECDSA.Init(ctx, sp, ts.cfg); err != nil {
-		sp.logger.Debug("ECDSA attestation initialization failed, trying EPID",
-			"err", err,
-		)
-
-		implEPID := &teeStateEPID{}
-		if targetInfo, err = implEPID.Init(ctx, sp, ts.cfg); err != nil {
-			return nil, err
-		}
-		ts.impl = implEPID
-	} else {
-		ts.impl = implECDSA
+	targetInfo, err := implECDSA.Init(ctx, sp, ts.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("ECDSA attestation initialization failed: %w", err)
 	}
+	ts.impl = implECDSA
 
 	return targetInfo, nil
 }
