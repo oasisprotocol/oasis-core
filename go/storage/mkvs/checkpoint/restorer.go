@@ -83,7 +83,7 @@ func (rs *restorer) RestoreChunk(ctx context.Context, idx uint64, r io.Reader) (
 		return false, err
 	}
 
-	err = restoreChunk(ctx, rs.ndb, chunk, r)
+	err = RestoreChunk(ctx, rs.ndb, chunk, r)
 	switch {
 	case err == nil:
 	case errors.Is(err, ErrChunkProofVerificationFailed):

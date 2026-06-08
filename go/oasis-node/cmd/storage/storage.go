@@ -603,5 +603,6 @@ func Register(parentCmd *cobra.Command) {
 	storageCmd.AddCommand(storageCompactCmd)
 	storageCmd.AddCommand(pruneCmd)
 	storageCmd.AddCommand(newInspectCmd())
+	storageCmd.AddCommand(newCheckpointCmd())
 	parentCmd.AddCommand(storageCmd)
 }
