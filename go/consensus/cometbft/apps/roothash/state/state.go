@@ -547,7 +547,7 @@ func (s *MutableState) RemoveExpiredEvidence(ctx context.Context, runtimeID comm
 		if rtID != hID {
 			break
 		}
-		if round > minRound {
+		if round >= minRound {
 			break
 		}
 		toDelete = append(toDelete, it.Key())
