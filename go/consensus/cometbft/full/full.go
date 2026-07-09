@@ -630,7 +630,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	cometConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
 	cometConfig.P2P.Seeds = strings.Join(seeds, ",")
 	cometConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
-	cometConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
+	cometConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.P2P.AllowDuplicateIP
 	cometConfig.RPC.ListenAddress = ""
 
 	if len(sentryUpstreamAddrs) > 0 {

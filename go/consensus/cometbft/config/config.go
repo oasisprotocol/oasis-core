@@ -90,6 +90,15 @@ type P2PConfig struct {
 	DisablePeerExchange bool `yaml:"disable_peer_exchange"`
 	// CometBFT max timeout when redialing a persistent peer (default: unlimited).
 	PersistentPeersMaxDialPeriod time.Duration `yaml:"persistent_peers_max_dial_period"`
+
+	// Allow multiple P2P connections from the same IP.
+	//
+	// WARNING: Enabling this disables duplicate-IP protection, allowing a single
+	// remote host to occupy all inbound peer slots, and is unsafe for public-facing
+	// nodes. Only use this in isolated/private topologies where P2P ingress is
+	// restricted to trusted peers, e.g. local test networks or validators behind
+	// sentries with firewall-restricted access.
+	AllowDuplicateIP bool `yaml:"allow_duplicate_ip"`
 }
 
 // SubmissionConfig is the transaction submission configuration.
@@ -171,8 +180,6 @@ type SupplementarySanityConfig struct {
 type DebugConfig struct {
 	// Allow non-routable addresses in P2P address book.
 	P2PAddrBookLenient bool `yaml:"addr_book_lenient,omitempty"`
-	// Allow multiple P2P connections from the same IP.
-	P2PAllowDuplicateIP bool `yaml:"allow_duplicate_ip,omitempty"`
 
 	// Enable automatic recovery from corrupted WAL during replay (UNSAFE).
 	UnsafeReplayRecoverCorruptedWAL bool `yaml:"unsafe_replay_recover_corrupted_wal,omitempty"`

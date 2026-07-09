@@ -680,7 +680,7 @@ func (net *Network) startOasisNode(
 		}
 
 		cfg.Consensus.Debug.P2PAddrBookLenient = true
-		cfg.Consensus.Debug.P2PAllowDuplicateIP = true
+		cfg.Consensus.P2P.AllowDuplicateIP = true
 		cfg.Consensus.UpgradeStopDelay = 10 * time.Second
 
 		extraArgs = extraArgs.debugAllowDebugEnclaves()

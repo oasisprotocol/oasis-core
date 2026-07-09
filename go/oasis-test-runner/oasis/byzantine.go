@@ -65,7 +65,7 @@ func (worker *Byzantine) ModifyConfig() error {
 	worker.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(worker.consensusPort))
 	worker.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(worker.consensusPort))
 
-	worker.Config.Consensus.Debug.P2PAllowDuplicateIP = true
+	worker.Config.Consensus.P2P.AllowDuplicateIP = true
 	worker.Config.Consensus.Debug.P2PAddrBookLenient = true
 
 	worker.Config.P2P.Port = worker.p2pPort
