@@ -4,16 +4,23 @@ At [Oasis Foundation], we take security very seriously and we deeply appreciate
 any effort to discover and fix vulnerabilities in [Oasis Core] and other
 projects powering the [Oasis Network].
 
-We prefer that security reports be sent through our [private bug bounty program
-linked on our website](https://oasis.net/security-and-tees).
+## Bug Bounty Program
 
+If you discover a vulnerability, please submit it to our bug bounty program at
+[Immunefi], which also shows the eligible assets. We will quickly respond and
+verify the vulnerability.
+
+Rewards are based on potential impact.
 We sketch out the general classification of the kinds of errors
 below. This is not intended to be an exhaustive list.
+Please note these are general guidelines, and reward decisions are up to the
+discretion of the Oasis Protocol Foundation.
 
 <!-- markdownlint-disable line-length -->
 [Oasis Foundation]: https://oasis.net/
 [Oasis Core]: https://github.com/oasisprotocol/oasis-core
 [Oasis Network]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/README.md
+[Immunefi]: https://immunefi.com/bounty/oasis/
 <!-- markdownlint-enable line-length -->
 
 ## Specifications
