@@ -9,9 +9,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
-// ProposalSignatureContext is the context used for signing propose batch dispatch messages.
+// ProposalSignatureContext is the context used for signing proposal headers.
 var ProposalSignatureContext = signature.NewContext(
 	"oasis-core/roothash: proposal",
+	signature.WithChainSeparation(),
+	signature.WithDynamicSuffix(" for runtime ", common.NamespaceHexSize),
+)
+
+// ProposalBatchSignatureContext is the context used for signing proposal batches.
+var ProposalBatchSignatureContext = signature.NewContext(
+	"oasis-core/roothash: proposal batch",
 	signature.WithChainSeparation(),
 	signature.WithDynamicSuffix(" for runtime ", common.NamespaceHexSize),
 )
@@ -67,9 +74,17 @@ type Proposal struct {
 	// Signature is the proposal header signature.
 	Signature signature.RawSignature `json:"sig"`
 
-	// Batch is an ordered list of all transaction hashes that should be in a batch. In case of
-	// the proposal being submitted as equivocation evidence, this field should be omitted.
+	// Batch is an ordered list of all transaction hashes that should be in a batch.
+	//
+	// In case of the proposal being submitted as equivocation evidence,
+	// this field should be omitted.
 	Batch []hash.Hash `json:"batch,omitempty"`
+
+	// BatchSignature is the proposal batch signature.
+	//
+	// In case of the proposal being submitted as equivocation evidence,
+	// this field should be omitted.
+	BatchSignature *signature.RawSignature `json:"batch_sig,omitempty"`
 }
 
 // Sign signs the proposal header and sets the signature on the proposal.
@@ -83,6 +98,23 @@ func (p *Proposal) Sign(signer signature.Signer, runtimeID common.Namespace) err
 		return err
 	}
 	p.Signature = *sig
+
+	// TODO: Sign the batch once most of the compute nodes have been upgraded to a version
+	// that supports batch signatures.
+	if false {
+		batchSigCtx, err := ProposalBatchSignatureContext.WithSuffix(runtimeID.String())
+		if err != nil {
+			return fmt.Errorf("roothash/commitment: batch signature context error: %w", err)
+		}
+
+		signature, err := signature.Sign(signer, batchSigCtx, cbor.Marshal(p.Batch))
+		if err != nil {
+			return err
+		}
+
+		p.BatchSignature = &signature.Signature
+	}
+
 	return nil
 }
 
@@ -96,5 +128,17 @@ func (p *Proposal) Verify(runtimeID common.Namespace) error {
 	if !p.NodeID.Verify(sigCtx, cbor.Marshal(p.Header), p.Signature[:]) {
 		return fmt.Errorf("roothash/commitment: signature verification failed")
 	}
+
+	if p.BatchSignature != nil {
+		batchSigCtx, err := ProposalBatchSignatureContext.WithSuffix(runtimeID.String())
+		if err != nil {
+			return fmt.Errorf("roothash/commitment: batch signature context error: %w", err)
+		}
+
+		if !p.NodeID.Verify(batchSigCtx, cbor.Marshal(p.Batch), p.BatchSignature[:]) {
+			return fmt.Errorf("roothash/commitment: batch signature verification failed")
+		}
+	}
+
 	return nil
 }
