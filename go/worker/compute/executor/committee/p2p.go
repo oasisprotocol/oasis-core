@@ -91,7 +91,10 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.Publi
 			"batch_size", len(proposal.Batch),
 		)
 
-		// Add to the queue.
+		if _, ok := h.n.proposals.Get(proposal.Header.Round, rank); ok {
+			return nil
+		}
+
 		if err := h.n.proposals.Add(proposal, rank); err != nil {
 			return err
 		}

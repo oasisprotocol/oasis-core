@@ -9,6 +9,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -76,7 +77,18 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 		panic(fmt.Sprintf("executor proposing batch: %+v", err))
 	}
 
-	if mode == ModeExecutorFailureIndicating {
+	switch mode {
+	case ModeExecutorInvalidBatchHash:
+		validBatchHash := cbc.proposal.Header.BatchHash
+		cbc.proposal.Header.BatchHash = hash.NewFromBytes([]byte("invalid batch hash"))
+		if err := cbc.proposal.Sign(b.identity.NodeSigner, block.Header.Namespace); err != nil {
+			return false, fmt.Errorf("failed to re-sign invalid batch hash proposal: %w", err)
+		}
+		logger.Debug("invalid batch hash: invalidating batch hash",
+			"valid_batch_hash", validBatchHash,
+			"invalid_batch_hash", cbc.proposal.Header.BatchHash,
+		)
+	case ModeExecutorFailureIndicating:
 		// Submit failure indicating commitment and stop.
 		logger.Debug("executor failure indicating: submitting commitment and stopping")
 		schedulerID := b.identity.NodeSigner.Public()

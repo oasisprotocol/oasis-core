@@ -164,6 +164,35 @@ var (
 			Index: primarySchedulerIndex,
 		},
 	)
+	ByzantineExecutorSchedulerInvalidBatchHash scenario.Scenario = newByzantineImpl(
+		"primary-worker/primary-scheduler/invalid-batch-hash",
+		"executor",
+		[]log.WatcherHandlerFactory{
+			// The Byzantine node will publish a proposal with an invalid batch hash.
+			// Other workers will reject the proposal after determining that the I/O root
+			// does not match. As a result, the second-ranked proposer will prepare a new
+			// proposal but will not have enough commitments to finalize it. This will
+			// trigger the round timeout, leading to discrepancy resolution, which will
+			// succeed once the remaining backup workers submit their commitments.
+			oasis.LogAssertTimeouts(),
+			oasis.LogAssertExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
+		[]oasis.Argument{
+			{Name: byzantine.CfgPrimarySchedulerExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorInvalidBatchHash.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
+		},
+	)
 	// ByzantineExecutorStraggler is a scenario in which the Byzantine node acts
 	// as the primary worker, backup scheduler, and a straggler.
 	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl(

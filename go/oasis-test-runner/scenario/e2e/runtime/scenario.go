@@ -333,6 +333,7 @@ func RegisterScenarios() error {
 		ByzantineExecutorDishonest,
 		ByzantineExecutorSchedulerRunaway,
 		ByzantineExecutorSchedulerBogus,
+		ByzantineExecutorSchedulerInvalidBatchHash,
 		ByzantineExecutorStraggler,
 		ByzantineExecutorSchedulerStraggler,
 		ByzantineExecutorStragglerAllowed,

@@ -57,12 +57,14 @@ const (
 	ModeExecutorRunaway           ExecutorMode = 2
 	ModeExecutorStraggler         ExecutorMode = 3
 	ModeExecutorFailureIndicating ExecutorMode = 4
+	ModeExecutorInvalidBatchHash  ExecutorMode = 5
 
 	modeExecutorHonestString            = "executor_honest"
 	modeExecutorDishonestString         = "executor_dishonest"
 	modeExecutorRunawayString           = "executor_runaway"
 	modeExecutorStragglerString         = "executor_straggler"
 	modeExecutorFailureIndicatingString = "executor_failure_indicating"
+	modeExecutorInvalidBatchHashString  = "executor_invalid_batch_hash"
 )
 
 // String returns a string representation of a executor mode.
@@ -78,6 +80,8 @@ func (m ExecutorMode) String() string {
 		return modeExecutorStragglerString
 	case ModeExecutorFailureIndicating:
 		return modeExecutorFailureIndicatingString
+	case ModeExecutorInvalidBatchHash:
+		return modeExecutorInvalidBatchHashString
 	default:
 		return "[unsupported runtime kind]"
 	}
@@ -96,8 +100,10 @@ func (m *ExecutorMode) FromString(str string) error {
 		*m = ModeExecutorStraggler
 	case modeExecutorFailureIndicatingString:
 		*m = ModeExecutorFailureIndicating
+	case modeExecutorInvalidBatchHashString:
+		*m = ModeExecutorInvalidBatchHash
 	default:
-		return fmt.Errorf("invalid executor mode kind: %s", m)
+		return fmt.Errorf("invalid executor mode kind: %s", str)
 	}
 
 	return nil
