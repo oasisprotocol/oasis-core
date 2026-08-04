@@ -173,7 +173,7 @@ func New(dataDir string, identity *identity.Identity, doc *genesis.Document) (*S
 	p2pCfg.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
 	p2pCfg.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
 	p2pCfg.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
-	p2pCfg.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
+	p2pCfg.AllowDuplicateIP = config.GlobalConfig.Consensus.P2P.AllowDuplicateIP
 
 	nodeKey := &cmtp2p.NodeKey{PrivKey: crypto.SignerToCometBFT(identity.P2PSigner)}
 
