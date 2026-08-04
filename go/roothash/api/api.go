@@ -361,6 +361,10 @@ func (ev *EquivocationProposalEvidence) ValidateBasic(id common.Namespace) error
 		return fmt.Errorf("batch should be empty for equivocation evidence")
 	}
 
+	if ev.ProposalA.BatchSignature != nil || ev.ProposalB.BatchSignature != nil {
+		return fmt.Errorf("batch signature should be empty for equivocation evidence")
+	}
+
 	// Since we did the Equal check above, either BatchHash or PreviousHash must be different.
 
 	// Verify signatures.
