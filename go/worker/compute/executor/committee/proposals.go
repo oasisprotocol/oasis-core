@@ -16,6 +16,7 @@ const maxPendingProposals = 32
 type proposalInfo struct {
 	proposal *commitment.Proposal
 	rank     uint64
+	invalid  bool
 }
 
 // proposalQueue is a priority queue of pending proposals, ordered by round and rank.
@@ -61,6 +62,8 @@ func (q *proposalQueue) Best(round uint64, minRank uint64, maxRank uint64, exclu
 			return true
 		case pi.rank > maxRank:
 			return false
+		case pi.invalid:
+			return true
 		default:
 			if _, skip := exclude[pi.rank]; skip {
 				return true
@@ -73,6 +76,28 @@ func (q *proposalQueue) Best(round uint64, minRank uint64, maxRank uint64, exclu
 	})
 
 	return proposal, rank, ok
+}
+
+// Get returns a proposal for the given round and rank.
+func (q *proposalQueue) Get(round uint64, rank uint64) (*commitment.Proposal, bool) {
+	q.l.RLock()
+	defer q.l.RUnlock()
+
+	info := proposalInfo{
+		proposal: &commitment.Proposal{
+			Header: commitment.ProposalHeader{
+				Round: round,
+			},
+		},
+		rank: rank,
+	}
+
+	pi, ok := q.q.Get(&info)
+	if !ok {
+		return nil, false
+	}
+
+	return pi.proposal, true
 }
 
 // Add adds a new pending proposal that MUST HAVE already undergone basic validity checks
@@ -91,6 +116,11 @@ func (q *proposalQueue) Add(proposal *commitment.Proposal, rank uint64) error {
 		proposal: proposal,
 		rank:     rank,
 	}
+
+	if _, ok := q.q.Get(&info); ok {
+		return fmt.Errorf("proposal already exists")
+	}
+
 	q.q.ReplaceOrInsert(&info)
 
 	// In case of overflows, remove the proposal that is the most in the future.
@@ -103,6 +133,22 @@ func (q *proposalQueue) Add(proposal *commitment.Proposal, rank uint64) error {
 	}
 
 	return nil
+}
+
+// Reject marks a proposal as invalid.
+func (q *proposalQueue) Reject(proposal *commitment.Proposal, rank uint64) {
+	q.l.Lock()
+	defer q.l.Unlock()
+
+	info, ok := q.q.Get(&proposalInfo{
+		proposal: proposal,
+		rank:     rank,
+	})
+	if !ok {
+		return
+	}
+
+	info.invalid = true
 }
 
 // Prune prunes any proposals which are not valid anymore.

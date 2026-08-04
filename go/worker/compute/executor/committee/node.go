@@ -588,6 +588,25 @@ func (n *Node) runtimeExecuteTxBatch(
 func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Proposal, rank uint64, batch transaction.RawBatch) {
 	// This method runs within its own goroutine and is always stopped before the runtime
 	// worker finishes. Therefore, it is safe to read local round variables (block info, ...).
+	n.logger.Debug("verifying batch")
+
+	ioRoot, err := n.computeIORoot(ctx, proposal.Header.Round, batch)
+	if err != nil {
+		n.logger.Error("failed to compute I/O root",
+			"err", err,
+		)
+		// Notify the round worker that the execution failed.
+		n.processedBatchCh <- nil
+		return
+	}
+	if !ioRoot.Equal(&proposal.Header.BatchHash) {
+		n.logger.Debug("batch I/O root mismatch")
+		n.proposals.Reject(proposal, rank)
+		// Notify the round worker that the execution failed.
+		n.processedBatchCh <- nil
+		return
+	}
+
 	n.logger.Debug("processing batch",
 		"batch_size", len(batch),
 	)
@@ -622,6 +641,39 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		computed:        &rsp.Batch,
 		txInputWriteLog: rsp.TxInputWriteLog,
 	}
+}
+
+func (n *Node) computeIORoot(ctx context.Context, round uint64, batch transaction.RawBatch) (hash.Hash, error) {
+	txs := make([]*transaction.Transaction, 0, len(batch))
+	for idx, tx := range batch {
+		txs = append(txs, &transaction.Transaction{
+			Input:      tx,
+			BatchOrder: uint32(idx),
+		})
+	}
+
+	emptyRoot := storage.Root{
+		Namespace: n.rt.ID(),
+		Version:   round,
+		Type:      storage.RootTypeIO,
+	}
+	emptyRoot.Hash.Empty()
+
+	ioTree := transaction.NewTree(nil, emptyRoot)
+	defer ioTree.Close()
+
+	for _, tx := range txs {
+		if err := ioTree.AddTransaction(ctx, *tx, nil); err != nil {
+			return hash.Hash{}, fmt.Errorf("failed to add transaction to tree: %w", err)
+		}
+	}
+
+	_, ioRoot, err := ioTree.Commit(ctx)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to commit I/O tree: %w", err)
+	}
+
+	return ioRoot, nil
 }
 
 func (n *Node) abortBatch(state *StateProcessingBatch) {
