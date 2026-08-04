@@ -39,6 +39,12 @@ type SGXConstraints struct {
 	// requesting runtime key derivation from the key manager.
 	//
 	// If not nil, it replaces the default quote policy for compute and observer nodes.
+	//
+	// NOTE: Enforced directly during compute/observer registration and committee election.
+	// Key manager EnclaveRPC access is gated transitively through registered runtime membership.
+	// Key manager clients must still satisfy the key manager runtime's own quote policy. Making
+	// the key manager runtime resolve caller runtime policies itself is tracked in:
+	// https://github.com/oasisprotocol/oasis-core/issues/6317
 	KeyManagerAccessPolicy *quote.Policy `json:"kma_policy,omitempty"`
 
 	// MaxAttestationAge is the maximum attestation age (in blocks).
