@@ -260,6 +260,10 @@ func (b *AVRBundle) Open(policy *QuotePolicy, trustRoots *x509.CertPool, ts time
 		return nil, fmt.Errorf("quote status not allowed by policy")
 	}
 
+	if policy == nil {
+		return avr, nil
+	}
+
 	// Check minimum TCB evaluation data number.
 	// If the report doesn't contain this number, it will be zeroed out in the structure.
 	if avr.TCBEvaluationDataNumber < policy.MinTCBEvaluationDataNumber {
