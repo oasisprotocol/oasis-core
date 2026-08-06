@@ -7,6 +7,11 @@ import (
 	"github.com/gammazero/deque"
 )
 
+const (
+	// maxBatchBytes is the maximum size of a batch in bytes.
+	maxBatchBytes = 31 * 1024 * 1024 // 31MiB
+)
+
 type checkTxQueue struct {
 	mu sync.Mutex
 
@@ -28,9 +33,12 @@ func (q *checkTxQueue) add(pct *PendingCheckTransaction) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	// Check if there is room in the queue.
 	if q.txs.Len() >= q.maxSize {
 		return fmt.Errorf("check queue is full")
+	}
+
+	if len(pct.raw) > maxBatchBytes {
+		return fmt.Errorf("transaction is too large")
 	}
 
 	q.txs.PushBack(pct)
@@ -57,10 +65,19 @@ func (q *checkTxQueue) pop() []*PendingCheckTransaction {
 		return nil
 	}
 
+	var batchBytes int
+
 	batch := make([]*PendingCheckTransaction, 0, batchSize)
 	for range batchSize {
-		tx := q.txs.PopFront()
+		tx := q.txs.Front()
+
+		batchBytes += len(tx.raw)
+		if batchBytes > maxBatchBytes {
+			break
+		}
 		batch = append(batch, tx)
+
+		_ = q.txs.PopFront()
 	}
 
 	return batch
