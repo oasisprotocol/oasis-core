@@ -68,6 +68,11 @@ func (t *tree) doRemove(
 		return nil, false, nil, err
 	}
 
+	keyBitLength, err := key.BitLength()
+	if err != nil {
+		return nil, false, nil, err
+	}
+
 	switch n := nd.(type) {
 	case nil:
 		// Remove from nil node.
@@ -79,14 +84,15 @@ func (t *tree) doRemove(
 
 		var changed bool
 		var existing []byte
-		if key.BitLength() < bitLength {
+		switch {
+		case keyBitLength < bitLength:
 			// Lookup key is too short for the current n.Label, so it doesn't exist.
 			return ptr, false, nil, nil
-		} else if key.BitLength() == bitLength {
+		case keyBitLength == bitLength:
 			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key)
-		} else if key.GetBit(bitLength) {
+		case key.GetBit(bitLength):
 			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key)
-		} else {
+		default:
 			n.Left, changed, existing, err = t.doRemove(ctx, n.Left, bitLength, key)
 		}
 		if err != nil {

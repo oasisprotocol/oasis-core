@@ -21,6 +21,9 @@ var (
 	// ErrMalformedKey is the error when a malformed key is encountered
 	// during deserialization.
 	ErrMalformedKey = errors.New("mkvs: malformed key")
+	// ErrDepthOverflow is the error when the depth would exceed the maximum
+	// value.
+	ErrDepthOverflow = errors.New("mkvs: depth overflow")
 )
 
 const (

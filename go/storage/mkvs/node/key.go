@@ -82,8 +82,12 @@ func ToMapKey(k []byte) string {
 }
 
 // BitLength returns the length of the key in bits.
-func (k Key) BitLength() Depth {
-	return Depth(len(k[:]) * 8)
+func (k Key) BitLength() (Depth, error) {
+	depth := len(k[:]) * 8
+	if depth > int(MaxDepth) {
+		return 0, ErrDepthOverflow
+	}
+	return Depth(depth), nil
 }
 
 // GetBit returns the given bit of the key.

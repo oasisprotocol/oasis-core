@@ -133,7 +133,12 @@ func (t *tree) doGet(
 		bitLength := bitDepth + n.LabelBitLength
 
 		// Does lookup key end here? Look into LeafNode.
-		if key.BitLength() == bitLength {
+		keyBitLength, err := key.BitLength()
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case keyBitLength == bitLength:
 			if opts.includeSiblings {
 				// Also fetch the left and right siblings.
 				_, err = t.doGet(ctx, n.Left, bitLength, key, opts, true)
@@ -153,43 +158,41 @@ func (t *tree) doGet(
 			}
 
 			return t.doGet(ctx, n.LeafNode, bitLength, key, opts, false)
-		}
-
-		// Lookup key is too short for the current n.Label. It's not stored.
-		if key.BitLength() < bitLength {
+		case keyBitLength < bitLength:
+			// Lookup key is too short for the current n.Label. It's not stored.
 			return nil, nil
-		}
+		default:
+			// Continue recursively based on a bit value.
+			fn := func(visit, other, leaf *node.Pointer) ([]byte, error) {
+				value, err := t.doGet(ctx, visit, bitLength, key, opts, false)
+				if err != nil {
+					return nil, err
+				}
 
-		// Continue recursively based on a bit value.
-		fn := func(visit, other, leaf *node.Pointer) ([]byte, error) {
-			value, err := t.doGet(ctx, visit, bitLength, key, opts, false)
-			if err != nil {
-				return nil, err
-			}
+				if opts.includeSiblings {
+					if pb := opts.proofBuilder; pb != nil && pb.Version() > 0 {
+						// In V0, the leaf node is included in internal node.
+						// Also fetch the leaf.
+						_, err = t.doGet(ctx, leaf, bitLength, key, opts, true)
+						if err != nil {
+							return nil, err
+						}
+					}
 
-			if opts.includeSiblings {
-				if pb := opts.proofBuilder; pb != nil && pb.Version() > 0 {
-					// In V0, the leaf node is included in internal node.
-					// Also fetch the leaf.
-					_, err = t.doGet(ctx, leaf, bitLength, key, opts, true)
+					// Also fetch the other sibling.
+					_, err = t.doGet(ctx, other, bitLength, key, opts, true)
 					if err != nil {
 						return nil, err
 					}
 				}
-
-				// Also fetch the other sibling.
-				_, err = t.doGet(ctx, other, bitLength, key, opts, true)
-				if err != nil {
-					return nil, err
-				}
+				return value, nil
 			}
-			return value, nil
-		}
-		switch key.GetBit(bitLength) {
-		case true:
-			return fn(n.Right, n.Left, n.LeafNode)
-		default:
-			return fn(n.Left, n.Right, n.LeafNode)
+			switch key.GetBit(bitLength) {
+			case true:
+				return fn(n.Right, n.Left, n.LeafNode)
+			default:
+				return fn(n.Left, n.Right, n.LeafNode)
+			}
 		}
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
