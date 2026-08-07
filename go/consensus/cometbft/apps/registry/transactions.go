@@ -396,7 +396,8 @@ func (app *Application) registerNode( // nolint: gocyclo
 
 	// Initialize/update the node status depending on what has changed.
 	var statusDirty bool
-	if isNewNode || isExpiredNode {
+	switch {
+	case isNewNode || isExpiredNode:
 		// Node doesn't exist (or is expired).
 		statusDirty = true
 		if status != nil {
@@ -410,8 +411,7 @@ func (app *Application) registerNode( // nolint: gocyclo
 		// In either case, the node isn't immediately eligible to serve
 		// on a non-validator committee.
 		status.ElectionEligibleAfter = beacon.EpochInvalid
-
-	} else {
+	case isFeatureVersion261:
 		// Node exists, and the registration is just getting renewed.
 		var beaconParams *beacon.ConsensusParameters
 		beaconState := beaconState.NewMutableState(ctx.State())
@@ -422,7 +422,9 @@ func (app *Application) registerNode( // nolint: gocyclo
 			// If the VRF backend is active, and the node's VRF key has
 			// changed, reset election eligibility.
 			status.ElectionEligibleAfter = beacon.EpochInvalid
+			statusDirty = true
 		}
+	default:
 	}
 	if statusDirty {
 		if err = state.SetNodeStatus(ctx, newNode.ID, status); err != nil {
