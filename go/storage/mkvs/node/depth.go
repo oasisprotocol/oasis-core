@@ -6,8 +6,6 @@ import (
 )
 
 // Depth determines the maximum length of the key in bits.
-//
-// maxKeyLengthInBits = 2^size_of(Depth)*8
 type Depth uint16
 
 // DepthSize is the size of Depth in bytes.

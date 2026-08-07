@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/bits"
 )
 
@@ -18,10 +19,15 @@ func (k Key) String() string {
 
 // MarshalBinary encodes a key length in bytes + key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, DepthSize+len(k))
-	binary.LittleEndian.PutUint16(data[0:DepthSize], uint16(len(k)))
+	keyLen := len(k)
+	if keyLen > math.MaxUint16 {
+		return nil, ErrMalformedKey
+	}
+	size := 2 + keyLen
+	data = make([]byte, size)
+	binary.LittleEndian.PutUint16(data[0:2], uint16(keyLen))
 	if k != nil {
-		copy(data[DepthSize:], k[:])
+		copy(data[2:], k[:])
 	}
 	return data, nil
 }
@@ -34,24 +40,25 @@ func (k *Key) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled key incl. length in bytes.
 func (k *Key) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < DepthSize {
+	if len(data) < 2 {
 		return 0, ErrMalformedKey
 	}
 
-	keyLen := binary.LittleEndian.Uint16(data[0:DepthSize])
-	if len(data) < DepthSize+int(keyLen) {
-		return 1, ErrMalformedKey
+	keyLen := binary.LittleEndian.Uint16(data[0:2])
+	size := 2 + int(keyLen)
+	if len(data) < size {
+		return 0, ErrMalformedKey
 	}
 
 	if keyLen > 0 {
 		*k = make([]byte, keyLen)
-		copy(*k, data[DepthSize:DepthSize+int(keyLen)])
+		copy(*k, data[2:size])
 	} else if k != nil {
 		// If the key we are unmarshaling into is not nil, make sure that
 		// it is at least of size zero.
 		*k = []byte{}
 	}
-	return DepthSize + int(keyLen), nil
+	return size, nil
 }
 
 // Equal compares the key with some other key.
