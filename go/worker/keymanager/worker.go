@@ -453,7 +453,12 @@ func (w *Worker) worker() {
 		"version", comp.Version,
 	)
 
-	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
+	policyProvider := &quotePolicyProvider{
+		cs:        w.commonWorker.Consensus,
+		runtimeID: w.runtimeID,
+		version:   comp.Version,
+	}
+	if err := w.ProvisionHostedRuntimeComponent(comp, policyProvider); err != nil {
 		w.logger.Error("failed to provision runtime component",
 			"err", err,
 			"id", comp.ID(),

@@ -14,7 +14,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -550,6 +549,27 @@ func (h *TEEHardware) FromString(str string) error {
 	return nil
 }
 
+// CapabilityTEEVerifyParams contains parameters required to verify a TEE attestation.
+type CapabilityTEEVerifyParams struct {
+	// Features are the TEE features and defaults advertised by the consensus layer.
+	Features *TEEFeatures
+
+	// Time is the current consensus time.
+	Time time.Time
+
+	// Height is the current consensus height.
+	Height uint64
+
+	// Constraints are the serialized TEE constraints.
+	Constraints []byte
+
+	// NodeID is the node identity the TEE capability must be bound to.
+	NodeID signature.PublicKey
+
+	// IsFeatureVersion261 is true for consensus at version 26.1 or higher.
+	IsFeatureVersion261 bool
+}
+
 // CapabilityTEE represents the node's TEE capability.
 type CapabilityTEE struct {
 	// TEE hardware type.
@@ -565,16 +585,8 @@ type CapabilityTEE struct {
 	Attestation []byte `json:"attestation"`
 }
 
-// HashRAK computes the expected report data hash bound to a given public RAK.
-func HashRAK(rak signature.PublicKey) hash.Hash {
-	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
-	hData = append(hData, teeHashContext...)
-	hData = append(hData, rak[:]...)
-	return hash.NewFromBytes(hData)
-}
-
 // Verify verifies the node's TEE capabilities, at the provided timestamp and height.
-func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey, isFeatureVersion261 bool) error {
+func (c *CapabilityTEE) Verify(params CapabilityTEEVerifyParams) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		// Parse SGX remote attestation.
@@ -582,21 +594,29 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 		if err := cbor.Unmarshal(c.Attestation, &sa); err != nil {
 			return fmt.Errorf("node: malformed SGX attestation: %w", err)
 		}
-		if err := sa.ValidateBasic(teeCfg); err != nil {
+		if err := sa.ValidateBasic(params.Features); err != nil {
 			return fmt.Errorf("node: malformed SGX attestation: %w", err)
 		}
 
 		// Parse SGX constraints.
 		var sc SGXConstraints
-		if err := cbor.Unmarshal(constraints, &sc); err != nil {
+		if err := cbor.Unmarshal(params.Constraints, &sc); err != nil {
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
-		if err := sc.ValidateBasic(teeCfg, isFeatureVersion261); err != nil {
+		if err := sc.ValidateBasic(params.Features, params.IsFeatureVersion261); err != nil {
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
 
 		// Verify SGX remote attestation.
-		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, c.REK, nodeID)
+		return sa.Verify(
+			params.Features,
+			params.Time,
+			params.Height,
+			&sc,
+			c.RAK,
+			c.REK,
+			params.NodeID,
+		)
 	default:
 		return ErrInvalidTEEHardware
 	}
