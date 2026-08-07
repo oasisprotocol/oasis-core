@@ -175,7 +175,10 @@ func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
 // AppendBit appends the given bit to the key.
 //
 // This function is immutable and returns a new instance of Key.
-func (k Key) AppendBit(keyLen Depth, val bool) Key {
+func (k Key) AppendBit(keyLen Depth, val bool) (Key, error) {
+	if keyLen == MaxDepth {
+		return nil, ErrDepthOverflow
+	}
 	newKey := make(Key, (keyLen + 1).ToBytes())
 	copy(newKey[:len(k)], k[:])
 
@@ -185,7 +188,7 @@ func (k Key) AppendBit(keyLen Depth, val bool) Key {
 		newKey[keyLen/8] &^= 0x80 >> (keyLen % 8)
 	}
 
-	return newKey
+	return newKey, nil
 }
 
 // CommonPrefixLen computes length of common prefix of k and k2.

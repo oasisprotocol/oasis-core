@@ -42,17 +42,23 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// append a single bit
 	key = Key{0xf0}
-	newKey = key.AppendBit(4, true)
+	newKey, err := key.AppendBit(4, true)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf8}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(4, false)
+	newKey, err = key.AppendBit(4, false)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf7}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(8, true)
+	newKey, err = key.AppendBit(8, true)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xff, 0x80}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(8, false)
+	newKey, err = key.AppendBit(8, false)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xff, 0x00}, newKey)
+	_, err = key.AppendBit(MaxDepth, false)
+	require.Error(t, err)
 
 	// byte-aligned split
 	key = Key{0xaa, 0xbb, 0xcc, 0xdd}

@@ -282,7 +282,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 				return nil, err
 			}
 			k, _ = k.Split(newBitDepth, keyBitLength)
-			return k.AppendBit(newBitDepth, true), nil
+			return k.AppendBit(newBitDepth, true)
 		}
 
 		// Check if the key is longer than the current path but lexicographically smaller. In this
@@ -306,7 +306,10 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			fallthrough
 		case visitAt:
 			if keyNotLonger {
-				key = key.AppendBit(newBitDepth, false)
+				key, err = key.AppendBit(newBitDepth, false)
+				if err != nil {
+					return err
+				}
 			}
 
 			if !key.GetBit(newBitDepth) || takeFirst {
