@@ -68,7 +68,8 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// byte-aligned merge
 	key = Key{0xaa, 0xbb}
-	newKey = key.Merge(16, Key{0xcc, 0xdd}, 16)
+	newKey, err = key.Merge(16, Key{0xcc, 0xdd}, 16)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb, 0xcc, 0xdd}, newKey)
 
 	// empty/full splits
@@ -81,9 +82,11 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 	require.Equal(t, Key{}, s)
 
 	// empty merges
-	newKey = Key{}.Merge(0, Key{0xaa, 0xbb}, 16)
+	newKey, err = Key{}.Merge(0, Key{0xaa, 0xbb}, 16)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb}, newKey)
-	newKey = Key{0xaa, 0xbb}.Merge(16, Key{}, 0)
+	newKey, err = Key{0xaa, 0xbb}.Merge(16, Key{}, 0)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb}, newKey)
 
 	// non byte-aligned split
@@ -93,7 +96,8 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 	require.Equal(t, Key{0x8a, 0xcf, 0x13, 0x57, 0x9b, 0xde}, s)
 
 	// ...and merge
-	newKey = p.Merge(17, s, 64-17)
+	newKey, err = p.Merge(17, s, 64-17)
+	require.NoError(t, err)
 	require.Equal(t, key, newKey)
 
 	// non byte-aligned key length split.
@@ -104,19 +108,32 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 	require.Equal(t, Key{0xff}, s)
 
 	// ...and merge
-	newKey = p.Merge(21, s, 8)
+	newKey, err = p.Merge(21, s, 8)
+	require.NoError(t, err)
 	// Merge doesn't obtain original key, because the split cleaned unused bits!
 	require.Equal(t, Key{0xff, 0xff, 0xff, 0xf8}, newKey)
 
 	// Special case with zero-length key.
 	key = Key{0x80}
-	newKey = key.Merge(0, Key{0xf0}, 4)
+	newKey, err = key.Merge(0, Key{0xf0}, 4)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf0}, newKey)
 
 	// Special case with extra bytes.
 	key = Key{0x41, 0x6b, 0x00}
-	newKey = key.Merge(16, Key{0x37}, 8)
+	newKey, err = key.Merge(16, Key{0x37}, 8)
+	require.NoError(t, err)
 	require.Equal(t, Key{0x41, 0x6b, 0x37}, newKey)
+
+	// Overflow.
+	key = Key{0x41}
+	_, err = key.Merge(9, key, 1)
+	require.Error(t, err)
+	_, err = key.Merge(1, key, 9)
+	require.Error(t, err)
+	longKey := Key(make([]byte, MaxDepth.ToBytes()))
+	_, err = key.Merge(1, longKey, MaxDepth)
+	require.Error(t, err)
 }
 
 func TestKeyCommonPrefixLen(t *testing.T) {

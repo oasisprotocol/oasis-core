@@ -263,7 +263,10 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		return nil
 	case *node.InternalNode:
 		newBitDepth := bitDepth + n.LabelBitLength
-		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+		newPath, err := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+		if err != nil {
+			return err
+		}
 
 		tryNext := func(next *node.Pointer, nextKey node.Key, parentState visitState) (bool, error) {
 			if err := it.doNext(next, newBitDepth, newPath, nextKey, visitBefore); err != nil {

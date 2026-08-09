@@ -147,11 +147,18 @@ func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key) {
 // keyLen is the length of the original key in bits and k2Len is the length of
 // another key in bits.
 // This function is immutable and returns a new instance of Key.
-func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
-	keyLenBytes := int(keyLen) / 8
-	if keyLen%8 != 0 {
-		keyLenBytes++
+func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) (Key, error) {
+	if keyLen.ToBytes() > len(k[:]) {
+		return nil, ErrInvalidKeyLength
 	}
+	if k2Len.ToBytes() > len(k2[:]) {
+		return nil, ErrInvalidKeyLength
+	}
+	if MaxDepth-keyLen < k2Len {
+		return nil, ErrDepthOverflow
+	}
+
+	keyLenBytes := keyLen.ToBytes()
 
 	newKey := make(Key, (keyLen + k2Len).ToBytes())
 	copy(newKey[:], k[:keyLenBytes])
@@ -169,7 +176,7 @@ func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
 		}
 	}
 
-	return newKey
+	return newKey, nil
 }
 
 // AppendBit appends the given bit to the key.

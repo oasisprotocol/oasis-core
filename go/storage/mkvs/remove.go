@@ -137,7 +137,10 @@ func (t *tree) doRemove(
 			// If child is an internal node, also fix the label.
 			switch inode := ndChild.(type) {
 			case *node.InternalNode:
-				inode.Label = n.Label.Merge(n.LabelBitLength, inode.Label, inode.LabelBitLength)
+				inode.Label, err = n.Label.Merge(n.LabelBitLength, inode.Label, inode.LabelBitLength)
+				if err != nil {
+					return nil, false, nil, err
+				}
 				inode.LabelBitLength += n.LabelBitLength
 				if inode.Clean {
 					// Node was clean so old node is eligible for removal.
