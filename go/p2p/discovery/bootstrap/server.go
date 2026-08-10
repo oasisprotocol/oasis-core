@@ -66,6 +66,24 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 
 func (s *service) handleAdvertise(ns string, peerID core.PeerID) (*AdvertiseResponse, error) {
 	addrs := s.host.Peerstore().Addrs(peerID)
+
+	if len(addrs) == 0 {
+		seen := make(map[string]struct{})
+
+		conns := s.host.Network().ConnsToPeer(peerID)
+		for _, conn := range conns {
+			addr := conn.RemoteMultiaddr()
+
+			key := addr.String()
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			addrs = append(addrs, addr)
+		}
+	}
+
 	if !s.allowPrivateIPs {
 		var pubAddrs []multiaddr.Multiaddr
 		for _, addr := range addrs {
