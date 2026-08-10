@@ -101,7 +101,7 @@ func (t *tree) doInsert(
 				// Key to insert ends exactly at this node. Add it to the
 				// existing internal node as LeafNode.
 				result, err = t.doInsert(ctx, n.LeafNode, bitLength, key, val)
-			} else if key.GetBit(bitLength) {
+			} else if key.MustGetBit(bitLength) {
 				// Insert recursively based on the bit value.
 				result, err = t.doInsert(ctx, n.Right, bitLength, key, val)
 			} else {
@@ -114,7 +114,7 @@ func (t *tree) doInsert(
 
 			if keyBitLength == bitLength {
 				n.LeafNode = result.newRoot
-			} else if key.GetBit(bitLength) {
+			} else if key.MustGetBit(bitLength) {
 				n.Right = result.newRoot
 			} else {
 				n.Left = result.newRoot
@@ -158,14 +158,14 @@ func (t *tree) doInsert(
 		if keyBitLength-bitDepth == cpLength {
 			// The key is a prefix of existing path.
 			leafNode = newLeaf
-			if labelSuffix.GetBit(0) {
+			if labelSuffix.MustGetBit(0) {
 				left = nil
 				right = ptr
 			} else {
 				left = ptr
 				right = nil
 			}
-		} else if keyRemainder.GetBit(cpLength) {
+		} else if keyRemainder.MustGetBit(cpLength) {
 			left = ptr
 			right = newLeaf
 		} else {
@@ -227,7 +227,7 @@ func (t *tree) doInsert(
 		if keyBitLength-bitDepth == cpLength {
 			// Inserted key is a prefix of the label.
 			leafNode = newLeaf
-			if leafKeyRemainder.GetBit(cpLength) {
+			if leafKeyRemainder.MustGetBit(cpLength) {
 				left = nil
 				right = ptr
 			} else {
@@ -237,14 +237,14 @@ func (t *tree) doInsert(
 		} else if nodeKeyBitLength-bitDepth == cpLength {
 			// Label is a prefix of the inserted key.
 			leafNode = ptr
-			if keyRemainder.GetBit(cpLength) {
+			if keyRemainder.MustGetBit(cpLength) {
 				left = nil
 				right = newLeaf
 			} else {
 				left = newLeaf
 				right = nil
 			}
-		} else if keyRemainder.GetBit(cpLength) {
+		} else if keyRemainder.MustGetBit(cpLength) {
 			left = ptr
 			right = newLeaf
 		} else {

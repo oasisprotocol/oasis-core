@@ -91,8 +91,22 @@ func (k Key) BitLength() (Depth, error) {
 }
 
 // GetBit returns the given bit of the key.
-func (k Key) GetBit(bit Depth) bool {
-	return k[bit/8]&(1<<(7-(bit%8))) != 0
+func (k Key) GetBit(bit Depth) (bool, error) {
+	if bit.ToBytes() > len(k[:]) {
+		return false, ErrInvalidKeyLength
+	}
+	return k[bit/8]&(1<<(7-(bit%8))) != 0, nil
+}
+
+// MustGetBit returns the given bit of the key.
+//
+// It panics if the bit is outside the key's length.
+func (k Key) MustGetBit(bit Depth) bool {
+	b, err := k.GetBit(bit)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // SetBit sets the bit at the given position bit to value val.

@@ -187,7 +187,7 @@ func (t *tree) doGet(
 				}
 				return value, nil
 			}
-			switch key.GetBit(bitLength) {
+			switch key.MustGetBit(bitLength) {
 			case true:
 				return fn(n.Right, n.Left, n.LeafNode)
 			default:

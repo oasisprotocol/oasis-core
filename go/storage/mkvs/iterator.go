@@ -315,7 +315,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 				}
 			}
 
-			if !key.GetBit(newBitDepth) || takeFirst {
+			if !key.MustGetBit(newBitDepth) || takeFirst {
 				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
 					return err
 				}

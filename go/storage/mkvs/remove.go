@@ -90,7 +90,7 @@ func (t *tree) doRemove(
 			return ptr, false, nil, nil
 		case keyBitLength == bitLength:
 			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key)
-		case key.GetBit(bitLength):
+		case key.MustGetBit(bitLength):
 			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key)
 		default:
 			n.Left, changed, existing, err = t.doRemove(ctx, n.Left, bitLength, key)
