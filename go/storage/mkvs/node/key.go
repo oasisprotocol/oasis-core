@@ -111,8 +111,11 @@ func (k Key) MustGetBit(bit Depth) bool {
 
 // SetBit sets the bit at the given position bit to value val.
 //
-// This function is immutable and returns a new instance of Key
-func (k Key) SetBit(bit Depth, val bool) Key {
+// This function is immutable and returns a new instance of Key.
+func (k Key) SetBit(bit Depth, val bool) (Key, error) {
+	if bit.ToBytes() > len(k[:]) {
+		return nil, ErrInvalidKeyLength
+	}
 	kb := make(Key, len(k))
 	copy(kb[:], k[:])
 	mask := byte(1 << (7 - (bit % 8)))
@@ -120,6 +123,18 @@ func (k Key) SetBit(bit Depth, val bool) Key {
 		kb[bit/8] |= mask
 	} else {
 		kb[bit/8] &^= mask
+	}
+	return kb, nil
+}
+
+// MustSetBit sets the bit at the given position bit to value val.
+//
+// This function is immutable and returns a new instance of Key.
+// It panics if the bit is outside the key's length.
+func (k Key) MustSetBit(bit Depth, val bool) Key {
+	kb, err := k.SetBit(bit, val)
+	if err != nil {
+		panic(err)
 	}
 	return kb
 }

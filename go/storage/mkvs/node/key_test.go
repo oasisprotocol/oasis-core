@@ -30,7 +30,7 @@ func TestSetBit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.key.SetBit(tc.bit, tc.val); !got.Equal(tc.want) {
+			if got := tc.key.MustSetBit(tc.bit, tc.val); !got.Equal(tc.want) {
 				t.Errorf("%08b.SetBit(%d, %t) = %08b, want %08b", tc.key, tc.bit, tc.val, got, tc.want)
 			}
 		})
