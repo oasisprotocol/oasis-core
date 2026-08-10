@@ -77,7 +77,7 @@ func (t *tree) doInsert(
 	if err != nil {
 		return insertResult{}, err
 	}
-	_, keyRemainder := key.Split(bitDepth, keyBitLength)
+	_, keyRemainder := key.MustSplit(bitDepth, keyBitLength)
 
 	switch n := nd.(type) {
 	case nil:
@@ -138,7 +138,7 @@ func (t *tree) doInsert(
 
 		// Key mismatches the label at position cpLength. Split the edge and
 		// insert new leaf.
-		labelPrefix, labelSuffix := n.Label.Split(cpLength, n.LabelBitLength)
+		labelPrefix, labelSuffix := n.Label.MustSplit(cpLength, n.LabelBitLength)
 		n.Label = labelSuffix
 		n.LabelBitLength = n.LabelBitLength - cpLength
 
@@ -211,7 +211,7 @@ func (t *tree) doInsert(
 		}
 
 		var result insertResult
-		_, leafKeyRemainder := n.Key.Split(bitDepth, nodeKeyBitLength)
+		_, leafKeyRemainder := n.Key.MustSplit(bitDepth, nodeKeyBitLength)
 		cpLength := leafKeyRemainder.CommonPrefixLen(nodeKeyBitLength-bitDepth, keyRemainder, keyBitLength-bitDepth)
 
 		// Key mismatches the label at position cpLength. Split the edge.
@@ -219,7 +219,7 @@ func (t *tree) doInsert(
 		if err != nil {
 			return insertResult{}, err
 		}
-		labelPrefix, _ := leafKeyRemainder.Split(cpLength, leafKeyBitLength)
+		labelPrefix, _ := leafKeyRemainder.MustSplit(cpLength, leafKeyBitLength)
 		newLeaf := t.cache.newLeafNode(key, val)
 		result.insertedLeaf = newLeaf
 		var leafNode, left, right *node.Pointer

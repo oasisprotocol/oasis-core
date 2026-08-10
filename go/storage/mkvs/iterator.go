@@ -284,7 +284,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			if err != nil {
 				return nil, err
 			}
-			k, _ = k.Split(newBitDepth, keyBitLength)
+			k, _ = k.MustSplit(newBitDepth, keyBitLength)
 			return k.AppendBit(newBitDepth, true)
 		}
 

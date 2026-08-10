@@ -62,7 +62,7 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// byte-aligned split
 	key = Key{0xaa, 0xbb, 0xcc, 0xdd}
-	p, s := key.Split(16, 32)
+	p, s := key.MustSplit(16, 32)
 	require.Equal(t, Key{0xaa, 0xbb}, p)
 	require.Equal(t, Key{0xcc, 0xdd}, s)
 
@@ -74,10 +74,10 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// empty/full splits
 	key = Key{0xaa, 0xbb, 0xcc, 0xdd}
-	p, s = key.Split(0, 32)
+	p, s = key.MustSplit(0, 32)
 	require.Equal(t, Key{}, p)
 	require.Equal(t, key, s)
-	p, s = key.Split(32, 32)
+	p, s = key.MustSplit(32, 32)
 	require.Equal(t, key, p)
 	require.Equal(t, Key{}, s)
 
@@ -91,7 +91,7 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// non byte-aligned split
 	key = Key{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
-	p, s = key.Split(17, 64)
+	p, s = key.MustSplit(17, 64)
 	require.Equal(t, Key{0x01, 0x23, 0x00}, p)
 	require.Equal(t, Key{0x8a, 0xcf, 0x13, 0x57, 0x9b, 0xde}, s)
 
@@ -102,7 +102,7 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// non byte-aligned key length split.
 	key = Key{0xff, 0xff, 0xff, 0xff}
-	p, s = key.Split(21, 29)
+	p, s = key.MustSplit(21, 29)
 	// Check that split cleans the last 3 unused bits!
 	require.Equal(t, Key{0xff, 0xff, 0xf8}, p)
 	require.Equal(t, Key{0xff}, s)

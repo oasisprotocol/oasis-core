@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"math/bits"
 )
@@ -144,9 +143,12 @@ func (k Key) MustSetBit(bit Depth, val bool) Key {
 // keyLen is the length of the key in bits and splitPoint is the index of the
 // first suffix bit.
 // This function is immutable and returns two new instances of Key.
-func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key) {
+func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key, err error) {
+	if keyLen.ToBytes() > len(k[:]) {
+		return nil, nil, ErrInvalidKeyLength
+	}
 	if splitPoint > keyLen {
-		panic(fmt.Sprintf("mkvs: splitPoint %+v greater than keyLen %+v", splitPoint, keyLen))
+		return nil, nil, ErrInvalidKeyLength
 	}
 	prefixLen := Depth(splitPoint.ToBytes())
 	suffixLen := Depth((keyLen - splitPoint).ToBytes())
@@ -168,6 +170,20 @@ func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key) {
 		}
 	}
 
+	return prefix, suffix, nil
+}
+
+// MustSplit performs bit-wise split of the key.
+//
+// keyLen is the length of the key in bits and splitPoint is the index of the
+// first suffix bit.
+// This function is immutable and returns two new instances of Key.
+// It panics if the split point or key length is outside the key's length.
+func (k Key) MustSplit(splitPoint, keyLen Depth) (prefix, suffix Key) {
+	prefix, suffix, err := k.Split(splitPoint, keyLen)
+	if err != nil {
+		panic(err)
+	}
 	return prefix, suffix
 }
 
