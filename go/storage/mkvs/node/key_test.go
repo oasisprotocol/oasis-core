@@ -30,7 +30,7 @@ func TestSetBit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.key.SetBit(tc.bit, tc.val); !got.Equal(tc.want) {
+			if got := tc.key.MustSetBit(tc.bit, tc.val); !got.Equal(tc.want) {
 				t.Errorf("%08b.SetBit(%d, %t) = %08b, want %08b", tc.key, tc.bit, tc.val, got, tc.want)
 			}
 		})
@@ -42,90 +42,123 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 	// append a single bit
 	key = Key{0xf0}
-	newKey = key.AppendBit(4, true)
+	newKey, err := key.AppendBit(4, true)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf8}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(4, false)
+	newKey, err = key.AppendBit(4, false)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf7}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(8, true)
+	newKey, err = key.AppendBit(8, true)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xff, 0x80}, newKey)
 	key = Key{0xff}
-	newKey = key.AppendBit(8, false)
+	newKey, err = key.AppendBit(8, false)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xff, 0x00}, newKey)
+	_, err = key.AppendBit(MaxDepth, false)
+	require.Error(t, err)
 
 	// byte-aligned split
 	key = Key{0xaa, 0xbb, 0xcc, 0xdd}
-	p, s := key.Split(16, 32)
+	p, s := key.MustSplit(16, 32)
 	require.Equal(t, Key{0xaa, 0xbb}, p)
 	require.Equal(t, Key{0xcc, 0xdd}, s)
 
 	// byte-aligned merge
 	key = Key{0xaa, 0xbb}
-	newKey = key.Merge(16, Key{0xcc, 0xdd}, 16)
+	newKey, err = key.Merge(16, Key{0xcc, 0xdd}, 16)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb, 0xcc, 0xdd}, newKey)
 
 	// empty/full splits
 	key = Key{0xaa, 0xbb, 0xcc, 0xdd}
-	p, s = key.Split(0, 32)
+	p, s = key.MustSplit(0, 32)
 	require.Equal(t, Key{}, p)
 	require.Equal(t, key, s)
-	p, s = key.Split(32, 32)
+	p, s = key.MustSplit(32, 32)
 	require.Equal(t, key, p)
 	require.Equal(t, Key{}, s)
 
 	// empty merges
-	newKey = Key{}.Merge(0, Key{0xaa, 0xbb}, 16)
+	newKey, err = Key{}.Merge(0, Key{0xaa, 0xbb}, 16)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb}, newKey)
-	newKey = Key{0xaa, 0xbb}.Merge(16, Key{}, 0)
+	newKey, err = Key{0xaa, 0xbb}.Merge(16, Key{}, 0)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xaa, 0xbb}, newKey)
 
 	// non byte-aligned split
 	key = Key{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
-	p, s = key.Split(17, 64)
+	p, s = key.MustSplit(17, 64)
 	require.Equal(t, Key{0x01, 0x23, 0x00}, p)
 	require.Equal(t, Key{0x8a, 0xcf, 0x13, 0x57, 0x9b, 0xde}, s)
 
 	// ...and merge
-	newKey = p.Merge(17, s, 64-17)
+	newKey, err = p.Merge(17, s, 64-17)
+	require.NoError(t, err)
 	require.Equal(t, key, newKey)
 
 	// non byte-aligned key length split.
 	key = Key{0xff, 0xff, 0xff, 0xff}
-	p, s = key.Split(21, 29)
+	p, s = key.MustSplit(21, 29)
 	// Check that split cleans the last 3 unused bits!
 	require.Equal(t, Key{0xff, 0xff, 0xf8}, p)
 	require.Equal(t, Key{0xff}, s)
 
 	// ...and merge
-	newKey = p.Merge(21, s, 8)
+	newKey, err = p.Merge(21, s, 8)
+	require.NoError(t, err)
 	// Merge doesn't obtain original key, because the split cleaned unused bits!
 	require.Equal(t, Key{0xff, 0xff, 0xff, 0xf8}, newKey)
 
 	// Special case with zero-length key.
 	key = Key{0x80}
-	newKey = key.Merge(0, Key{0xf0}, 4)
+	newKey, err = key.Merge(0, Key{0xf0}, 4)
+	require.NoError(t, err)
 	require.Equal(t, Key{0xf0}, newKey)
 
 	// Special case with extra bytes.
 	key = Key{0x41, 0x6b, 0x00}
-	newKey = key.Merge(16, Key{0x37}, 8)
+	newKey, err = key.Merge(16, Key{0x37}, 8)
+	require.NoError(t, err)
 	require.Equal(t, Key{0x41, 0x6b, 0x37}, newKey)
+
+	// Overflow.
+	key = Key{0x41}
+	_, err = key.Merge(9, key, 1)
+	require.Error(t, err)
+	_, err = key.Merge(1, key, 9)
+	require.Error(t, err)
+	longKey := Key(make([]byte, MaxDepth.ToBytes()))
+	_, err = key.Merge(1, longKey, MaxDepth)
+	require.Error(t, err)
 }
 
 func TestKeyCommonPrefixLen(t *testing.T) {
 	key := Key{}
-	require.Equal(t, Depth(0), key.CommonPrefixLen(0, Key{}, 0))
+	length, err := key.CommonPrefixLen(0, Key{}, 0)
+	require.NoError(t, err)
+	require.Equal(t, Depth(0), length)
 
 	key = Key{0xff, 0xff}
-	require.Equal(t, Depth(16), key.CommonPrefixLen(16, Key{0xff, 0xff, 0xff}, 24))
+	length, err = key.CommonPrefixLen(16, Key{0xff, 0xff, 0xff}, 24)
+	require.NoError(t, err)
+	require.Equal(t, Depth(16), length)
 
 	key = Key{0xff, 0xff, 0xff}
-	require.Equal(t, Depth(16), key.CommonPrefixLen(24, Key{0xff, 0xff}, 16))
+	length, err = key.CommonPrefixLen(24, Key{0xff, 0xff}, 16)
+	require.NoError(t, err)
+	require.Equal(t, Depth(16), length)
 
 	key = Key{0xff, 0xff, 0xff}
-	require.Equal(t, Depth(24), key.CommonPrefixLen(24, Key{0xff, 0xff, 0xff}, 24))
+	length, err = key.CommonPrefixLen(24, Key{0xff, 0xff, 0xff}, 24)
+	require.NoError(t, err)
+	require.Equal(t, Depth(24), length)
 
 	key = Key{0xab, 0xcd, 0xef, 0xff}
-	require.Equal(t, Depth(23), key.CommonPrefixLen(32, Key{0xab, 0xcd, 0xee, 0xff}, 32))
+	length, err = key.CommonPrefixLen(32, Key{0xab, 0xcd, 0xee, 0xff}, 32)
+	require.NoError(t, err)
+	require.Equal(t, Depth(23), length)
 }

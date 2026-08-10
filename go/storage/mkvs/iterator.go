@@ -38,7 +38,12 @@ func (t *tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 	)
 	defer it.Close()
 
-	it.Seek(request.Key)
+	key := node.Key(request.Key)
+	if err := key.Validate(); err != nil {
+		return nil, err
+	}
+
+	it.Seek(key)
 	if it.Err() != nil {
 		return nil, it.Err()
 	}
@@ -246,7 +251,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error {
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
@@ -263,7 +268,10 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 		return nil
 	case *node.InternalNode:
 		newBitDepth := bitDepth + n.LabelBitLength
-		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+		newPath, err := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+		if err != nil {
+			return err
+		}
 
 		tryNext := func(next *node.Pointer, nextKey node.Key, parentState visitState) (bool, error) {
 			if err := it.doNext(next, newBitDepth, newPath, nextKey, visitBefore); err != nil {
@@ -276,15 +284,24 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			return false, nil
 		}
 
-		advanceKeyToRight := func(k node.Key) node.Key {
-			k, _ = k.Split(newBitDepth, k.BitLength())
+		advanceKeyToRight := func(k node.Key) (node.Key, error) {
+			keyBitLength, err := k.BitLength()
+			if err != nil {
+				return nil, err
+			}
+			k, _ = k.MustSplit(newBitDepth, keyBitLength)
 			return k.AppendBit(newBitDepth, true)
 		}
 
 		// Check if the key is longer than the current path but lexicographically smaller. In this
 		// case everything in this subtree will be larger so we need to take the first value.
-		takeFirst := newBitDepth > 0 && key.BitLength() >= newBitDepth && key.Compare(newPath) < 0
-		keyNotLonger := key.BitLength() <= newBitDepth
+		keyBitLength, err := key.BitLength()
+		if err != nil {
+			return err
+		}
+
+		takeFirst := newBitDepth > 0 && keyBitLength >= newBitDepth && key.Compare(newPath) < 0
+		keyNotLonger := keyBitLength <= newBitDepth
 
 		switch state {
 		case visitBefore:
@@ -297,21 +314,30 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 			fallthrough
 		case visitAt:
 			if keyNotLonger {
-				key = key.AppendBit(newBitDepth, false)
+				key, err = key.AppendBit(newBitDepth, false)
+				if err != nil {
+					return err
+				}
 			}
 
-			if !key.GetBit(newBitDepth) || takeFirst {
+			if !key.MustGetBit(newBitDepth) || takeFirst {
 				if ok, err := tryNext(n.Left, key, visitAtLeft); ok || err != nil {
 					return err
 				}
-				key = advanceKeyToRight(key)
+				key, err = advanceKeyToRight(key)
+				if err != nil {
+					return err
+				}
 			}
 
 			if ok, err := tryNext(n.Right, key, visitAfter); ok || err != nil {
 				return err
 			}
 		case visitAtLeft:
-			key = advanceKeyToRight(key)
+			key, err = advanceKeyToRight(key)
+			if err != nil {
+				return err
+			}
 			if ok, err := tryNext(n.Right, key, visitAfter); ok || err != nil {
 				return err
 			}
