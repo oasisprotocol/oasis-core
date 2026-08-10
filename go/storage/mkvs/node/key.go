@@ -16,6 +16,15 @@ func (k Key) String() string {
 	return hex.EncodeToString(k[:])
 }
 
+// Validate checks that the key does not exceed the maximum supported depth.
+func (k Key) Validate() error {
+	depth := len(k[:]) * 8
+	if depth > int(MaxDepth) {
+		return ErrDepthOverflow
+	}
+	return nil
+}
+
 // MarshalBinary encodes a key length in bytes + key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
 	keyLen := len(k)

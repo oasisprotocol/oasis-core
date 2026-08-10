@@ -38,7 +38,12 @@ func (t *tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 	)
 	defer it.Close()
 
-	it.Seek(request.Key)
+	key := node.Key(request.Key)
+	if err := key.Validate(); err != nil {
+		return nil, err
+	}
+
+	it.Seek(key)
 	if it.Err() != nil {
 		return nil, it.Err()
 	}
@@ -246,7 +251,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error {
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {

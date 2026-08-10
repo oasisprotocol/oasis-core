@@ -56,7 +56,7 @@ type insertResult struct {
 	existed      bool
 }
 
-func (t *tree) doInsert(
+func (t *tree) doInsert( // nolint: gocyclo
 	ctx context.Context,
 	ptr *node.Pointer,
 	bitDepth node.Depth,
