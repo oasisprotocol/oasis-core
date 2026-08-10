@@ -138,17 +138,27 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 
 func TestKeyCommonPrefixLen(t *testing.T) {
 	key := Key{}
-	require.Equal(t, Depth(0), key.CommonPrefixLen(0, Key{}, 0))
+	length, err := key.CommonPrefixLen(0, Key{}, 0)
+	require.NoError(t, err)
+	require.Equal(t, Depth(0), length)
 
 	key = Key{0xff, 0xff}
-	require.Equal(t, Depth(16), key.CommonPrefixLen(16, Key{0xff, 0xff, 0xff}, 24))
+	length, err = key.CommonPrefixLen(16, Key{0xff, 0xff, 0xff}, 24)
+	require.NoError(t, err)
+	require.Equal(t, Depth(16), length)
 
 	key = Key{0xff, 0xff, 0xff}
-	require.Equal(t, Depth(16), key.CommonPrefixLen(24, Key{0xff, 0xff}, 16))
+	length, err = key.CommonPrefixLen(24, Key{0xff, 0xff}, 16)
+	require.NoError(t, err)
+	require.Equal(t, Depth(16), length)
 
 	key = Key{0xff, 0xff, 0xff}
-	require.Equal(t, Depth(24), key.CommonPrefixLen(24, Key{0xff, 0xff, 0xff}, 24))
+	length, err = key.CommonPrefixLen(24, Key{0xff, 0xff, 0xff}, 24)
+	require.NoError(t, err)
+	require.Equal(t, Depth(24), length)
 
 	key = Key{0xab, 0xcd, 0xef, 0xff}
-	require.Equal(t, Depth(23), key.CommonPrefixLen(32, Key{0xab, 0xcd, 0xee, 0xff}, 32))
+	length, err = key.CommonPrefixLen(32, Key{0xab, 0xcd, 0xee, 0xff}, 32)
+	require.NoError(t, err)
+	require.Equal(t, Depth(23), length)
 }

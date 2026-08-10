@@ -90,7 +90,10 @@ func (t *tree) doInsert(
 		}
 		return result, nil
 	case *node.InternalNode:
-		cpLength := n.Label.CommonPrefixLen(n.LabelBitLength, keyRemainder, keyBitLength-bitDepth)
+		cpLength, err := n.Label.CommonPrefixLen(n.LabelBitLength, keyRemainder, keyBitLength-bitDepth)
+		if err != nil {
+			return insertResult{}, err
+		}
 		var result insertResult
 
 		if cpLength == n.LabelBitLength {
@@ -212,7 +215,10 @@ func (t *tree) doInsert(
 
 		var result insertResult
 		_, leafKeyRemainder := n.Key.MustSplit(bitDepth, nodeKeyBitLength)
-		cpLength := leafKeyRemainder.CommonPrefixLen(nodeKeyBitLength-bitDepth, keyRemainder, keyBitLength-bitDepth)
+		cpLength, err := leafKeyRemainder.CommonPrefixLen(nodeKeyBitLength-bitDepth, keyRemainder, keyBitLength-bitDepth)
+		if err != nil {
+			return insertResult{}, err
+		}
 
 		// Key mismatches the label at position cpLength. Split the edge.
 		leafKeyBitLength, err := leafKeyRemainder.BitLength()

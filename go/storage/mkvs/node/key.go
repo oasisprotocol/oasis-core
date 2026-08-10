@@ -247,12 +247,19 @@ func (k Key) AppendBit(keyLen Depth, val bool) (Key, error) {
 //
 // Additionally, keyBitLen and k2bitLen are key lengths in bits of k and k2
 // respectively.
-func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) Depth {
-	minKeyLen := min(len(k2), len(k))
+func (k Key) CommonPrefixLen(keyLen Depth, k2 Key, k2Len Depth) (Depth, error) {
+	if keyLen.ToBytes() > len(k[:]) {
+		return 0, ErrInvalidKeyLength
+	}
+	if k2Len.ToBytes() > len(k2[:]) {
+		return 0, ErrInvalidKeyLength
+	}
+
+	minLen := min(len(k2), len(k))
 
 	// Compute the common prefix byte-wise.
 	i := Depth(0)
-	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ { //nolint:gosec
+	for ; i < Depth(minLen) && k[i] == k2[i]; i++ { //nolint:gosec
 	}
 
 	// Prefixes match i bytes and maybe some more bits below.
@@ -265,12 +272,12 @@ func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) Depth {
 	}
 
 	// In any case, bitLength should never exceed length of the shorter key.
-	if bitLength > keyBitLen {
-		bitLength = keyBitLen
+	if bitLength > keyLen {
+		bitLength = keyLen
 	}
-	if bitLength > k2bitLen {
-		bitLength = k2bitLen
+	if bitLength > k2Len {
+		bitLength = k2Len
 	}
 
-	return bitLength
+	return bitLength, nil
 }
