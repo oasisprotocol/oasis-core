@@ -272,7 +272,7 @@ type RuntimeRPCCallRequest struct {
 	Request []byte `json:"request"`
 	// Kind is the type of RPC call.
 	Kind enclaverpc.Kind `json:"kind,omitempty"`
-	// PeerID is the identifier of the peer making the request.
+	// PeerID is an opaque identifier of the request origin used for EnclaveRPC session accounting.
 	PeerID []byte `json:"peer_id,omitempty"`
 }
 
