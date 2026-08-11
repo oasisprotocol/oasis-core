@@ -199,8 +199,15 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 
 	// Initialize runtime provisioner.
+	policyProvider := &runtimeRegistry.QuotePolicyProvider{Consensus: n.Consensus}
 	var err error
-	n.Provisioner, err = provisioner.New(n.dataDir, n.commonStore, n.Identity, n.Consensus, genesisDoc)
+	n.Provisioner, err = provisioner.New(
+		n.dataDir,
+		n.commonStore,
+		n.Identity,
+		genesisDoc,
+		policyProvider,
+	)
 	if err != nil {
 		return err
 	}
