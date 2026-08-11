@@ -203,11 +203,22 @@ func createProvisioner(
 	return provisioner, nil
 }
 
+// quotePolicyProvider is a provider backed by the latest runtime descriptors on
+// the consensus layer.
 type quotePolicyProvider struct {
 	cs consensus.Service
 }
 
-func (p *quotePolicyProvider) Get(ctx context.Context, runtimeID common.Namespace, version version.Version) (*sgxQuote.Policy, error) {
+func (p *quotePolicyProvider) Get(
+	ctx context.Context,
+	runtimeID common.Namespace,
+	compID component.ID,
+	version version.Version,
+) (*sgxQuote.Policy, error) {
+	if !compID.IsRONL() { // ROFL components have no policy on the consensus.
+		return nil, nil
+	}
+
 	rt, err := p.cs.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height:           consensus.HeightLatest,
 		ID:               runtimeID,

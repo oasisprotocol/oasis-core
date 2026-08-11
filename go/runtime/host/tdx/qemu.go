@@ -433,15 +433,9 @@ func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 	rekPub := rspRep.RuntimeCapabilityTEERakReportResponse.RekPub
 	rawQuote := rspRep.RuntimeCapabilityTEERakReportResponse.Report
 
-	var quotePolicy *sgxQuote.Policy
-	switch hp.Config.Component.Kind {
-	case component.RONL:
-		quotePolicy, err = p.quotePolicy.Get(ctx, hp.Config.ID, hp.Config.Component.Version)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch RONL quote policy: %w", err)
-		}
-	default:
-		// No policy, use fallback.
+	quotePolicy, err := p.quotePolicy.Get(ctx, hp.Config.ID, hp.Config.Component.ID(), hp.Config.Component.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quote policy: %w", err)
 	}
 
 	// Use the fallback policy for ROFL components and RONL components with no TDX policy so that provisioning can proceed.
