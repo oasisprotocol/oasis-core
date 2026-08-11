@@ -56,7 +56,7 @@ type QemuConfig struct {
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
 	// QuotePolicy provides quote policies for provisioned components.
-	QuotePolicy sgxCommon.QuotePolicyProvider
+	QuotePolicy host.QuotePolicyProvider
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -79,7 +79,7 @@ type qemuProvisioner struct {
 
 	sandbox     host.Provisioner
 	pcs         pcs.QuoteService
-	quotePolicy sgxCommon.QuotePolicyProvider
+	quotePolicy host.QuotePolicyProvider
 	identity    *identity.Identity
 	cidPool     *CidPool
 

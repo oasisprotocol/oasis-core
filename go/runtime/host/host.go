@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
@@ -36,6 +37,12 @@ type Config struct {
 
 	// Log is the runtime log handle to use for writing logs to this runtime.
 	Log *log.Log
+}
+
+// QuotePolicyProvider provides quote policies for provisioned components.
+type QuotePolicyProvider interface {
+	// Get returns the applicable quote policy, or nil if there is none.
+	Get(ctx context.Context, runtimeID common.Namespace, compID component.ID, version version.Version) (*quote.Policy, error)
 }
 
 // Provisioner is the runtime provisioner interface.

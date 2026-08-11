@@ -19,7 +19,6 @@ import (
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
-	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
 	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
 )
 
@@ -33,7 +32,7 @@ func New(
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
 	genesisDoc *genesisAPI.Document,
-	policyProvider sgxCommon.QuotePolicyProvider,
+	policyProvider runtimeHost.QuotePolicyProvider,
 ) (runtimeHost.Provisioner, error) {
 	// Configure host environment information.
 	hostInfo, err := createHostInfo(genesisDoc)
@@ -78,7 +77,7 @@ func createProvisioner(
 	identity *identity.Identity,
 	hostInfo *hostProtocol.HostInfo,
 	qs pcs.QuoteService,
-	policyProvider sgxCommon.QuotePolicyProvider,
+	policyProvider runtimeHost.QuotePolicyProvider,
 ) (runtimeHost.Provisioner, error) {
 	var err error
 	var insecureNoSandbox bool
