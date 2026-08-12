@@ -8,7 +8,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -16,17 +15,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 )
-
-// QuotePolicyProvider provides quote policies.
-type QuotePolicyProvider interface {
-	// Get returns the quote policy for the specified RONL deployment.
-	Get(ctx context.Context, runtimeID common.Namespace, version version.Version) (*sgxQuote.Policy, error)
-}
 
 // EndorseCapabilityTEE endorses the given CapabilityTEE and submits the signed endorsement to the
 // runtime over the given connection.

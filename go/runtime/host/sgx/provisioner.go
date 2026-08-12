@@ -58,8 +58,8 @@ type Config struct {
 
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
-	// QuotePolicy provides the quote policy for RONL deployments.
-	QuotePolicy sgxCommon.QuotePolicyProvider
+	// QuotePolicy provides quote policies for provisioned components.
+	QuotePolicy host.QuotePolicyProvider
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -88,7 +88,7 @@ type sgxProvisioner struct {
 	sandbox        host.Provisioner
 	pcs            pcs.QuoteService
 	aesm           *aesm.Client
-	policyProvider sgxCommon.QuotePolicyProvider
+	policyProvider host.QuotePolicyProvider
 	identity       *identity.Identity
 	store          *persistent.CommonStore
 

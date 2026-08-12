@@ -55,8 +55,8 @@ type QemuConfig struct {
 
 	// PCS is the Intel Provisioning Certification Service quote service.
 	PCS pcs.QuoteService
-	// QuotePolicy provides the quote policy for RONL deployments.
-	QuotePolicy sgxCommon.QuotePolicyProvider
+	// QuotePolicy provides quote policies for provisioned components.
+	QuotePolicy host.QuotePolicyProvider
 	// Identity is the node identity.
 	Identity *identity.Identity
 
@@ -79,7 +79,7 @@ type qemuProvisioner struct {
 
 	sandbox     host.Provisioner
 	pcs         pcs.QuoteService
-	quotePolicy sgxCommon.QuotePolicyProvider
+	quotePolicy host.QuotePolicyProvider
 	identity    *identity.Identity
 	cidPool     *CidPool
 
@@ -433,15 +433,9 @@ func (p *qemuProvisioner) updateCapabilityTEE(ctx context.Context, hp *sandbox.H
 	rekPub := rspRep.RuntimeCapabilityTEERakReportResponse.RekPub
 	rawQuote := rspRep.RuntimeCapabilityTEERakReportResponse.Report
 
-	var quotePolicy *sgxQuote.Policy
-	switch hp.Config.Component.Kind {
-	case component.RONL:
-		quotePolicy, err = p.quotePolicy.Get(ctx, hp.Config.ID, hp.Config.Component.Version)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch RONL quote policy: %w", err)
-		}
-	default:
-		// No policy, use fallback.
+	quotePolicy, err := p.quotePolicy.Get(ctx, hp.Config.ID, hp.Config.Component.ID(), hp.Config.Component.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quote policy: %w", err)
 	}
 
 	// Use the fallback policy for ROFL components and RONL components with no TDX policy so that provisioning can proceed.

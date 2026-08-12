@@ -1,22 +1,15 @@
 package provisioner
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
-	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -26,7 +19,6 @@ import (
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
-	sgxCommon "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx/common"
 	hostTdx "github.com/oasisprotocol/oasis-core/go/runtime/host/tdx"
 )
 
@@ -39,8 +31,8 @@ func New(
 	dataDir string,
 	commonStore *persistent.CommonStore,
 	identity *identity.Identity,
-	consensus consensus.Service,
 	genesisDoc *genesisAPI.Document,
+	policyProvider runtimeHost.QuotePolicyProvider,
 ) (runtimeHost.Provisioner, error) {
 	// Configure host environment information.
 	hostInfo, err := createHostInfo(genesisDoc)
@@ -53,8 +45,6 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-
-	policyProvider := &quotePolicyProvider{consensus}
 
 	// Create runtime provisioner.
 	return createProvisioner(dataDir, commonStore, identity, hostInfo, qs, policyProvider)
@@ -87,7 +77,7 @@ func createProvisioner(
 	identity *identity.Identity,
 	hostInfo *hostProtocol.HostInfo,
 	qs pcs.QuoteService,
-	policyProvider sgxCommon.QuotePolicyProvider,
+	policyProvider runtimeHost.QuotePolicyProvider,
 ) (runtimeHost.Provisioner, error) {
 	var err error
 	var insecureNoSandbox bool
@@ -201,27 +191,4 @@ func createProvisioner(
 	provisioner := hostComposite.NewProvisioner(provisioners)
 
 	return provisioner, nil
-}
-
-type quotePolicyProvider struct {
-	cs consensus.Service
-}
-
-func (p *quotePolicyProvider) Get(ctx context.Context, runtimeID common.Namespace, version version.Version) (*sgxQuote.Policy, error) {
-	rt, err := p.cs.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
-		Height:           consensus.HeightLatest,
-		ID:               runtimeID,
-		IncludeSuspended: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to query runtime descriptor: %w", err)
-	}
-	if d := rt.DeploymentForVersion(version); d != nil {
-		var sc node.SGXConstraints
-		if err = cbor.Unmarshal(d.TEE, &sc); err != nil {
-			return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
-		}
-		return sc.Policy, nil
-	}
-	return nil, nil
 }
