@@ -76,7 +76,6 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	if rtState.LivenessStatistics == nil {
 		rtState.LivenessStatistics = roothash.NewLivenessStatistics(len(rtState.Committee.Members))
 	}
-	livenessStats := rtState.LivenessStatistics
 
 	sc, err := pool.ProcessCommitments(rtState.Committee, rtState.Runtime.Executor.AllowedStragglers, timeout)
 	switch err {
@@ -146,7 +145,7 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		"timeout", timeout,
 	)
 
-	livenessStats.TotalRounds++
+	rtState.LivenessStatistics.TotalRounds++
 
 	// Record if the highest-ranked scheduler received enough commitments.
 	firstSchedulerIdx, ok := rtState.Committee.SchedulerIdx(round, 0)
@@ -158,9 +157,9 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 
 	switch firstScheduler.PublicKey.Equal(sc.Commitment.Header.SchedulerID) {
 	case true:
-		livenessStats.FinalizedProposals[firstSchedulerIdx]++
+		rtState.LivenessStatistics.FinalizedProposals[firstSchedulerIdx]++
 	case false:
-		livenessStats.MissedProposals[firstSchedulerIdx]++
+		rtState.LivenessStatistics.MissedProposals[firstSchedulerIdx]++
 	}
 
 	state := roothashState.NewMutableState(ctx.State())
@@ -228,7 +227,7 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		switch vote.Equal(&schedulerVote) {
 		case true:
 			goodComputeEntities = append(goodComputeEntities, node.EntityID)
-			livenessStats.LiveRounds[i]++
+			rtState.LivenessStatistics.LiveRounds[i]++
 		case false:
 			badComputeEntities = append(badComputeEntities, node.EntityID)
 		}
