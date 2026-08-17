@@ -97,13 +97,16 @@ func TestSGXConstraintsKMAPolicyValidation(t *testing.T) {
 			name:                "key manager access policy is valid",
 			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
 			isFeatureVersion261: true,
-			kmaPolicy:           &quote.Policy{},
+			kmaPolicy: &quote.Policy{
+				IAS: &ias.QuotePolicy{Disabled: true},
+			},
 		},
 		{
 			name:                "tdx policy in key manager access policy requires tdx feature",
 			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
 			isFeatureVersion261: true,
 			kmaPolicy: &quote.Policy{
+				IAS: &ias.QuotePolicy{Disabled: true},
 				PCS: &pcs.QuotePolicy{
 					TDX: &pcs.TdxQuotePolicy{},
 				},
@@ -111,13 +114,20 @@ func TestSGXConstraintsKMAPolicyValidation(t *testing.T) {
 			errContains: "TDX policy not supported",
 		},
 		{
-			name:                "non-empty IAS key manager access policy not allowed",
+			name:                "IAS must be non-nil and disabled in the key manager access policy",
+			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
+			isFeatureVersion261: true,
+			kmaPolicy:           &quote.Policy{},
+			errContains:         "IAS must be disabled",
+		},
+		{
+			name:                "IAS must be disabled in key manager access policy",
 			cfg:                 &TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}},
 			isFeatureVersion261: true,
 			kmaPolicy: &quote.Policy{
 				IAS: &ias.QuotePolicy{},
 			},
-			errContains: "IAS not allowed",
+			errContains: "IAS must be disabled",
 		},
 	}
 

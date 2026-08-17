@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -340,7 +341,9 @@ func TestVerifyRuntime(t *testing.T) {
 					Enclaves: []sgx.EnclaveIdentity{
 						{},
 					},
-					KeyManagerAccessPolicy: &quote.Policy{},
+					KeyManagerAccessPolicy: &quote.Policy{
+						IAS: &ias.QuotePolicy{Disabled: true},
+					},
 				})
 			},
 			modifyParams: func(cp *ConsensusParameters) {
@@ -364,7 +367,9 @@ func TestVerifyRuntime(t *testing.T) {
 					Enclaves: []sgx.EnclaveIdentity{
 						{},
 					},
-					KeyManagerAccessPolicy: &quote.Policy{},
+					KeyManagerAccessPolicy: &quote.Policy{
+						IAS: &ias.QuotePolicy{Disabled: true},
+					},
 				})
 				rt.AdmissionPolicy.AnyNode = &AnyNodeRuntimeAdmissionPolicy{}
 				rt.AdmissionPolicy.EntityWhitelist = nil

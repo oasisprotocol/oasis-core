@@ -144,8 +144,11 @@ func (sc *SGXConstraints) ValidateBasic(cfg *TEEFeatures, isFeatureVersion261 bo
 		if !isFeatureVersion261 {
 			return fmt.Errorf("policy should be nil")
 		}
-		if policy.IAS != nil {
-			return fmt.Errorf("IAS not allowed")
+
+		// TODO: Remove IAS support entirely.
+		// See https://github.com/oasisprotocol/oasis-core/issues/5935.
+		if policy.IAS == nil || !policy.IAS.Disabled {
+			return fmt.Errorf("IAS must be disabled")
 		}
 		return validatePolicy(policy)
 	}
