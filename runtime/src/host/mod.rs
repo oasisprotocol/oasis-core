@@ -53,6 +53,7 @@ pub struct TxResult {
 }
 
 /// Interface to the (untrusted) host node.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Host: Send + Sync {
     /// Returns the identity of the host node.
@@ -75,6 +76,7 @@ pub trait Host: Send + Sync {
     fn attestation(&self) -> &dyn attestation::Attestation;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl Host for Protocol {
     async fn identity(&self) -> Result<PublicKey, Error> {

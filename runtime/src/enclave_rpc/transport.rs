@@ -16,6 +16,7 @@ pub struct EnclaveResponse {
 }
 
 /// An EnclaveRPC transport.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Transport: Send + Sync {
     async fn write_noise_session(
@@ -82,6 +83,7 @@ impl RuntimeTransport {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl Transport for RuntimeTransport {
     async fn write_message_impl(

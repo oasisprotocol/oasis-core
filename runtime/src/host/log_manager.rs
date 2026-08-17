@@ -13,6 +13,7 @@ pub const LOCAL_RPC_ENDPOINT_LOG_MANAGER: &str = "log-manager";
 pub const METHOD_LOG_GET: &str = "LogGet";
 
 /// Log manager interface.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait LogManager: Send + Sync {
     /// Request to host to fetch logs.
@@ -21,6 +22,7 @@ pub trait LogManager: Send + Sync {
     async fn log_get(&self, args: LogGetRequest) -> Result<LogGetResponse, Error>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl LogManager for Protocol {
     async fn log_get(&self, args: LogGetRequest) -> Result<LogGetResponse, Error> {

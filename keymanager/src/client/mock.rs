@@ -36,6 +36,7 @@ impl MockClient {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl KeyManagerClient for MockClient {
     fn runtime_id(&self) -> Option<Namespace> {

@@ -15,6 +15,7 @@ use crate::{
 };
 
 /// Key manager client interface.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait KeyManagerClient: Send + Sync {
     /// Key manager runtime identifier this client is connected to. It may be `None` in case the
@@ -124,6 +125,7 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> Result<StateKey, KeyManagerError>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
     fn runtime_id(&self) -> Option<Namespace> {

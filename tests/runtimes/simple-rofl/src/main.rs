@@ -145,6 +145,7 @@ impl App {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl app::App for App {
     fn get_config(&self) -> app::Config {

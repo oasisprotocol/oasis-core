@@ -337,6 +337,7 @@ impl RemoteClient {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl KeyManagerClient for RemoteClient {
     fn runtime_id(&self) -> Option<Namespace> {

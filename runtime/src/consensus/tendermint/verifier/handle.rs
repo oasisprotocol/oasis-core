@@ -24,6 +24,7 @@ pub struct Handle {
     pub command_sender: channel::Sender<Command>,
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl verifier::Verifier for Handle {
     async fn sync(&self, height: u64) -> Result<(), Error> {

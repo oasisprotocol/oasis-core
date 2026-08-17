@@ -669,6 +669,7 @@ mod test {
         }
     }
 
+    #[allow(clippy::double_must_use)]
     #[async_trait]
     impl Transport for MockTransport {
         async fn write_message_impl(

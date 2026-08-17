@@ -70,6 +70,7 @@ impl From<Error> for types::Error {
 }
 
 /// Verifier is the consensus layer state verifier trait.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Verifier: Send + Sync {
     /// Synchronize the verifier state up to including the passed consensus height.
@@ -131,6 +132,7 @@ pub trait Verifier: Send + Sync {
     async fn latest_height(&self) -> Result<u64, Error>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl<T: ?Sized + Verifier> Verifier for Arc<T> {
     async fn sync(&self, height: u64) -> Result<(), Error> {
