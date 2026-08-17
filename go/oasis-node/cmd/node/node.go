@@ -199,7 +199,16 @@ func (n *Node) initRuntimeWorkers(genesisDoc *genesisAPI.Document) error {
 	}
 
 	// Initialize runtime provisioner.
-	policyProvider := &runtimeRegistry.QuotePolicyProvider{Consensus: n.Consensus}
+	var useKMAPolicy bool
+	switch config.GlobalConfig.Mode {
+	case config.ModeCompute, config.ModeObserver:
+		useKMAPolicy = true
+	default:
+	}
+	policyProvider := &runtimeRegistry.QuotePolicyProvider{
+		Consensus:    n.Consensus,
+		UseKMAPolicy: useKMAPolicy,
+	}
 	var err error
 	n.Provisioner, err = provisioner.New(
 		n.dataDir,
