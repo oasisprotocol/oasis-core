@@ -61,6 +61,7 @@ impl NopVerifier {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl verifier::Verifier for NopVerifier {
     async fn sync(&self, height: u64) -> Result<(), Error> {

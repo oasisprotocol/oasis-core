@@ -15,6 +15,7 @@ use super::Config;
 
 /// A runtime application.
 #[allow(unused_variables)]
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait App: Send + Sync {
     /// Whether this is a ROFL application.
@@ -77,6 +78,7 @@ pub trait App: Send + Sync {
 /// An application which doesn't do anything.
 pub struct NoopApp;
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl App for NoopApp {
     fn is_rofl(&self) -> bool {

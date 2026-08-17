@@ -17,6 +17,7 @@ pub const METHOD_VOLUME_REMOVE: &str = "VolumeRemove";
 pub const METHOD_VOLUME_LIST: &str = "VolumeList";
 
 /// Volume manager interface.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait VolumeManager: Send + Sync {
     /// Request to host to add a volume.
@@ -36,6 +37,7 @@ pub trait VolumeManager: Send + Sync {
     async fn volume_list(&self, args: VolumeListRequest) -> Result<VolumeListResponse, Error>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl VolumeManager for Protocol {
     async fn volume_add(&self, args: VolumeAddRequest) -> Result<VolumeAddResponse, Error> {

@@ -44,7 +44,7 @@ Core:
 
   <!-- markdownlint-enable line-length -->
 
-- [Go] (at least version 1.26.3).
+- [Go] (at least version 1.26.6).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -57,18 +57,18 @@ Core:
     [`PATH`](https://tip.golang.org/doc/code.html#GOPATH),
   - install the desired
     [version of Go](https://golang.org/doc/install#extra_versions),
-    e.g. 1.26.3, with:
+    e.g. 1.26.6, with:
 
     ```
-    go install golang.org/dl/go1.26.3@latest
-    go1.26.3 download
+    go install golang.org/dl/go1.26.6@latest
+    go1.26.6 download
     ```
 
   - instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.26.3
+    export OASIS_GO=go1.26.6
     ```
 
 - [Rust].

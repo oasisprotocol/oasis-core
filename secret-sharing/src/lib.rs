@@ -8,7 +8,7 @@
 //!
 //! - CHURP (CHUrn-Robust Proactive secret sharing)
 //! - Shamir (Shamir secret sharing)
-
+#![allow(unused_features)]
 #![feature(test)]
 
 pub mod churp;

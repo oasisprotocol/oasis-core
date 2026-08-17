@@ -1,6 +1,6 @@
 module github.com/oasisprotocol/oasis-core/test-upgrade
 
-go 1.26.3
+go 1.26.6
 
 replace (
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.2-oasis1

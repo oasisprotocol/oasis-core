@@ -10,6 +10,7 @@
 //!
 //! This will start the required services needed to communicate with
 //! the worker host.
+#![allow(unused_features)]
 #![feature(test)]
 #![feature(arbitrary_self_types)]
 

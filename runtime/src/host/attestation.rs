@@ -19,6 +19,7 @@ pub const METHOD_ATTEST_LABELS: &str = "AttestLabels";
 pub const ATTEST_LABELS_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/node: attest component labels";
 
 /// Attestaion interface.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Attestation: Send + Sync {
     /// Request to host to attest component labels.
@@ -26,6 +27,7 @@ pub trait Attestation: Send + Sync {
         -> Result<AttestLabelsResponse, Error>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl Attestation for Protocol {
     async fn attest_labels(

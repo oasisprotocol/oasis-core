@@ -22,6 +22,7 @@ pub const METHOD_BUNDLE_LIST: &str = "BundleList";
 pub const LABEL_INSTANCE_ID: &str = "net.oasis.instance_id";
 
 /// Bundle manager interface.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait BundleManager: Send + Sync {
     /// Request to host to write a chunk of the bundle to a temporary file.
@@ -47,6 +48,7 @@ pub trait BundleManager: Send + Sync {
     async fn bundle_list(&self, args: BundleListRequest) -> Result<BundleListResponse, Error>;
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl BundleManager for Protocol {
     async fn bundle_write(&self, args: BundleWriteRequest) -> Result<BundleWriteResponse, Error> {

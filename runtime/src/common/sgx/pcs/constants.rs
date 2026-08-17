@@ -28,6 +28,7 @@ pub const QE_VENDOR_ID_LEN: usize = 16;
 pub const QE_USER_DATA_LEN: usize = 20;
 pub const SGX_REPORT_BODY_LEN: usize = 384;
 pub const TDX_REPORT_BODY_LEN: usize = 584;
+#[allow(dead_code)]
 pub const CPUSVN_LEN: usize = 16;
 
 pub const QUOTE_VERSION_3: u16 = 3;
