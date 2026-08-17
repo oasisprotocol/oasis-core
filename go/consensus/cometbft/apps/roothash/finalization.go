@@ -11,11 +11,13 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 func (app *Application) tryFinalizeRounds(
@@ -136,6 +138,31 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		return err
 	}
 
+	state := roothashState.NewMutableState(ctx.State())
+
+	var msgEvents []*roothash.MessageEvent
+
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
+	if err != nil {
+		return err
+	}
+	if isFeatureVersion261 {
+		// Update the incoming message queue by removing processed messages. Do one final check to
+		// make sure that the processed messages actually correspond to the provided hash.
+		msgs, err := fetchRuntimeMessages(ctx, state, rtState.Runtime.ID, sc.Commitment.Header.Header.InMessagesCount)
+		if err != nil {
+			return err
+		}
+		if err = verifyRuntimeMessages(ctx, msgs, sc.Commitment.Header.Header.InMessagesHash); err != nil {
+			// TODO: All nodes contributing to this round should be penalized.
+			return app.failRound(ctx, rtState, err)
+		}
+		if err = app.removeRuntimeMessages(ctx, state, rtState.Runtime.ID, msgs, round); err != nil {
+			return err
+		}
+		msgEvents = app.processRuntimeMessages(ctx, rtState, sc.Commitment.Messages)
+	}
+
 	// The round has been finalized.
 	ctx.Logger().Debug("finalized round",
 		"runtime_id", rtState.Runtime.ID,
@@ -162,23 +189,22 @@ func (app *Application) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		rtState.LivenessStatistics.MissedProposals[firstSchedulerIdx]++
 	}
 
-	state := roothashState.NewMutableState(ctx.State())
-	header := sc.Commitment.Header.Header
-
-	// Update the incoming message queue by removing processed messages. Do one final check to
-	// make sure that the processed messages actually correspond to the provided hash.
-	msgs, err := fetchRuntimeMessages(ctx, state, rtState.Runtime.ID, header.InMessagesCount)
-	if err != nil {
-		return err
+	if !isFeatureVersion261 {
+		// Update the incoming message queue by removing processed messages. Do one final check to
+		// make sure that the processed messages actually correspond to the provided hash.
+		msgs, err := fetchRuntimeMessages(ctx, state, rtState.Runtime.ID, sc.Commitment.Header.Header.InMessagesCount)
+		if err != nil {
+			return err
+		}
+		if err = verifyRuntimeMessages(ctx, msgs, sc.Commitment.Header.Header.InMessagesHash); err != nil {
+			// TODO: All nodes contributing to this round should be penalized.
+			return app.failRound(ctx, rtState, err)
+		}
+		if err = app.removeRuntimeMessages(ctx, state, rtState.Runtime.ID, msgs, round); err != nil {
+			return err
+		}
+		msgEvents = app.processRuntimeMessages(ctx, rtState, sc.Commitment.Messages)
 	}
-	if err = verifyRuntimeMessages(ctx, msgs, header.InMessagesHash); err != nil {
-		// TODO: All nodes contributing to this round should be penalized.
-		return app.failRound(ctx, rtState, err)
-	}
-	if err = app.removeRuntimeMessages(ctx, state, rtState.Runtime.ID, msgs, round); err != nil {
-		return err
-	}
-	msgEvents := app.processRuntimeMessages(ctx, rtState, sc.Commitment.Messages)
 
 	// Compute good and bad entities.
 	var (
