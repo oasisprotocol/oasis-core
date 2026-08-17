@@ -88,7 +88,7 @@ func (rh *roflHostHandler) getLocalStorageKey(key []byte) []byte {
 // getLocalEnclaveRPCPeerID returns the peer ID for local EnclaveRPC calls.
 func (rh *roflHostHandler) getLocalEnclaveRPCPeerID() []byte {
 	componentID, _ := rh.id.MarshalText()
-	return append([]byte("local:"), componentID...)
+	return append([]byte(protocol.PeerIDPrefixLocal), componentID...)
 }
 
 // Implements protocol.Handler.

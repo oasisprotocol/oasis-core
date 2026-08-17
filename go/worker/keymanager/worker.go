@@ -186,7 +186,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
 			Request: data,
 			Kind:    kind,
-			PeerID:  append([]byte("p2p:"), []byte(peerID)...),
+			PeerID:  append([]byte(protocol.PeerIDPrefixP2P), []byte(peerID)...),
 		},
 	}
 
