@@ -19,6 +19,8 @@ import (
 //     boundary.
 //   - A stricter node registration rule where observer nodes must include runtimes.
 //   - Removal of previous runtime owner on runtime update.
+//   - Changes to runtime message verification so that messages are verified before liveness
+//     statistics are updated.
 const Consensus261 = "consensus261"
 
 // Version261 is the Oasis Core 26.1 version.
