@@ -398,6 +398,18 @@ func (m *Manager) WriteTemporary(tmpPath string, create bool, data []byte) error
 	}
 	defer f.Close()
 
+	size := int64(len(data))
+	if !create {
+		info, err := f.Stat()
+		if err != nil {
+			return fmt.Errorf("failed to stat temporary bundle: %w", err)
+		}
+		size += info.Size()
+	}
+	if size > m.maxBundleSizeBytes {
+		return fmt.Errorf("temporary bundle exceeds size limit of %d bytes", m.maxBundleSizeBytes)
+	}
+
 	_, err = f.Write(data)
 	return err
 }
