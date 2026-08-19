@@ -125,7 +125,8 @@ func (rh *roflHostHandler) handleBundleAdd(rq *rofl.BundleAddRequest) (*rofl.Bun
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	// Resolve volumes.
@@ -169,7 +170,8 @@ func (rh *roflHostHandler) handleBundleRemove(rq *rofl.BundleRemoveRequest) (*ro
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	rh.getBundleManager().Remove(rh.parent.runtime.ID(), labels)
@@ -183,7 +185,8 @@ func (rh *roflHostHandler) handleBundleList(rq *rofl.BundleListRequest) (*rofl.B
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	// Populate bundle information.
@@ -213,7 +216,8 @@ func (rh *roflHostHandler) handleVolumeAdd(rq *rofl.VolumeAddRequest) (*rofl.Vol
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	volume, err := rh.getVolumeManager().Create(labels)
@@ -232,7 +236,8 @@ func (rh *roflHostHandler) handleVolumeRemove(rq *rofl.VolumeRemoveRequest) (*ro
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	if err := rh.getVolumeManager().Remove(labels); err != nil {
@@ -247,7 +252,8 @@ func (rh *roflHostHandler) handleVolumeList(rq *rofl.VolumeListRequest) (*rofl.V
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	// Populate volume information.
@@ -271,7 +277,8 @@ func (rh *roflHostHandler) handleLogGet(ctx context.Context, rq *rofl.LogGetRequ
 	}
 
 	// Determine labels, make sure to override origin as that is used for isolation.
-	labels := maps.Clone(rq.Labels)
+	labels := make(map[string]string)
+	maps.Copy(labels, rq.Labels)
 	maps.Copy(labels, rh.getBundleManagementLabels())
 
 	var requestedComponentID component.ID
