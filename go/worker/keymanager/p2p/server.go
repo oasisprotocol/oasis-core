@@ -22,7 +22,11 @@ type service struct {
 }
 
 func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (any, error) {
-	enclaveRPCCount.With(prometheus.Labels{"method": method}).Inc()
+	switch method {
+	case MethodCallEnclave:
+		enclaveRPCCount.With(prometheus.Labels{"method": method}).Inc()
+	default:
+	}
 
 	switch method {
 	case MethodCallEnclave:
