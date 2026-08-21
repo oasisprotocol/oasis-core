@@ -156,9 +156,8 @@ Core:
   Download and install it with:
 
   ```
-  curl -sSfL \
-  https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v2.12.2
+  curl -sSfL https://golangci-lint.run/install.sh \
+  | sh -s -- -b "$(${OASIS_GO:-go} env GOPATH)/bin" v2.13.1
   ```
 
 - (**OPTIONAL**) [protoc-gen-go].
