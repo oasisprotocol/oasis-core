@@ -1,3 +1,1 @@
 CVE-2021-43668 # the vulnerability does not affect us as we don't use LevelDB
-CVE-2026-56860 # ignore until golang.org/x/net releases a fix
-CVE-2026-56859 # ignore until golang.org/x/net releases a fix
