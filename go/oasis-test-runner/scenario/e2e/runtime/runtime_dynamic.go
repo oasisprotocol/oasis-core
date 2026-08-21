@@ -502,7 +502,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	if err = sc.RegisterRuntime(childEnv, cli, compRtDesc, nonce); err != nil {
 		return err
 	}
-	nonce++ // nolint: ineffassign
+	nonce++ // nolint: staticcheck, ineffassign
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")

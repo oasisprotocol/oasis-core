@@ -1305,7 +1305,7 @@ func (n *Node) drainChannels(ctx context.Context) {
 
 func (n *Node) worker() {
 	defer close(n.quitCh)
-	defer (n.cancelCtx)()
+	defer n.cancelCtx()
 
 	// Wait for the common node to be initialized.
 	select {

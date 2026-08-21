@@ -348,17 +348,17 @@ func (w *churpWorker) updateStatusMetrics(status *churp.Status, prevStatus *chur
 
 	// Update constant values once.
 	if prevStatus == nil {
-		churpThresholdNumber.WithLabelValues(runtime, id).Add((float64)(status.Threshold))
+		churpThresholdNumber.WithLabelValues(runtime, id).Add(float64(status.Threshold))
 	}
 
 	// Update variable values always.
-	churpHandoffNumber.WithLabelValues(runtime, id).Add((float64)(status.Handoff - prevHandoff))
-	churpNextHandoffNumber.WithLabelValues(runtime, id).Add((float64)(status.NextHandoff - prevNextHandoff))
-	churpHandoffInterval.WithLabelValues(runtime, id).Set((float64)(status.HandoffInterval))
-	churpExtraSharesNumber.WithLabelValues(runtime, id).Set((float64)(status.ExtraShares))
-	churpCommitteeSize.WithLabelValues(runtime, id).Set((float64)(len(status.Committee)))
-	churpSubmittedApplicationsTotal.WithLabelValues(runtime, id).Set((float64)(len(status.Applications)))
-	churpConfirmedApplicationsTotal.WithLabelValues(runtime, id).Set((float64)(confirmedApplications))
+	churpHandoffNumber.WithLabelValues(runtime, id).Add(float64(status.Handoff - prevHandoff))
+	churpNextHandoffNumber.WithLabelValues(runtime, id).Add(float64(status.NextHandoff - prevNextHandoff))
+	churpHandoffInterval.WithLabelValues(runtime, id).Set(float64(status.HandoffInterval))
+	churpExtraSharesNumber.WithLabelValues(runtime, id).Set(float64(status.ExtraShares))
+	churpCommitteeSize.WithLabelValues(runtime, id).Set(float64(len(status.Committee)))
+	churpSubmittedApplicationsTotal.WithLabelValues(runtime, id).Set(float64(len(status.Applications)))
+	churpConfirmedApplicationsTotal.WithLabelValues(runtime, id).Set(float64(confirmedApplications))
 }
 
 // submissionScheduler is responsible for generating and submitting
