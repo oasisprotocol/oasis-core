@@ -4,6 +4,9 @@ go 1.27.0
 
 replace (
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.18-oasis3
+	// v1.22.2 doesn't work with Go 1.27.0 due to a recursive loop when
+	// unmarshaling a server request.
+	github.com/powerman/rpc-codec => github.com/oasisprotocol/rpc-codec v0.0.0-20260821192426-8771fbee5115
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
