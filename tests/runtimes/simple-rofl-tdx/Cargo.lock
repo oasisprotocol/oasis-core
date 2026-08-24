@@ -1065,14 +1065,15 @@ dependencies = [
 
 [[package]]
 name = "honggfuzz"
-version = "0.5.56"
+version = "0.5.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c76b6234c13c9ea73946d1379d33186151148e0da231506b964b44f3d023505"
+checksum = "378465388ac845720910efa26a6f46f93d744debe65710b82f0e5310058c6703"
 dependencies = [
  "arbitrary",
  "lazy_static",
  "memmap2",
  "rustc_version",
+ "semver",
 ]
 
 [[package]]
