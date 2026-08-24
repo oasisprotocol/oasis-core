@@ -58,7 +58,7 @@ func (v Version) Less(other Version) bool {
 
 // ToU64 returns the version as platform-dependent uint64.
 func (v Version) ToU64() uint64 {
-	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16) | (uint64(v.Patch))
+	return uint64(v.Major)<<32 | uint64(v.Minor)<<16 | uint64(v.Patch)
 }
 
 // FromU64 returns the version from platform-dependent uint64.

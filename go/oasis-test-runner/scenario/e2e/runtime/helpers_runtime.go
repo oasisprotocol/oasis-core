@@ -349,7 +349,7 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 	if err = sc.RegisterRuntime(childEnv, cli, newRtDsc, nonce); err != nil {
 		return err
 	}
-	nonce++ // nolint: ineffassign
+	nonce++ // nolint: staticcheck, ineffassign
 
 	// Wait for activation epoch.
 	sc.Logger.Info("waiting for runtime upgrade epoch",

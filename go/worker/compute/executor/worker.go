@@ -50,7 +50,7 @@ func (w *Worker) Start() error {
 	// Wait for all runtimes and all proxies to terminate.
 	go func() {
 		defer close(w.quitCh)
-		defer (w.cancelCtx)()
+		defer w.cancelCtx()
 
 		for _, rt := range w.runtimes {
 			<-rt.Quit()

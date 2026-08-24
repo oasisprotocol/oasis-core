@@ -128,7 +128,7 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 		if err = sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, 0, policies, nonce); err != nil {
 			return fmt.Errorf("updating policies: %w", err)
 		}
-		nonce++ // nolint: ineffassign
+		nonce++ // nolint: staticcheck, ineffassign
 	}
 
 	// Start all the required workers.

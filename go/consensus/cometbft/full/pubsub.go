@@ -64,6 +64,6 @@ func (ps *cometbftPubsubBuffer) reader() {
 
 func (ps *cometbftPubsubBuffer) writer() {
 	for msg := range ps.messageBuffer.Out() {
-		ps.outCh <- *(msg.(*cmtpubsub.Message))
+		ps.outCh <- *msg.(*cmtpubsub.Message)
 	}
 }

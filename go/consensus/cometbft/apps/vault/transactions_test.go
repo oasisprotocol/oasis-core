@@ -687,7 +687,7 @@ func TestAuthorizeCancelAction(t *testing.T) {
 		}
 
 		if tc.afterFn != nil {
-			(tc.afterFn)(ctx)
+			tc.afterFn(ctx)
 		}
 	}
 }

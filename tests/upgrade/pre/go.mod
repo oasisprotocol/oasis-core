@@ -1,6 +1,6 @@
 module github.com/oasisprotocol/oasis-core/test-upgrade
 
-go 1.26.6
+go 1.27.0
 
 replace (
 	// Updates the version used by badgerdb, because some of the Go

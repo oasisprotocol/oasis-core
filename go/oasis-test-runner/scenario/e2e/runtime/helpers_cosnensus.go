@@ -119,7 +119,7 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 			// wrong, it is the test that is wrong.
 			var randByte [1]byte
 			_, _ = rand.Read(randByte[:])
-			numSkips := (int)(randByte[0]&3) + 1
+			numSkips := int(randByte[0]&3) + 1
 			sc.Logger.Info("advancing the epoch to prevent hardcoding time assumptions in tests",
 				"num_advances", numSkips,
 			)

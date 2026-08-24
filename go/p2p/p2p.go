@@ -168,7 +168,7 @@ func (p *p2p) Addresses() []node.Address {
 		if err != nil {
 			panic(err)
 		}
-		tcpAddr := (netAddr).(*net.TCPAddr)
+		tcpAddr := netAddr.(*net.TCPAddr)
 		nodeAddr := node.Address{
 			IP:   tcpAddr.IP,
 			Port: int64(tcpAddr.Port),
