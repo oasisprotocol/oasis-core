@@ -81,8 +81,8 @@ jobs:
 
       - name: Set RELEASE_BRANCH name for stable/bugfix releases
         run: |
-          GIT_VERSION=${GITHUB_REF#refs/tags/v}
-          if [[ ! ${GIT_VERSION} =~ ^[0-9]+\.[0-9]+$ ]]; then
+          GIT_VERSION="${GITHUB_REF#refs/tags/v}"
+          if [[ "$GIT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "RELEASE_BRANCH=stable/${GIT_VERSION%.*}.x" >> $GITHUB_ENV
           fi
 

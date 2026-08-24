@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -24,6 +25,9 @@ import (
 
 // labelInstanceID is the name of the special label that identifies the instance.
 const labelInstanceID = "net.oasis.instance_id"
+
+// validBundleTemporaryName validates temporary bundle name, e.g. "instance-1a2b3c".
+var validBundleTemporaryName = regexp.MustCompile(`^[a-zA-Z-]+$`)
 
 // handleBundleManagement handles bundle management local RPCs.
 func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, error) {
@@ -110,7 +114,10 @@ func (rh *roflHostHandler) handleBundleWrite(rq *rofl.BundleWriteRequest) (*rofl
 		return nil, err
 	}
 
-	tmpPath := rh.getBundleTemporaryPath(rq.TemporaryName)
+	tmpPath, err := rh.getBundleTemporaryPath(rq.TemporaryName)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := rh.getBundleManager().WriteTemporary(tmpPath, rq.Create, rq.Data); err != nil {
 		return nil, err
@@ -142,7 +149,11 @@ func (rh *roflHostHandler) handleBundleAdd(rq *rofl.BundleAddRequest) (*rofl.Bun
 		volumes[volName] = volume
 	}
 
-	tmpPath := rh.getBundleTemporaryPath(rq.TemporaryName)
+	tmpPath, err := rh.getBundleTemporaryPath(rq.TemporaryName)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := []bundle.AddOption{
 		bundle.WithBundleManifestHash(rq.ManifestHash),
 		bundle.WithBundleRuntimeID(rh.parent.runtime.ID()),
@@ -356,11 +367,14 @@ func (rh *roflHostHandler) getBundleManagementLabels() map[string]string {
 	}
 }
 
-func (rh *roflHostHandler) getBundleTemporaryPath(tmpName string) string {
+func (rh *roflHostHandler) getBundleTemporaryPath(tmpName string) (string, error) {
+	if !validBundleTemporaryName.MatchString(tmpName) {
+		return "", fmt.Errorf("invalid temporary filename")
+	}
 	dirName := rh.getBundleManagementLabels()[bundle.LabelOrigin]
 	// Hash the origin to make sure it doesn't contain any characters that are not fs-friendly.
 	dirName = hash.NewFromBytes([]byte(dirName)).Hex()
-	return filepath.Join(dirName, tmpName)
+	return filepath.Join(dirName, tmpName), nil
 }
 
 func managedManifestRewriter(labels map[string]string) bundle.ManifestRewriterFunc {
