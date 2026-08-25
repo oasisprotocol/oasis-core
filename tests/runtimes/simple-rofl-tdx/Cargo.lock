@@ -1661,7 +1661,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.8",
  "smallvec",
  "zeroize",
 ]
@@ -1761,7 +1761,7 @@ dependencies = [
  "oasis-core-runtime",
  "p256",
  "p384",
- "rand 0.8.5",
+ "rand 0.10.2",
  "rustc-hex",
  "secret-sharing",
  "sgx-isa",
@@ -1809,7 +1809,7 @@ dependencies = [
  "oasis-cbor",
  "oid-registry",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.10.2",
  "rsa",
  "rustc-hex",
  "serde",
@@ -2143,9 +2143,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha",
@@ -2373,7 +2373,7 @@ dependencies = [
  "hex-literal",
  "honggfuzz",
  "p384",
- "rand 0.8.5",
+ "rand 0.10.2",
  "rand_core 0.6.4",
  "sha3",
  "subtle",
@@ -2562,7 +2562,7 @@ dependencies = [
  "oasis-cbor",
  "oasis-core-keymanager",
  "oasis-core-runtime",
- "rand 0.8.5",
+ "rand 0.10.2",
  "tokio",
 ]
 
@@ -2852,7 +2852,7 @@ dependencies = [
  "getrandom 0.2.15",
  "peg",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.8.8",
  "semver",
  "serde",
  "serde_bytes",
