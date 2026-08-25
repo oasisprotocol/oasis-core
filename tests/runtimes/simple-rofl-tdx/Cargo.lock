@@ -1772,7 +1772,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "crossbeam",
- "curve25519-dalek 4.1.3",
+ "curve25519-dalek 5.0.0",
  "deoxysii",
  "ed25519-dalek",
  "futures",

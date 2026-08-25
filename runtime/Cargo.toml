@@ -45,7 +45,10 @@ tendermint-light-client = { version = "0.40.4", features = [
     "rust-crypto",
 ], default-features = false }
 tendermint-rpc = { version = "0.40.4", default-features = false }
-curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
+curve25519-dalek = { version = "5.0.0", features = [
+    "legacy_compatibility",
+    "digest",
+] }
 x25519-dalek = { version = "3.0.0", features = ["static_secrets", "zeroize"] }
 ed25519-dalek = { version = "3.0.0", features = ["rand_core", "digest"] }
 deoxysii = "0.2.4"
