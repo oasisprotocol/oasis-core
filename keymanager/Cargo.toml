@@ -13,7 +13,7 @@ cbor = { version = "0.5.1", package = "oasis-cbor" }
 anyhow = "1.0"
 base64 = "0.22.1"
 futures = "0.3.31"
-group = "0.13.0"
+group = "0.14.0"
 lazy_static = "1.3.0"
 lru = "0.18.2"
 rand = "0.10.2"
@@ -26,8 +26,8 @@ x25519-dalek = { version = "3.0.0", features = ["static_secrets", "zeroize"] }
 tokio = { version = "1.44", features = ["rt"] }
 zeroize = "1.7"
 async-trait = "0.1.83"
-p384 = { version = "0.13.0" }
-p256 = { version = "0.13.2" }
+p384 = { version = "0.14.0" }
+p256 = { version = "0.14.0" }
 
 [features]
 debug-mock-sgx = ["oasis-core-runtime/debug-mock-sgx"]
