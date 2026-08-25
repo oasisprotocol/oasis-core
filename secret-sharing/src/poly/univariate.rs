@@ -5,7 +5,7 @@ use std::{
 };
 
 use group::ff::PrimeField;
-use rand_core::RngCore;
+use rand::RngExt;
 use subtle::{Choice, CtOption};
 use zeroize::Zeroize;
 
@@ -44,7 +44,7 @@ where
     ///
     /// This method is not constant time as some prime field implementations
     /// may generate uniformly random elements using rejection sampling.
-    pub fn random(deg: u8, rng: &mut impl RngCore) -> Self {
+    pub fn random(deg: u8, rng: &mut impl RngExt) -> Self {
         let deg = deg as usize;
 
         let mut a = Vec::with_capacity(deg + 1);
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let bp = Polynomial::random(0, &mut rng);
         let restored =
             Polynomial::from_bytes(&bp.to_bytes()).expect("deserialization should succeed");

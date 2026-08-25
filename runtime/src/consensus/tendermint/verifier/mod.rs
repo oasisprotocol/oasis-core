@@ -3,7 +3,7 @@ use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use crossbeam::channel;
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 use sha2::{Digest, Sha256};
 use slog::{debug, error, info};
 use tendermint::merkle::HASH_SIZE;
@@ -280,9 +280,8 @@ impl Verifier {
         );
 
         // Generate a random nonce for prove freshness transaction.
-        let mut rng = OsRng {};
         let mut nonce = [0u8; NONCE_SIZE];
-        rng.fill(&mut nonce);
+        SysRng.try_fill_bytes(&mut nonce).unwrap();
 
         // Ask host for freshness proof.
         let io = Io::new(&self.protocol);

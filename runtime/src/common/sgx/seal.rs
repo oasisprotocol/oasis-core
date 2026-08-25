@@ -1,6 +1,6 @@
 //! Wrappers for sealing secrets to the enclave in cold storage.
 use anyhow::{format_err, Error};
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 use sgx_isa::Keypolicy;
 use zeroize::Zeroize;
 
@@ -13,11 +13,9 @@ use crate::common::{
 ///
 /// The `context` field is a domain separation tag.
 pub fn seal(key_policy: Keypolicy, context: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut rng = OsRng {};
-
     // Encrypt the raw policy.
     let mut nonce = [0u8; NONCE_SIZE];
-    rng.fill(&mut nonce);
+    SysRng.try_fill_bytes(&mut nonce).unwrap();
     let d2 = new_deoxysii(key_policy, context);
     let mut ciphertext = d2.seal(&nonce, data, vec![]);
     ciphertext.extend_from_slice(&nonce);

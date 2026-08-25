@@ -1,7 +1,7 @@
 //! Deoxys-II-256-128 MRAE primitives implementation.
 use anyhow::Result;
 use hmac::{Hmac, Mac};
-use rand::rngs::OsRng;
+use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use sha2::Sha512_256;
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -40,7 +40,8 @@ fn derive_symmetric_key(public: &PublicKey, private: &StaticSecret) -> [u8; KEY_
 /// Generates a public/private key pair suitable for use with
 /// `derive_symmetric_key`, `box_seal`, and `box_open`.
 pub fn generate_key_pair() -> (PublicKey, StaticSecret) {
-    let sk = StaticSecret::random_from_rng(OsRng);
+    let mut rng = UnwrapErr(SysRng);
+    let sk = StaticSecret::random_from_rng(&mut rng);
     let pk = PublicKey::from(&sk);
 
     (pk, sk)
@@ -91,7 +92,7 @@ mod tests {
 
     use self::test::{black_box, Bencher};
     use super::*;
-    use rand::RngCore;
+    use rand::Rng;
 
     #[test]
     fn test_mrae_asymmetric() {
@@ -123,7 +124,7 @@ mod tests {
 
     #[bench]
     fn bench_mrae_box_seal_4096(b: &mut Bencher) {
-        let mut rng = OsRng {};
+        let mut rng = rand::rng();
 
         // Set up the keys.
         let (_a_pub, a_priv) = generate_key_pair(); // Alice
@@ -151,7 +152,7 @@ mod tests {
 
     #[bench]
     fn bench_mrae_box_open_4096(b: &mut Bencher) {
-        let mut rng = OsRng {};
+        let mut rng = rand::rng();
 
         // Set up the keys.
         let (a_pub, a_priv) = generate_key_pair(); // Alice

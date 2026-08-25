@@ -49,7 +49,7 @@ mod tests {
     use group::ff::PrimeField;
     use hex_literal::hex;
     use p384::elliptic_curve::sec1::ToSec1Point;
-    use rand::{rngs::StdRng, RngCore, SeedableRng};
+    use rand::{rngs::StdRng, SeedableRng, TryRng};
 
     use super::{FieldDigest, GroupDigest, Sha3_384};
 
@@ -149,22 +149,22 @@ mod tests {
 
     #[bench]
     fn bench_hash_to_field_p384_sha3_384(b: &mut Bencher) {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let mut data = [0; 64];
 
         b.iter(|| {
-            rng.fill_bytes(&mut data);
+            rng.try_fill_bytes(&mut data).unwrap();
             let _ = Sha3_384::hash_to_field(&data[..32], &data[32..64]).unwrap();
         });
     }
 
     #[bench]
     fn bench_hash_to_group_p384_sha3_384(b: &mut Bencher) {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let mut data = [0; 64];
 
         b.iter(|| {
-            rng.fill_bytes(&mut data);
+            rng.try_fill_bytes(&mut data).unwrap();
             let _ = Sha3_384::hash_to_group(&data[..32], &data[32..64]).unwrap();
         });
     }

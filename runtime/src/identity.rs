@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use base64::prelude::*;
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 use sgx_isa::Targetinfo;
 use thiserror::Error;
 use tiny_keccak::{Hasher, TupleHash};
@@ -149,7 +149,7 @@ impl Identity {
     /// Generate a random 256-bit nonce, for anti-replay.
     fn generate_nonce() -> [u8; 32] {
         let mut nonce_bytes = [0u8; 32];
-        OsRng.fill(&mut nonce_bytes);
+        SysRng.try_fill_bytes(&mut nonce_bytes).unwrap();
 
         let mut h = TupleHash::v256(QUOTE_NONCE_CONTEXT);
         h.update(&nonce_bytes);

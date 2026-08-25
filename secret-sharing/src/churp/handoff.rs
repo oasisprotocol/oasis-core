@@ -397,7 +397,7 @@ where
 mod tests {
     use std::{collections::HashSet, iter::zip, sync::Arc};
 
-    use rand::{rngs::StdRng, RngCore, SeedableRng};
+    use rand::{rngs::StdRng, RngExt, SeedableRng};
 
     use crate::{
         churp::{self, Handoff, HandoffKind, SwitchPoint, VerifiableSecretShare},
@@ -441,7 +441,7 @@ mod tests {
         threshold: u8,
         dealing_phase: bool,
         n: usize,
-        rng: &mut impl RngCore,
+        rng: &mut impl RngExt,
     ) -> Vec<Dealer> {
         let mut dealers = Vec::with_capacity(n);
 
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_handoff() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let threshold = 2;
 
         // Handoff 0: Dealing phase.

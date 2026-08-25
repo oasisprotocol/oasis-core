@@ -1,5 +1,5 @@
 use group::ff::PrimeField;
-use rand_core::RngCore;
+use rand::RngExt;
 use subtle::{Choice, CtOption};
 use zeroize::Zeroize;
 
@@ -40,7 +40,7 @@ where
     ///
     /// This method is not constant time as some prime field implementations
     /// may generate uniformly random elements using rejection sampling.
-    pub fn random(deg_x: u8, deg_y: u8, rng: &mut impl RngCore) -> Self {
+    pub fn random(deg_x: u8, deg_y: u8, rng: &mut impl RngExt) -> Self {
         let deg_x = deg_x as usize;
         let deg_y = deg_y as usize;
 
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::random(0, 0, &mut rng);
         assert_eq!(bp.deg_x, 0);
         assert_eq!(bp.deg_y, 0);
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_to_zero_hole() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::random(2, 3, &mut rng);
 
         assert!(bp.set_coefficient(0, 0, scalar(1)));
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::random(0, 0, &mut rng);
         let restored = BivariatePolynomial::from_bytes(&bp.to_bytes())
             .expect("deserialization should succeed");

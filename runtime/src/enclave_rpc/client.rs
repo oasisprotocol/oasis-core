@@ -10,7 +10,7 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use lazy_static::lazy_static;
 #[cfg(not(test))]
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
@@ -618,7 +618,7 @@ impl RpcClient {
         return 0;
 
         #[cfg(not(test))]
-        OsRng.next_u32()
+        SysRng.try_next_u32().unwrap()
     }
 }
 

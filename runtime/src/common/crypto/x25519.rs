@@ -1,6 +1,6 @@
 //! CBOR serializable X25519 types.
 use anyhow::Result;
-use rand::rngs::OsRng;
+use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::hash::Hash;
@@ -18,7 +18,8 @@ pub struct PrivateKey(pub x25519_dalek::StaticSecret);
 impl PrivateKey {
     /// Generate a new private key.
     pub fn generate() -> Self {
-        PrivateKey(x25519_dalek::StaticSecret::random_from_rng(OsRng))
+        let mut rng = UnwrapErr(SysRng);
+        PrivateKey(x25519_dalek::StaticSecret::random_from_rng(&mut rng))
     }
 
     /// Compute corresponding public key.

@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
-use rand::{rngs::OsRng, Rng};
+use rand::{rand_core::UnwrapErr, rngs::SysRng, RngExt};
 use tokio::sync::OwnedMutexGuard;
 
 use super::{
@@ -301,7 +301,8 @@ where
         }
 
         // If all sessions are in use, return a random one.
-        let n = OsRng.gen_range(0..self.by_idle_time.len());
+        let mut rng = UnwrapErr(SysRng);
+        let n = rng.random_range(0..self.by_idle_time.len());
         let (_, peer_id, session_id) = self.by_idle_time.iter().nth(n).unwrap();
         let session = self
             .by_peer
@@ -343,7 +344,8 @@ where
         }
 
         // If all sessions are in use, return a random one.
-        let n = OsRng.gen_range(0..all_sessions.len());
+        let mut rng = UnwrapErr(SysRng);
+        let n = rng.random_range(0..all_sessions.len());
         let (peer_id, session_id) = all_sessions.get(n).unwrap();
         let session = self
             .by_peer

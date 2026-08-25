@@ -1,5 +1,5 @@
 //! RPC protocol types.
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 
 impl_bytes!(
     SessionID,
@@ -12,7 +12,7 @@ impl SessionID {
     /// Generate a random session identifier.
     pub fn random() -> Self {
         let mut session_id = [0u8; 32];
-        OsRng.fill(&mut session_id);
+        SysRng.try_fill_bytes(&mut session_id).unwrap();
 
         SessionID(session_id)
     }

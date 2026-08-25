@@ -33,8 +33,8 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let scalar = PrimeField::random(rng);
+        let mut rng = StdRng::from_seed([1u8; 32]);
+        let scalar = PrimeField::random(&mut rng);
         let bytes = scalar_to_bytes(&scalar);
         let restored = scalar_from_bytes(&bytes).expect("deserialization should succeed");
         assert_eq!(scalar, restored);

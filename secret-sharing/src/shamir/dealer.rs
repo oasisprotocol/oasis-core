@@ -1,5 +1,5 @@
 use group::ff::PrimeField;
-use rand::RngCore;
+use rand::RngExt;
 
 use crate::poly::{Point, Polynomial};
 
@@ -16,7 +16,7 @@ where
     F: PrimeField,
 {
     /// Creates a new dealer with a predefined shared secret.
-    pub fn new(threshold: u8, secret: F, rng: &mut impl RngCore) -> Self {
+    pub fn new(threshold: u8, secret: F, rng: &mut impl RngExt) -> Self {
         let mut sharer = Self::random(threshold, rng);
         let updated = sharer.poly.set_coefficient(0, secret);
         debug_assert!(updated);
@@ -24,7 +24,7 @@ where
     }
 
     /// Creates a new dealer with a random shared secret.
-    pub fn random(threshold: u8, rng: &mut impl RngCore) -> Self {
+    pub fn random(threshold: u8, rng: &mut impl RngExt) -> Self {
         let deg = threshold;
         let poly = Polynomial::random(deg, rng);
         Self { poly }
