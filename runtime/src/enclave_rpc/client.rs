@@ -257,7 +257,7 @@ impl RpcClient {
             .max_delay(std::time::Duration::from_millis(250))
             .take(MAX_TRANSPORT_ERROR_RETRIES);
 
-        let result = tokio_retry::Retry::spawn(retry_strategy, || {
+        let result = tokio_retry::Retry::start(retry_strategy, || {
             self.execute_call(request.clone(), kind, nodes.clone())
         })
         .await;
