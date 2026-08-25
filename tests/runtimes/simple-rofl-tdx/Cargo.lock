@@ -2374,7 +2374,7 @@ dependencies = [
  "honggfuzz",
  "p384",
  "rand 0.10.2",
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
  "sha3",
  "subtle",
  "thiserror",

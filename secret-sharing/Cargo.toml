@@ -14,7 +14,7 @@ p384 = { version = "0.13", default-features = false, features = [
     "hash2curve",
 ] }
 rand = { version = "0.10.2" }
-rand_core = { version = "0.6" }
+rand_core = { version = "0.10.1" }
 sha3 = { version = "0.10" }
 subtle = { version = "2.6", default-features = false }
 thiserror = { version = "1.0" }
