@@ -12,7 +12,7 @@ pub const PRIVATE_KEY_LENGTH: usize = 32;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// A CBOR serializable Diffie-Hellman X25519 private key.
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, ZeroizeOnDrop)]
 pub struct PrivateKey(pub x25519_dalek::StaticSecret);
 
 impl PrivateKey {

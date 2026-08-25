@@ -46,7 +46,7 @@ tendermint-light-client = { version = "0.40.4", features = [
 ], default-features = false }
 tendermint-rpc = { version = "0.40.4", default-features = false }
 curve25519-dalek = { version = "4.1.3", features = ["legacy_compatibility"] }
-x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
+x25519-dalek = { version = "3.0.0", features = ["static_secrets", "zeroize"] }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core", "digest"] }
 deoxysii = "0.2.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
