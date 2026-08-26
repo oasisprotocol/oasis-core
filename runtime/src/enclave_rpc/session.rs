@@ -527,6 +527,7 @@ impl Builder {
         let (builder, keypair, cfg) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
+            .unwrap()
             .build_initiator()
             .unwrap();
         Session::new(session, keypair.public, cfg)
@@ -537,6 +538,7 @@ impl Builder {
         let (builder, keypair, cfg) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
+            .unwrap()
             .build_responder()
             .unwrap();
         Session::new(session, keypair.public, cfg)
