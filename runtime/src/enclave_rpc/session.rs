@@ -523,24 +523,22 @@ impl Builder {
     }
 
     /// Build initiator session.
-    pub fn build_initiator(self) -> Session {
+    pub fn build_initiator(self) -> Result<Session> {
         let (builder, keypair, cfg) = self.build();
         let session = builder
-            .local_private_key(&keypair.private)
-            .unwrap()
-            .build_initiator()
-            .unwrap();
-        Session::new(session, keypair.public, cfg)
+            .local_private_key(&keypair.private)?
+            .build_initiator()?;
+        let session = Session::new(session, keypair.public, cfg);
+        Ok(session)
     }
 
     /// Build responder session.
-    pub fn build_responder(self) -> Session {
+    pub fn build_responder(self) -> Result<Session> {
         let (builder, keypair, cfg) = self.build();
         let session = builder
-            .local_private_key(&keypair.private)
-            .unwrap()
-            .build_responder()
-            .unwrap();
-        Session::new(session, keypair.public, cfg)
+            .local_private_key(&keypair.private)?
+            .build_responder()?;
+        let session = Session::new(session, keypair.public, cfg);
+        Ok(session)
     }
 }

@@ -223,7 +223,7 @@ where
         &mut self,
         peer_id: PeerID,
         session_id: SessionID,
-    ) -> MultiplexedSession<PeerID> {
+    ) -> Result<MultiplexedSession<PeerID>> {
         // If no quote policy is set, use the local one.
         if self.builder.get_quote_policy().is_none() {
             let policy = self
@@ -235,22 +235,22 @@ where
             self.builder = mem::take(&mut self.builder).quote_policy(policy);
         }
 
-        MultiplexedSession {
+        Ok(MultiplexedSession {
             peer_id: peer_id.clone(),
             session_id,
-            inner: self.builder.clone().build_responder(),
-        }
+            inner: self.builder.clone().build_responder()?,
+        })
     }
 
     /// Create a new multiplexed initiator session.
-    pub fn create_initiator(&self, peer_id: PeerID) -> MultiplexedSession<PeerID> {
+    pub fn create_initiator(&self, peer_id: PeerID) -> Result<MultiplexedSession<PeerID>> {
         let session_id = SessionID::random();
 
-        MultiplexedSession {
+        Ok(MultiplexedSession {
             peer_id: peer_id.clone(),
             session_id,
-            inner: self.builder.clone().build_initiator(),
-        }
+            inner: self.builder.clone().build_initiator()?,
+        })
     }
 
     /// Fetch an existing session given its identifier.
@@ -571,7 +571,9 @@ mod test {
 
         let now = 0;
         for (peer_id, session_id, num_sessions, num_peers, created) in test_vector {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let res = sessions.add(session, now);
             match created {
                 true => {
@@ -606,7 +608,9 @@ mod test {
         let now = 0;
         for (peer_id, session_id, create) in test_vector {
             if create {
-                let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+                let session = sessions
+                    .create_responder(peer_id.clone(), session_id.clone())
+                    .unwrap();
                 let _ = sessions.add(session, now);
             }
 
@@ -641,7 +645,9 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
             now += 1
         }
@@ -710,7 +716,9 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
             now += 1
         }
@@ -777,7 +785,9 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector.clone() {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
             now += 1;
         }
@@ -844,7 +854,9 @@ mod test {
 
         let mut now = 0;
         for (peer_id, session_id) in test_vector.clone() {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
             now += 1;
         }
@@ -901,7 +913,9 @@ mod test {
 
         let now = 0;
         for (peer_id, session_id, _, _) in test_vector.clone() {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
         }
 
@@ -931,7 +945,9 @@ mod test {
 
         let now = 0;
         for (peer_id, session_id) in test_vector.clone() {
-            let session = sessions.create_responder(peer_id.clone(), session_id.clone());
+            let session = sessions
+                .create_responder(peer_id.clone(), session_id.clone())
+                .unwrap();
             let _ = sessions.add(session, now);
         }
 

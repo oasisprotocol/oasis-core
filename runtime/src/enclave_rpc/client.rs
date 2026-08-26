@@ -331,7 +331,7 @@ impl RpcClient {
 
             // Since the peer ID is not yet known, use the default value and set it later.
             let peer_id = Default::default();
-            sessions.create_initiator(peer_id)
+            sessions.create_initiator(peer_id)?
         };
 
         // Copy session ID to avoid moved value errors.
