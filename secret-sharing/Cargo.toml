@@ -6,15 +6,17 @@ edition = "2018"
 
 [dependencies]
 anyhow = { version = "1.0" }
-group = { version = "0.13", default-features = false }
+group = { version = "0.14.0", default-features = false }
+hex-literal = "1.1.0"
 honggfuzz = { version = "0.5" }
-p384 = { version = "0.13", default-features = false, features = [
+p384 = { version = "0.14.0", default-features = false, features = [
     "std",
     "hash2curve",
+    "arithmetic",
+    "group-digest",
 ] }
-rand = { version = "0.8" }
-rand_core = { version = "0.6" }
-sha3 = { version = "0.10" }
+rand = { version = "0.10.2" }
+sha3 = { version = "0.12.0" }
 subtle = { version = "2.6", default-features = false }
 thiserror = { version = "1.0" }
 zeroize = { version = "1.7" }

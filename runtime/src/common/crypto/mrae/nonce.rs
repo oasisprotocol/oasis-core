@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use rand::{rngs::OsRng, Rng};
+use rand::{rand_core::TryRng, rngs::SysRng};
 
 /// Size of the nonce in bytes.
 pub use super::deoxysii::NONCE_SIZE;
@@ -35,9 +35,8 @@ impl Nonce {
 
     /// Generate a random nonce.
     pub fn generate() -> Self {
-        let mut rng = OsRng {};
         let mut start_value = [0u8; NONCE_SIZE];
-        rng.fill(&mut start_value);
+        SysRng.try_fill_bytes(&mut start_value).unwrap();
 
         Self::new(start_value)
     }

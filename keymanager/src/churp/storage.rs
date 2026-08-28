@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_store_load_bivariate_polynomial() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
         let polynomial = BivariatePolynomial::random(2, 4, &mut rng);
@@ -451,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_store_load_secret_share() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
         let x = PrimeField::from_u64(2);
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_store_load_next_secret_share() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
         let x = PrimeField::from_u64(2);
@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_bivariate_polynomial() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let polynomial = BivariatePolynomial::random(2, 4, &mut rng);
         let churp_id = 1;
         let epoch = 10;
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_secret_share() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let x = PrimeField::from_u64(2);
         let bp = BivariatePolynomial::random(2, 4, &mut rng);
         let vm = VerificationMatrix::from(&bp);

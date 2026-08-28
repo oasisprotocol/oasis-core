@@ -667,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_switch_point() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
 
         let threshold = 2;
         let deg_x = threshold;
@@ -764,7 +764,7 @@ mod tests {
     ) -> Result<bool> {
         let deg_x = threshold;
         let deg_y = 2 * threshold;
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::random(deg_x, deg_y, &mut rng);
         if zero_hole {
             bp.to_zero_hole();

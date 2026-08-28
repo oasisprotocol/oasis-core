@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::Result;
 use group::{Group, GroupEncoding};
-use rand::rngs::OsRng;
+use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use sp800_185::KMac;
 
 use oasis_core_runtime::{
@@ -878,10 +878,12 @@ impl<S: Suite> Instance<S> {
         threshold: u8,
         dealing_phase: bool,
     ) -> Result<Arc<Dealer<S::Group>>> {
+        let mut rng = UnwrapErr(SysRng);
+
         // Create a new dealer.
         let dealer = match dealing_phase {
-            true => Dealer::new(threshold, &mut OsRng),
-            false => Dealer::new_proactive(threshold, &mut OsRng),
+            true => Dealer::new(threshold, &mut rng),
+            false => Dealer::new_proactive(threshold, &mut rng),
         }?;
         let dealer = Arc::new(dealer);
 

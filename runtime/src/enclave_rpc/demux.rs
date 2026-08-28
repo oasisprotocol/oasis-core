@@ -86,7 +86,7 @@ impl Demux {
                 None => {
                     let now = insecure_posix_time();
                     let _ = sessions.remove_for(&peer_id, now)?;
-                    let session = sessions.create_responder(peer_id, session_id);
+                    let session = sessions.create_responder(peer_id, session_id)?;
                     sessions
                         .add(session, now)
                         .expect("there should be space for the new session")

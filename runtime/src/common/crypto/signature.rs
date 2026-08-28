@@ -8,7 +8,7 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use ed25519_dalek::{Digest as _, Sha512, Signer as _};
-use rand::rngs::OsRng;
+use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use thiserror::Error;
 use zeroize::Zeroize;
 
@@ -55,7 +55,8 @@ pub struct PrivateKey(pub ed25519_dalek::SigningKey);
 impl PrivateKey {
     /// Generates a new private key pair.
     pub fn generate() -> Self {
-        PrivateKey(ed25519_dalek::SigningKey::generate(&mut OsRng))
+        let mut rng = UnwrapErr(SysRng);
+        PrivateKey(ed25519_dalek::SigningKey::generate(&mut rng))
     }
 
     /// Convert this private key into bytes.

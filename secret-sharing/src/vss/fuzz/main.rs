@@ -1,6 +1,6 @@
 use group::ff::PrimeField;
 use honggfuzz::fuzz;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, RngExt, SeedableRng};
 
 use secret_sharing::{poly::BivariatePolynomial, vss::VerificationMatrix};
 
@@ -34,8 +34,8 @@ fn random_bivariate_polynomial<F: PrimeField>(data: &[u8]) -> BivariatePolynomia
     seed.copy_from_slice(&data[..32]);
     let mut rng = StdRng::from_seed(seed);
 
-    let deg_x = rng.gen_range(0..5);
-    let deg_y = rng.gen_range(0..5);
+    let deg_x = rng.random_range(0..5);
+    let deg_y = rng.random_range(0..5);
 
     BivariatePolynomial::<F>::random(deg_x, deg_y, &mut rng)
 }

@@ -10,7 +10,7 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use lazy_static::lazy_static;
 #[cfg(not(test))]
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
@@ -257,7 +257,7 @@ impl RpcClient {
             .max_delay(std::time::Duration::from_millis(250))
             .take(MAX_TRANSPORT_ERROR_RETRIES);
 
-        let result = tokio_retry::Retry::spawn(retry_strategy, || {
+        let result = tokio_retry::Retry::start(retry_strategy, || {
             self.execute_call(request.clone(), kind, nodes.clone())
         })
         .await;
@@ -331,7 +331,7 @@ impl RpcClient {
 
             // Since the peer ID is not yet known, use the default value and set it later.
             let peer_id = Default::default();
-            sessions.create_initiator(peer_id)
+            sessions.create_initiator(peer_id)?
         };
 
         // Copy session ID to avoid moved value errors.
@@ -618,7 +618,7 @@ impl RpcClient {
         return 0;
 
         #[cfg(not(test))]
-        OsRng.next_u32()
+        SysRng.try_next_u32().unwrap()
     }
 }
 

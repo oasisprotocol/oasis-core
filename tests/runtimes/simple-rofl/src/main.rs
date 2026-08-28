@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 use rustls_mbedcrypto_provider::mbedtls_crypto_provider;
 use rustls_mbedpki_provider::MbedTlsServerCertVerifier;
 
@@ -119,7 +119,7 @@ impl App {
         }
 
         let tx = cbor::to_vec(Call {
-            sender: format!("sender-{}", OsRng.gen::<u64>()).into(),
+            sender: format!("sender-{}", SysRng.try_next_u64().unwrap()).into(),
             nonce: 0,
             method: "insert".to_owned(),
             args: cbor::to_value(KeyValue {

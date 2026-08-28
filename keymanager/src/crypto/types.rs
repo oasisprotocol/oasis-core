@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::SysRng, TryRng};
 use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -59,9 +59,8 @@ pub struct Secret(pub [u8; SECRET_SIZE]);
 
 impl Secret {
     pub fn generate() -> Self {
-        let mut rng = OsRng {};
         let mut secret = Secret::default();
-        rng.fill(&mut secret.0);
+        SysRng.try_fill_bytes(&mut secret.0).unwrap();
 
         secret
     }
@@ -100,9 +99,8 @@ impl KeyPair {
         let sk = x25519::PrivateKey::generate();
         let pk = x25519::PublicKey::from(&sk);
 
-        let mut rng = OsRng {};
         let mut state_key = StateKey::default();
-        rng.fill(&mut state_key.0);
+        SysRng.try_fill_bytes(&mut state_key.0).unwrap();
 
         KeyPair::new(pk, sk, state_key)
     }

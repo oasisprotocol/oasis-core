@@ -63,7 +63,7 @@ impl KeyRecoverer for Player {
 
 #[cfg(test)]
 mod tests {
-    use rand_core::OsRng;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
         kdc::{KeyRecoverer, KeySharer},
@@ -81,6 +81,8 @@ mod tests {
 
     #[test]
     fn test_shamir() {
+        let mut rng = StdRng::from_seed([1u8; 32]);
+
         // Prepare parameters.
         let threshold = 2;
         let num_shareholders = 5;
@@ -91,7 +93,7 @@ mod tests {
         let min_shares = player.min_shares();
 
         // Prepare a dealer and distribute shares to shareholders.
-        let dealer = Dealer::new(threshold, secret, &mut OsRng);
+        let dealer = Dealer::new(threshold, secret, &mut rng);
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
@@ -136,6 +138,8 @@ mod tests {
 
     #[test]
     fn test_kdc() {
+        let mut rng = StdRng::from_seed([1u8; 32]);
+
         // Prepare parameters.
         let threshold = 2;
         let num_shareholders = 5;
@@ -152,7 +156,7 @@ mod tests {
         let min_shares = player.min_shares();
 
         // Prepare a dealer and distribute shares.
-        let dealer: Dealer<::p384::Scalar> = Dealer::new(threshold, secret, &mut OsRng);
+        let dealer: Dealer<::p384::Scalar> = Dealer::new(threshold, secret, &mut rng);
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
@@ -199,6 +203,8 @@ mod tests {
 
     #[test]
     fn test_proactivization() {
+        let mut rng = StdRng::from_seed([1u8; 32]);
+
         // Prepare parameters.
         let threshold = 2;
         let num_dealers = 5;
@@ -210,7 +216,7 @@ mod tests {
         let min_shares = player.min_shares();
 
         // Prepare a dealer and distribute shares.
-        let dealer = Dealer::new(threshold, secret, &mut OsRng);
+        let dealer = Dealer::new(threshold, secret, &mut rng);
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
@@ -234,7 +240,7 @@ mod tests {
 
         // Prepare dealers of proactive shares.
         let dealers = (0..num_dealers)
-            .map(|_| Dealer::new(threshold, PrimeField::ZERO, &mut OsRng))
+            .map(|_| Dealer::new(threshold, PrimeField::ZERO, &mut rng))
             .collect::<Vec<_>>();
 
         // Proactivize shares.

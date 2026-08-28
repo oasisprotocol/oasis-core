@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use group::GroupEncoding;
 use lru::LruCache;
-use rand::{prelude::SliceRandom, rngs::OsRng};
+use rand::{prelude::SliceRandom, rand_core::UnwrapErr, rngs::SysRng};
 
 use oasis_core_runtime::{
     common::{
@@ -254,6 +254,8 @@ impl RemoteClient {
         key_id: KeyPairId,
         status: churp::Status,
     ) -> Result<StateKey, KeyManagerError> {
+        let mut rng = UnwrapErr(SysRng);
+
         // Fault detection and blame assignment are not supported,
         // so the minimal number of key shares will suffice.
         let kind = HandoffKind::CommitteeUnchanged;
@@ -263,7 +265,7 @@ impl RemoteClient {
 
         // Fetch key shares in random order.
         let mut committee = status.committee;
-        committee.shuffle(&mut OsRng);
+        committee.shuffle(&mut rng);
 
         // Fetch key shares concurrently.
         let mut futures = FuturesUnordered::new();

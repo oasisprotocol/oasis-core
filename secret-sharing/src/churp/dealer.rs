@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use group::{ff::Field, Group};
-use rand_core::RngCore;
+use rand::RngExt;
 use zeroize::Zeroize;
 
 use crate::{poly::BivariatePolynomial, vss::VerificationMatrix};
@@ -53,7 +53,7 @@ where
     /// also satisfies the aforementioned non-zero leading term requirements.
     ///
     /// This function is not constant time because it uses rejection sampling.
-    pub fn new(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+    pub fn new(threshold: u8, rng: &mut impl RngExt) -> Result<Self> {
         let bp = Self::generate_bivariate_polynomial(threshold, rng)?;
         Ok(bp.into())
     }
@@ -73,7 +73,7 @@ where
     /// requirements.
     ///
     /// This function is not constant time because it uses rejection sampling.
-    pub fn new_proactive(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+    pub fn new_proactive(threshold: u8, rng: &mut impl RngExt) -> Result<Self> {
         let mut bp = Self::generate_bivariate_polynomial(threshold, rng)?;
         bp.to_zero_hole();
         Ok(bp.into())
@@ -87,7 +87,7 @@ where
     pub fn new_with_secret(
         threshold: u8,
         secret: G::Scalar,
-        rng: &mut impl RngCore,
+        rng: &mut impl RngExt,
     ) -> Result<Self> {
         let mut bp = Self::generate_bivariate_polynomial(threshold, rng)?;
         let updated = bp.set_coefficient(0, 0, secret);
@@ -135,7 +135,7 @@ where
     /// use rejection sampling to generate uniformly random elements.
     fn generate_bivariate_polynomial(
         threshold: u8,
-        rng: &mut impl RngCore,
+        rng: &mut impl RngExt,
     ) -> Result<BivariatePolynomial<G::Scalar>> {
         let deg_x = threshold;
         let deg_y = threshold.checked_mul(2).ok_or(Error::ThresholdTooLarge)?;
@@ -189,7 +189,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::{rngs::StdRng, Error, RngCore, SeedableRng};
+    use rand::{rngs::StdRng, SeedableRng, TryRng};
+    use std::convert::Infallible;
 
     use super::{BivariatePolynomial, HandoffKind};
 
@@ -199,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
 
         let test_cases = vec![
             (0, 0, 0, 1, 1), // Zero threshold.
@@ -221,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_new_proactive() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
 
         let test_cases = vec![
             (0, 0, 0, 1, 1), // Zero threshold.
@@ -243,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_new_with_secret() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
 
         let test_cases = vec![
             (0, 0, 0, 1, 1, 0),   // Zero threshold.
@@ -267,7 +268,7 @@ mod tests {
     #[test]
     fn test_make_share() {
         let threshold = 2;
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let dealer = Dealer::new(threshold, &mut rng).unwrap();
         let x = PrimeField::from_u64(2);
 
@@ -306,25 +307,26 @@ mod tests {
             }
         }
 
-        impl RngCore for ZeroOneRng {
-            fn next_u32(&mut self) -> u32 {
+        impl TryRng for ZeroOneRng {
+            type Error = Infallible;
+
+            fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
                 panic!("not implemented")
             }
 
-            fn next_u64(&mut self) -> u64 {
+            fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
                 panic!("not implemented")
             }
 
-            fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), Error> {
-                panic!("not implemented")
-            }
-
-            fn fill_bytes(&mut self, dest: &mut [u8]) {
-                match self.counter < self.limit {
-                    true => dest.fill(0),
-                    false => dest.fill(1),
+            fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+                if self.counter < self.limit {
+                    dst.fill(0)
+                } else {
+                    dst.fill(1)
                 }
                 self.counter += 1;
+
+                Ok(())
             }
         }
 

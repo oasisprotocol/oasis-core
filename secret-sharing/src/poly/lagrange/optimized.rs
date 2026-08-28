@@ -141,7 +141,7 @@ mod tests {
     use self::test::Bencher;
 
     use group::ff::Field;
-    use rand::{rngs::StdRng, RngCore, SeedableRng};
+    use rand::{rngs::StdRng, RngExt, SeedableRng};
 
     use crate::poly::Point;
 
@@ -166,11 +166,11 @@ mod tests {
             .collect()
     }
 
-    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<PrimeField> {
+    fn random_scalars(n: usize, mut rng: &mut impl RngExt) -> Vec<PrimeField> {
         (0..n).map(|_| PrimeField::random(&mut rng)).collect()
     }
 
-    fn random_points(n: usize, mut rng: &mut impl RngCore) -> Vec<Point<PrimeField>> {
+    fn random_points(n: usize, mut rng: &mut impl RngExt) -> Vec<Point<PrimeField>> {
         let mut points = Vec::with_capacity(n);
         for _ in 0..n {
             let x = PrimeField::random(&mut rng);
@@ -185,7 +185,7 @@ mod tests {
     fn test_lagrange() {
         // Prepare random points.
         let n = 10;
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let points = random_points(n, &mut rng);
         let points: Vec<_> = points.iter().collect();
 
@@ -253,7 +253,7 @@ mod tests {
     }
 
     fn bench_lagrange(b: &mut Bencher, n: usize) {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let points = random_points(n, &mut rng);
         let points: Vec<_> = points.iter().collect();
 
@@ -263,7 +263,7 @@ mod tests {
     }
 
     fn bench_basis_polynomials(b: &mut Bencher, n: usize) {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let xs = random_scalars(n, &mut rng);
 
         b.iter(|| {
@@ -272,7 +272,7 @@ mod tests {
     }
 
     fn bench_coefficients(b: &mut Bencher, n: usize) {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let xs = random_scalars(n, &mut rng);
 
         b.iter(|| {

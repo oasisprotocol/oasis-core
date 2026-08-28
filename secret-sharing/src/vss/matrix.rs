@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn test_from() {
         // Two non-zero coefficients (fast).
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::zero(2, 3);
         assert!(bp.set_coefficient(0, 0, PrimeField::ONE));
         assert!(bp.set_coefficient(1, 2, PrimeField::ONE.double()));
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_dimensions() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::random(5, 10, &mut rng);
 
         let vm = VerificationMatrix::from(&bp);
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let x2 = scalar(2);
         let x3 = scalar(3);
 
@@ -499,7 +499,7 @@ mod tests {
 
     #[test]
     fn test_verification_polynomial_for_x() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let x2 = scalar(2);
         let x3 = scalar(3);
 
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn test_verification_polynomial_for_y() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let x2 = scalar(2);
         let x3 = scalar(3);
 
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_verify_x() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let x2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_verify_y() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let y2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut rng = StdRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::random(2, 3, &mut rng);
         let vm = VerificationMatrix::from(&bp);
         let restored =
