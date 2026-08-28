@@ -266,13 +266,20 @@ type RuntimeCapabilityTEEUpdateEndorsementRequest struct {
 	EndorsedCapabilityTEE node.EndorsedCapabilityTEE `json:"ect"` //nolint: misspell
 }
 
+const (
+	// PeerIDPrefixLocal is the peer ID prefix for local EnclaveRPC calls.
+	PeerIDPrefixLocal = "local:"
+	// PeerIDPrefixP2P is the peer ID prefix for P2P EnclaveRPC calls.
+	PeerIDPrefixP2P = "p2p:"
+)
+
 // RuntimeRPCCallRequest is a worker RPC call request message body.
 type RuntimeRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
 	// Kind is the type of RPC call.
 	Kind enclaverpc.Kind `json:"kind,omitempty"`
-	// PeerID is the identifier of the peer making the request.
+	// PeerID is an opaque identifier of the request origin used for EnclaveRPC session accounting.
 	PeerID []byte `json:"peer_id,omitempty"`
 }
 
