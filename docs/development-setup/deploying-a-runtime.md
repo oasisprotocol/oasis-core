@@ -115,7 +115,7 @@ Prepare a runtime descriptor:
 ```
 cat << EOF > "${RUNTIME_DESCRIPTOR}"
 {
-  "v": 2,
+  "v": 3,
   "id": "${RUNTIME_ID}",
   "entity_id": "${ENTITY_ID}",
   "genesis": {
@@ -160,7 +160,10 @@ cat << EOF > "${RUNTIME_DESCRIPTOR}"
     }
   },
   "staking": {},
-  "governance_model": "entity"
+  "governance_model": "entity",
+   "deployments": [{
+    "valid_from": 100000
+  }]
 }
 EOF
 ```
@@ -227,7 +230,7 @@ Should give output similar to
 
 ```
 {
-  "v": 2,
+  "v": 3,
   "id": "8000000000000000000000000000000000000000000000000000000001234567",
   "entity_id": "+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=",
   "genesis": {
@@ -272,7 +275,13 @@ Should give output similar to
     }
   },
   "staking": {},
-  "governance_model": "entity"
+  "governance_model": "entity",
+  "deployments": [
+    {
+      "version": {},
+      "valid_from": 100000
+    }
+  ]
 }
 ```
 
@@ -408,9 +417,9 @@ state:
 ```
 oasis-node registry entity list -a $ADDR -v
 
-{"v":1,"id":"JTUtHd4XYQjh//e6eYU7Pa/XMFG88WE+jixvceIfWrk=","nodes":["LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0="]}
-{"v":1,"id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=","nodes":["vWUfSmjrHSlN5tSSO3/Qynzx+R/UlwPV9u+lnodQ00c="]}
-{"v":1,"id":"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=","allow_entity_signed_nodes":true}
+{"v":2,"id":"JTUtHd4XYQjh//e6eYU7Pa/XMFG88WE+jixvceIfWrk=","nodes":["LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0="]}
+{"v":2,"id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=","nodes":["vWUfSmjrHSlN5tSSO3/Qynzx+R/UlwPV9u+lnodQ00c="]}
+{"v":2,"id":"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=","allow_entity_signed_nodes":true}
 ```
 
 <!-- markdownlint-enable line-length -->
