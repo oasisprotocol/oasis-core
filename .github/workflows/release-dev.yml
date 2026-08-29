@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # Fetch all history as the recommended way to fetch all tags and
           # branches of the project.
@@ -75,7 +75,7 @@ jobs:
         run: |
           make release-build
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: oasis-core-dev-release
           path: dist/*.tar.gz
