@@ -280,7 +280,6 @@ func handlerWatchEphemeralSecrets(srv any, stream grpc.ServerStream) error {
 // RegisterService registers a new keymanager secrets backend service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
-	server.RegisterService(&deprecatedServiceDesc, service)
 }
 
 // Client is a gRPC key manager secrets client.
