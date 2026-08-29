@@ -55,14 +55,11 @@ transactions from clients (also see the figure above for an overview).
    need to have the executable available locally and must be configured as
    compute nodes.
 
-1. In addition to compute nodes a runtime also needs storage nodes to store its
-   state.
-
-1. Both kinds of [nodes will register] on the consensus layer announcing their
+1. Compute [nodes will register] on the consensus layer announcing their
    willingness to participate in the operation of Runtime A.
 
 1. After an [epoch transition] the [committee scheduler] service will elect
-   registered compute and storage nodes into different committees based on role.
+   registered compute nodes into different committees based on role.
    Elections are randomized based on entropy provided by the [random beacon].
 
 1. A client may submit transactions by querying the consensus layer to get the
@@ -78,7 +75,7 @@ transactions from clients (also see the figure above for an overview).
    that computation was performed correctly and state was correctly persisted.
 
 1. The compute nodes are ready to accept the next batch and the process can
-   repeat from step 6.
+   repeat from step 5.
 
 Note that the above example describes the _happy path_, a scenario where there
 are no failures. Described steps mention things like verifying that computation
@@ -152,17 +149,6 @@ computation.
 <!-- markdownlint-disable line-length -->
 [cryptographic commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc
 <!-- markdownlint-enable line-length -->
-
-### Storage Receipts
-
-All runtime persistent state is stored by storage nodes. These provide a
-[Merklized Key-Value Store (MKVS)] to compute nodes. The MKVS stores immutable
-state cryptographically summarized by a single root hash. When a storage node
-stores a given state update, it signs a receipt stating that it is storing a
-specific root. These receipts are verified by the [roothash service] before
-accepting a commitment from a compute node.
-
-[Merklized Key-Value Store (MKVS)]: ../mkvs.md
 
 ### Suspending Runtimes
 
