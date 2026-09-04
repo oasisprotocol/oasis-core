@@ -223,7 +223,8 @@ func (n *commonNode) initialize() error {
 	// Apply the genesis public key blacklist.
 	for _, v := range n.publicKeyBlacklist {
 		if err := v.Blacklist(); err != nil {
-			n.Logger.Error("initialize: failed to blacklist key",
+			n.Logger.Error(
+				"initialize: failed to blacklist key",
 				"err", err,
 				"pk", v,
 			)

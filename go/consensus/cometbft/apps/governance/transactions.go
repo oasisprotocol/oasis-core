@@ -22,7 +22,8 @@ func (app *Application) submitProposal(
 	state *governanceState.MutableState,
 	proposalContent *governance.ProposalContent,
 ) (*governance.Proposal, error) {
-	ctx.Logger().Debug("governance: submit proposal tx",
+	ctx.Logger().Debug(
+		"governance: submit proposal tx",
 		"proposal_content", proposalContent,
 	)
 
@@ -33,7 +34,8 @@ func (app *Application) submitProposal(
 
 	// Validate proposal content basics.
 	if err = proposalContent.ValidateBasic(params); err != nil {
-		ctx.Logger().Debug("governance: malformed proposal content",
+		ctx.Logger().Debug(
+			"governance: malformed proposal content",
 			"content", proposalContent,
 			"err", err,
 		)
@@ -72,7 +74,8 @@ func (app *Application) submitProposal(
 
 	// Check if submitter has enough balance for proposal deposit.
 	if submitter.General.Balance.Cmp(&params.MinProposalDeposit) < 0 {
-		ctx.Logger().Debug("governance: not enough balance to submit proposal",
+		ctx.Logger().Debug(
+			"governance: not enough balance to submit proposal",
 			"submitter", submitterAddr,
 			"min_proposal_deposit", params.MinProposalDeposit,
 		)
@@ -81,7 +84,8 @@ func (app *Application) submitProposal(
 
 	epoch, err := app.state.GetEpoch(ctx, ctx.CurrentHeight())
 	if err != nil {
-		ctx.Logger().Error("governance: failed to get epoch",
+		ctx.Logger().Error(
+			"governance: failed to get epoch",
 			"err", err,
 		)
 		return nil, err
@@ -92,7 +96,8 @@ func (app *Application) submitProposal(
 		upgrade := proposalContent.Upgrade
 		// Ensure upgrade descriptor epoch is far enough in future.
 		if upgrade.Descriptor.Epoch < params.UpgradeMinEpochDiff+epoch {
-			ctx.Logger().Debug("governance: upgrade descriptor epoch too soon",
+			ctx.Logger().Debug(
+				"governance: upgrade descriptor epoch too soon",
 				"submitter", submitterAddr,
 				"descriptor", upgrade.Descriptor,
 				"upgrade_min_epoch_diff", params.UpgradeMinEpochDiff,
@@ -122,13 +127,15 @@ func (app *Application) submitProposal(
 		switch err {
 		case nil:
 		case governance.ErrNoSuchUpgrade:
-			ctx.Logger().Debug("governance: cancel upgrade for a non existing pending upgrade",
+			ctx.Logger().Debug(
+				"governance: cancel upgrade for a non existing pending upgrade",
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)
 			return nil, err
 		default:
-			ctx.Logger().Error("governance: error loading proposal",
+			ctx.Logger().Error(
+				"governance: error loading proposal",
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)
@@ -149,7 +156,8 @@ func (app *Application) submitProposal(
 			Data:   proposalContent.ChangeParameters,
 		})
 		if err != nil {
-			ctx.Logger().Debug("governance: failed to dispatch validate parameter changes message",
+			ctx.Logger().Debug(
+				"governance: failed to dispatch validate parameter changes message",
 				"err", err,
 			)
 			return nil, err
@@ -170,7 +178,8 @@ func (app *Application) submitProposal(
 		submitterAddr,
 		&params.MinProposalDeposit,
 	); err != nil {
-		ctx.Logger().Error("governance: failed to deposit governance",
+		ctx.Logger().Error(
+			"governance: failed to deposit governance",
 			"err", err,
 			"submitter", submitterAddr,
 			"deposit", &params.MinProposalDeposit,
@@ -181,13 +190,15 @@ func (app *Application) submitProposal(
 	// Load the next proposal identifier.
 	id, err := state.NextProposalIdentifier(ctx)
 	if err != nil {
-		ctx.Logger().Error("governance: failed to get next proposal identifier",
+		ctx.Logger().Error(
+			"governance: failed to get next proposal identifier",
 			"err", err,
 		)
 		return nil, fmt.Errorf("governance: failed to get next proposal identifier: %w", err)
 	}
 	if err := state.SetNextProposalIdentifier(ctx, id+1); err != nil {
-		ctx.Logger().Error("governance: failed to set next proposal identifier",
+		ctx.Logger().Error(
+			"governance: failed to set next proposal identifier",
 			"err", err,
 		)
 		return nil, fmt.Errorf("governance: failed to set next proposal identifier: %w", err)
@@ -203,7 +214,8 @@ func (app *Application) submitProposal(
 		Submitter: submitterAddr,
 	}
 	if err := state.SetActiveProposal(ctx, proposal); err != nil {
-		ctx.Logger().Error("governance: failed to set active proposal",
+		ctx.Logger().Error(
+			"governance: failed to set active proposal",
 			"err", err,
 		)
 		return nil, fmt.Errorf("governance: failed to set active proposal: %w", err)
@@ -317,7 +329,8 @@ func (app *Application) castVote(
 	}
 
 	if !eligible {
-		ctx.Logger().Debug("governance: submitter not eligible to vote",
+		ctx.Logger().Debug(
+			"governance: submitter not eligible to vote",
 			"submitter", ctx.CallerAddress(),
 		)
 		return governance.ErrNotEligible
@@ -328,19 +341,22 @@ func (app *Application) castVote(
 	switch err {
 	case nil:
 	case governance.ErrNoSuchProposal:
-		ctx.Logger().Debug("governance: vote for a missing proposal",
+		ctx.Logger().Debug(
+			"governance: vote for a missing proposal",
 			"proposal_id", proposalVote.ID,
 		)
 		return governance.ErrNoSuchProposal
 	default:
-		ctx.Logger().Debug("governance: error loading proposal",
+		ctx.Logger().Debug(
+			"governance: error loading proposal",
 			"err", err,
 			"proposal_id", proposalVote.ID,
 		)
 	}
 	// Ensure proposal is active.
 	if proposal.State != governance.StateActive {
-		ctx.Logger().Error("governance: vote for a non-active proposal",
+		ctx.Logger().Error(
+			"governance: vote for a non-active proposal",
 			"proposal_id", proposalVote.ID,
 			"state", proposal.State,
 			"proposal", proposal,

@@ -19,11 +19,11 @@ const (
 )
 
 func tcbBundleCacheKey(teeType TeeType) []byte {
-	return []byte(fmt.Sprintf("%s.%d", tcbBundleCacheKeyPrefix, teeType))
+	return fmt.Appendf(nil, "%s.%d", tcbBundleCacheKeyPrefix, teeType)
 }
 
 func tcbEvaluationDataNumbersCacheKey(teeType TeeType) []byte {
-	return []byte(fmt.Sprintf("%s.%d", tcbEvaluationDataNumbersCacheKeyPrefix, teeType))
+	return fmt.Appendf(nil, "%s.%d", tcbEvaluationDataNumbersCacheKeyPrefix, teeType)
 }
 
 func readBundleMinTimestamp(bundle *TCBBundle) (time.Time, error) {
@@ -80,7 +80,8 @@ func (tc *tcbCache) checkEvaluationDataNumbers(teeType TeeType) ([]uint32, bool)
 		return nil, true
 	default:
 		// Can't get it... an error, but we can still try downloading it.
-		tc.logger.Warn("error checking common store for cached TCB evaluation data numbers",
+		tc.logger.Warn(
+			"error checking common store for cached TCB evaluation data numbers",
 			"err", err,
 		)
 		return nil, true
@@ -98,7 +99,8 @@ func (tc *tcbCache) cacheEvaluationDataNumbers(teeType TeeType, numbers []uint32
 		LastUpdate: tc.now(),
 	}
 	if err := tc.serviceStore.PutCBOR(tcbEvaluationDataNumbersCacheKey(teeType), cached); err != nil {
-		tc.logger.Error("could not store new TCB evaluation data numbers to cache, ignoring",
+		tc.logger.Error(
+			"could not store new TCB evaluation data numbers to cache, ignoring",
 			"err", err,
 		)
 	}
@@ -117,7 +119,8 @@ func (tc *tcbCache) checkBundle(teeType TeeType, fmspc []byte) (*TCBBundle, bool
 		return nil, true
 	default:
 		// Can't get it... an error, but we can still try downloading it.
-		tc.logger.Warn("error checking common store for cached TCB bundle",
+		tc.logger.Warn(
+			"error checking common store for cached TCB bundle",
 			"err", err,
 		)
 		return nil, true
@@ -148,7 +151,8 @@ func (tc *tcbCache) checkBundle(teeType TeeType, fmspc []byte) (*TCBBundle, bool
 func (tc *tcbCache) cacheBundle(teeType TeeType, tcbBundle *TCBBundle, fmspc []byte) {
 	expectedExpiry, err := readBundleMinTimestamp(tcbBundle)
 	if err != nil {
-		tc.logger.Error("could not determine next update timestamp from TCB bundle",
+		tc.logger.Error(
+			"could not determine next update timestamp from TCB bundle",
 			"err", err,
 		)
 		return
@@ -161,7 +165,8 @@ func (tc *tcbCache) cacheBundle(teeType TeeType, tcbBundle *TCBBundle, fmspc []b
 		LastUpdate:     tc.now(),
 	}
 	if err = tc.serviceStore.PutCBOR(tcbBundleCacheKey(teeType), cached); err != nil {
-		tc.logger.Error("could not store new TCB bundle to cache, ignoring",
+		tc.logger.Error(
+			"could not store new TCB bundle to cache, ignoring",
 			"err", err,
 		)
 	}
