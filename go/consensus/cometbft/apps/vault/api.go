@@ -16,10 +16,10 @@ var (
 	// AppName is the ABCI application name.
 	AppName = "400_vault"
 
-	// EventType is the ABCI event type for staking events.
+	// EventType is the ABCI event type for vault events.
 	EventType = api.EventTypeForApp(AppName)
 
 	// QueryApp is a query for filtering events processed by the
-	// staking application.
+	// vault application.
 	QueryApp = api.QueryForApp(AppName)
 )
