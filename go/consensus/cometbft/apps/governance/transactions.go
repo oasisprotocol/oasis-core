@@ -352,6 +352,7 @@ func (app *Application) castVote(
 			"err", err,
 			"proposal_id", proposalVote.ID,
 		)
+		return fmt.Errorf("governance: failed to load proposal: %w", err)
 	}
 	// Ensure proposal is active.
 	if proposal.State != governance.StateActive {
