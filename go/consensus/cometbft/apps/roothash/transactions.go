@@ -10,10 +10,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 // getRuntimeState fetches the current runtime state and performs common
@@ -45,7 +47,7 @@ func (app *Application) executorCommit(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	cc *roothash.ExecutorCommit,
-) (err error) {
+) error {
 	if ctx.IsCheckOnly() {
 		// Notify subscribers about observed commitments.
 		for _, ec := range cc.Commits {
@@ -55,14 +57,25 @@ func (app *Application) executorCommit(
 	}
 
 	// Charge gas for this transaction.
+	isFeatureVersion261, err := features.IsFeatureVersion(ctx, migrations.Version261)
+	if err != nil {
+		return err
+	}
+	numCommits := 1
+	if isFeatureVersion261 {
+		numCommits = len(cc.Commits)
+	}
+
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("ComputeCommit: failed to fetch consensus parameters",
+		ctx.Logger().Error(
+			"ComputeCommit: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
 	}
-	if err = ctx.Gas().UseGas(1, roothash.GasOpComputeCommit, params.GasCosts); err != nil {
+
+	if err = ctx.Gas().UseGas(numCommits, roothash.GasOpComputeCommit, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -94,7 +107,8 @@ func (app *Application) executorCommit(
 	// Verify and add commitments to the pool.
 	for _, commit := range cc.Commits {
 		if err = commitment.VerifyExecutorCommitment(ctx, rtState.LastBlock, rtState.Runtime, rtState.Committee.ValidFor, &commit, msgGasAccountant, nl); err != nil { // nolint: gosec
-			ctx.Logger().Debug("failed to verify executor commitment",
+			ctx.Logger().Debug(
+				"failed to verify executor commitment",
 				"err", err,
 				"runtime_id", cc.ID,
 				"round", commit.Header.Header.Round,
@@ -103,7 +117,8 @@ func (app *Application) executorCommit(
 		}
 
 		if err := rtState.CommitmentPool.AddVerifiedExecutorCommitment(rtState.Committee, &commit); err != nil { // nolint: gosec
-			ctx.Logger().Debug("failed to add executor commitment",
+			ctx.Logger().Debug(
+				"failed to add executor commitment",
 				"err", err,
 				"runtime_id", cc.ID,
 				"round", commit.Header.Header.Round,
@@ -111,7 +126,8 @@ func (app *Application) executorCommit(
 			return err
 		}
 
-		ctx.Logger().Debug("executor commitment added to pool",
+		ctx.Logger().Debug(
+			"executor commitment added to pool",
 			"runtime_id", cc.ID,
 			"round", commit.Header.Header.Round,
 			"node_id", commit.NodeID,
@@ -135,7 +151,8 @@ func (app *Application) executorCommit(
 	if prevRank != rtState.CommitmentPool.HighestRank {
 		round := rtState.LastBlock.Header.Round + 1
 
-		ctx.Logger().Debug("transaction scheduler has changed",
+		ctx.Logger().Debug(
+			"transaction scheduler has changed",
 			"runtime_id", cc.ID,
 			"round", round,
 			"prev_rank", prevRank,
@@ -180,7 +197,8 @@ func (app *Application) submitEvidence(
 ) error {
 	// Validate proposal content basics.
 	if err := evidence.ValidateBasic(); err != nil {
-		ctx.Logger().Debug("Evidence: submitted evidence not valid",
+		ctx.Logger().Debug(
+			"Evidence: submitted evidence not valid",
 			"evidence", evidence,
 			"err", err,
 		)
@@ -194,7 +212,8 @@ func (app *Application) submitEvidence(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("Evidence: failed to fetch consensus parameters",
+		ctx.Logger().Error(
+			"Evidence: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -215,7 +234,8 @@ func (app *Application) submitEvidence(
 
 	if len(rtState.Runtime.Staking.Slashing) == 0 {
 		// No slashing instructions for runtime, no point in collecting evidence.
-		ctx.Logger().Debug("Evidence: runtime has no slashing instructions",
+		ctx.Logger().Debug(
+			"Evidence: runtime has no slashing instructions",
 			"err", roothash.ErrRuntimeDoesNotSlash,
 		)
 		return roothash.ErrRuntimeDoesNotSlash
@@ -223,7 +243,8 @@ func (app *Application) submitEvidence(
 	slash := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeEquivocation].Amount
 	if slash.IsZero() {
 		// Slash amount is zero for runtime, no point in collecting evidence.
-		ctx.Logger().Debug("Evidence: runtime has no slashing instructions for equivocation",
+		ctx.Logger().Debug(
+			"Evidence: runtime has no slashing instructions for equivocation",
 			"err", roothash.ErrRuntimeDoesNotSlash,
 		)
 		return roothash.ErrRuntimeDoesNotSlash
@@ -237,7 +258,8 @@ func (app *Application) submitEvidence(
 		commitA := evidence.EquivocationExecutor.CommitA
 
 		if commitA.Header.Header.Round+params.MaxEvidenceAge < rtState.LastBlock.Header.Round {
-			ctx.Logger().Debug("Evidence: commitment equivocation evidence expired",
+			ctx.Logger().Debug(
+				"Evidence: commitment equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.LastBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
@@ -250,7 +272,8 @@ func (app *Application) submitEvidence(
 		proposalA := evidence.EquivocationProposal.ProposalA
 
 		if proposalA.Header.Round+params.MaxEvidenceAge < rtState.LastBlock.Header.Round {
-			ctx.Logger().Debug("Evidence: proposal equivocation evidence expired",
+			ctx.Logger().Debug(
+				"Evidence: proposal equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.LastBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
@@ -304,7 +327,8 @@ func (app *Application) submitMsg(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("failed to fetch consensus parameters",
+		ctx.Logger().Error(
+			"failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
