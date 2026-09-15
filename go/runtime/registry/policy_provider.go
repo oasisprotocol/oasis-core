@@ -18,6 +18,8 @@ import (
 // the consensus layer.
 type QuotePolicyProvider struct {
 	Consensus consensus.Service
+	// UseKMAPolicy specifies whether to use keymanager access policy when one exists.
+	UseKMAPolicy bool
 }
 
 func (p *QuotePolicyProvider) Get(
@@ -43,7 +45,7 @@ func (p *QuotePolicyProvider) Get(
 		if err = cbor.Unmarshal(d.TEE, &sc); err != nil {
 			return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
 		}
-		return sc.Policy, nil
+		return sc.ResolvePolicy(p.UseKMAPolicy), nil
 	}
 	return nil, nil
 }
