@@ -3,6 +3,8 @@ package committee
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -221,11 +223,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 	defer tree.Close()
 
 	// Check if there's anything interesting in this block.
-	var txHashes []hash.Hash
-	for txHash := range pending {
-		txHashes = append(txHashes, txHash)
-	}
-
+	txHashes := slices.Collect(maps.Keys(pending))
 	matches, err := tree.GetTransactionMultiple(ctx, txHashes)
 	if err != nil {
 		return fmt.Errorf("error getting block I/O from storage: %w", err)
@@ -335,7 +333,8 @@ func (n *Node) worker() {
 		var failedBlocks []*block.Block
 		for _, blk := range blocks {
 			if err := n.checkBlock(ctx, blk, pending); err != nil {
-				n.logger.Error("error checking block",
+				n.logger.Error(
+					"error checking block",
 					"err", err,
 					"round", blk.Header.Round,
 				)
@@ -343,7 +342,8 @@ func (n *Node) worker() {
 			}
 		}
 		if len(failedBlocks) > 0 {
-			n.logger.Warn("failed roothash blocks",
+			n.logger.Warn(
+				"failed roothash blocks",
 				"num_failed_blocks", len(failedBlocks),
 			)
 
