@@ -56,12 +56,25 @@ func (sc *runtimeTxsImpl) Run(ctx context.Context, _ *env.Env) error {
 		return err
 	}
 
+	// What for the transaction pool to be ready. We know that the transaction
+	// pool is ready when the first transaction is included in a block.
+	batch := map[string][]uint64{
+		sender0: {0},
+		sender1: {0},
+		sender2: {0},
+		sender3: {0},
+	}
+	_, err := sc.submitTxs(ctx, batch)
+	if err != nil {
+		return err
+	}
+
 	// Queue transactions with higher nonces which should not be included
 	// in a block until transactions with lower nonces are submitted.
-	batch := map[string][]uint64{
-		sender1: {1},
-		sender2: {1, 2},
-		sender3: {1, 2, 3},
+	batch = map[string][]uint64{
+		sender1: {2},
+		sender2: {2, 3},
+		sender3: {2, 3, 4},
 	}
 	group, gctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
@@ -75,10 +88,10 @@ func (sc *runtimeTxsImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	// Queue missing transactions.
 	batch = map[string][]uint64{
-		sender0: {0},
-		sender1: {0},
-		sender2: {0},
-		sender3: {0},
+		sender0: {1},
+		sender1: {1},
+		sender2: {1},
+		sender3: {1},
 	}
 	rounds, err := sc.submitTxs(ctx, batch)
 	if err != nil {
@@ -108,10 +121,10 @@ func (sc *runtimeTxsImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	// Verify state.
 	expectedValues := map[string]string{
-		sender0: "0",
-		sender1: "1",
-		sender2: "2",
-		sender3: "3",
+		sender0: "1",
+		sender1: "2",
+		sender2: "3",
+		sender3: "4",
 	}
 	for sender, expected := range expectedValues {
 		value, err := sc.submitKeyValueRuntimeGetQuery(ctx, KeyValueRuntimeID, sender, api.RoundLatest)

@@ -23,7 +23,7 @@ const (
 	ronlEnclaveRPCTimeout = 2 * time.Second
 	// roflSubmitTxTimeout is the maximum amount of time that the host will wait for transaction
 	// inclusion into a block.
-	roflSubmitTxTimeout = 1 * time.Minute
+	roflSubmitTxTimeout = time.Minute
 	// roflLocalStorageKeySeparator is the local storage key separator after component ID.
 	roflLocalStorageKeySeparator = ":"
 )
@@ -153,7 +153,8 @@ func (rh *roflHostHandler) handleHostRPCCall(
 			},
 		})
 		if err != nil {
-			rh.logger.Warn("failed to route EnclaveRPC call to RONL",
+			rh.logger.Warn(
+				"failed to route EnclaveRPC call to RONL",
 				"err", err,
 				"kind", rq.HostRPCCallRequest.Kind,
 			)
@@ -162,7 +163,8 @@ func (rh *roflHostHandler) handleHostRPCCall(
 
 		rsp := rspRaw.RuntimeRPCCallResponse
 		if rsp == nil {
-			rh.logger.Warn("malformed response from runtime",
+			rh.logger.Warn(
+				"malformed response from runtime",
 				"response", rspRaw,
 			)
 			return nil, fmt.Errorf("malformed response from RONL")

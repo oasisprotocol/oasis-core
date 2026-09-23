@@ -15,7 +15,7 @@ p384 = { version = "0.14.0", default-features = false, features = [
     "arithmetic",
     "group-digest",
 ] }
-rand = { version = "0.10.2" }
+rand = { version = "0.10.3" }
 sha3 = { version = "0.12.0" }
 subtle = { version = "2.6", default-features = false }
 thiserror = { version = "1.0" }

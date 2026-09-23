@@ -262,13 +262,15 @@ func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*Pend
 }
 
 func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
-	t.logger.Debug("queuing transaction for check",
+	t.logger.Debug(
+		"queuing transaction for check",
 		"tx", pct.Raw(),
 		"hash", pct.Hash(),
 		"recheck", pct.checked,
 	)
 	if err := t.checkTxQueue.add(pct); err != nil {
-		t.logger.Warn("unable to queue transaction",
+		t.logger.Warn(
+			"unable to queue transaction",
 			"hash", pct.Hash(),
 			"err", err,
 		)
@@ -304,7 +306,8 @@ func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 func (t *txPool) PromoteProposedBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
 	txs, missingTxs := t.GetKnownBatch(batch)
 	if len(missingTxs) > 0 {
-		t.logger.Debug("promoted proposed batch contains missing transactions",
+		t.logger.Debug(
+			"promoted proposed batch contains missing transactions",
 			"missing_tx_count", len(missingTxs),
 		)
 	}
@@ -476,7 +479,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 	if _, err = t.history.WaitRoundSynced(waitSyncCtx, di.BlockInfo.RuntimeBlock.Header.Round); err != nil {
 		// Block round isn't synced yet, so make sure the batch check is
 		// retried later to avoid aborting the runtime, as it is not its fault.
-		t.logger.Info("block round is not synced yet, retrying transaction batch check later",
+		t.logger.Info(
+			"block round is not synced yet, retrying transaction batch check later",
 			"round", di.BlockInfo.RuntimeBlock.Header.Round,
 			"err", err,
 		)
@@ -512,7 +516,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		defer cancel()
 
 		if err = t.runtime.Abort(abortCtx, false); err != nil {
-			t.logger.Error("failed to abort the runtime",
+			t.logger.Error(
+				"failed to abort the runtime",
 				"err", err,
 			)
 		}
@@ -542,7 +547,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 	for i, res := range results {
 		if !res.IsSuccess() {
 			rejectedTransactions.With(t.getMetricLabels()).Inc()
-			t.logger.Debug("check tx failed",
+			t.logger.Debug(
+				"check tx failed",
 				"tx", batch[i].Raw(),
 				"hash", batch[i].Hash(),
 				"result", res,
@@ -582,7 +588,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		return nil
 	}
 
-	t.logger.Debug("checked new transactions",
+	t.logger.Debug(
+		"checked new transactions",
 		"num_txs", len(newTxs),
 		"accepted_txs", len(goodPcts),
 	)
@@ -604,7 +611,8 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		}
 
 		if err = t.mainQueue.Add(pct.TxQueueMeta, res.Meta); err != nil {
-			t.logger.Error("unable to queue transaction for scheduling",
+			t.logger.Error(
+				"unable to queue transaction for scheduling",
 				"err", err,
 				"hash", pct.Hash(),
 			)
@@ -699,7 +707,8 @@ func (t *txPool) checkWorker() {
 		t.logger.Debug("checking queued transactions")
 
 		if err := t.checkTxBatch(ctx); err != nil {
-			t.logger.Warn("transaction batch check failed",
+			t.logger.Warn(
+				"transaction batch check failed",
 				"err", err,
 			)
 
@@ -736,7 +745,8 @@ func (t *txPool) republishWorker() {
 		}
 	}()
 
-	t.logger.Debug("starting transaction republish worker",
+	t.logger.Debug(
+		"starting transaction republish worker",
 		"interval", republishInterval,
 	)
 
@@ -793,7 +803,8 @@ func (t *txPool) republishWorker() {
 			}
 
 			if err := t.txPublisher.PublishTx(ctx, tx.Raw()); err != nil {
-				t.logger.Warn("failed to publish transaction",
+				t.logger.Warn(
+					"failed to publish transaction",
 					"err", err,
 					"tx", tx,
 				)
@@ -816,10 +827,13 @@ func (t *txPool) republishWorker() {
 		// Reschedule ticker for next republish.
 		ticker.Reset(nextPendingRepublish)
 
-		t.logger.Debug("republished transactions",
+		t.logger.Debug(
+			"republished transactions",
 			"num_txs", republishedCount,
 			"next_republish", nextPendingRepublish,
 		)
+
+		lastRepublish = time.Now()
 	}
 }
 
@@ -864,7 +878,8 @@ func (t *txPool) recheck() {
 	for _, pct := range pcts {
 		err := t.addToCheckQueue(pct)
 		if err != nil {
-			t.logger.Warn("failed to submit transaction for recheck",
+			t.logger.Warn(
+				"failed to submit transaction for recheck",
 				"err", err,
 				"hash", pct.Hash(),
 			)

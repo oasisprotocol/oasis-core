@@ -123,7 +123,7 @@ func getDuration(
 	// obtained time series corresponds to one run.
 	v1api := prometheusAPI.NewAPI(client)
 	r := prometheusAPI.Range{
-		Start: bi.Values[0].Timestamp.Time().Add(-1 * time.Minute),
+		Start: bi.Values[0].Timestamp.Time().Add(-time.Minute),
 		End:   bi.Values[len(bi.Values)-1].Timestamp.Time().Add(time.Minute),
 		Step:  time.Second,
 	}
@@ -287,7 +287,7 @@ func getNetwork(
 
 	v1api := prometheusAPI.NewAPI(client)
 	r := prometheusAPI.Range{
-		Start: bi.Values[0].Timestamp.Time().Add(-1 * time.Minute),
+		Start: bi.Values[0].Timestamp.Time().Add(-time.Minute),
 		End:   bi.Values[len(bi.Values)-1].Timestamp.Time().Add(time.Minute),
 		Step:  time.Second,
 	}
@@ -362,7 +362,8 @@ func getCoarseBenchmarkInstances(
 		ls[model.LabelName(k)] = model.LabelValue(v)
 	}
 
-	query := fmt.Sprintf("max(%s %s) by (%s) == 1.0",
+	query := fmt.Sprintf(
+		"max(%s %s) by (%s) == 1.0",
 		metrics.MetricUp, ls.String(), metrics.MetricsLabelInstance,
 	)
 	result, warnings, err := v1api.QueryRange(ctx, query, r)
@@ -410,7 +411,8 @@ func fetchAndCompare(
 
 	sAvg, sMax, err := getMetric(ctx, scenario, sInstance)
 	if err != nil {
-		cmpLogger.Error("error fetching source benchmark instance",
+		cmpLogger.Error(
+			"error fetching source benchmark instance",
 			"metric", m,
 			"scenario", scenario,
 			"instance", instanceName(sInstance),
@@ -421,7 +423,8 @@ func fetchAndCompare(
 
 	tAvg, tMax, err := getMetric(ctx, scenario, tInstance)
 	if err != nil {
-		cmpLogger.Error("error fetching target scenario instance",
+		cmpLogger.Error(
+			"error fetching target scenario instance",
 			"metric", m,
 			"scenario", scenario,
 			"instance", instanceName(sInstance),
@@ -436,7 +439,8 @@ func fetchAndCompare(
 	maxMaxRatio := allMetrics[m].maxThresholdMaxRatio
 	minAvgRatio := allMetrics[m].minThresholdAvgRatio
 	minMaxRatio := allMetrics[m].minThresholdMaxRatio
-	cmpLogger.Info("obtained average ratio",
+	cmpLogger.Info(
+		"obtained average ratio",
 		"metric", m,
 		"scenario", scenario,
 		"source_avg", sAvg,
@@ -444,7 +448,8 @@ func fetchAndCompare(
 		"ratio", sAvg/tAvg,
 	)
 	if maxAvgRatio != 0 && sAvg/tAvg > maxAvgRatio {
-		cmpLogger.Error("average metric value exceeds max allowed ratio",
+		cmpLogger.Error(
+			"average metric value exceeds max allowed ratio",
 			"metric", m,
 			"scenario", scenario,
 			"source_avg", sAvg,
@@ -455,7 +460,8 @@ func fetchAndCompare(
 		succ = false
 	}
 	if minAvgRatio != 0 && sAvg/tAvg < minAvgRatio {
-		cmpLogger.Error("average metric value doesn't reach min required ratio",
+		cmpLogger.Error(
+			"average metric value doesn't reach min required ratio",
 			"metric", m,
 			"scenario", scenario,
 			"source_avg", sAvg,
@@ -465,7 +471,8 @@ func fetchAndCompare(
 		)
 		succ = false
 	}
-	cmpLogger.Info("obtained max ratio",
+	cmpLogger.Info(
+		"obtained max ratio",
 		"metric", m,
 		"scenario", scenario,
 		"source_max", sMax,
@@ -473,7 +480,8 @@ func fetchAndCompare(
 		"ratio", sMax/tMax,
 	)
 	if maxMaxRatio != 0 && sMax/tMax > maxMaxRatio {
-		cmpLogger.Error("maximum metric value exceeds max ratio",
+		cmpLogger.Error(
+			"maximum metric value exceeds max ratio",
 			"metric", m,
 			"scenario", scenario,
 			"source_max", sMax,
@@ -484,7 +492,8 @@ func fetchAndCompare(
 		succ = false
 	}
 	if minMaxRatio != 0 && sMax/tMax < maxMaxRatio {
-		cmpLogger.Error("maximum metric value doesn't reach min required ratio",
+		cmpLogger.Error(
+			"maximum metric value doesn't reach min required ratio",
 			"metric", m,
 			"scenario", scenario,
 			"source_max", sMax,
@@ -599,7 +608,8 @@ func runCmp(cmd *cobra.Command, _ []string) {
 			// Last benchmark instances are equal, pick the pre-last one from
 			// the target instances.
 			if len(tgtScNames) < 2 {
-				cmpLogger.Info("scenario only has one benchmark instance, ignoring",
+				cmpLogger.Info(
+					"scenario only has one benchmark instance, ignoring",
 					"scenario", sc,
 					"source_instances", srcScNames,
 					"target_instances", tgtScNames,
@@ -609,7 +619,8 @@ func runCmp(cmd *cobra.Command, _ []string) {
 			srcInstance = srcScInstances[len(srcScInstances)-1]
 			tgtInstance = tgtScInstances[len(tgtScInstances)-2]
 		}
-		cmpLogger.Info("obtained source and target instance",
+		cmpLogger.Info(
+			"obtained source and target instance",
 			"scenario", sc,
 			"source_instance", instanceName(srcInstance),
 			"target_instance", instanceName(tgtInstance),
