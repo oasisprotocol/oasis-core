@@ -61,7 +61,7 @@ const (
 	// initial syncing. If difference is greater than the specified threshold
 	// the node is considered not yet synced.
 	// NOTE: this is only used during the initial sync.
-	syncWorkerLastBlockTimeDiffThreshold = 1 * time.Minute
+	syncWorkerLastBlockTimeDiffThreshold = time.Minute
 
 	minUpgradeStopWaitPeriod = 5 * time.Second
 
@@ -374,7 +374,8 @@ func (t *fullService) subscribe(subscriber string, query cmtpubsub.Query) (cmtty
 
 	// The node doesn't exist until it's started since, creating the node
 	// triggers replay, InitChain, and etc.
-	t.Logger.Debug("Subscribe: node not available yet, blocking",
+	t.Logger.Debug(
+		"Subscribe: node not available yet, blocking",
 		"subscriber", subscriber,
 		"query", query,
 	)
@@ -654,7 +655,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	if !cometConfig.P2P.PexReactor {
-		t.Logger.Info("pex reactor disabled",
+		t.Logger.Info(
+			"pex reactor disabled",
 			logging.LogEvent, api.LogEventPeerExchangeDisabled,
 		)
 	}
@@ -670,7 +672,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 	dbProvider, err := db.Provider()
 	if err != nil {
-		t.Logger.Error("failed to obtain database provider",
+		t.Logger.Error(
+			"failed to obtain database provider",
 			"err", err,
 		)
 		return err
@@ -740,7 +743,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			}
 			lightClient, err := light.NewClient(t.ctx, t.chainContext, t.p2p, cfg)
 			if err != nil {
-				t.Logger.Error("failed to create light client",
+				t.Logger.Error(
+					"failed to create light client",
 					"err", err,
 				)
 				return fmt.Errorf("failed to create light client: %w", err)
@@ -750,7 +754,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			stateProvider = newStateProvider(t.chainContext, t.genesisHeight, lightClient)
 		}
 
-		t.node, err = cmtnode.NewNode(cometConfig,
+		t.node, err = cmtnode.NewNode(
+			cometConfig,
 			cometbftPV,
 			&cmtp2p.NodeKey{PrivKey: crypto.SignerToCometBFT(t.identity.P2PSigner)},
 			cmtproxy.NewLocalClientCreator(t.mux.Mux()),
@@ -802,7 +807,8 @@ func (t *fullService) syncWorker() {
 		case <-time.After(1 * time.Second):
 			isFastSyncing, err := checkSyncFn()
 			if err != nil {
-				t.Logger.Error("Failed to poll FastSync",
+				t.Logger.Error(
+					"Failed to poll FastSync",
 					"err", err,
 				)
 				return
@@ -811,7 +817,8 @@ func (t *fullService) syncWorker() {
 				// Check latest block time.
 				tmBlock, err := t.GetCometBFTBlock(t.ctx, consensusAPI.HeightLatest)
 				if err != nil {
-					t.Logger.Error("Failed to get cometbft block",
+					t.Logger.Error(
+						"Failed to get cometbft block",
 						"err", err,
 					)
 					return
@@ -829,7 +836,8 @@ func (t *fullService) syncWorker() {
 					return
 				}
 
-				t.Logger.Debug("Node still syncing",
+				t.Logger.Debug(
+					"Node still syncing",
 					"currentTime", now,
 					"latestBlockTime", tmBlock.Time,
 					"diff", now.Sub(tmBlock.Time),
@@ -934,17 +942,20 @@ func (t *fullService) upgradeHaltHook() api.HaltHook {
 // dumpGenesisHaltHook returns a halt hook which dump genesis.
 func (t *fullService) dumpGenesisHaltHook() api.HaltHook {
 	return func(ctx context.Context, height int64, epoch beaconAPI.EpochTime, _ error) {
-		t.Logger.Info("consensus halt hook: dumping genesis",
+		t.Logger.Info(
+			"consensus halt hook: dumping genesis",
 			"epoch", epoch,
 			"height", height,
 		)
 		if err := t.dumpGenesis(ctx, height); err != nil {
-			t.Logger.Error("halt hook: failed to dump genesis",
+			t.Logger.Error(
+				"halt hook: failed to dump genesis",
 				"err", err,
 			)
 			return
 		}
-		t.Logger.Info("consensus halt hook: genesis dumped",
+		t.Logger.Info(
+			"consensus halt hook: genesis dumped",
 			"epoch", epoch,
 			"height", height,
 		)
@@ -997,7 +1008,8 @@ func New(ctx context.Context, p2p p2pAPI.Service, cfg Config) (consensusAPI.Serv
 	if err != nil {
 		return nil, fmt.Errorf("failed to create price discovery: %w", err)
 	}
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd,
+	t.submissionMgr = consensusAPI.NewSubmissionManager(
+		t, pd,
 		config.GlobalConfig.Consensus.Submission.MaxFee,
 	)
 
