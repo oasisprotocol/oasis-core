@@ -15,7 +15,7 @@ var testTransactionID int64
 
 func newTestTransaction(sender int, seq uint64, priority uint64) *mainQueueTransaction {
 	id := atomic.AddInt64(&testTransactionID, 1)
-	raw := []byte(fmt.Sprintf("transaction-%d", id))
+	raw := fmt.Appendf(nil, "transaction-%d", id)
 	tx := TxQueueMeta{
 		raw:       raw,
 		hash:      hash.NewFromBytes(raw),
