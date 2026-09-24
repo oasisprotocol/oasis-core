@@ -329,6 +329,56 @@ func TestForward(t *testing.T) {
 		s.forward(testTxs[0].sender, 100)
 		require.Equal(t, len(testTxs)-5, s.size())
 	})
+
+	t.Run("Schedule", func(t *testing.T) {
+		s, err := testPrepareMainQueueScheduler(10, testTxs[:5])
+		require.NoError(t, err)
+
+		testCases := []struct {
+			seq uint64
+			len int
+		}{
+			{0, 2},
+			{1, 1},
+			{2, 0},
+			{3, 0},
+			{4, 0},
+			{5, 2},
+			{6, 1},
+			{7, 0},
+			{8, 1},
+			{9, 0},
+		}
+
+		for _, tc := range testCases {
+			s.forward(testTxs[0].sender, tc.seq)
+
+			txs := s.schedule(100)
+			require.Len(t, txs, tc.len)
+		}
+	})
+
+	t.Run("Crop", func(t *testing.T) {
+		s, err := testPrepareMainQueueScheduler(10, testTxs[:5])
+		require.NoError(t, err)
+
+		testCases := []struct {
+			seq uint64
+			len int
+		}{
+			{0, 5},
+			{3, 3},
+			{5, 3},
+			{8, 1},
+			{9, 0},
+		}
+
+		for _, tc := range testCases {
+			s.forward(testTxs[0].sender, tc.seq)
+
+			require.Equal(t, tc.len, s.size())
+		}
+	})
 }
 
 func TestHandleTxUsed(t *testing.T) {
