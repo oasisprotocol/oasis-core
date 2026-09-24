@@ -158,7 +158,6 @@ func (s *mainQueueScheduler) forward(sender string, seq uint64) {
 	if seq <= seqHeap.seq {
 		return
 	}
-	seqHeap.seq = seq
 
 	for {
 		tx, ok := seqHeap.peek()
@@ -166,12 +165,20 @@ func (s *mainQueueScheduler) forward(sender string, seq uint64) {
 			break
 		}
 
+		switch {
+		case tx.seq < seq:
+			s.remove(tx, seqHeap)
+		case tx.seq == seq:
+			s.maxHeap.push(tx)
+		default:
+		}
+
 		if tx.seq >= seq {
 			break
 		}
-
-		s.remove(tx, seqHeap)
 	}
+
+	seqHeap.seq = seq
 }
 
 // handleTxUsed removes the transaction with the given hash and forwards
@@ -182,9 +189,10 @@ func (s *mainQueueScheduler) handleTxUsed(hash hash.Hash) {
 		return
 	}
 
-	s.delete(tx)
-
-	if tx.seq < math.MaxUint64 {
+	switch tx.seq {
+	case math.MaxUint64:
+		s.delete(tx)
+	default:
 		s.forward(tx.sender, tx.seq+1)
 	}
 }
@@ -320,7 +328,7 @@ func (s *mainQueueScheduler) replace(new, old *mainQueueTransaction, seqHeap *se
 // nextSchedulable returns a transaction that can be scheduled for execution
 // immediately after the given one.
 func (s *mainQueueScheduler) nextSchedulable(tx *mainQueueTransaction) (*mainQueueTransaction, bool) {
-	if tx.seq == math.MaxInt64 {
+	if tx.seq == math.MaxUint64 {
 		return nil, false
 	}
 

@@ -230,7 +230,7 @@ func (t *txPool) SubmitTxNoWait(tx []byte, local bool) error {
 func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*PendingCheckTransaction, error) {
 	// Skip recently seen transactions.
 	hash := hash.NewFromBytes(tx)
-	if _, seen := t.seenCache.Peek(hash); seen {
+	if _, ok := t.seenCache.Peek(hash); ok {
 		t.logger.Debug("ignoring already seen transaction", "hash", hash)
 		return nil, fmt.Errorf("duplicate transaction")
 	}
@@ -630,20 +630,22 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 		// Notify submitter of success.
 		notifySubmitter(idx)
 
-		if !pct.checked {
-			// Mark new transactions as never having been published. The republish worker will
-			// publish these immediately.
-			var publishTime time.Time
-			if !pct.local {
-				// This being a tx we got from outside, it's usually something that another node
-				// has just broadcast. Treat it as if it were published just now so that we don't
-				// immediately publish again from our node.
-				publishTime = time.Now()
-			}
-			// Put cannot fail as seenCache's LRU capacity is not in bytes and the only case where it
-			// can error is if the capacity is in bytes and the value size is over capacity.
-			_ = t.seenCache.Put(pct.Hash(), publishTime)
+		if pct.checked {
+			continue
 		}
+
+		// Mark new transactions as never having been published. The republish worker will
+		// publish these immediately.
+		var publishTime time.Time
+		if !pct.local {
+			// This being a tx we got from outside, it's usually something that another node
+			// has just broadcast. Treat it as if it were published just now so that we don't
+			// immediately publish again from our node.
+			publishTime = time.Now()
+		}
+		// Put cannot fail as seenCache's LRU capacity is not in bytes and the only case where it
+		// can error is if the capacity is in bytes and the value size is over capacity.
+		_ = t.seenCache.Put(pct.Hash(), publishTime)
 	}
 
 	if len(newTxs) != 0 {
@@ -791,8 +793,7 @@ func (t *txPool) republishWorker() {
 		var republishedCount int
 		nextPendingRepublish := republishInterval
 		for _, tx := range txs {
-			ts, seen := t.seenCache.Peek(tx.Hash())
-			if seen {
+			if ts, ok := t.seenCache.Peek(tx.Hash()); ok {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
 					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
