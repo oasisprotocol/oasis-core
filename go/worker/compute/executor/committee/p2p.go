@@ -42,6 +42,11 @@ func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signatu
 	case cm.Epoch > now:
 		// Future messages may become valid.
 		return fmt.Errorf("epoch in the future")
+	case cm.Proposal.BatchSignature == nil:
+		// Accept only messages with batch signature, as those are the only ones
+		// that can be completely verified.
+		return p2pError.Permanent(fmt.Errorf("batch signature required"))
+	default:
 	}
 
 	// Only known committee members are allowed to submit messages on this topic.
