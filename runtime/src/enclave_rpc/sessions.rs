@@ -247,7 +247,7 @@ where
         let session_id = SessionID::random();
 
         Ok(MultiplexedSession {
-            peer_id: peer_id.clone(),
+            peer_id,
             session_id,
             inner: self.builder.clone().build_initiator()?,
         })
@@ -491,8 +491,14 @@ where
 
     /// Remove a session that must be currently owned by the caller.
     pub fn remove(&mut self, session: &OwnedMutexGuard<MultiplexedSession<PeerID>>) {
-        let sessions = self.by_peer.get_mut(&session.peer_id).unwrap();
-        let session_meta = sessions.get(&session.session_id).unwrap();
+        let sessions = match self.by_peer.get_mut(&session.peer_id) {
+            Some(sessions) => sessions,
+            None => return,
+        };
+        let session_meta = match sessions.get(&session.session_id) {
+            Some(session_meta) => session_meta,
+            None => return,
+        };
         let key = session_meta.by_time_key();
         sessions.remove(&session.session_id);
         self.by_idle_time.remove(&key);
