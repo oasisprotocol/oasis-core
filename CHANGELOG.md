@@ -12,6 +12,120 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 26.2 (2026-09-29)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- go/consensus/cometbft/config: Move allow duplicate IP config
+  ([#6551](https://github.com/oasisprotocol/oasis-core/issues/6551))
+
+  Allowing multiple P2P connections from the same IP is useful in local
+  sentry-like setups where multiple nodes run behind the same IP address.
+  The option is therefore no longer a debug option and no longer requires
+  the unsafe `--debug.dont_blame_oasis` flag.
+
+  This is a breaking configuration change. The following configuration
+  option has been removed:
+
+  - `consensus.debug.allow_duplicate_ip`.
+
+  The following configuration option has been added:
+
+  - `consensus.p2p.allow_duplicate_ip`.
+
+### Bug Fixes
+
+- go/consensus/cometbft/apps/roothash: Fix evidence removal round check
+  ([#6549](https://github.com/oasisprotocol/oasis-core/issues/6549))
+
+- go/runtime/registry: Isolate ROFL EnclaveRPC session budgets
+  ([#6563](https://github.com/oasisprotocol/oasis-core/issues/6563))
+
+  ROFL components now use component-specific peer identifiers for local
+  EnclaveRPC calls to RONL, preventing components on the same node from
+  evicting each other's sessions.
+
+- go/consensus/cometbft/apps/registry: Reset eligibility on renewal
+  ([#6565](https://github.com/oasisprotocol/oasis-core/issues/6565))
+
+- go/consensus/cometbft/apps/roothash/finalization: Verify messages sooner
+  ([#6573](https://github.com/oasisprotocol/oasis-core/issues/6573))
+
+  Runtime messages are verified before liveness statistics are updated.
+
+- go/consensus/cometbft/apps/roothash: Charge gas for all commitments
+  ([#6581](https://github.com/oasisprotocol/oasis-core/issues/6581))
+
+- go/runtime/txpool: Fix republish debounce
+  ([#6585](https://github.com/oasisprotocol/oasis-core/issues/6585))
+
+- go/runtime/txpool/main_queue_scheduler: Fix forward function
+  ([#6586](https://github.com/oasisprotocol/oasis-core/issues/6586))
+
+- runtime/src/enclave_rpc/sessions: Ignore already removed session
+  ([#6588](https://github.com/oasisprotocol/oasis-core/issues/6588))
+
+### Documentation Improvements
+
+- SECURITY.md now hosts the bug bounty link to Immunefi
+  ([#6554](https://github.com/oasisprotocol/oasis-core/issues/6554))
+
+### Internal Changes
+
+- go: Bump github.com/pion/dtls/v3 to v3.1.5
+  ([#6552](https://github.com/oasisprotocol/oasis-core/issues/6552))
+
+- rust: Bump crossbeam-epoch to 0.9.20
+  ([#6552](https://github.com/oasisprotocol/oasis-core/issues/6552))
+
+- go: Bump github.com/pion/stun/v3 to v3.1.6
+  ([#6556](https://github.com/oasisprotocol/oasis-core/issues/6556))
+
+- go: Bump github.com/quic-go/webtransport-go to v0.11.1
+  ([#6556](https://github.com/oasisprotocol/oasis-core/issues/6556))
+
+- go: Bump github.com/klauspost/compress to v1.18.7
+  ([#6556](https://github.com/oasisprotocol/oasis-core/issues/6556))
+
+- go: Bump golang.org/x/net to v0.57.0
+  ([#6556](https://github.com/oasisprotocol/oasis-core/issues/6556))
+
+- go: Bump Go to 1.26.6
+  ([#6572](https://github.com/oasisprotocol/oasis-core/issues/6572))
+
+- rust: Bump Rust toolchain to 2026-08-16
+  ([#6572](https://github.com/oasisprotocol/oasis-core/issues/6572))
+
+- rust: Bump mbedtls to 0.13.6
+  ([#6572](https://github.com/oasisprotocol/oasis-core/issues/6572))
+
+- go: Bump golang.org/x/net to v0.58.0
+  ([#6572](https://github.com/oasisprotocol/oasis-core/issues/6572))
+
+- go: Bump Go to 1.27.0
+  ([#6578](https://github.com/oasisprotocol/oasis-core/issues/6578))
+
+- go: Bump golangci-lint to v2.13.1
+  ([#6578](https://github.com/oasisprotocol/oasis-core/issues/6578))
+
+- go: Bump google.golang.org/grpc to 1.83.2
+  ([#6582](https://github.com/oasisprotocol/oasis-core/issues/6582))
+
+- go: Bump golang.org/x/crypto to v0.57.0
+  ([#6582](https://github.com/oasisprotocol/oasis-core/issues/6582))
+
+- go: Bump google.golang.org/protobuf to 1.36.12
+  ([#6582](https://github.com/oasisprotocol/oasis-core/issues/6582))
+
+- rust: Bump rustls to 0.23.45
+  ([#6583](https://github.com/oasisprotocol/oasis-core/issues/6583))
+
 ## 26.1 (2026-06-08)
 
 | Protocol          | Version   |
