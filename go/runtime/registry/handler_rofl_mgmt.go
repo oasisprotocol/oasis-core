@@ -27,7 +27,7 @@ import (
 const labelInstanceID = "net.oasis.instance_id"
 
 // validBundleTemporaryName validates temporary bundle name, e.g. "instance-1a2b3c".
-var validBundleTemporaryName = regexp.MustCompile(`^[a-zA-Z-]+$`)
+var validBundleTemporaryName = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
 
 // handleBundleManagement handles bundle management local RPCs.
 func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, error) {
