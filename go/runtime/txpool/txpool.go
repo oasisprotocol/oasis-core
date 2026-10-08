@@ -38,10 +38,10 @@ const (
 	// receiving a new block. It should be roughly the block propagation delay.
 	newBlockPublishDelay = 200 * time.Millisecond
 
-	// republishLimitReinvokeTimeout is the timeout to the next republish worker invocation in
+	// minReinvokeInterval is the timeout to the next republish worker invocation in
 	// case when the maxRepublishTxs limit is reached. This should be much shorter than the
 	// RepublishInterval.
-	republishLimitReinvokeTimeout = time.Second
+	minReinvokeInterval = time.Second
 )
 
 // TransactionPool is an interface for managing a pool of transactions.
@@ -728,11 +728,15 @@ func (t *txPool) republishWorker() {
 		t.cfg.RepublishInterval,
 		t.txPublisher.GetMinRepublishInterval(),
 	)
-	ticker := time.NewTicker(republishInterval)
+	reinvokeInterval := min(
+		republishInterval,
+		minReinvokeInterval,
+	)
 
 	t.logger.Debug(
 		"starting transaction republish worker",
-		"interval", republishInterval,
+		"republish_interval", republishInterval,
+		"reinvoke_interval", reinvokeInterval,
 	)
 
 	// Wait for initialization.
@@ -745,6 +749,8 @@ func (t *txPool) republishWorker() {
 		<-t.stopCh
 		cancel()
 	}()
+
+	ticker := time.NewTicker(republishInterval)
 
 	for {
 		select {
@@ -759,13 +765,13 @@ func (t *txPool) republishWorker() {
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
-		nextPendingRepublish := republishInterval
+		nextRepublish := republishInterval
 		for _, tx := range txs {
 			if ts, ok := t.seenCache.Peek(tx.Hash()); ok {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
-					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
-						nextPendingRepublish = remaining + time.Second
+					if remaining := republishInterval - sinceLast; remaining < nextRepublish {
+						nextRepublish = remaining + time.Second
 					}
 					continue
 				}
@@ -786,20 +792,19 @@ func (t *txPool) republishWorker() {
 
 			republishedCount++
 			if republishedCount >= maxRepublishTxs {
-				// If the limit of max republish transactions has been reached
-				// republish again sooner.
-				nextPendingRepublish = republishLimitReinvokeTimeout
+				// Republish again sooner.
+				nextRepublish = reinvokeInterval
 				break
 			}
 		}
 
 		// Reschedule ticker for next republish.
-		ticker.Reset(nextPendingRepublish)
+		ticker.Reset(nextRepublish)
 
 		t.logger.Debug(
 			"republished transactions",
 			"num_txs", republishedCount,
-			"next_republish", nextPendingRepublish,
+			"next_republish", nextRepublish,
 		)
 	}
 }
