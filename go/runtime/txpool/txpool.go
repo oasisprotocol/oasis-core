@@ -724,28 +724,11 @@ func (t *txPool) checkWorker() {
 
 func (t *txPool) republishWorker() {
 	// Set up a ticker for republish interval.
-	republishInterval := t.cfg.RepublishInterval
-	if minRepublishInterval := t.txPublisher.GetMinRepublishInterval(); republishInterval < minRepublishInterval {
-		republishInterval = minRepublishInterval
-	}
-	ticker := time.NewTicker(republishInterval)
-
-	// Set up a debounce ticker for explicit republish requests.
-	var (
-		lastRepublish time.Time
-		debounceCh    <-chan time.Time
-		debounceTimer *time.Timer
+	republishInterval := max(
+		t.cfg.RepublishInterval,
+		t.txPublisher.GetMinRepublishInterval(),
 	)
-	const debounceInterval = 10 * time.Second
-	defer func() {
-		if debounceTimer == nil {
-			return
-		}
-
-		if !debounceTimer.Stop() {
-			<-debounceTimer.C
-		}
-	}()
+	ticker := time.NewTicker(republishInterval)
 
 	t.logger.Debug(
 		"starting transaction republish worker",
@@ -769,21 +752,6 @@ func (t *txPool) republishWorker() {
 			return
 		case <-ticker.C:
 		case <-t.republishCh.Out():
-			// Debounce explicit republish request.
-			switch {
-			case debounceCh != nil:
-				// Debounce already in progress.
-				continue
-			case time.Since(lastRepublish) < debounceInterval:
-				// Another request happened within the debounce interval, start timer.
-				debounceTimer = time.NewTimer(debounceInterval - time.Since(lastRepublish))
-				debounceCh = debounceTimer.C
-				continue
-			default:
-				// Handle republish request.
-			}
-		case <-debounceCh:
-			debounceCh = nil
 		}
 
 		// Get transactions to republish.
@@ -833,8 +801,6 @@ func (t *txPool) republishWorker() {
 			"num_txs", republishedCount,
 			"next_republish", nextPendingRepublish,
 		)
-
-		lastRepublish = time.Now()
 	}
 }
 
