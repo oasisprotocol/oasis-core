@@ -80,7 +80,7 @@ nix = { version = "0.31.3", features = [
     "mount",
     "signal",
 ], optional = true }
-vsock = { version = "0.5.1", optional = true }
+vsock = { version = "0.5.4", optional = true }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "1.44.2"
