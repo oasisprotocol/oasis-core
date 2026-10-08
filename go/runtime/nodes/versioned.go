@@ -37,7 +37,7 @@ type VersionedNodeDescriptorWatcher struct {
 //
 // This watcher will only track nodes that will be explicitly marked to watch
 // via WatchNode/WatchNodeWithTags methods.
-func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Service) (*VersionedNodeDescriptorWatcher, error) {
+func NewVersionedNodeDescriptorWatcher(consensus consensus.Service) *VersionedNodeDescriptorWatcher {
 	nw := &VersionedNodeDescriptorWatcher{
 		consensus: consensus,
 		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
@@ -56,9 +56,12 @@ func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.
 	})
 	nw.Reset()
 
-	go nw.watchRuntimeNodeUpdates(ctx)
+	return nw
+}
 
-	return nw, nil
+// Serve starts the watcher.
+func (nw *VersionedNodeDescriptorWatcher) Serve(ctx context.Context) error {
+	return nw.watchRuntimeNodeUpdates(ctx)
 }
 
 // Reset clears the watcher so it doesn't watch any nodes.
@@ -226,11 +229,11 @@ func (nw *VersionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate
 	return ch, sub, nil
 }
 
-func (nw *VersionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
+func (nw *VersionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Context) error {
 	nw.logger.Debug("waiting consensus sync")
 	select {
 	case <-ctx.Done():
-		return
+		return ctx.Err()
 	case <-nw.consensus.Synced():
 	}
 	nw.logger.Debug("consensus synced")
@@ -242,14 +245,14 @@ func (nw *VersionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 			"failed to watch nodes",
 			"err", err,
 		)
-		return
+		return fmt.Errorf("failed to watch nodes: %w", err)
 	}
 	defer sub.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case ev := <-ch:
 			func() {
 				nw.Lock()

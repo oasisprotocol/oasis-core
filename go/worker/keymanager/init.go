@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -96,7 +97,8 @@ func New(
 	w.services = service.NewGroup(notifier, lbNotifier)
 
 	// Prepare watchers.
-	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
+	w.nodeWatcher = nodes.NewVersionedNodeDescriptorWatcher(commonWorker.Consensus)
+	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger(), w.nodeWatcher)
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Prepare sub-workers.

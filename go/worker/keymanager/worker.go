@@ -27,6 +27,7 @@ import (
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -63,6 +64,7 @@ type Worker struct {
 	runtimeID    common.Namespace
 	runtimeLabel string
 
+	nodeWatcher      *nodes.VersionedNodeDescriptorWatcher
 	kmNodeWatcher    *kmNodeWatcher
 	kmRuntimeWatcher *kmRuntimeWatcher
 	secretsWorker    *secretsWorker
@@ -499,6 +501,16 @@ func (w *Worker) worker() {
 	wg.Go(func() {
 		if err := w.services.Serve(w.ctx); err != nil {
 			w.logger.Error("service group stopped", "err", err)
+		}
+	})
+
+	// Need to explicitly watch for node updates.
+	wg.Go(func() {
+		if err := w.nodeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run node watcher",
+				"err", err,
+			)
 		}
 	})
 

@@ -101,20 +101,19 @@ func NewGroup(
 	identity *identity.Identity,
 	consensus consensus.Service,
 	p2p p2p.Service,
-) (*Group, error) {
-	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
-	if err != nil {
-		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
-	}
-
+) *Group {
 	return &Group{
 		runtimeID: runtimeID,
 		identity:  identity,
 		consensus: consensus,
 		p2p:       p2p,
-		nodes:     nw,
+		nodes:     nodes.NewVersionedNodeDescriptorWatcher(consensus),
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
-	}, nil
+	}
+}
+
+func (g *Group) Serve(ctx context.Context) error {
+	return g.nodes.Serve(ctx)
 }
 
 // CommitteeInfo returns the currently active committee info.

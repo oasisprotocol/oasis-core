@@ -29,10 +29,12 @@ type kmNodeWatcher struct {
 	accessList *AccessList
 	peerTagger p2p.PeerTagger
 
+	watcher *nodes.VersionedNodeDescriptorWatcher
+
 	logger *logging.Logger
 }
 
-func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
+func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger, watcher *nodes.VersionedNodeDescriptorWatcher) *kmNodeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/km")
 
 	return &kmNodeWatcher{
@@ -41,6 +43,7 @@ func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, p
 		peerMap:    peerMap,
 		accessList: accessList,
 		peerTagger: peerTagger,
+		watcher:    watcher,
 		logger:     logger,
 	}
 }
@@ -56,15 +59,7 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 	}
 	defer nodesSub.Close()
 
-	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, w.consensus)
-	if err != nil {
-		w.logger.Error(
-			"failed to create node watcher",
-			"err", err,
-		)
-		return
-	}
-	watcherCh, watcherSub, err := watcher.WatchNodeUpdates()
+	watcherCh, watcherSub, err := w.watcher.WatchNodeUpdates()
 	if err != nil {
 		w.logger.Error(
 			"failed to watch node updates",
@@ -78,10 +73,10 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 	for {
 		select {
 		case nodeList := <-nodesCh:
-			watcher.Reset()
+			w.watcher.Reset()
 			activeNodes = w.rebuildActiveNodeIDs(nodeList.Nodes)
 			for id := range activeNodes {
-				if _, err := watcher.WatchNode(ctx, id); err != nil {
+				if _, err := w.watcher.WatchNode(ctx, id); err != nil {
 					w.logger.Error(
 						"worker/keymanager: failed to watch node",
 						"err", err,
@@ -103,7 +98,7 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 		// Rebuild the access policy, something has changed.
 		peerMap := make(map[core.PeerID]signature.PublicKey, len(activeNodes))
 		for id := range activeNodes {
-			n := watcher.Lookup(id)
+			n := w.watcher.Lookup(id)
 			if n == nil {
 				continue
 			}

@@ -323,6 +323,16 @@ func (n *Node) worker() { //nolint: gocyclo
 	n.logger.Info("consensus has finished initial synchronization")
 	atomic.StoreUint32(&n.consensusSynced, 1)
 
+	// Start the group after consensus is synced.
+	wg.Go(func() {
+		if err := n.Group.Serve(n.ctx); err != nil {
+			n.logger.Error(
+				"failed to run group",
+				"err", err,
+			)
+		}
+	})
+
 	// Start the transaction pool after consensus is synced.
 	if err := n.TxPool.Start(); err != nil {
 		n.logger.Error(
@@ -668,11 +678,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
+	group := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
 
 	txTopic := p2pProtocol.NewTopicKindTxID(cfg.ChainContext, runtime.ID())
 
