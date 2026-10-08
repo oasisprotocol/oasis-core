@@ -67,6 +67,34 @@ type versionedNodeDescriptorWatcher struct {
 	logger *logging.Logger
 }
 
+// NewVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
+//
+// This watcher will only track nodes that will be explicitly marked to watch
+// via WatchNode/WatchNodeWithTags methods.
+func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Service) (VersionedNodeDescriptorWatcher, error) {
+	nw := &versionedNodeDescriptorWatcher{
+		consensus: consensus,
+		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
+	}
+	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		nw.RLock()
+		defer nw.RUnlock()
+
+		ch.In() <- &NodeUpdate{Reset: true}
+		for _, n := range nw.nodes {
+			ch.In() <- &NodeUpdate{Update: n}
+		}
+		if nw.frozen {
+			ch.In() <- &NodeUpdate{Freeze: &VersionEvent{Version: nw.version}}
+		}
+	})
+	nw.Reset()
+
+	go nw.watchRuntimeNodeUpdates(ctx)
+
+	return nw, nil
+}
+
 func (nw *versionedNodeDescriptorWatcher) Reset() {
 	nw.Lock()
 	defer nw.Unlock()
@@ -224,7 +252,8 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 	// Subscribe to node updates.
 	ch, sub, err := nw.consensus.Registry().WatchNodes(ctx)
 	if err != nil {
-		nw.logger.Error("failed to watch nodes",
+		nw.logger.Error(
+			"failed to watch nodes",
 			"err", err,
 		)
 		return
@@ -245,7 +274,8 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 					return
 				}
 
-				nw.logger.Debug("updating node descriptor",
+				nw.logger.Debug(
+					"updating node descriptor",
 					"node", ev.Node.ID,
 				)
 
@@ -258,32 +288,4 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
 	// This watcher supports versions.
 	return true
-}
-
-// NewVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
-//
-// This watcher will only track nodes that will be explicitly marked to watch
-// via WatchNode/WatchNodeWithTags methods.
-func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Service) (VersionedNodeDescriptorWatcher, error) {
-	nw := &versionedNodeDescriptorWatcher{
-		consensus: consensus,
-		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
-	}
-	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		nw.RLock()
-		defer nw.RUnlock()
-
-		ch.In() <- &NodeUpdate{Reset: true}
-		for _, n := range nw.nodes {
-			ch.In() <- &NodeUpdate{Update: n}
-		}
-		if nw.frozen {
-			ch.In() <- &NodeUpdate{Freeze: &VersionEvent{Version: nw.version}}
-		}
-	})
-	nw.Reset()
-
-	go nw.watchRuntimeNodeUpdates(ctx)
-
-	return nw, nil
 }
