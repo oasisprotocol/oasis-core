@@ -768,11 +768,9 @@ func (t *txPool) republishWorker() {
 		nextRepublish := republishInterval
 		for _, tx := range txs {
 			if ts, ok := t.seenCache.Peek(tx.Hash()); ok {
-				sinceLast := time.Since(ts.(time.Time))
-				if sinceLast < republishInterval {
-					if remaining := republishInterval - sinceLast; remaining < nextRepublish {
-						nextRepublish = remaining + time.Second
-					}
+				if elapsed := time.Since(ts.(time.Time)); elapsed < republishInterval {
+					remaining := republishInterval - elapsed
+					nextRepublish = min(nextRepublish, remaining+time.Second)
 					continue
 				}
 			}
