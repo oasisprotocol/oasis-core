@@ -42,7 +42,7 @@ type CommitteeInfo struct {
 	PublicKeys map[signature.PublicKey]struct{}
 	Peers      map[signature.PublicKey]struct{}
 
-	nodes nodes.VersionedNodeDescriptorWatcher
+	nodes *nodes.VersionedNodeDescriptorWatcher
 }
 
 // IsMember checks if the current node is a member of the committee.
@@ -89,7 +89,7 @@ type Group struct {
 	committee *CommitteeInfo
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
 	// TODO: Consider removing nodes.
-	nodes nodes.VersionedNodeDescriptorWatcher
+	nodes *nodes.VersionedNodeDescriptorWatcher
 
 	logger *logging.Logger
 }
@@ -205,7 +205,8 @@ func (g *Group) CommitteeTransition(ctx context.Context, committee *scheduler.Co
 		nodes:      g.nodes,
 	}
 
-	g.logger.Info("committee transition complete",
+	g.logger.Info(
+		"committee transition complete",
 		"epoch", epochNumber,
 		"executor_roles", g.committee.Roles,
 	)
