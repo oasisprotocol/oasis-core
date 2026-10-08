@@ -103,7 +103,9 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	}
 
 	// Publish batch.
-	cbc.publishProposal(ctx, b.p2p, b.electionEpoch)
+	if err := cbc.publishProposal(ctx, b.p2p, b.electionEpoch); err != nil {
+		panic(fmt.Sprintf("failed to publish proposal: %+v", err))
+	}
 	logger.Debug("executor scheduler: dispatched transactions", "transactions", txs)
 
 	// If we're in ModeExecutorRunaway, stop after publishing the batch.

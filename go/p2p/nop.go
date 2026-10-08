@@ -56,7 +56,8 @@ func (p *nopP2P) Peers(common.Namespace) []string {
 }
 
 // Implements api.Service.
-func (p *nopP2P) Publish(context.Context, string, any) {
+func (p *nopP2P) Publish(context.Context, string, any) error {
+	return nil
 }
 
 // Implements api.Service.

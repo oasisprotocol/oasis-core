@@ -246,7 +246,7 @@ func filterGloballyReachableAddresses(addrs []multiaddr.Multiaddr) []multiaddr.M
 }
 
 // Implements api.Service.
-func (p *p2p) Publish(_ context.Context, topic string, msg any) {
+func (p *p2p) Publish(_ context.Context, topic string, msg any) error {
 	rawMsg := cbor.Marshal(msg)
 
 	p.RLock()
@@ -258,7 +258,7 @@ func (p *p2p) Publish(_ context.Context, topic string, msg any) {
 			"attempted to publish message for unsupported topic",
 			"topic", topic,
 		)
-		return
+		return fmt.Errorf("unsupported topic")
 	}
 
 	if err := h.tryPublishing(rawMsg); err != nil {
@@ -266,12 +266,15 @@ func (p *p2p) Publish(_ context.Context, topic string, msg any) {
 			"failed to publish message to the network",
 			"err", err,
 		)
+		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
 	p.logger.Debug(
 		"published message",
 		"topic", topic,
 	)
+
+	return nil
 }
 
 // Implements api.Service.

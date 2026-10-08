@@ -432,10 +432,12 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 		"batch_size", len(proposal.Batch),
 	)
 
-	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
+	if err := n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
 		Epoch:    n.committeeInfo.Committee.ValidFor,
 		Proposal: proposal,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to publish proposal: %w", err)
+	}
 
 	crash.Here(crashPointBatchPublishAfter)
 

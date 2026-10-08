@@ -65,7 +65,7 @@ type Service interface {
 	Peers(runtimeID common.Namespace) []string
 
 	// Publish publishes the given message to the given topic.
-	Publish(ctx context.Context, topic string, msg any)
+	Publish(ctx context.Context, topic string, msg any) error
 
 	// RegisterHandler registers a message handler for the specified runtime and topic kind.
 	//
