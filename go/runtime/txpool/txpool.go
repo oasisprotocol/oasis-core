@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -750,13 +752,26 @@ func (t *txPool) republishWorker() {
 		cancel()
 	}()
 
+	boff := cmnBackoff.NewExponentialBackOff()
+	boff.Reset()
+
 	ticker := time.NewTicker(republishInterval)
+	defer ticker.Stop()
+
+	var (
+		nextRepublish = time.Duration(math.MaxInt64)
+		nextRetry     = time.Duration(math.MaxInt64)
+	)
 
 	for {
 		select {
 		case <-t.stopCh:
 			return
 		case <-ticker.C:
+			// Reset retry ticker only when triggered.
+			if nextRetry < nextRepublish {
+				nextRetry = math.MaxInt64
+			}
 		case <-t.republishCh.Out():
 		}
 
@@ -764,8 +779,11 @@ func (t *txPool) republishWorker() {
 		txs := t.mainQueue.All()
 
 		// Filter transactions based on whether they can already be republished.
-		var republishedCount int
-		nextRepublish := republishInterval
+		var (
+			republishedCount int
+			failedCount      int
+		)
+		nextRepublish = republishInterval
 		for _, tx := range txs {
 			if ts, ok := t.seenCache.Peek(tx.Hash()); ok {
 				if elapsed := time.Since(ts.(time.Time)); elapsed < republishInterval {
@@ -781,7 +799,7 @@ func (t *txPool) republishWorker() {
 					"err", err,
 					"tx", tx,
 				)
-				t.republishCh.In() <- struct{}{}
+				failedCount++
 				continue
 			}
 
@@ -796,13 +814,25 @@ func (t *txPool) republishWorker() {
 			}
 		}
 
+		// Extend retry timer only when triggered.
+		switch {
+		case failedCount == 0:
+			nextRetry = math.MaxInt64
+			boff.Reset()
+		case nextRetry == math.MaxInt64:
+			nextRetry = boff.NextBackOff()
+		}
+
 		// Reschedule ticker for next republish.
-		ticker.Reset(nextRepublish)
+		ticker.Reset(min(nextRepublish, nextRetry))
 
 		t.logger.Debug(
 			"republished transactions",
-			"num_txs", republishedCount,
+			"total", len(txs),
+			"republished", republishedCount,
+			"failed", failedCount,
 			"next_republish", nextRepublish,
+			"next_retry", nextRetry,
 		)
 	}
 }
