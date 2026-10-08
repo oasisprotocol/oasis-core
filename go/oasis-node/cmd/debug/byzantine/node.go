@@ -84,7 +84,8 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 		if err := cbc.proposal.Sign(b.identity.NodeSigner, block.Header.Namespace); err != nil {
 			return false, fmt.Errorf("failed to re-sign invalid batch hash proposal: %w", err)
 		}
-		logger.Debug("invalid batch hash: invalidating batch hash",
+		logger.Debug(
+			"invalid batch hash: invalidating batch hash",
 			"valid_batch_hash", validBatchHash,
 			"invalid_batch_hash", cbc.proposal.Header.BatchHash,
 		)
@@ -134,7 +135,8 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("init default identity failed: %w", err)
 	}
 
-	b.logger.Debug("node identity generated",
+	b.logger.Debug(
+		"node identity generated",
 		"id", b.identity.NodeSigner.Public(),
 	)
 
@@ -218,7 +220,8 @@ func initializeAndRegisterByzantineNode(
 	}
 
 	committeeStartEpoch := activationEpoch + 1
-	b.logger.Debug("waiting for VRF election epoch transition",
+	b.logger.Debug(
+		"waiting for VRF election epoch transition",
 		"wait_till", committeeStartEpoch,
 	)
 
@@ -226,7 +229,8 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("waitForEpoch(VRF electionDelay): %w", err)
 	}
 
-	b.logger.Debug("getting next election committee",
+	b.logger.Debug(
+		"getting next election committee",
 		"epoch", committeeStartEpoch,
 	)
 

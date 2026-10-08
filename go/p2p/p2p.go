@@ -254,19 +254,22 @@ func (p *p2p) Publish(_ context.Context, topic string, msg any) {
 
 	h := p.topics[topic]
 	if h == nil {
-		p.logger.Error("attempted to publish message for unsupported topic",
+		p.logger.Error(
+			"attempted to publish message for unsupported topic",
 			"topic", topic,
 		)
 		return
 	}
 
 	if err := h.tryPublishing(rawMsg); err != nil {
-		h.logger.Error("failed to publish message to the network",
+		h.logger.Error(
+			"failed to publish message to the network",
 			"err", err,
 		)
 	}
 
-	p.logger.Debug("published message",
+	p.logger.Debug(
+		"published message",
 		"topic", topic,
 	)
 }
@@ -293,7 +296,8 @@ func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
 		pubsub.WithValidatorConcurrency(config.GlobalConfig.P2P.Gossipsub.ValidateConcurrency),
 	)
 
-	p.logger.Debug("registered new topic handler",
+	p.logger.Debug(
+		"registered new topic handler",
 		"topic", topic,
 	)
 
@@ -303,7 +307,8 @@ func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
 
 // Implements api.Service.
 func (p *p2p) BlockPeer(peerID core.PeerID) {
-	p.logger.Warn("blocking peer",
+	p.logger.Warn(
+		"blocking peer",
 		"peer_id", peerID,
 	)
 
@@ -335,7 +340,8 @@ func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
 
 	p.peerMgr.AdvertiseProtocol(srv.Protocol())
 
-	p.logger.Info("registered protocol server",
+	p.logger.Info(
+		"registered protocol server",
 		"protocol_id", srv.Protocol(),
 	)
 }
@@ -395,7 +401,8 @@ func New(identity *identity.Identity, chainContext string, store *persistent.Com
 	if cfg.BootstrapDiscoveryConfig.Enable {
 		seeds := make([]discovery.Discovery, 0, len(cfg.Seeds))
 		for i := range cfg.Seeds {
-			seed := bootstrap.NewClient(host, cfg.Seeds[i],
+			seed := bootstrap.NewClient(
+				host, cfg.Seeds[i],
 				bootstrap.WithRetentionPeriod(cfg.RetentionPeriod),
 			)
 			seeds = append(seeds, seed)
@@ -408,12 +415,14 @@ func New(identity *identity.Identity, chainContext string, store *persistent.Com
 	// Initialize the logger.
 	logger := logging.GetLogger("p2p")
 
-	logger.Info("p2p host initialized",
+	logger.Info(
+		"p2p host initialized",
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
 
 	if len(cfg.BlockedPeers) > 0 {
-		logger.Info("p2p blacklist initialized",
+		logger.Info(
+			"p2p blacklist initialized",
 			"num_blocked_peers", len(cfg.BlockedPeers),
 		)
 	}
