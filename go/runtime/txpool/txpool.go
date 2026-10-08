@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
@@ -48,11 +49,7 @@ const (
 
 // TransactionPool is an interface for managing a pool of transactions.
 type TransactionPool interface {
-	// Start starts the service.
-	Start() error
-
-	// Stop halts the service.
-	Stop()
+	service.Service
 
 	// Quit returns a channel that will be closed when the service terminates.
 	Quit() <-chan struct{}
@@ -136,7 +133,6 @@ type TransactionPublisher interface {
 type txPool struct {
 	logger *logging.Logger
 
-	stopCh chan struct{}
 	quitCh chan struct{}
 	initCh chan struct{}
 
@@ -170,15 +166,18 @@ type txPool struct {
 	republishCh *channels.RingChannel
 }
 
-func (t *txPool) Start() error {
-	go t.checkWorker()
-	go t.republishWorker()
-	go t.recheckWorker()
-	return nil
-}
+func (t *txPool) Serve(ctx context.Context) error {
+	t.logger.Info("starting")
+	defer t.logger.Info("stopping")
 
-func (t *txPool) Stop() {
-	close(t.stopCh)
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Go(func() { t.checkWorker(ctx) })
+	wg.Go(func() { t.republishWorker(ctx) })
+	wg.Go(func() { t.recheckWorker(ctx) })
+
+	return nil
 }
 
 func (t *txPool) Quit() <-chan struct{} {
@@ -217,8 +216,6 @@ func (t *txPool) SubmitTx(ctx context.Context, tx []byte, local bool, discard bo
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-t.stopCh:
-		return nil, fmt.Errorf("shutting down")
 	case result := <-pct.notifyCh:
 		return result, nil
 	}
@@ -667,28 +664,23 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 	return nil
 }
 
-func (t *txPool) ensureInitialized() error {
+func (t *txPool) ensureInitialized(ctx context.Context) error {
 	select {
-	case <-t.stopCh:
-		return fmt.Errorf("shutting down")
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-t.initCh:
 		return nil
 	}
 }
 
-func (t *txPool) checkWorker() {
+func (t *txPool) checkWorker(ctx context.Context) {
 	defer close(t.quitCh)
 
 	t.logger.Debug("starting transaction check worker")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-t.stopCh
-		cancel()
-	}()
+	defer t.logger.Debug("stopping transaction check worker")
 
 	// Wait for initialization.
-	if err := t.ensureInitialized(); err != nil {
+	if err := t.ensureInitialized(ctx); err != nil {
 		return
 	}
 
@@ -701,7 +693,7 @@ func (t *txPool) checkWorker() {
 
 	for {
 		select {
-		case <-t.stopCh:
+		case <-ctx.Done():
 			return
 		case <-t.checkTxCh.Out():
 		case <-retryTimer.C:
@@ -724,7 +716,7 @@ func (t *txPool) checkWorker() {
 	}
 }
 
-func (t *txPool) republishWorker() {
+func (t *txPool) republishWorker(ctx context.Context) {
 	// Set up a ticker for republish interval.
 	republishInterval := max(
 		t.cfg.RepublishInterval,
@@ -740,17 +732,12 @@ func (t *txPool) republishWorker() {
 		"republish_interval", republishInterval,
 		"reinvoke_interval", reinvokeInterval,
 	)
+	defer t.logger.Debug("stopping transaction republish worker")
 
 	// Wait for initialization.
-	if err := t.ensureInitialized(); err != nil {
+	if err := t.ensureInitialized(ctx); err != nil {
 		return
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-t.stopCh
-		cancel()
-	}()
 
 	boff := cmnBackoff.NewExponentialBackOff()
 	boff.Reset()
@@ -765,7 +752,7 @@ func (t *txPool) republishWorker() {
 
 	for {
 		select {
-		case <-t.stopCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			// Reset retry ticker only when triggered.
@@ -837,24 +824,27 @@ func (t *txPool) republishWorker() {
 	}
 }
 
-func (t *txPool) recheckWorker() {
+func (t *txPool) recheckWorker(ctx context.Context) {
+	t.logger.Debug("starting recheck worker")
+	defer t.logger.Debug("stopping recheck worker")
+
 	// Wait for initialization.
-	if err := t.ensureInitialized(); err != nil {
+	if err := t.ensureInitialized(ctx); err != nil {
 		return
 	}
 
 	for {
 		select {
-		case <-t.stopCh:
+		case <-ctx.Done():
 			return
 		case <-t.recheckTxCh.Out():
 		}
 
-		t.recheck()
+		t.recheck(ctx)
 	}
 }
 
-func (t *txPool) recheck() {
+func (t *txPool) recheck(ctx context.Context) {
 	// Get a batch of scheduled transactions.
 	var pcts []*PendingCheckTransaction
 	var results []chan *protocol.CheckTxResult
@@ -889,7 +879,7 @@ func (t *txPool) recheck() {
 	// Block until checking is done.
 	for _, notifyCh := range results {
 		select {
-		case <-t.stopCh:
+		case <-ctx.Done():
 			return
 		case <-notifyCh:
 			// Don't care about result.
@@ -918,7 +908,6 @@ func New(
 
 	return &txPool{
 		logger:          logging.GetLogger("runtime/txpool"),
-		stopCh:          make(chan struct{}),
 		quitCh:          make(chan struct{}),
 		initCh:          make(chan struct{}),
 		runtimeID:       runtimeID,

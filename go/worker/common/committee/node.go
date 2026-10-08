@@ -151,7 +151,6 @@ func (n *Node) Start() error {
 func (n *Node) Stop() {
 	n.stopOnce.Do(func() {
 		close(n.stopCh)
-		n.TxPool.Stop()
 		n.KeyManagerClient.SetKeyManagerID(nil)
 	})
 }
@@ -334,13 +333,14 @@ func (n *Node) worker() { //nolint: gocyclo
 	})
 
 	// Start the transaction pool after consensus is synced.
-	if err := n.TxPool.Start(); err != nil {
-		n.logger.Error(
-			"failed to start transaction pool",
-			"err", err,
-		)
-		return
-	}
+	wg.Go(func() {
+		if err := n.TxPool.Serve(n.ctx); err != nil {
+			n.logger.Error(
+				"failed to run transaction pool",
+				"err", err,
+			)
+		}
+	})
 
 	// Wait for the runtime.
 	rt, err := n.Runtime.RegistryDescriptor(n.ctx)
