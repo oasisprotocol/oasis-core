@@ -223,13 +223,15 @@ func (w *churpWorker) GetStatus() workerKm.ChurpStatus {
 }
 
 func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
-	w.logger.Info("starting worker",
+	w.logger.Info(
+		"starting worker",
 		"node_id", w.kmWorker.nodeID,
 	)
 
 	stCh, stSub, err := w.kmWorker.keymanager.Churp().WatchStatuses(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch statuses",
+		w.logger.Error(
+			"failed to watch statuses",
 			"err", err,
 		)
 		return
@@ -238,7 +240,8 @@ func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 
 	epoCh, epoSub, err := w.kmWorker.commonWorker.Consensus.Beacon().WatchEpochs(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch epochs",
+		w.logger.Error(
+			"failed to watch epochs",
 			"err", err,
 		)
 		return
@@ -247,7 +250,8 @@ func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 
 	blkCh, blkSub, err := w.kmWorker.commonWorker.Consensus.Core().WatchBlocks(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch blocks",
+		w.logger.Error(
+			"failed to watch blocks",
 			"err", err,
 		)
 		return
@@ -304,7 +308,8 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 		return
 	}
 
-	w.logger.Debug("status update",
+	w.logger.Debug(
+		"status update",
 		"status", status,
 	)
 
@@ -399,7 +404,8 @@ func (s *submissionScheduler) Queue(status *churp.Status) {
 		epoch := status.NextHandoff - 1
 		height, err := s.kmWorker.selectBlockHeight(epoch, 20, 50)
 		if err != nil {
-			s.logger.Error("failed to select a random block height",
+			s.logger.Error(
+				"failed to select a random block height",
 				"err", err,
 			)
 			return
@@ -456,7 +462,8 @@ func (s *submissionScheduler) Cancel(epoch beacon.EpochTime) {
 // or transaction fails.
 func (s *submissionScheduler) submitApplication(ctx context.Context, status *churp.Status) {
 	if err := retry(ctx, func(attempt int) error {
-		s.logger.Info("trying to submit application",
+		s.logger.Info(
+			"trying to submit application",
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"attempt", attempt,
@@ -464,7 +471,8 @@ func (s *submissionScheduler) submitApplication(ctx context.Context, status *chu
 
 		err := s.trySubmitApplication(ctx, status)
 		if err != nil {
-			s.logger.Debug("failed to submit application",
+			s.logger.Debug(
+				"failed to submit application",
 				"id", status.ID,
 				"epoch", status.NextHandoff,
 				"attempt", attempt,
@@ -475,7 +483,8 @@ func (s *submissionScheduler) submitApplication(ctx context.Context, status *chu
 
 		return nil
 	}); err != nil {
-		s.logger.Warn("failed to submit application",
+		s.logger.Warn(
+			"failed to submit application",
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"err", err,
@@ -577,7 +586,8 @@ func (e *handoffExecutor) Queue(status *churp.Status) {
 	// at the same time.
 	height, err := e.kmWorker.selectBlockHeight(status.NextHandoff, 10, 10)
 	if err != nil {
-		e.logger.Error("failed to select a random block height",
+		e.logger.Error(
+			"failed to select a random block height",
 			"err", err,
 		)
 		return
@@ -587,7 +597,8 @@ func (e *handoffExecutor) Queue(status *churp.Status) {
 	info = newTaskInfo(status, height)
 	e.handoffs.Add(info)
 
-	e.logger.Info("handoff scheduled",
+	e.logger.Info(
+		"handoff scheduled",
 		"id", status.ID,
 		"epoch", status.NextHandoff,
 		"height", height,
@@ -642,7 +653,8 @@ func (e *handoffExecutor) handoff(ctx context.Context, status *churp.Status, dim
 	oldCommittee := status.Committee
 	newCommittee := maps.Keys(status.Applications)
 
-	e.logger.Info("starting handoff",
+	e.logger.Info(
+		"starting handoff",
 		"id", status.ID,
 		"epoch", status.NextHandoff,
 		"threshold", status.Threshold,
@@ -668,7 +680,8 @@ func (e *handoffExecutor) handoff(ctx context.Context, status *churp.Status, dim
 	// Share reduction (optional).
 	if kind == churp.HandoffKindCommitteeChanged {
 		if err := e.shareReduction(ctx, status, oldCommittee, priorities); err != nil {
-			e.logger.Warn("failed to do share reduction",
+			e.logger.Warn(
+				"failed to do share reduction",
 				"id", status.ID,
 				"epoch", status.NextHandoff,
 				"err", err,
@@ -682,7 +695,8 @@ func (e *handoffExecutor) handoff(ctx context.Context, status *churp.Status, dim
 
 	// Proactivization.
 	if err := e.proactivization(ctx, status, newCommittee, priorities); err != nil {
-		e.logger.Warn("failed to do proactivization",
+		e.logger.Warn(
+			"failed to do proactivization",
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"err", err,
@@ -701,7 +715,8 @@ func (e *handoffExecutor) handoff(ctx context.Context, status *churp.Status, dim
 		}
 
 		if err := e.shareDistribution(ctx, status, newCommittee, priorities); err != nil {
-			e.logger.Warn("failed to do share distribution",
+			e.logger.Warn(
+				"failed to do share distribution",
 				"id", status.ID,
 				"epoch", status.NextHandoff,
 				"err", err,
@@ -712,7 +727,8 @@ func (e *handoffExecutor) handoff(ctx context.Context, status *churp.Status, dim
 
 	// Confirmation.
 	if err := e.submitConfirmation(ctx, status); err != nil {
-		e.logger.Warn("failed to submit confirmation",
+		e.logger.Warn(
+			"failed to submit confirmation",
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"err", err,
@@ -755,7 +771,8 @@ func (e *handoffExecutor) fetch(
 	return retry(ctx, func(attempt int) error {
 		nodeIDs := selectNodes(remainingNodeIDs, priorities)
 
-		e.logger.Info(fmt.Sprintf("trying to do %s", stage),
+		e.logger.Info(
+			fmt.Sprintf("trying to do %s", stage),
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"node_ids", nodeIDs,
@@ -764,7 +781,8 @@ func (e *handoffExecutor) fetch(
 
 		rsp, err := e.tryFetch(ctx, status, nodeIDs, method)
 		if err != nil {
-			e.logger.Warn(fmt.Sprintf("failed to do %s", stage),
+			e.logger.Warn(
+				fmt.Sprintf("failed to do %s", stage),
 				"id", status.ID,
 				"epoch", status.NextHandoff,
 				"attempt", attempt,
@@ -773,7 +791,8 @@ func (e *handoffExecutor) fetch(
 			return fmt.Errorf("failed to do %s: %w", stage, err)
 		}
 
-		e.logger.Info(fmt.Sprintf("%s status", stage),
+		e.logger.Info(
+			fmt.Sprintf("%s status", stage),
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"attempt", attempt,
@@ -832,7 +851,8 @@ func (e *handoffExecutor) tryFetch(
 // fails.
 func (e *handoffExecutor) submitConfirmation(ctx context.Context, status *churp.Status) error {
 	return retry(ctx, func(attempt int) error {
-		e.logger.Info("trying to submit confirmation",
+		e.logger.Info(
+			"trying to submit confirmation",
 			"id", status.ID,
 			"epoch", status.NextHandoff,
 			"attempt", attempt,
@@ -840,7 +860,8 @@ func (e *handoffExecutor) submitConfirmation(ctx context.Context, status *churp.
 
 		err := e.trySubmitConfirmation(ctx, status)
 		if err != nil {
-			e.logger.Debug("failed to submit confirmation",
+			e.logger.Debug(
+				"failed to submit confirmation",
 				"id", status.ID,
 				"epoch", status.NextHandoff,
 				"attempt", attempt,
@@ -947,7 +968,8 @@ func (f *handoffFinisher) Finalize(status *churp.Status) {
 
 // finalizeHandoff tries to finalize a completed handoff.
 func (f *handoffFinisher) finalizeHandoff(ctx context.Context, status *churp.Status) {
-	f.logger.Info("trying to finalize handoff",
+	f.logger.Info(
+		"trying to finalize handoff",
 		"id", status.ID,
 		"handoff", status.Handoff,
 		"next_handoff", status.NextHandoff,
@@ -963,7 +985,8 @@ func (f *handoffFinisher) finalizeHandoff(ctx context.Context, status *churp.Sta
 	}
 	var rsp protocol.Empty
 	if err := timeCallEnclaveLocal(ctx, f.kmWorker, churp.RPCMethodFinalize, req, &rsp, status); err != nil {
-		f.logger.Info("failed to finalize handoff",
+		f.logger.Info(
+			"failed to finalize handoff",
 			"id", status.ID,
 			"epoch", status.Handoff,
 			"err", err,
