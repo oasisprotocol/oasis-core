@@ -2,6 +2,7 @@ package keymanager
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/libp2p/go-libp2p/core"
@@ -48,24 +49,17 @@ func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, p
 	}
 }
 
-func (w *kmNodeWatcher) watch(ctx context.Context) {
+// Serve starts the watcher.
+func (w *kmNodeWatcher) Serve(ctx context.Context) error {
 	nodesCh, nodesSub, err := w.consensus.Registry().WatchNodeList(ctx)
 	if err != nil {
-		w.logger.Error(
-			"failed to watch node list",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch node list: %w", err)
 	}
 	defer nodesSub.Close()
 
 	watcherCh, watcherSub, err := w.watcher.WatchNodeUpdates()
 	if err != nil {
-		w.logger.Error(
-			"failed to watch node updates",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch node updates: %w", err)
 	}
 	defer watcherSub.Close()
 
@@ -92,7 +86,7 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 				continue
 			}
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		}
 
 		// Rebuild the access policy, something has changed.
@@ -168,16 +162,13 @@ func newKmRuntimeWatcher(runtimeID common.Namespace, consensus consensus.Service
 	}
 }
 
-func (w *kmRuntimeWatcher) watch(ctx context.Context) {
+// Serve starts the watcher.
+func (w *kmRuntimeWatcher) Serve(ctx context.Context) error {
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
 	rtCh, rtSub, err := w.consensus.Registry().WatchRuntimes(ctx)
 	if err != nil {
-		w.logger.Error(
-			"failed to watch runtimes",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch runtimes: %w", err)
 	}
 	defer rtSub.Close()
 
@@ -190,7 +181,7 @@ func (w *kmRuntimeWatcher) watch(ctx context.Context) {
 		var rt *registry.Runtime
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case rt = <-rtCh:
 		}
 

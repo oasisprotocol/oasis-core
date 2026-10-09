@@ -517,13 +517,23 @@ func (w *Worker) worker() {
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
 	wg.Go(func() {
-		w.kmNodeWatcher.watch(w.ctx)
+		if err := w.kmNodeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run key manager node watcher",
+				"err", err,
+			)
+		}
 	})
 
 	// Watch runtime registrations in order to know which runtimes are using
 	// us as a key manager.
 	wg.Go(func() {
-		w.kmRuntimeWatcher.watch(w.ctx)
+		if err := w.kmRuntimeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run key manager runtime watcher",
+				"err", err,
+			)
+		}
 	})
 
 	// Serve master and ephemeral secrets.
