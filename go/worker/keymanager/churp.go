@@ -22,7 +22,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	workerKm "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 )
@@ -222,39 +221,28 @@ func (w *churpWorker) GetStatus() workerKm.ChurpStatus {
 	return status
 }
 
-func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
+func (w *churpWorker) Serve(ctx context.Context) error {
 	w.logger.Info(
-		"starting worker",
+		"starting",
 		"node_id", w.kmWorker.nodeID,
 	)
+	defer w.logger.Info("stopping")
 
 	stCh, stSub, err := w.kmWorker.keymanager.Churp().WatchStatuses(ctx)
 	if err != nil {
-		w.logger.Error(
-			"failed to watch statuses",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch statuses: %w", err)
 	}
 	defer stSub.Close()
 
 	epoCh, epoSub, err := w.kmWorker.commonWorker.Consensus.Beacon().WatchEpochs(ctx)
 	if err != nil {
-		w.logger.Error(
-			"failed to watch epochs",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch epochs: %w", err)
 	}
 	defer epoSub.Close()
 
 	blkCh, blkSub, err := w.kmWorker.commonWorker.Consensus.Core().WatchBlocks(ctx)
 	if err != nil {
-		w.logger.Error(
-			"failed to watch blocks",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch blocks: %w", err)
 	}
 	defer blkSub.Close()
 
@@ -269,11 +257,10 @@ func (w *churpWorker) work(ctx context.Context, _ host.Runtime) {
 		case status := <-stCh:
 			w.handleStatusUpdate(status)
 		case <-ctx.Done():
-			w.logger.Info("stopping worker")
 			w.submissions.Stop()
 			w.handoffs.Stop()
 			w.finisher.Stop()
-			return
+			return ctx.Err()
 		}
 	}
 }

@@ -548,7 +548,12 @@ func (w *Worker) worker() {
 
 	// Serve CHURP secrets.
 	wg.Go(func() {
-		w.churpWorker.work(w.ctx, hrt)
+		if err := w.churpWorker.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run churp worker",
+				"err", err,
+			)
+		}
 	})
 
 	// Watch runtime updates and register with new capabilities on restarts.
