@@ -54,8 +54,7 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey,
 
 // PublishTx publishes a transaction via P2P gossipsub.
 func (n *Node) PublishTx(ctx context.Context, tx []byte) error {
-	n.P2P.Publish(ctx, n.txTopic, tx)
-	return nil
+	return n.P2P.Publish(ctx, n.txTopic, tx)
 }
 
 // GetMinRepublishInterval returns the minimum republish interval that needs to be respected by

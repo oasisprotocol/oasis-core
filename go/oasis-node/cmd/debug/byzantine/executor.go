@@ -81,14 +81,14 @@ func (cbc *computeBatchContext) publishProposal(
 	ctx context.Context,
 	p2pH *p2pHandle,
 	epoch beacon.EpochTime,
-) {
+) error {
 	if cbc.proposal == nil {
 		panic("no prepared proposal")
 	}
 
 	committeeTopic := protocol.NewTopicKindCommitteeID(cbc.chainContext, cbc.runtimeID)
 
-	p2pH.service.Publish(ctx, committeeTopic, &p2p.CommitteeMessage{
+	return p2pH.service.Publish(ctx, committeeTopic, &p2p.CommitteeMessage{
 		Epoch:    epoch,
 		Proposal: cbc.proposal,
 	})

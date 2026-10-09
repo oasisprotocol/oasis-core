@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -38,10 +40,10 @@ const (
 	// receiving a new block. It should be roughly the block propagation delay.
 	newBlockPublishDelay = 200 * time.Millisecond
 
-	// republishLimitReinvokeTimeout is the timeout to the next republish worker invocation in
+	// minReinvokeInterval is the timeout to the next republish worker invocation in
 	// case when the maxRepublishTxs limit is reached. This should be much shorter than the
 	// RepublishInterval.
-	republishLimitReinvokeTimeout = time.Second
+	minReinvokeInterval = time.Second
 )
 
 // TransactionPool is an interface for managing a pool of transactions.
@@ -724,32 +726,19 @@ func (t *txPool) checkWorker() {
 
 func (t *txPool) republishWorker() {
 	// Set up a ticker for republish interval.
-	republishInterval := t.cfg.RepublishInterval
-	if minRepublishInterval := t.txPublisher.GetMinRepublishInterval(); republishInterval < minRepublishInterval {
-		republishInterval = minRepublishInterval
-	}
-	ticker := time.NewTicker(republishInterval)
-
-	// Set up a debounce ticker for explicit republish requests.
-	var (
-		lastRepublish time.Time
-		debounceCh    <-chan time.Time
-		debounceTimer *time.Timer
+	republishInterval := max(
+		t.cfg.RepublishInterval,
+		t.txPublisher.GetMinRepublishInterval(),
 	)
-	const debounceInterval = 10 * time.Second
-	defer func() {
-		if debounceTimer == nil {
-			return
-		}
-
-		if !debounceTimer.Stop() {
-			<-debounceTimer.C
-		}
-	}()
+	reinvokeInterval := min(
+		republishInterval,
+		minReinvokeInterval,
+	)
 
 	t.logger.Debug(
 		"starting transaction republish worker",
-		"interval", republishInterval,
+		"republish_interval", republishInterval,
+		"reinvoke_interval", reinvokeInterval,
 	)
 
 	// Wait for initialization.
@@ -763,42 +752,43 @@ func (t *txPool) republishWorker() {
 		cancel()
 	}()
 
+	boff := cmnBackoff.NewExponentialBackOff()
+	boff.Reset()
+
+	ticker := time.NewTicker(republishInterval)
+	defer ticker.Stop()
+
+	var (
+		nextRepublish = time.Duration(math.MaxInt64)
+		nextRetry     = time.Duration(math.MaxInt64)
+	)
+
 	for {
 		select {
 		case <-t.stopCh:
 			return
 		case <-ticker.C:
-		case <-t.republishCh.Out():
-			// Debounce explicit republish request.
-			switch {
-			case debounceCh != nil:
-				// Debounce already in progress.
-				continue
-			case time.Since(lastRepublish) < debounceInterval:
-				// Another request happened within the debounce interval, start timer.
-				debounceTimer = time.NewTimer(debounceInterval - time.Since(lastRepublish))
-				debounceCh = debounceTimer.C
-				continue
-			default:
-				// Handle republish request.
+			// Reset retry ticker only when triggered.
+			if nextRetry < nextRepublish {
+				nextRetry = math.MaxInt64
 			}
-		case <-debounceCh:
-			debounceCh = nil
+		case <-t.republishCh.Out():
 		}
 
 		// Get transactions to republish.
 		txs := t.mainQueue.All()
 
 		// Filter transactions based on whether they can already be republished.
-		var republishedCount int
-		nextPendingRepublish := republishInterval
+		var (
+			republishedCount int
+			failedCount      int
+		)
+		nextRepublish = republishInterval
 		for _, tx := range txs {
 			if ts, ok := t.seenCache.Peek(tx.Hash()); ok {
-				sinceLast := time.Since(ts.(time.Time))
-				if sinceLast < republishInterval {
-					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
-						nextPendingRepublish = remaining + time.Second
-					}
+				if elapsed := time.Since(ts.(time.Time)); elapsed < republishInterval {
+					remaining := republishInterval - elapsed
+					nextRepublish = min(nextRepublish, remaining+time.Second)
 					continue
 				}
 			}
@@ -809,7 +799,7 @@ func (t *txPool) republishWorker() {
 					"err", err,
 					"tx", tx,
 				)
-				t.republishCh.In() <- struct{}{}
+				failedCount++
 				continue
 			}
 
@@ -818,23 +808,32 @@ func (t *txPool) republishWorker() {
 
 			republishedCount++
 			if republishedCount >= maxRepublishTxs {
-				// If the limit of max republish transactions has been reached
-				// republish again sooner.
-				nextPendingRepublish = republishLimitReinvokeTimeout
+				// Republish again sooner.
+				nextRepublish = reinvokeInterval
 				break
 			}
 		}
 
+		// Extend retry timer only when triggered.
+		switch {
+		case failedCount == 0:
+			nextRetry = math.MaxInt64
+			boff.Reset()
+		case nextRetry == math.MaxInt64:
+			nextRetry = boff.NextBackOff()
+		}
+
 		// Reschedule ticker for next republish.
-		ticker.Reset(nextPendingRepublish)
+		ticker.Reset(min(nextRepublish, nextRetry))
 
 		t.logger.Debug(
 			"republished transactions",
-			"num_txs", republishedCount,
-			"next_republish", nextPendingRepublish,
+			"total", len(txs),
+			"republished", republishedCount,
+			"failed", failedCount,
+			"next_republish", nextRepublish,
+			"next_retry", nextRetry,
 		)
-
-		lastRepublish = time.Now()
 	}
 }
 

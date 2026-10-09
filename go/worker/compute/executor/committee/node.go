@@ -161,7 +161,8 @@ func (n *Node) reselect() {
 }
 
 func (n *Node) transitionState(state NodeState) {
-	n.logger.Info("state transition",
+	n.logger.Info(
+		"state transition",
 		"current_state", n.state,
 		"new_state", state,
 	)
@@ -205,7 +206,8 @@ func (n *Node) transitionStateToProcessingFailure(
 	batchSize uint64,
 	maxBatchSize uint64,
 ) {
-	n.logger.Debug("batch too large",
+	n.logger.Debug(
+		"batch too large",
 		"bytes", bytes,
 		"max_bytes", maxBytes,
 		"batch_size", batchSize,
@@ -295,7 +297,8 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 	}
 	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, rq)
 	if err != nil {
-		n.logger.Error("failed to query runtime state",
+		n.logger.Error(
+			"failed to query runtime state",
 			"err", err,
 			"height", height,
 		)
@@ -303,7 +306,8 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 	}
 	roundResults, err := n.commonNode.Consensus.RootHash().GetLastRoundResults(ctx, rq)
 	if err != nil {
-		n.logger.Error("failed to query round last normal round results",
+		n.logger.Error(
+			"failed to query round last normal round results",
 			"err", err,
 			"height", height,
 		)
@@ -314,7 +318,8 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 }
 
 func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
-	n.logger.Debug("trying to schedule a batch",
+	n.logger.Debug(
+		"trying to schedule a batch",
 		"round", round,
 		"rank", n.rank,
 		"force", force,
@@ -344,14 +349,16 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	// reverted anyway (since the committee will change).
 	height, err := n.commonNode.Consensus.Core().GetLatestHeight(ctx)
 	if err != nil {
-		n.logger.Error("failed to fetch latest height",
+		n.logger.Error(
+			"failed to fetch latest height",
 			"err", err,
 		)
 		return
 	}
 	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, height)
 	if err != nil {
-		n.logger.Error("failed to fetch future epoch state",
+		n.logger.Error(
+			"failed to fetch future epoch state",
 			"err", err,
 		)
 		return
@@ -364,7 +371,8 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	// Check what the runtime supports.
 	rtInfo, err := n.rt.GetInfo(ctx)
 	if err != nil {
-		n.logger.Warn("not scheduling, the runtime is broken",
+		n.logger.Warn(
+			"not scheduling, the runtime is broken",
 			"err", err,
 		)
 		return
@@ -418,15 +426,18 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 		return fmt.Errorf("failed to sign proposal header: %w", err)
 	}
 
-	n.logger.Debug("dispatching a new batch proposal",
+	n.logger.Debug(
+		"dispatching a new batch proposal",
 		"input_root", proposal.Header.BatchHash,
 		"batch_size", len(proposal.Batch),
 	)
 
-	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
+	if err := n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
 		Epoch:    n.committeeInfo.Committee.ValidFor,
 		Proposal: proposal,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to publish proposal: %w", err)
+	}
 
 	crash.Here(crashPointBatchPublishAfter)
 
@@ -436,7 +447,8 @@ func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposa
 func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueueMeta) {
 	// This method runs within its own goroutine and is always stopped before the runtime
 	// worker finishes. Therefore, it is safe to read local round variables (block info, ...).
-	n.logger.Debug("scheduling batch",
+	n.logger.Debug(
+		"scheduling batch",
 		"batch_size", len(batch),
 	)
 
@@ -460,7 +472,8 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		initialBatch,
 	)
 	if err != nil {
-		n.logger.Error("runtime batch execution failed",
+		n.logger.Error(
+			"runtime batch execution failed",
 			"err", err,
 		)
 		// Notify the round worker that the execution failed.
@@ -552,7 +565,8 @@ func (n *Node) runtimeExecuteTxBatch(
 	case err == nil:
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		// Context was canceled while the runtime was processing a request.
-		n.logger.Error("batch processing aborted by context, restarting runtime",
+		n.logger.Error(
+			"batch processing aborted by context, restarting runtime",
 			"cause", context.Cause(callCtx),
 		)
 
@@ -562,13 +576,15 @@ func (n *Node) runtimeExecuteTxBatch(
 		defer cancel()
 
 		if err = rt.Abort(abortCtx, false); err != nil {
-			n.logger.Error("failed to abort the runtime",
+			n.logger.Error(
+				"failed to abort the runtime",
 				"err", err,
 			)
 		}
 		return nil, fmt.Errorf("batch processing aborted by context")
 	default:
-		n.logger.Error("error while sending batch processing request to runtime",
+		n.logger.Error(
+			"error while sending batch processing request to runtime",
 			"err", err,
 		)
 		return nil, err
@@ -576,7 +592,8 @@ func (n *Node) runtimeExecuteTxBatch(
 	crash.Here(crashPointBatchProcessStartAfter)
 
 	if rsp.RuntimeExecuteTxBatchResponse == nil {
-		n.logger.Error("malformed response from runtime",
+		n.logger.Error(
+			"malformed response from runtime",
 			"response", rsp,
 		)
 		return nil, fmt.Errorf("malformed response from runtime")
@@ -592,7 +609,8 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 
 	ioRoot, err := n.computeIORoot(ctx, proposal.Header.Round, batch)
 	if err != nil {
-		n.logger.Error("failed to compute I/O root",
+		n.logger.Error(
+			"failed to compute I/O root",
 			"err", err,
 		)
 		// Notify the round worker that the execution failed.
@@ -607,7 +625,8 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		return
 	}
 
-	n.logger.Debug("processing batch",
+	n.logger.Debug(
+		"processing batch",
 		"batch_size", len(batch),
 	)
 
@@ -626,7 +645,8 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		batch,
 	)
 	if err != nil {
-		n.logger.Error("runtime batch execution failed",
+		n.logger.Error(
+			"runtime batch execution failed",
 			"err", err,
 		)
 		// Notify the round worker that the execution failed.
@@ -702,7 +722,8 @@ func (n *Node) proposeBatch(
 
 	batch := processed.computed
 
-	n.logger.Debug("proposing batch",
+	n.logger.Debug(
+		"proposing batch",
 		"scheduler_id", processed.proposal.NodeID,
 		"node_id", n.commonNode.Identity.NodeSigner.Public(),
 		"batch_size", len(processed.proposal.Batch),
@@ -772,7 +793,8 @@ func (n *Node) proposeBatch(
 		return n.storage.NodeDB().Sync()
 	}()
 	if storageErr != nil {
-		n.logger.Error("storage failure, submitting failure indicating commitment",
+		n.logger.Error(
+			"storage failure, submitting failure indicating commitment",
 			"err", storageErr,
 		)
 		ec.Header.SetFailure(commitment.FailureUnknown)
@@ -782,7 +804,8 @@ func (n *Node) proposeBatch(
 	// Make sure we are still in the right state/round.
 	state, ok := n.state.(StateProcessingBatch)
 	if !ok || lastHeader.Round != n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round {
-		n.logger.Error("new state or round since started proposing batch",
+		n.logger.Error(
+			"new state or round since started proposing batch",
 			"state", state,
 			"round", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round,
 			"expected_round", lastHeader.Round,
@@ -790,12 +813,14 @@ func (n *Node) proposeBatch(
 		return
 	}
 
-	n.logger.Debug("sign and submit the commitment",
+	n.logger.Debug(
+		"sign and submit the commitment",
 		"commit", ec,
 	)
 
 	if err := n.signAndSubmitCommitment(roundCtx, ec); err != nil {
-		n.logger.Error("failed to sign and submit the commitment",
+		n.logger.Error(
+			"failed to sign and submit the commitment",
 			"commit", ec,
 			"err", err,
 		)
@@ -825,7 +850,8 @@ func (n *Node) proposeBatch(
 func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.ExecutorCommitment) error {
 	err := ec.Sign(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID())
 	if err != nil {
-		n.logger.Error("failed to sign commitment",
+		n.logger.Error(
+			"failed to sign commitment",
 			"commit", ec,
 			"err", err,
 		)
@@ -839,7 +865,8 @@ func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.
 		case nil:
 			n.logger.Info("executor commit finalized")
 		default:
-			n.logger.Error("failed to submit executor commit",
+			n.logger.Error(
+				"failed to submit executor commit",
 				"commit", ec,
 				"err", commitErr,
 			)
@@ -850,7 +877,8 @@ func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.
 }
 
 func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposal, rank uint64, discrepancy bool) {
-	n.logger.Debug("trying to process a proposal",
+	n.logger.Debug(
+		"trying to process a proposal",
 		"scheduler", proposal.NodeID,
 		"round", proposal.Header.Round,
 		"rank", rank,
@@ -861,7 +889,8 @@ func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposa
 	switch n.state.(type) {
 	case StateWaitingForBatch:
 	default:
-		n.logger.Debug("not processing, invalid state",
+		n.logger.Debug(
+			"not processing, invalid state",
 			"state", n.state.Name(),
 		)
 		return
@@ -1051,7 +1080,8 @@ func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 		// Configuration updated, just refresh availability.
 	default:
 		// Unknown event.
-		n.logger.Warn("unknown worker event",
+		n.logger.Warn(
+			"unknown worker event",
 			"ev", ev,
 		)
 	}
@@ -1064,7 +1094,8 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 	if !ok {
 		// Should not be possible, as we always drain the channel once we transition
 		// to a different state.
-		n.logger.Error("failed to handle processed batch, invalid state",
+		n.logger.Error(
+			"failed to handle processed batch, invalid state",
 			"state", n.state,
 		)
 		return
@@ -1097,11 +1128,13 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 		}
 		commit.Header.SetFailure(commitment.FailureUnknown)
 
-		n.logger.Debug("submitting failure indicating commitment",
+		n.logger.Debug(
+			"submitting failure indicating commitment",
 			"commitment", commit,
 		)
 		if err := n.signAndSubmitCommitment(ctx, commit); err != nil {
-			n.logger.Error("failed to sign and submit the commitment",
+			n.logger.Error(
+				"failed to sign and submit the commitment",
 				"commit", commit,
 				"err", err,
 			)
@@ -1114,7 +1147,8 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 
 	// Check if scheduling was processed successfully.
 	if state.mode == protocol.ExecutionModeSchedule {
-		n.logger.Info("runtime has finished scheduling a batch",
+		n.logger.Info(
+			"runtime has finished scheduling a batch",
 			"input_root", batch.proposal.Header.BatchHash,
 			"tx_hashes", batch.proposal.Batch,
 		)
@@ -1122,7 +1156,8 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 		// Sign and submit the proposal to P2P network.
 		err := n.publishProposal(ctx, batch.proposal)
 		if err != nil {
-			n.logger.Error("failed to sign and publish proposal",
+			n.logger.Error(
+				"failed to sign and publish proposal",
 				"err", err,
 			)
 			return
@@ -1152,7 +1187,8 @@ func (n *Node) handleEvent(ctx context.Context, ev *roothash.Event) {
 }
 
 func (n *Node) handleExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
-	n.logger.Debug("executor commitment",
+	n.logger.Debug(
+		"executor commitment",
 		"commitment", ec,
 	)
 
@@ -1163,7 +1199,8 @@ func (n *Node) handleExecutorCommitment(ctx context.Context, ec *commitment.Exec
 }
 
 func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
-	n.logger.Debug("observed executor commitment",
+	n.logger.Debug(
+		"observed executor commitment",
 		"commitment", ec,
 	)
 
@@ -1179,7 +1216,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	// Filter for this round only.
 	round := n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1
 	if ec.Header.Header.Round != round {
-		n.logger.Debug("ignoring bad executor commitment, not for this round",
+		n.logger.Debug(
+			"ignoring bad executor commitment, not for this round",
 			"round", round,
 			"ec_round", ec.Header.Header.Round,
 			"node_id", ec.NodeID,
@@ -1190,7 +1228,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 
 	// Filter scheduler commitments.
 	if ec.NodeID != ec.Header.SchedulerID {
-		n.logger.Debug("ignoring bad executor commitment, not from scheduler",
+		n.logger.Debug(
+			"ignoring bad executor commitment, not from scheduler",
 			"node_id", ec.NodeID,
 			"observed", observed,
 		)
@@ -1200,7 +1239,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	if observed {
 		// Verify the commitment.
 		if err := commitment.VerifyExecutorCommitment(ctx, n.dispatchInfo.BlockInfo.RuntimeBlock, n.dispatchInfo.ActiveDescriptor, n.committeeInfo.Committee.ValidFor, ec, nil, n.committeeInfo); err != nil {
-			n.logger.Debug("ignoring bad executor commitment, verification failed",
+			n.logger.Debug(
+				"ignoring bad executor commitment, verification failed",
 				"err", err,
 				"node_id", ec.NodeID,
 				"observed", observed,
@@ -1212,7 +1252,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	// Update pool rank.
 	rank, ok := n.committeeInfo.Committee.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
 	if !ok {
-		n.logger.Debug("ignoring bad executor commitment, scheduler not in committee",
+		n.logger.Debug(
+			"ignoring bad executor commitment, scheduler not in committee",
 			"node_id", ec.NodeID,
 			"observed", observed,
 		)
@@ -1222,7 +1263,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 		return
 	}
 	n.poolRank = rank
-	n.logger.Debug("pool rank has changed",
+	n.logger.Debug(
+		"pool rank has changed",
 		"round", round,
 		"rank", n.poolRank,
 		"observed", observed,
@@ -1230,7 +1272,8 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 }
 
 func (n *Node) finalizePreviousRound() {
-	n.logger.Info("considering the round finalized",
+	n.logger.Info(
+		"considering the round finalized",
 		"round", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round,
 		"header_hash", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.EncodedHash(),
 		"header_type", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType,
@@ -1239,7 +1282,8 @@ func (n *Node) finalizePreviousRound() {
 	if n.proposedBatch != nil && n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType == block.Normal {
 		switch n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
 		case false:
-			n.logger.Error("proposed batch was not finalized",
+			n.logger.Error(
+				"proposed batch was not finalized",
 				"header_io_root", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot,
 				"proposed_io_root", n.proposedBatch.proposedIORoot,
 				"header_type", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.HeaderType,
@@ -1249,7 +1293,8 @@ func (n *Node) finalizePreviousRound() {
 			// Record time taken for successfully processing a batch.
 			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
 
-			n.logger.Debug("removing processed batch from queue",
+			n.logger.Debug(
+				"removing processed batch from queue",
 				"batch_size", len(n.proposedBatch.txHashes),
 				"io_root", n.dispatchInfo.BlockInfo.RuntimeBlock.Header.IORoot,
 			)
@@ -1331,7 +1376,8 @@ func (n *Node) worker() {
 	// Subscribe to gossiped executor commitments.
 	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx, n.commonNode.Runtime.ID())
 	if err != nil {
-		n.logger.Error("failed to subscribe to executor commitments",
+		n.logger.Error(
+			"failed to subscribe to executor commitments",
 			"err", err,
 		)
 		close(n.initCh)
@@ -1342,7 +1388,8 @@ func (n *Node) worker() {
 	// Start watching roothash events.
 	n.evCh, evSub, err = n.commonNode.Consensus.RootHash().WatchEvents(n.ctx, n.commonNode.Runtime.ID())
 	if err != nil {
-		n.logger.Error("failed to subscribe to roothash events",
+		n.logger.Error(
+			"failed to subscribe to roothash events",
 			"err", err,
 		)
 		return
@@ -1405,10 +1452,12 @@ func (n *Node) roundWorker(ctx context.Context) {
 	}
 	round := n.dispatchInfo.BlockInfo.RuntimeBlock.Header.Round + 1
 
-	n.logger.Debug("round worker started",
+	n.logger.Debug(
+		"round worker started",
 		"round", round,
 	)
-	defer n.logger.Debug("round worker stopped",
+	defer n.logger.Debug(
+		"round worker stopped",
 		"round", round,
 	)
 
@@ -1421,13 +1470,15 @@ func (n *Node) roundWorker(ctx context.Context) {
 	// Need to be an executor committee member.
 	committeeInfo, ok := n.commonNode.Group.CommitteeInfo()
 	if !ok {
-		n.logger.Debug("skipping round, no executor committee",
+		n.logger.Debug(
+			"skipping round, no executor committee",
 			"round", round,
 		)
 		return
 	}
 	if !committeeInfo.IsMember() {
-		n.logger.Debug("skipping round, not an executor member",
+		n.logger.Debug(
+			"skipping round, not an executor member",
 			"round", round,
 		)
 		return
@@ -1447,7 +1498,8 @@ func (n *Node) roundWorker(ctx context.Context) {
 	var err error
 	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, n.dispatchInfo.BlockInfo.ConsensusBlock.Height)
 	if err != nil {
-		n.logger.Debug("skipping round, failed to fetch state and round results",
+		n.logger.Debug(
+			"skipping round, failed to fetch state and round results",
 			"err", err,
 		)
 		return
@@ -1465,7 +1517,8 @@ func (n *Node) roundWorker(ctx context.Context) {
 		n.rank = rank
 	}
 
-	n.logger.Debug("node is an executor member",
+	n.logger.Debug(
+		"node is an executor member",
 		"round", round,
 		"rank", n.rank,
 		"worker", committeeInfo.IsWorker(),
@@ -1545,7 +1598,8 @@ func (n *Node) roundWorker(ctx context.Context) {
 		case <-schedulerRankTicker.C:
 			// Change scheduler rank and try again.
 			schedulerRank++
-			n.logger.Debug("scheduler rank has changed",
+			n.logger.Debug(
+				"scheduler rank has changed",
 				"rank", schedulerRank,
 			)
 		case <-flushTimer.C:
