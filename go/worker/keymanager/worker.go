@@ -538,7 +538,12 @@ func (w *Worker) worker() {
 
 	// Serve master and ephemeral secrets.
 	wg.Go(func() {
-		w.secretsWorker.work(w.ctx, hrt)
+		if err := w.secretsWorker.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run secrets worker",
+				"err", err,
+			)
+		}
 	})
 
 	// Serve CHURP secrets.

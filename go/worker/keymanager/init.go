@@ -102,7 +102,7 @@ func New(
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Prepare sub-workers.
-	w.secretsWorker, err = newSecretsWorker(w.runtimeID, commonWorker, w, r, keymanager)
+	w.secretsWorker, err = newSecretsWorker(w.runtimeID, commonWorker, w, r, keymanager, w.RuntimeHostNode.GetHostedRuntime())
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create secrets worker: %w", err)
 	}
