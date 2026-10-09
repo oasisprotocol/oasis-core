@@ -197,7 +197,8 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 
 	response, err := rt.Call(ctx, req)
 	if err != nil {
-		w.logger.Error("failed to dispatch RPC call to runtime",
+		w.logger.Error(
+			"failed to dispatch RPC call to runtime",
 			"err", err,
 			"kind", kind,
 		)
@@ -206,7 +207,8 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 
 	resp := response.RuntimeRPCCallResponse
 	if resp == nil {
-		w.logger.Error("malformed response from runtime",
+		w.logger.Error(
+			"malformed response from runtime",
 			"response", response,
 		)
 		return nil, fmt.Errorf("malformed response from runtime")
@@ -365,7 +367,8 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 			rt.Capabilities.TEE = capabilityTEE
 			return nil
 		}, func(context.Context) error {
-			w.logger.Info("key manager registered",
+			w.logger.Info(
+				"key manager registered",
 				"version", version,
 				"tee", capabilityTEE,
 			)
@@ -376,7 +379,8 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		w.roleProvider.SetUnavailable()
 	default:
 		// Unknown event.
-		w.logger.Warn("unknown runtime host event",
+		w.logger.Warn(
+			"unknown runtime host event",
 			"ev", ev,
 		)
 	}
@@ -433,7 +437,8 @@ func (w *Worker) worker() {
 			return false
 		}
 
-		w.logger.Info("runtime component discovered",
+		w.logger.Info(
+			"runtime component discovered",
 			"id", comp.ID(),
 			"version", comp.Version,
 		)
@@ -448,13 +453,15 @@ func (w *Worker) worker() {
 	}
 
 	// Provision the specified runtime component.
-	w.logger.Info("provisioning runtime component",
+	w.logger.Info(
+		"provisioning runtime component",
 		"id", comp.ID(),
 		"version", comp.Version,
 	)
 
 	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
-		w.logger.Error("failed to provision runtime component",
+		w.logger.Error(
+			"failed to provision runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,
@@ -475,7 +482,8 @@ func (w *Worker) worker() {
 
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
-		w.logger.Error("failed to activate runtime component",
+		w.logger.Error(
+			"failed to activate runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,
