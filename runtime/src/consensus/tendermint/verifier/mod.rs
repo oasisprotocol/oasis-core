@@ -193,6 +193,10 @@ impl Verifier {
         instance: &mut Instance,
         height: u64,
     ) -> Result<ConsensusState, Error> {
+        if height == HEIGHT_LATEST {
+            return self.latest_consensus_state(cache, instance);
+        }
+
         // Obtain an authoritative state root, either from the current block if it is already
         // finalized or from the metadata transaction of the previous block.
         let state_root = match self.verify_to_target(height, cache, instance) {
