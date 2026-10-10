@@ -1,6 +1,6 @@
 //! Deoxys-II-256-128 MRAE primitives implementation.
 use anyhow::Result;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use sha2::Sha512_256;
 use x25519_dalek::{PublicKey, StaticSecret};
