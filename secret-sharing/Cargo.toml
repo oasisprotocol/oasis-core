@@ -18,7 +18,7 @@ p384 = { version = "0.14.0", default-features = false, features = [
 rand = { version = "0.10.3" }
 sha3 = { version = "0.12.0" }
 subtle = { version = "2.6", default-features = false }
-thiserror = { version = "1.0" }
+thiserror = { version = "2.0" }
 zeroize = { version = "1.7" }
 
 [[bin]]
