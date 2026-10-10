@@ -27,6 +27,7 @@ import (
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -63,6 +64,7 @@ type Worker struct {
 	runtimeID    common.Namespace
 	runtimeLabel string
 
+	nodeWatcher      *nodes.VersionedNodeDescriptorWatcher
 	kmNodeWatcher    *kmNodeWatcher
 	kmRuntimeWatcher *kmRuntimeWatcher
 	secretsWorker    *secretsWorker
@@ -197,7 +199,8 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 
 	response, err := rt.Call(ctx, req)
 	if err != nil {
-		w.logger.Error("failed to dispatch RPC call to runtime",
+		w.logger.Error(
+			"failed to dispatch RPC call to runtime",
 			"err", err,
 			"kind", kind,
 		)
@@ -206,7 +209,8 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 
 	resp := response.RuntimeRPCCallResponse
 	if resp == nil {
-		w.logger.Error("malformed response from runtime",
+		w.logger.Error(
+			"malformed response from runtime",
 			"response", response,
 		)
 		return nil, fmt.Errorf("malformed response from runtime")
@@ -365,7 +369,8 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 			rt.Capabilities.TEE = capabilityTEE
 			return nil
 		}, func(context.Context) error {
-			w.logger.Info("key manager registered",
+			w.logger.Info(
+				"key manager registered",
 				"version", version,
 				"tee", capabilityTEE,
 			)
@@ -376,7 +381,8 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		w.roleProvider.SetUnavailable()
 	default:
 		// Unknown event.
-		w.logger.Warn("unknown runtime host event",
+		w.logger.Warn(
+			"unknown runtime host event",
 			"ev", ev,
 		)
 	}
@@ -433,7 +439,8 @@ func (w *Worker) worker() {
 			return false
 		}
 
-		w.logger.Info("runtime component discovered",
+		w.logger.Info(
+			"runtime component discovered",
 			"id", comp.ID(),
 			"version", comp.Version,
 		)
@@ -448,13 +455,15 @@ func (w *Worker) worker() {
 	}
 
 	// Provision the specified runtime component.
-	w.logger.Info("provisioning runtime component",
+	w.logger.Info(
+		"provisioning runtime component",
 		"id", comp.ID(),
 		"version", comp.Version,
 	)
 
 	if err := w.ProvisionHostedRuntimeComponent(comp); err != nil {
-		w.logger.Error("failed to provision runtime component",
+		w.logger.Error(
+			"failed to provision runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,
@@ -475,7 +484,8 @@ func (w *Worker) worker() {
 
 	// Ensure that the runtime version is active.
 	if _, err := w.GetHostedRuntimeActiveVersion(); err != nil {
-		w.logger.Error("failed to activate runtime component",
+		w.logger.Error(
+			"failed to activate runtime component",
 			"err", err,
 			"id", comp.ID(),
 			"version", comp.Version,
@@ -494,26 +504,56 @@ func (w *Worker) worker() {
 		}
 	})
 
+	// Need to explicitly watch for node updates.
+	wg.Go(func() {
+		if err := w.nodeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run node watcher",
+				"err", err,
+			)
+		}
+	})
+
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
 	wg.Go(func() {
-		w.kmNodeWatcher.watch(w.ctx)
+		if err := w.kmNodeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run key manager node watcher",
+				"err", err,
+			)
+		}
 	})
 
 	// Watch runtime registrations in order to know which runtimes are using
 	// us as a key manager.
 	wg.Go(func() {
-		w.kmRuntimeWatcher.watch(w.ctx)
+		if err := w.kmRuntimeWatcher.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run key manager runtime watcher",
+				"err", err,
+			)
+		}
 	})
 
 	// Serve master and ephemeral secrets.
 	wg.Go(func() {
-		w.secretsWorker.work(w.ctx, hrt)
+		if err := w.secretsWorker.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run secrets worker",
+				"err", err,
+			)
+		}
 	})
 
 	// Serve CHURP secrets.
 	wg.Go(func() {
-		w.churpWorker.work(w.ctx, hrt)
+		if err := w.churpWorker.Serve(w.ctx); err != nil {
+			w.logger.Error(
+				"failed to run churp worker",
+				"err", err,
+			)
+		}
 	})
 
 	// Watch runtime updates and register with new capabilities on restarts.

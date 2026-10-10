@@ -151,7 +151,6 @@ func (n *Node) Start() error {
 func (n *Node) Stop() {
 	n.stopOnce.Do(func() {
 		close(n.stopCh)
-		n.TxPool.Stop()
 		n.KeyManagerClient.SetKeyManagerID(nil)
 	})
 }
@@ -231,7 +230,8 @@ func (n *Node) GetStatus() (*api.Status, error) {
 
 func (n *Node) handleCommitteeTransition(committee *scheduler.Committee) {
 	if err := n.Group.CommitteeTransition(n.ctx, committee); err != nil {
-		n.logger.Error("unable to handle committee transition",
+		n.logger.Error(
+			"unable to handle committee transition",
 			"err", err,
 		)
 	}
@@ -250,7 +250,8 @@ func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
 	// Always take the latest epoch to avoid reverting to stale state.
 	epoch, err := n.Consensus.Beacon().GetNextEpoch(n.ctx, consensus.HeightLatest)
 	if err != nil {
-		n.logger.Error("failed to fetch next block epoch",
+		n.logger.Error(
+			"failed to fetch next block epoch",
 			"err", err,
 		)
 		return
@@ -277,7 +278,8 @@ func (n *Node) updateHostedRuntimeVersion(rt *registry.Runtime) {
 	n.SetHostedRuntimeVersion(activeVersion, nextVersion)
 
 	if _, err := n.GetHostedRuntimeActiveVersion(); err != nil {
-		n.logger.Warn("failed to activate runtime version(s)",
+		n.logger.Warn(
+			"failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,
 			"next_version", nextVersion,
@@ -320,18 +322,31 @@ func (n *Node) worker() { //nolint: gocyclo
 	n.logger.Info("consensus has finished initial synchronization")
 	atomic.StoreUint32(&n.consensusSynced, 1)
 
+	// Start the group after consensus is synced.
+	wg.Go(func() {
+		if err := n.Group.Serve(n.ctx); err != nil {
+			n.logger.Error(
+				"failed to run group",
+				"err", err,
+			)
+		}
+	})
+
 	// Start the transaction pool after consensus is synced.
-	if err := n.TxPool.Start(); err != nil {
-		n.logger.Error("failed to start transaction pool",
-			"err", err,
-		)
-		return
-	}
+	wg.Go(func() {
+		if err := n.TxPool.Serve(n.ctx); err != nil {
+			n.logger.Error(
+				"failed to run transaction pool",
+				"err", err,
+			)
+		}
+	})
 
 	// Wait for the runtime.
 	rt, err := n.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
-		n.logger.Error("failed to wait for registry descriptor",
+		n.logger.Error(
+			"failed to wait for registry descriptor",
 			"err", err,
 		)
 		return
@@ -343,14 +358,16 @@ func (n *Node) worker() { //nolint: gocyclo
 	// If the runtime requires a key manager, wait for the key manager to actually become available
 	// before processing any requests.
 	if rt.KeyManager != nil {
-		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready",
+		n.logger.Info(
+			"runtime indicates a key manager is required, waiting for it to be ready",
 			"keymanager_runtime_id", *rt.KeyManager,
 		)
 
 		n.KeyManagerClient.SetKeyManagerID(rt.KeyManager)
 		select {
 		case <-n.ctx.Done():
-			n.logger.Error("failed to wait for key manager",
+			n.logger.Error(
+				"failed to wait for key manager",
 				"err", err,
 			)
 			return
@@ -396,7 +413,8 @@ func (n *Node) worker() { //nolint: gocyclo
 	// Provision all known components.
 	for _, comp := range bundleRegistry.Components(n.Runtime.ID()) {
 		if err := n.ProvisionHostedRuntimeComponent(comp); err != nil {
-			n.logger.Error("failed to provision runtime component",
+			n.logger.Error(
+				"failed to provision runtime component",
 				"err", err,
 				"id", comp.ID(),
 				"version", comp.Version,
@@ -408,7 +426,8 @@ func (n *Node) worker() { //nolint: gocyclo
 	// changes and can update our worker role accordingly.
 	cmCh, cmSub, err := n.Consensus.Scheduler().WatchCommittees(n.ctx)
 	if err != nil {
-		n.logger.Error("failed to watch committees",
+		n.logger.Error(
+			"failed to watch committees",
 			"err", err,
 		)
 		return
@@ -419,7 +438,8 @@ func (n *Node) worker() { //nolint: gocyclo
 	// check existing ones based on the latest block and active runtime descriptor.
 	blkCh, blkSub, err := n.Consensus.RootHash().WatchBlocks(n.ctx, n.Runtime.ID())
 	if err != nil {
-		n.logger.Error("failed to watch runtime blocks",
+		n.logger.Error(
+			"failed to watch runtime blocks",
 			"err", err,
 		)
 		return
@@ -431,7 +451,8 @@ func (n *Node) worker() { //nolint: gocyclo
 	// the runtime is suspended.
 	rtCh, rtSub, err := n.Runtime.WatchRegistryDescriptor()
 	if err != nil {
-		n.logger.Error("failed to watch registry descriptor",
+		n.logger.Error(
+			"failed to watch registry descriptor",
 			"err", err,
 		)
 		return
@@ -479,7 +500,8 @@ func (n *Node) worker() { //nolint: gocyclo
 			case compNotify.Added != nil:
 				// Received a new version of a runtime component.
 				if err := n.ProvisionHostedRuntimeComponent(compNotify.Added); err != nil {
-					n.logger.Error("failed to provision hosted runtime",
+					n.logger.Error(
+						"failed to provision hosted runtime",
 						"err", err,
 						"id", compNotify.Added.ID(),
 						"version", compNotify.Added.Version,
@@ -491,7 +513,8 @@ func (n *Node) worker() { //nolint: gocyclo
 			case compNotify.Removed != nil:
 				// Received removal of a component.
 				if err := n.RemoveHostedRuntimeComponent(*compNotify.Removed); err != nil {
-					n.logger.Error("failed to remove hosted runtime component",
+					n.logger.Error(
+						"failed to remove hosted runtime component",
 						"err", err,
 						"id", *compNotify.Removed,
 					)
@@ -515,7 +538,8 @@ func (n *Node) handleCommittee(ctx context.Context, committee *scheduler.Committ
 		Height:    consensus.HeightLatest,
 	})
 	if err != nil {
-		n.logger.Error("failed to get runtime state",
+		n.logger.Error(
+			"failed to get runtime state",
 			"err", err,
 		)
 		return
@@ -561,7 +585,8 @@ func (n *Node) handleRuntimeBlock(ctx context.Context, blk *roothash.AnnotatedBl
 	// Fetch light consensus block.
 	lb, err := n.Consensus.Core().GetLightBlock(ctx, blk.Height)
 	if err != nil {
-		n.logger.Error("failed to get light block",
+		n.logger.Error(
+			"failed to get light block",
 			"err", err,
 			"height", blk.Height,
 			"round", blk.Block.Header.Round,
@@ -575,7 +600,8 @@ func (n *Node) handleRuntimeBlock(ctx context.Context, blk *roothash.AnnotatedBl
 		Height:    blk.Height,
 	})
 	if err != nil {
-		n.logger.Error("failed to get incoming messages",
+		n.logger.Error(
+			"failed to get incoming messages",
 			"err", err,
 			"height", blk.Height,
 			"round", blk.Block.Header.Round,
@@ -586,7 +612,8 @@ func (n *Node) handleRuntimeBlock(ctx context.Context, blk *roothash.AnnotatedBl
 	// Fetch epoch of the latest block.
 	epoch, err := n.Consensus.Beacon().GetEpoch(ctx, blk.Height)
 	if err != nil {
-		n.logger.Error("failed to get epoch",
+		n.logger.Error(
+			"failed to get epoch",
 			"err", err,
 			"height", blk.Height,
 			"round", blk.Block.Header.Round,
@@ -651,11 +678,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Prepare committee group services.
-	group, err := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
+	group := NewGroup(ctx, runtime.ID(), cfg.Identity, consensus, p2pHost)
 
 	txTopic := p2pProtocol.NewTopicKindTxID(cfg.ChainContext, runtime.ID())
 

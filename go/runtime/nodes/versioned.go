@@ -16,42 +16,8 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// VersionedNodeDescriptorWatcher is the versioned node descriptor watcher interface.
-type VersionedNodeDescriptorWatcher interface {
-	NodeDescriptorLookup
-
-	// Reset clears the watcher so it doesn't watch any nodes.
-	Reset()
-
-	// Freeze freezes the node descriptor watcher so no new nodes can be watched.
-	//
-	// In order to watch new nodes, the caller must first call Reset. Calling this method on an
-	// already frozen watcher may result in a panic.
-	//
-	// The version argument may be used to signal which committee version this is.
-	Freeze(version int64)
-
-	// BumpVersion updates the committee version without performing a reset.
-	//
-	// This method may be used when the new committee version is exactly the same as the old one
-	// without introducing a needless reset.
-	//
-	// The watcher must have previously been frozen. Calling this method on an unfrozen watcher may
-	// result in a panic.
-	BumpVersion(version int64)
-
-	// WatchNode starts watching a given node.
-	//
-	// It returns the latest version of the node descriptor.
-	WatchNode(ctx context.Context, id signature.PublicKey) (*node.Node, error)
-
-	// WatchNodeWithTag starts watching a given node, tagging it with a specific tag.
-	//
-	// It returns the latest version of the node descriptor.
-	WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error)
-}
-
-type versionedNodeDescriptorWatcher struct {
+// VersionedNodeDescriptorWatcher is the versioned node descriptor watcher.
+type VersionedNodeDescriptorWatcher struct {
 	sync.RWMutex
 
 	consensus consensus.Service
@@ -67,7 +33,39 @@ type versionedNodeDescriptorWatcher struct {
 	logger *logging.Logger
 }
 
-func (nw *versionedNodeDescriptorWatcher) Reset() {
+// NewVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
+//
+// This watcher will only track nodes that will be explicitly marked to watch
+// via WatchNode/WatchNodeWithTags methods.
+func NewVersionedNodeDescriptorWatcher(consensus consensus.Service) *VersionedNodeDescriptorWatcher {
+	nw := &VersionedNodeDescriptorWatcher{
+		consensus: consensus,
+		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
+	}
+	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		nw.RLock()
+		defer nw.RUnlock()
+
+		ch.In() <- &NodeUpdate{Reset: true}
+		for _, n := range nw.nodes {
+			ch.In() <- &NodeUpdate{Update: n}
+		}
+		if nw.frozen {
+			ch.In() <- &NodeUpdate{Freeze: &VersionEvent{Version: nw.version}}
+		}
+	})
+	nw.Reset()
+
+	return nw
+}
+
+// Serve starts the watcher.
+func (nw *VersionedNodeDescriptorWatcher) Serve(ctx context.Context) error {
+	return nw.watchRuntimeNodeUpdates(ctx)
+}
+
+// Reset clears the watcher so it doesn't watch any nodes.
+func (nw *VersionedNodeDescriptorWatcher) Reset() {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -81,7 +79,14 @@ func (nw *versionedNodeDescriptorWatcher) Reset() {
 	})
 }
 
-func (nw *versionedNodeDescriptorWatcher) BumpVersion(version int64) {
+// BumpVersion updates the committee version without performing a reset.
+//
+// This method may be used when the new committee version is exactly the same as the old one
+// without introducing a needless reset.
+//
+// The watcher must have previously been frozen. Calling this method on an unfrozen watcher may
+// result in a panic.
+func (nw *VersionedNodeDescriptorWatcher) BumpVersion(version int64) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -95,7 +100,13 @@ func (nw *versionedNodeDescriptorWatcher) BumpVersion(version int64) {
 	})
 }
 
-func (nw *versionedNodeDescriptorWatcher) Freeze(version int64) {
+// Freeze freezes the node descriptor watcher so no new nodes can be watched.
+//
+// In order to watch new nodes, the caller must first call Reset. Calling this method on an
+// already frozen watcher may result in a panic.
+//
+// The version argument may be used to signal which committee version this is.
+func (nw *VersionedNodeDescriptorWatcher) Freeze(version int64) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -110,11 +121,17 @@ func (nw *versionedNodeDescriptorWatcher) Freeze(version int64) {
 	})
 }
 
-func (nw *versionedNodeDescriptorWatcher) WatchNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+// WatchNode starts watching a given node.
+//
+// It returns the latest version of the node descriptor.
+func (nw *VersionedNodeDescriptorWatcher) WatchNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	return nw.WatchNodeWithTag(ctx, id, "")
 }
 
-func (nw *versionedNodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error) {
+// WatchNodeWithTag starts watching a given node, tagging it with a specific tag.
+//
+// It returns the latest version of the node descriptor.
+func (nw *VersionedNodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -141,7 +158,7 @@ func (nw *versionedNodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, 
 	return n, nil
 }
 
-func (nw *versionedNodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.Node {
+func (nw *VersionedNodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -151,7 +168,7 @@ func (nw *versionedNodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.N
 	return nw.nodes[id]
 }
 
-func (nw *versionedNodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.Node {
+func (nw *VersionedNodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -161,7 +178,7 @@ func (nw *versionedNodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey)
 	return nw.nodesByPeerID[id]
 }
 
-func (nw *versionedNodeDescriptorWatcher) GetNodes() []*node.Node {
+func (nw *VersionedNodeDescriptorWatcher) GetNodes() []*node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -172,7 +189,7 @@ func (nw *versionedNodeDescriptorWatcher) GetNodes() []*node.Node {
 	return nodes
 }
 
-func (nw *versionedNodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
+func (nw *VersionedNodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -182,7 +199,7 @@ func (nw *versionedNodeDescriptorWatcher) LookupTags(id signature.PublicKey) []s
 	return nw.tags[id]
 }
 
-func (nw *versionedNodeDescriptorWatcher) updateLocked(n *node.Node, tag string) {
+func (nw *VersionedNodeDescriptorWatcher) updateLocked(n *node.Node, tag string) {
 	if nw.nodes == nil || nw.nodesByPeerID == nil {
 		return
 	}
@@ -204,7 +221,7 @@ func (nw *versionedNodeDescriptorWatcher) updateLocked(n *node.Node, tag string)
 	})
 }
 
-func (nw *versionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error) {
+func (nw *VersionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error) {
 	sub := nw.notifier.Subscribe()
 	ch := make(chan *NodeUpdate)
 	sub.Unwrap(ch)
@@ -212,11 +229,11 @@ func (nw *versionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate
 	return ch, sub, nil
 }
 
-func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
+func (nw *VersionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Context) error {
 	nw.logger.Debug("waiting consensus sync")
 	select {
 	case <-ctx.Done():
-		return
+		return ctx.Err()
 	case <-nw.consensus.Synced():
 	}
 	nw.logger.Debug("consensus synced")
@@ -224,17 +241,18 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 	// Subscribe to node updates.
 	ch, sub, err := nw.consensus.Registry().WatchNodes(ctx)
 	if err != nil {
-		nw.logger.Error("failed to watch nodes",
+		nw.logger.Error(
+			"failed to watch nodes",
 			"err", err,
 		)
-		return
+		return fmt.Errorf("failed to watch nodes: %w", err)
 	}
 	defer sub.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case ev := <-ch:
 			func() {
 				nw.Lock()
@@ -245,7 +263,8 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 					return
 				}
 
-				nw.logger.Debug("updating node descriptor",
+				nw.logger.Debug(
+					"updating node descriptor",
 					"node", ev.Node.ID,
 				)
 
@@ -255,35 +274,7 @@ func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Co
 	}
 }
 
-func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
+func (nw *VersionedNodeDescriptorWatcher) Versioned() bool {
 	// This watcher supports versions.
 	return true
-}
-
-// NewVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
-//
-// This watcher will only track nodes that will be explicitly marked to watch
-// via WatchNode/WatchNodeWithTags methods.
-func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Service) (VersionedNodeDescriptorWatcher, error) {
-	nw := &versionedNodeDescriptorWatcher{
-		consensus: consensus,
-		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
-	}
-	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		nw.RLock()
-		defer nw.RUnlock()
-
-		ch.In() <- &NodeUpdate{Reset: true}
-		for _, n := range nw.nodes {
-			ch.In() <- &NodeUpdate{Update: n}
-		}
-		if nw.frozen {
-			ch.In() <- &NodeUpdate{Freeze: &VersionEvent{Version: nw.version}}
-		}
-	})
-	nw.Reset()
-
-	go nw.watchRuntimeNodeUpdates(ctx)
-
-	return nw, nil
 }

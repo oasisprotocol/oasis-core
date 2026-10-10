@@ -26,7 +26,7 @@ func TestCheckTxQueueBasic(t *testing.T) {
 
 	// Add some more calls.
 	for i := 0; i < 50; i++ {
-		err = queue.add(newPendingTx([]byte(fmt.Sprintf("call %d", i))))
+		err = queue.add(newPendingTx(fmt.Appendf(nil, "call %d", i)))
 		require.NoError(t, err, "Add")
 	}
 
@@ -41,7 +41,7 @@ func TestCheckTxQueueBasic(t *testing.T) {
 
 	require.EqualValues(t, batch[0].Raw(), []byte("hello world"))
 	for i := 0; i < 9; i++ {
-		require.EqualValues(t, batch[i+1].Raw(), []byte(fmt.Sprintf("call %d", i)))
+		require.EqualValues(t, batch[i+1].Raw(), fmt.Appendf(nil, "call %d", i))
 	}
 
 	queue.clear()

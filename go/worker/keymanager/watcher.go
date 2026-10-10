@@ -2,6 +2,7 @@ package keymanager
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/libp2p/go-libp2p/core"
@@ -29,10 +30,12 @@ type kmNodeWatcher struct {
 	accessList *AccessList
 	peerTagger p2p.PeerTagger
 
+	watcher *nodes.VersionedNodeDescriptorWatcher
+
 	logger *logging.Logger
 }
 
-func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
+func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger, watcher *nodes.VersionedNodeDescriptorWatcher) *kmNodeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/km")
 
 	return &kmNodeWatcher{
@@ -41,33 +44,22 @@ func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Service, p
 		peerMap:    peerMap,
 		accessList: accessList,
 		peerTagger: peerTagger,
+		watcher:    watcher,
 		logger:     logger,
 	}
 }
 
-func (w *kmNodeWatcher) watch(ctx context.Context) {
+// Serve starts the watcher.
+func (w *kmNodeWatcher) Serve(ctx context.Context) error {
 	nodesCh, nodesSub, err := w.consensus.Registry().WatchNodeList(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch node list",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch node list: %w", err)
 	}
 	defer nodesSub.Close()
 
-	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, w.consensus)
+	watcherCh, watcherSub, err := w.watcher.WatchNodeUpdates()
 	if err != nil {
-		w.logger.Error("failed to create node watcher",
-			"err", err,
-		)
-		return
-	}
-	watcherCh, watcherSub, err := watcher.WatchNodeUpdates()
-	if err != nil {
-		w.logger.Error("failed to watch node updates",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch node updates: %w", err)
 	}
 	defer watcherSub.Close()
 
@@ -75,11 +67,12 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 	for {
 		select {
 		case nodeList := <-nodesCh:
-			watcher.Reset()
+			w.watcher.Reset()
 			activeNodes = w.rebuildActiveNodeIDs(nodeList.Nodes)
 			for id := range activeNodes {
-				if _, err := watcher.WatchNode(ctx, id); err != nil {
-					w.logger.Error("worker/keymanager: failed to watch node",
+				if _, err := w.watcher.WatchNode(ctx, id); err != nil {
+					w.logger.Error(
+						"worker/keymanager: failed to watch node",
 						"err", err,
 						"id", id,
 					)
@@ -93,20 +86,21 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 				continue
 			}
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		}
 
 		// Rebuild the access policy, something has changed.
 		peerMap := make(map[core.PeerID]signature.PublicKey, len(activeNodes))
 		for id := range activeNodes {
-			n := watcher.Lookup(id)
+			n := w.watcher.Lookup(id)
 			if n == nil {
 				continue
 			}
 
 			peerID, err := p2p.PublicKeyToPeerID(n.P2P.ID)
 			if err != nil {
-				w.logger.Warn("invalid node P2P ID",
+				w.logger.Warn(
+					"invalid node P2P ID",
 					"err", err,
 					"node_id", n.ID,
 				)
@@ -168,15 +162,13 @@ func newKmRuntimeWatcher(runtimeID common.Namespace, consensus consensus.Service
 	}
 }
 
-func (w *kmRuntimeWatcher) watch(ctx context.Context) {
+// Serve starts the watcher.
+func (w *kmRuntimeWatcher) Serve(ctx context.Context) error {
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
 	rtCh, rtSub, err := w.consensus.Registry().WatchRuntimes(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch runtimes",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("failed to watch runtimes: %w", err)
 	}
 	defer rtSub.Close()
 
@@ -189,7 +181,7 @@ func (w *kmRuntimeWatcher) watch(ctx context.Context) {
 		var rt *registry.Runtime
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case rt = <-rtCh:
 		}
 
@@ -201,7 +193,8 @@ func (w *kmRuntimeWatcher) watch(ctx context.Context) {
 			continue
 		}
 
-		w.logger.Info("seen new runtime using us as a key manager",
+		w.logger.Info(
+			"seen new runtime using us as a key manager",
 			"runtime_id", rt.ID,
 		)
 
@@ -271,7 +264,8 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 	// Subscribe to epoch transitions to regularly update the runtime access list.
 	epoCh, epoSub, err := w.consensus.Beacon().WatchLatestEpoch(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch epochs",
+		w.logger.Error(
+			"failed to watch epochs",
 			"err", err,
 		)
 		return
@@ -297,7 +291,8 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 
 	nodeCh, nodeSub, err := w.consensus.Registry().WatchNodes(ctx)
 	if err != nil {
-		w.logger.Error("failed to subscribe to registry node updates",
+		w.logger.Error(
+			"failed to subscribe to registry node updates",
 			"err", err,
 		)
 		return
@@ -308,7 +303,8 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 	// epoCh will get the current epoch immediately, so no need to populate compute nodes specially.
 	nodes, err := w.consensus.Registry().GetNodes(ctx, consensus.HeightLatest)
 	if err != nil {
-		w.logger.Error("failed to fetch list of nodes from the registry",
+		w.logger.Error(
+			"failed to fetch list of nodes from the registry",
 			"err", err,
 		)
 		return
@@ -334,7 +330,8 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 				RuntimeID: w.runtimeID,
 			})
 			if err != nil {
-				w.logger.Error("failed to fetch runtime committee",
+				w.logger.Error(
+					"failed to fetch runtime committee",
 					"err", err,
 				)
 				break
@@ -351,7 +348,8 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 						Height: consensus.HeightLatest,
 					})
 					if err != nil {
-						w.logger.Error("failed to fetch node descriptor for committee member",
+						w.logger.Error(
+							"failed to fetch node descriptor for committee member",
 							"err", err,
 							"member", member.PublicKey,
 						)

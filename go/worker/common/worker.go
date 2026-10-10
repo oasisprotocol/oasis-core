@@ -73,7 +73,8 @@ func (w *Worker) Start() error {
 
 	// Start runtime services.
 	for id, rt := range w.runtimes {
-		w.logger.Info("starting services for runtime",
+		w.logger.Info(
+			"starting services for runtime",
 			"runtime_id", id,
 		)
 
@@ -93,7 +94,8 @@ func (w *Worker) Stop() {
 	}
 
 	for id, rt := range w.runtimes {
-		w.logger.Info("stopping services for runtime",
+		w.logger.Info(
+			"stopping services for runtime",
 			"runtime_id", id,
 		)
 
@@ -142,7 +144,8 @@ func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 
 func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 	id := runtime.ID()
-	w.logger.Info("registering new runtime",
+	w.logger.Info(
+		"registering new runtime",
 		"runtime_id", id,
 	)
 
@@ -167,7 +170,8 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 	}
 	w.runtimes[id] = node
 
-	w.logger.Info("new runtime registered",
+	w.logger.Info(
+		"new runtime registered",
 		"runtime_id", id,
 	)
 
