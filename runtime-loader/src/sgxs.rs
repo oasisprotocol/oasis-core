@@ -8,12 +8,12 @@ use std::{
 use aesm_client::AesmClient;
 use anyhow::{anyhow, Result};
 use enclave_runner::{
-    usercalls::{AsyncStream, UsercallExtension},
+    stream_router::{AsyncStream, OsStreamRouter, StreamRouter},
     EnclaveBuilder,
 };
-use futures::future::FutureExt;
+use enclave_runner_sgx::EnclaveBuilder as EnclaveBuilderSgx;
 use sgxs_loaders::isgx::Device as IsgxDevice;
-use tokio::net::UnixStream;
+use tokio::net::{TcpStream, UnixStream};
 
 use crate::Loader;
 
@@ -34,32 +34,56 @@ impl HostService {
 }
 
 #[allow(clippy::type_complexity)]
-impl UsercallExtension for HostService {
+impl StreamRouter for HostService {
+    fn basic_streams(&self) -> Vec<Box<dyn AsyncStream>> {
+        OsStreamRouter::new().basic_streams()
+    }
+
     fn connect_stream<'future>(
         &'future self,
         addr: &'future str,
         _local_addr: Option<&'future mut String>,
         _peer_addr: Option<&'future mut String>,
-    ) -> Pin<Box<dyn Future<Output = IoResult<Option<Box<dyn AsyncStream>>>> + 'future>> {
-        async move {
+    ) -> Pin<Box<dyn Future<Output = IoResult<Box<dyn AsyncStream>>> + Send + 'future>> {
+        Box::pin(async move {
             match addr {
                 "worker-host" | "worker-host:0" => {
                     // Connect to worker host socket.
-                    let stream = UnixStream::connect(self.host_socket.clone()).await?;
+                    let stream = UnixStream::connect(&self.host_socket).await?;
                     let async_stream: Box<dyn AsyncStream> = Box::new(stream);
-                    Ok(Some(async_stream))
+                    Ok(async_stream)
                 }
                 _ if self.allow_network => {
-                    // Unknown destination and network access is allowed, pass to default handler.
-                    Ok(None)
+                    // Unknown destination and network access is allowed.
+                    // Connect directly using the default TCP transport.
+                    let stream = TcpStream::connect(addr).await?;
+                    let async_stream: Box<dyn AsyncStream> = Box::new(stream);
+                    Ok(async_stream)
                 }
                 _ => {
                     // Unknown destination and network access is not allowed, reject.
                     Err(IoError::other("invalid destination"))
                 }
             }
-        }
-        .boxed_local()
+        })
+    }
+
+    fn bind_stream<'future>(
+        &'future self,
+        addr: &'future str,
+        _local_addr: Option<&'future mut String>,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = IoResult<Box<dyn enclave_runner::stream_router::AsyncListener>>>
+                + Send
+                + 'future,
+        >,
+    > {
+        Box::pin(async move {
+            Err(IoError::other(format!(
+                "binding streams is not supported: {addr}"
+            )))
+        })
     }
 }
 
@@ -75,19 +99,18 @@ impl Loader for SgxsLoader {
         allow_network: bool,
     ) -> Result<()> {
         let sig = signature_filename.ok_or_else(|| anyhow!("signature file is required"))?;
+        let mut sgx_builder = EnclaveBuilderSgx::new(filename.as_ref());
+        sgx_builder.signature(sig)?;
 
-        // Spawn the SGX enclave.
-        let mut device = IsgxDevice::new()?
+        let stream_router: Box<dyn StreamRouter + Send + Sync> =
+            Box::new(HostService::new(host_socket, allow_network));
+        let mut enclave_builder = EnclaveBuilder::<_, enclave_runner::Command>::new(sgx_builder);
+        enclave_builder.stream_router(stream_router);
+
+        let device = IsgxDevice::new()?
             .einittoken_provider(AesmClient::new())
             .build();
-
-        let mut enclave_builder = EnclaveBuilder::new(filename.as_ref());
-        enclave_builder.signature(sig)?;
-        enclave_builder.usercall_extension(HostService::new(host_socket, allow_network));
-        let enclave = enclave_builder
-            .build(&mut device)
-            .map_err(|err| anyhow!("{}", err))?;
-
-        enclave.run().map_err(|err| anyhow!("{}", err))
+        let enclave = enclave_builder.build(device)?;
+        enclave.run()
     }
 }
