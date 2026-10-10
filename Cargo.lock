@@ -1883,16 +1883,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-bigint"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93e7820bc0a80a0238e650327316f929ba18d5be054b647490a3a6a339f3e7c0"
-dependencies = [
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "num-bigint-dig"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2064,7 +2054,7 @@ dependencies = [
  "lru",
  "mbedtls",
  "nix 0.31.3",
- "num-bigint 0.5.1",
+ "num-bigint 0.4.8",
  "num-derive",
  "num-traits",
  "oasis-cbor",
