@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 26.3 (2026-10-12)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- go/runtime/registry/handler_rofl_mgmt: Fix bundle name validation
+  ([#6590](https://github.com/oasisprotocol/oasis-core/issues/6590))
+
+- go/runtime/txpool: Use backoff for publishing failed transactions
+  ([#6591](https://github.com/oasisprotocol/oasis-core/issues/6591))
+
 ## 26.2 (2026-09-29)
 
 | Protocol          | Version   |
