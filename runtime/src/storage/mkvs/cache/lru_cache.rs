@@ -27,7 +27,7 @@ pub struct CacheItemBox<Item: CacheItem + Default> {
 
 intrusive_adapter!(
     CacheItemAdapter<Item> = Pin<Box<CacheItemBox<Item>>>:
-        CacheItemBox<Item> { link: LinkedListLink }
+        CacheItemBox<Item> { link => LinkedListLink }
         where Item: CacheItem + Default
 );
 
