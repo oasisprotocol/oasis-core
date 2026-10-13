@@ -9,8 +9,10 @@ use super::{host_rpc_call, Error};
 /// Name of the local RPC endpoint for the bundle manager.
 pub const LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER: &str = "bundle-manager";
 
-/// Name of the BundleWrite method.
-pub const METHOD_BUNDLE_WRITE: &str = "BundleWrite";
+/// Name of the BundleTemporaryWrite method.
+pub const METHOD_BUNDLE_TEMPORARY_WRITE: &str = "BundleTemporaryWrite";
+/// Name of the BundleTemporaryDelete method.
+pub const METHOD_BUNDLE_TEMPORARY_DELETE: &str = "BundleTemporaryDelete";
 /// Name of the BundleAdd method.
 pub const METHOD_BUNDLE_ADD: &str = "BundleAdd";
 /// Name of the BundleRemove method.
@@ -28,7 +30,18 @@ pub trait BundleManager: Send + Sync {
     /// Request to host to write a chunk of the bundle to a temporary file.
     ///
     /// The `PermissionBundleAdd` permission is required to call this method.
-    async fn bundle_write(&self, args: BundleWriteRequest) -> Result<BundleWriteResponse, Error>;
+    async fn bundle_temporary_write(
+        &self,
+        args: BundleTemporaryWriteRequest,
+    ) -> Result<BundleTemporaryWriteResponse, Error>;
+
+    /// Request to host to delete a temporary bundle file.
+    ///
+    /// The `PermissionBundleAdd` permission is required to call this method.
+    async fn bundle_temporary_delete(
+        &self,
+        args: BundleTemporaryDeleteRequest,
+    ) -> Result<BundleTemporaryDeleteResponse, Error>;
 
     /// Request to host to add a specific bundle to the host.
     ///
@@ -51,11 +64,27 @@ pub trait BundleManager: Send + Sync {
 #[allow(clippy::double_must_use)]
 #[async_trait]
 impl BundleManager for Protocol {
-    async fn bundle_write(&self, args: BundleWriteRequest) -> Result<BundleWriteResponse, Error> {
+    async fn bundle_temporary_write(
+        &self,
+        args: BundleTemporaryWriteRequest,
+    ) -> Result<BundleTemporaryWriteResponse, Error> {
         host_rpc_call(
             self,
             LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
-            METHOD_BUNDLE_WRITE,
+            METHOD_BUNDLE_TEMPORARY_WRITE,
+            args,
+        )
+        .await
+    }
+
+    async fn bundle_temporary_delete(
+        &self,
+        args: BundleTemporaryDeleteRequest,
+    ) -> Result<BundleTemporaryDeleteResponse, Error> {
+        host_rpc_call(
+            self,
+            LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
+            METHOD_BUNDLE_TEMPORARY_DELETE,
             args,
         )
         .await
@@ -99,7 +128,7 @@ impl BundleManager for Protocol {
 ///
 /// The `PermissionBundleAdd` permission is required to call this method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct BundleWriteRequest {
+pub struct BundleTemporaryWriteRequest {
     /// Temporary file name to use on the host while writing the bundle.
     pub temporary_name: String,
     /// Optional flag which specifies that the temporary file should be recreated. If the file
@@ -110,9 +139,22 @@ pub struct BundleWriteRequest {
     pub data: Vec<u8>,
 }
 
-/// Response form the BundleWrite method.
+/// Response form the BundleTemporaryWrite method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct BundleWriteResponse {}
+pub struct BundleTemporaryWriteResponse {}
+
+/// Request to host to delete a temporary bundle file.
+///
+/// The `PermissionBundleAdd` permission is required to call this method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleTemporaryDeleteRequest {
+    /// Temporary file name to delete on the host.
+    pub temporary_name: String,
+}
+
+/// Response from the BundleTemporaryDelete method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleTemporaryDeleteResponse {}
 
 /// Request to host to add a specific bundle to the host.
 ///
@@ -120,7 +162,7 @@ pub struct BundleWriteResponse {}
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct BundleAddRequest {
     /// Temporary file name to read the bundle from. The file must have previously been created by
-    /// using `BundleWriteRequest`.
+    /// using `BundleTemporaryWrite`.
     ///
     /// The file must be a valid bundle.
     pub temporary_name: String,
