@@ -39,6 +39,13 @@ func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, 
 			return nil, err
 		}
 		return rh.handleBundleWrite(&args)
+	case rofl.MethodBundleTemporaryWrite:
+		// Write bundle data to temporary file.
+		var args rofl.BundleTemporaryWriteRequest
+		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
+			return nil, err
+		}
+		return rh.handleBundleTemporaryWrite(&args)
 	case rofl.MethodBundleTemporaryDelete:
 		// Delete a temporary bundle file.
 		var args rofl.BundleTemporaryDeleteRequest
@@ -131,6 +138,23 @@ func (rh *roflHostHandler) handleBundleWrite(rq *rofl.BundleWriteRequest) (*rofl
 	}
 
 	return &rofl.BundleWriteResponse{}, nil
+}
+
+func (rh *roflHostHandler) handleBundleTemporaryWrite(rq *rofl.BundleTemporaryWriteRequest) (*rofl.BundleTemporaryWriteResponse, error) {
+	if err := rh.ensureComponentPermissions(runtimeConfig.PermissionBundleAdd); err != nil {
+		return nil, err
+	}
+
+	tmpPath, err := rh.getBundleTemporaryPath(rq.TemporaryName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := rh.getBundleManager().WriteTemporary(tmpPath, rq.Create, rq.Data); err != nil {
+		return nil, err
+	}
+
+	return &rofl.BundleTemporaryWriteResponse{}, nil
 }
 
 func (rh *roflHostHandler) handleBundleTemporaryDelete(rq *rofl.BundleTemporaryDeleteRequest) (*rofl.BundleTemporaryDeleteResponse, error) {

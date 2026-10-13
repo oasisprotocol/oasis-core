@@ -7,7 +7,11 @@ const (
 	LocalRPCEndpointBundleManager = "bundle-manager"
 
 	// MethodBundleWrite is the name of the BundleWrite method.
+	//
+	// Deprecated. Use method BundleTemporaryWrite instead.
 	MethodBundleWrite = "BundleWrite"
+	// MethodBundleTemporaryWrite is the name of the BundleTemporaryWrite method.
+	MethodBundleTemporaryWrite = "BundleTemporaryWrite"
 	// MethodBundleTemporaryDelete is the name of the BundleTemporaryDelete method.
 	MethodBundleTemporaryDelete = "BundleTemporaryDelete"
 	// MethodBundleAdd is the name of the BundleAdd method.
@@ -35,6 +39,23 @@ type BundleWriteRequest struct {
 // BundleWriteResponse is the response from the BundleWrite method.
 type BundleWriteResponse struct{}
 
+// BundleTemporaryWriteRequest is a request to host to store a chunk of the bundle to a temporary file.
+//
+// The `PermissionBundleAdd` permission is required to call this method.
+type BundleTemporaryWriteRequest struct {
+	// TemporaryName is a temporary name to identify the chunk later.
+	TemporaryName string `json:"temporary_name"`
+	// Create is the optional flag which specifies that the bundle should be recreated. If the
+	// bundle exists and this flag is set to true, it will be truncated. If the flag is set to
+	// false, any content will be appended to the existing bundle.
+	Create bool `json:"create,omitempty"`
+	// Data that should be appended to the bundle.
+	Data []byte `json:"data"`
+}
+
+// BundleTemporaryWriteResponse is the response from the BundleTemporaryWrite method.
+type BundleTemporaryWriteResponse struct{}
+
 // BundleTemporaryDeleteRequest is a request to host to delete a temporary bundle file.
 //
 // The `PermissionBundleAdd` permission is required to call this method.
@@ -51,7 +72,7 @@ type BundleTemporaryDeleteResponse struct{}
 // The `PermissionBundleAdd` permission is required to call this method.
 type BundleAddRequest struct {
 	// TemporaryName is the temporary name to use to access the bundle. The chunks must have
-	// previously been created by using `BundleWriteRequest`.
+	// previously been created by using `BundleTemporaryWrite`.
 	TemporaryName string `json:"temporary_name"`
 	// ManifestHash is the expected hash of the manifest contained inside the bundle.
 	ManifestHash hash.Hash `json:"manifest_hash"`
