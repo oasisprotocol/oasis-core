@@ -39,6 +39,13 @@ func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, 
 			return nil, err
 		}
 		return rh.handleBundleWrite(&args)
+	case rofl.MethodBundleTemporaryDelete:
+		// Delete a temporary bundle file.
+		var args rofl.BundleTemporaryDeleteRequest
+		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
+			return nil, err
+		}
+		return rh.handleBundleTemporaryDelete(&args)
 	case rofl.MethodBundleAdd:
 		// Add a new bundle from a temporary file.
 		var args rofl.BundleAddRequest
@@ -124,6 +131,23 @@ func (rh *roflHostHandler) handleBundleWrite(rq *rofl.BundleWriteRequest) (*rofl
 	}
 
 	return &rofl.BundleWriteResponse{}, nil
+}
+
+func (rh *roflHostHandler) handleBundleTemporaryDelete(rq *rofl.BundleTemporaryDeleteRequest) (*rofl.BundleTemporaryDeleteResponse, error) {
+	if err := rh.ensureComponentPermissions(runtimeConfig.PermissionBundleAdd); err != nil {
+		return nil, err
+	}
+
+	tmpPath, err := rh.getBundleTemporaryPath(rq.TemporaryName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := rh.getBundleManager().RemoveTemporary(tmpPath); err != nil {
+		return nil, err
+	}
+
+	return &rofl.BundleTemporaryDeleteResponse{}, nil
 }
 
 func (rh *roflHostHandler) handleBundleAdd(rq *rofl.BundleAddRequest) (*rofl.BundleAddResponse, error) {

@@ -11,6 +11,8 @@ pub const LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER: &str = "bundle-manager";
 
 /// Name of the BundleWrite method.
 pub const METHOD_BUNDLE_WRITE: &str = "BundleWrite";
+/// Name of the BundleTemporaryDelete method.
+pub const METHOD_BUNDLE_TEMPORARY_DELETE: &str = "BundleTemporaryDelete";
 /// Name of the BundleAdd method.
 pub const METHOD_BUNDLE_ADD: &str = "BundleAdd";
 /// Name of the BundleRemove method.
@@ -29,6 +31,14 @@ pub trait BundleManager: Send + Sync {
     ///
     /// The `PermissionBundleAdd` permission is required to call this method.
     async fn bundle_write(&self, args: BundleWriteRequest) -> Result<BundleWriteResponse, Error>;
+
+    /// Request to host to delete a temporary bundle file.
+    ///
+    /// The `PermissionBundleAdd` permission is required to call this method.
+    async fn bundle_temporary_delete(
+        &self,
+        args: BundleTemporaryDeleteRequest,
+    ) -> Result<BundleTemporaryDeleteResponse, Error>;
 
     /// Request to host to add a specific bundle to the host.
     ///
@@ -56,6 +66,19 @@ impl BundleManager for Protocol {
             self,
             LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
             METHOD_BUNDLE_WRITE,
+            args,
+        )
+        .await
+    }
+
+    async fn bundle_temporary_delete(
+        &self,
+        args: BundleTemporaryDeleteRequest,
+    ) -> Result<BundleTemporaryDeleteResponse, Error> {
+        host_rpc_call(
+            self,
+            LOCAL_RPC_ENDPOINT_BUNDLE_MANAGER,
+            METHOD_BUNDLE_TEMPORARY_DELETE,
             args,
         )
         .await
@@ -113,6 +136,19 @@ pub struct BundleWriteRequest {
 /// Response form the BundleWrite method.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct BundleWriteResponse {}
+
+/// Request to host to delete a temporary bundle file.
+///
+/// The `PermissionBundleAdd` permission is required to call this method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleTemporaryDeleteRequest {
+    /// Temporary file name to delete on the host.
+    pub temporary_name: String,
+}
+
+/// Response from the BundleTemporaryDelete method.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct BundleTemporaryDeleteResponse {}
 
 /// Request to host to add a specific bundle to the host.
 ///

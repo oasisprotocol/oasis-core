@@ -8,6 +8,8 @@ const (
 
 	// MethodBundleWrite is the name of the BundleWrite method.
 	MethodBundleWrite = "BundleWrite"
+	// MethodBundleTemporaryDelete is the name of the BundleTemporaryDelete method.
+	MethodBundleTemporaryDelete = "BundleTemporaryDelete"
 	// MethodBundleAdd is the name of the BundleAdd method.
 	MethodBundleAdd = "BundleAdd"
 	// MethodBundleRemove is the name of the BundleRemove method.
@@ -16,7 +18,7 @@ const (
 	MethodBundleList = "BundleList"
 )
 
-// BundleWriteRequest is a request to host to store a chunk of the bundle.
+// BundleWriteRequest is a request to host to store a chunk of the bundle to a temporary file.
 //
 // The `PermissionBundleAdd` permission is required to call this method.
 type BundleWriteRequest struct {
@@ -32,6 +34,17 @@ type BundleWriteRequest struct {
 
 // BundleWriteResponse is the response from the BundleWrite method.
 type BundleWriteResponse struct{}
+
+// BundleTemporaryDeleteRequest is a request to host to delete a temporary bundle file.
+//
+// The `PermissionBundleAdd` permission is required to call this method.
+type BundleTemporaryDeleteRequest struct {
+	/// TemporaryName is a temporary file name to delete on the host.
+	TemporaryName string `json:"temporary_name"`
+}
+
+// BundleTemporaryDeleteResponse is the response from the BundleTemporaryDelete method.
+type BundleTemporaryDeleteResponse struct{}
 
 // BundleAddRequest is a request to host to add a specific bundle to the host.
 //
