@@ -18,6 +18,22 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
+const (
+	// maxDecompressedChunkSize bounds the complete CBOR sequence, including entry headers.
+	// These limits apply to both checkpoint creation and restoration.
+	//
+	// The limit is chosen to be large enough to accommodate typical checkpoint sizes,
+	// while still being reasonable to avoid excessive memory usage.
+	maxDecompressedChunkSize = 64 * 1024 * 1024
+	// maxChunkEntries also bounds the memory overhead of empty and nil proof entries.
+	maxChunkEntries = 1 << 20
+)
+
+var (
+	errChunkTooLarge       = errors.New("chunk exceeds decompressed size limit")
+	errChunkTooManyEntries = errors.New("chunk exceeds proof entry limit")
+)
+
 // Chunker enables splitting database state into chunks, where chunks are merkle proofs
 // representing part of the state.
 type chunker interface {
@@ -217,7 +233,7 @@ func (pc *parallelChunker) createChunks(ctx context.Context, wf writerFactory, t
 		group.Go(func() error {
 			hash, err := task.nextChunk(ctx, w, pc.chunkSize)
 			if err != nil {
-				return fmt.Errorf("creating new chunk with index %d", idx)
+				return fmt.Errorf("creating new chunk with index %d: %w", idx, err)
 			}
 
 			mu.Lock()
@@ -247,9 +263,17 @@ func (pc *parallelChunker) filterFinished(tasks []*subtree) []*subtree {
 }
 
 func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
+	return writeChunkWithLimits(proof, w, maxDecompressedChunkSize, maxChunkEntries)
+}
+
+func writeChunkWithLimits(proof *syncer.Proof, w io.Writer, maxSize int64, maxEntries int) (hash.Hash, error) {
+	if len(proof.Entries) > maxEntries {
+		return hash.Hash{}, errChunkTooManyEntries
+	}
+
 	hb := hash.NewBuilder()
 	sw := snappy.NewBufferedWriter(io.MultiWriter(w, hb))
-	enc := cbor.NewEncoder(sw)
+	enc := cbor.NewEncoder(&chunkSizeWriter{w: sw, remaining: maxSize})
 	for _, entry := range proof.Entries {
 		if err := enc.Encode(entry); err != nil {
 			return hash.Hash{}, fmt.Errorf("failed to encode chunk part: %w", err)
@@ -262,37 +286,72 @@ func writeChunk(proof *syncer.Proof, w io.Writer) (hash.Hash, error) {
 	return hb.Build(), nil
 }
 
+// chunkSizeWriter prevents producing checkpoints that exceed the restore byte budget.
+type chunkSizeWriter struct {
+	w         io.Writer
+	remaining int64
+}
+
+func (w *chunkSizeWriter) Write(p []byte) (int, error) {
+	if int64(len(p)) > w.remaining {
+		return 0, errChunkTooLarge
+	}
+	n, err := w.w.Write(p)
+	w.remaining -= int64(n)
+	return n, err
+}
+
+// readChunkProof bounds both decoder input and retained entries. The byte budget includes
+// one extra byte so exhaustion cannot be confused with a valid EOF at an entry boundary.
+func readChunkProof(ctx context.Context, r io.Reader, maxSize int64, maxEntries int) (*syncer.Proof, error) {
+	lr := &io.LimitedReader{R: r, N: maxSize + 1}
+	dec := cbor.NewDecoder(lr)
+	p := &syncer.Proof{V: v1ProofsVersion}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		var entry []byte
+		err := dec.Decode(&entry)
+		// Check before handling EOF: the decoder may have reached our artificial EOF
+		// while reading a single oversized entry, or buffered past the byte budget.
+		if lr.N == 0 {
+			return nil, errChunkTooLarge
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// The streaming decoder can return EOF for an incomplete final item.
+				if int64(dec.NumBytesRead()) != maxSize+1-lr.N {
+					return nil, fmt.Errorf("failed to decode chunk: %w", io.ErrUnexpectedEOF)
+				}
+				return p, nil
+			}
+			return nil, fmt.Errorf("failed to decode chunk: %w", err)
+		}
+
+		if len(p.Entries) >= maxEntries {
+			return nil, errChunkTooManyEntries
+		}
+		p.Entries = append(p.Entries, entry)
+	}
+}
+
 func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {
 	hb := hash.NewBuilder()
 	tr := io.TeeReader(r, hb)
 	sr := snappy.NewReader(tr)
-	dec := cbor.NewDecoder(sr)
 
-	// Reconstruct the proof.
-	var decodeErr error
-	var p syncer.Proof
-	p.V = v1ProofsVersion
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		var entry []byte
-		if err := dec.Decode(&entry); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-
-			decodeErr = fmt.Errorf("failed to decode chunk: %w", err)
-
-			// Read everything until EOF so we can verify the overall chunk integrity.
-			_, _ = io.Copy(io.Discard, tr)
-			break
-		}
-
-		p.Entries = append(p.Entries, entry)
+	// Reconstruct the proof with bounded decompression and entry accumulation.
+	p, decodeErr := readChunkProof(ctx, sr, maxDecompressedChunkSize, maxChunkEntries)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	p.UntrustedRoot = chunk.Root.Hash
+	if decodeErr != nil {
+		// Stop decompression, but hash the remaining compressed bytes to distinguish
+		// a corrupt chunk from an invalid checkpoint committed to by the manifest.
+		_, _ = io.Copy(io.Discard, tr)
+	}
 
 	// Verify overall chunk integrity.
 	chunkHash := hb.Build()
@@ -308,10 +367,11 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	if decodeErr != nil {
 		return fmt.Errorf("%w: %s", ErrChunkProofVerificationFailed, decodeErr.Error())
 	}
+	p.UntrustedRoot = chunk.Root.Hash
 
 	// Verify the proof.
 	var pv syncer.ProofVerifier
-	ptr, err := pv.VerifyProof(ctx, chunk.Root.Hash, &p)
+	ptr, err := pv.VerifyProof(ctx, chunk.Root.Hash, p)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrChunkProofVerificationFailed, err.Error())
 	}
