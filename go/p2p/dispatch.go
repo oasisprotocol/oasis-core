@@ -61,14 +61,16 @@ func (h *topicHandler) topicMessageValidator(_ context.Context, _ core.PeerID, e
 	// the expected format.
 
 	peerID := envelope.GetFrom() // Not ReceivedFrom, could be relayed.
-	h.logger.Debug("new message from peer",
+	h.logger.Debug(
+		"new message from peer",
 		"peer_id", peerID,
 		"received_from", envelope.ReceivedFrom,
 	)
 
 	id, err := peerIDToPublicKey(peerID)
 	if err != nil {
-		h.logger.Error("error while extracting public key from peer ID",
+		h.logger.Error(
+			"error while extracting public key from peer ID",
 			"err", err,
 			"peer_id", peerID,
 		)
@@ -77,7 +79,8 @@ func (h *topicHandler) topicMessageValidator(_ context.Context, _ core.PeerID, e
 
 	var msg any
 	if msg, err = h.handler.DecodeMessage(envelope.GetData()); err != nil {
-		h.logger.Error("error while parsing message from peer",
+		h.logger.Error(
+			"error while parsing message from peer",
 			"err", err,
 			"peer_id", peerID,
 		)
@@ -111,7 +114,8 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 			return
 		}
 		if p2pError.IsPermanent(retErr) {
-			h.logger.Error("failed to dispatch message in-line, not retrying",
+			h.logger.Error(
+				"failed to dispatch message in-line, not retrying",
 				"err", retErr,
 				"peer_id", peerID,
 			)
@@ -123,13 +127,15 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 		for {
 			numWorkers := atomic.LoadUint64(&h.numWorkers)
 			if numWorkers > redispatchMaxWorkers {
-				h.logger.Error("failed to enqueue message for retry, queue full",
+				h.logger.Error(
+					"failed to enqueue message for retry, queue full",
 					"peer_id", peerID,
 				)
 				return
 			}
 			if atomic.CompareAndSwapUint64(&h.numWorkers, numWorkers, numWorkers+1) {
-				h.logger.Error("failed to dispatch message in-line, retrying",
+				h.logger.Error(
+					"failed to dispatch message in-line, retrying",
 					"err", retErr,
 					"peer_id", peerID,
 				)
@@ -177,13 +183,15 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 		derr := h.dispatchMessage(m.peerID, m, false)
 		switch derr {
 		case nil:
-			h.logger.Debug("succeeded in re-dispatching message",
+			h.logger.Debug(
+				"succeeded in re-dispatching message",
 				"peer_id", m.peerID,
 			)
 		default:
 			derr = p2pError.EnsurePermanent(derr)
 			if !p2pError.IsPermanent(derr) {
-				h.logger.Warn("failed to-redispatch message, will retry",
+				h.logger.Warn(
+					"failed to-redispatch message, will retry",
 					"err", derr,
 					"peer_id", m.peerID,
 				)
@@ -192,7 +200,8 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 		return derr
 	}, bctx)
 	if err != nil {
-		h.logger.Error("failed to re-dispatch message, not retrying",
+		h.logger.Error(
+			"failed to re-dispatch message, not retrying",
 			"err", err,
 			"peer_id", m.peerID,
 		)
@@ -205,11 +214,17 @@ func (h *topicHandler) tryPublishing(rawMsg []byte) error {
 		// swallow the message and mark it as seen without retrying or returning
 		// an error. This special case is to try to preempt that.
 		h.logger.Debug("no connected peers, handing off to retry worker")
-		select {
-		case h.pendingQueue <- &rawMessage{rawMsg}:
-			return nil
-		default:
-			return fmt.Errorf("p2p: message queue overflow, libp2p still not initialized")
+		for {
+			select {
+			case h.pendingQueue <- &rawMessage{rawMsg}:
+				return nil
+			default:
+				// Try to drop the oldest message, if any, before retrying.
+				select {
+				case <-h.pendingQueue:
+				default:
+				}
+			}
 		}
 	}
 
@@ -244,7 +259,8 @@ func (h *topicHandler) pendingMessagesWorker() {
 		}
 
 		if err := h.topic.Publish(h.ctx, msg.msg); err != nil {
-			h.logger.Error("failed to publish message to the network",
+			h.logger.Error(
+				"failed to publish message to the network",
 				"err", err,
 			)
 		}
@@ -269,7 +285,8 @@ func newTopicHandler(p *p2p, topicID string, handler api.Handler) (*topicHandler
 	if h.cancelRelay, err = h.topic.Relay(); err != nil {
 		// Well, ok, fine.  This should NEVER happen, but try to back out
 		// the topic subscription we just did.
-		h.logger.Error("failed to enable topic relaying",
+		h.logger.Error(
+			"failed to enable topic relaying",
 			"err", err,
 		)
 		_ = topic.Close()
