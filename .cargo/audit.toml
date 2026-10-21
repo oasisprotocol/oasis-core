@@ -5,4 +5,5 @@ ignore = [
     "RUSTSEC-2026-0098", # Vulnerable crate is only used in simple-rofl test runtime.
     "RUSTSEC-2026-0099", # Vulnerable crate is only used in simple-rofl test runtime.
     "RUSTSEC-2026-0104", # Vulnerable crate is only used in simple-rofl test runtime.
+    "RUSTSEC-2026-0382", # Vulnerable crate is only used in simple-rofl test runtime.
 ]
