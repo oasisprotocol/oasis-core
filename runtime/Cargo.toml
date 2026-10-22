@@ -68,7 +68,7 @@ x509-parser = "0.18.1"
 oid-registry = "0.8.1"
 rsa = "0.10.0-rc.19"
 base64-serde = "0.8.0"
-lru = "0.18.2"
+lru = "0.19.0"
 async-trait = "0.1.83"
 cfg-if = "1.0"
 
