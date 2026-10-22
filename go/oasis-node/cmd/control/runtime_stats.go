@@ -8,6 +8,8 @@ import (
 	"strconv"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/renderer"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -97,7 +99,8 @@ func (s *stats) prepareEntitiesOutput() {
 
 	for entity, stats := range s.entities {
 		var line []string
-		line = append(line,
+		line = append(
+			line,
 			entity.String(),
 			strconv.FormatUint(stats.roundsElected, 10),
 			strconv.FormatUint(stats.roundsPrimary, 10),
@@ -127,12 +130,38 @@ func (s *stats) printStats() {
 	fmt.Printf("Suspended: %d\n", s.suspendedRounds)
 
 	fmt.Println("Entity stats")
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.SetCenterSeparator("|")
-	table.SetHeader(s.entitiesHeader)
-	table.AppendBulk(s.entitiesOutput)
-	table.Render()
+
+	rowAlignments := make([]tw.Align, len(s.entitiesHeader))
+	for i := range rowAlignments {
+		rowAlignments[i] = tw.AlignRight
+		if i == 0 {
+			rowAlignments[i] = tw.AlignLeft
+		}
+	}
+	table := tablewriter.NewTable(
+		os.Stdout,
+		tablewriter.WithRenderer(renderer.NewBlueprint()),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbolCustom("").WithCenter("|"),
+			Borders: tw.Border{
+				Left:   tw.On,
+				Top:    tw.Off,
+				Right:  tw.On,
+				Bottom: tw.Off,
+			},
+		}),
+		// All headers centered.
+		tablewriter.WithHeaderAlignmentConfig(tw.CellAlignment{
+			Global: tw.AlignCenter,
+		}),
+		// First column left, all remaining columns right.
+		tablewriter.WithRowAlignmentConfig(tw.CellAlignment{
+			PerColumn: rowAlignments,
+		}),
+	)
+	table.Header(s.entitiesHeader)
+	_ = table.Bulk(s.entitiesOutput)
+	_ = table.Render()
 }
 
 func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
@@ -156,7 +185,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 		endHeight   uint64
 	)
 	if err := runtimeID.UnmarshalText([]byte(args[0])); err != nil {
-		logger.Error("malformed runtime ID",
+		logger.Error(
+			"malformed runtime ID",
 			"err", err,
 			"arg", args[0],
 		)
@@ -167,7 +197,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 
 		// Start height is present for 2 and 3 args.
 		if startHeight, err = strconv.ParseUint(args[1], 10, 64); err != nil {
-			logger.Error("malformed start height",
+			logger.Error(
+				"malformed start height",
 				"err", err,
 				"arg", args[1],
 			)
@@ -177,7 +208,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 		if argLen == 3 {
 			// End height provided.
 			if endHeight, err = strconv.ParseUint(args[2], 10, 64); err != nil {
-				logger.Error("malformed end height",
+				logger.Error(
+					"malformed end height",
 					"err", err,
 					"arg", args[2],
 				)
@@ -194,7 +226,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 	if startHeight == 0 {
 		status, err := consensus.GetStatus(ctx)
 		if err != nil {
-			logger.Error("failed to query consensus status",
+			logger.Error(
+				"failed to query consensus status",
 				"err", err,
 			)
 			os.Exit(1)
@@ -204,7 +237,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 	if endHeight == 0 {
 		blk, err := consensus.GetBlock(ctx, consensusAPI.HeightLatest)
 		if err != nil {
-			logger.Error("failed to get latest block",
+			logger.Error(
+				"failed to get latest block",
 				"err", err,
 			)
 			os.Exit(1)
@@ -214,14 +248,16 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 
 	chainCtx, err := consensus.GetChainContext(ctx)
 	if err != nil {
-		logger.Error("failed to get chain context",
+		logger.Error(
+			"failed to get chain context",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 	signature.SetChainContext(chainCtx)
 
-	logger.Info("gathering statistics",
+	logger.Info(
+		"gathering statistics",
 		"runtime_id", runtimeID,
 		"start_height", startHeight,
 		"end_height", endHeight,
@@ -245,14 +281,16 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 
 	for height := int64(startHeight); height < int64(endHeight); height++ {
 		if height%1000 == 0 {
-			logger.Debug("progressed",
+			logger.Debug(
+				"progressed",
 				"height", height,
 			)
 		}
 		// Update node to entity map.
 		var nodes []*node.Node
 		if nodes, err = reg.GetNodes(ctx, height); err != nil {
-			logger.Error("failed to get nodes",
+			logger.Error(
+				"failed to get nodes",
 				"err", err,
 				"height", height,
 			)
@@ -270,7 +308,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 		case roothashAPI.ErrInvalidRuntime:
 			continue
 		default:
-			logger.Error("failed to get roothash block",
+			logger.Error(
+				"failed to get roothash block",
 				"err", err,
 				"height", height,
 			)
@@ -278,7 +317,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 		}
 		var evs []*roothashAPI.Event
 		if evs, err = roothash.GetEvents(ctx, height); err != nil {
-			logger.Error("failed to get roothash events",
+			logger.Error(
+				"failed to get roothash events",
 				"err", err,
 				"height", height,
 			)
@@ -311,7 +351,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			case ev.Finalized != nil:
 				var rtResults *roothashAPI.RoundResults
 				if rtResults, err = roothash.GetLastRoundResults(ctx, &roothashAPI.RuntimeRequest{RuntimeID: runtimeID, Height: height}); err != nil {
-					logger.Error("failed to get last round results",
+					logger.Error(
+						"failed to get last round results",
 						"err", err,
 						"height", height,
 					)
@@ -404,7 +445,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 				currentScheduler = nil
 				continue
 			default:
-				logger.Error("unexpected block header type",
+				logger.Error(
+					"unexpected block header type",
 					"header_type", blk.Header.HeaderType,
 					"height", height,
 				)
@@ -414,7 +456,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			// Query runtime state and setup committee info for the round.
 			var state *roothashAPI.RuntimeState
 			if state, err = roothash.GetRuntimeState(ctx, &roothashAPI.RuntimeRequest{RuntimeID: runtimeID, Height: height}); err != nil {
-				logger.Error("failed to query runtime state",
+				logger.Error(
+					"failed to query runtime state",
 					"err", err,
 					"height", height,
 				)
@@ -422,7 +465,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			}
 			if state.Committee == nil || state.CommitmentPool == nil {
 				// No committee - election failed(?)
-				logger.Warn("unexpected missing committee for runtime",
+				logger.Warn(
+					"unexpected missing committee for runtime",
 					"height", height,
 				)
 				currentCommittee = nil
@@ -434,7 +478,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			currentCommittee = state.Committee
 			currentScheduler, ok = currentCommittee.Scheduler(currentRound, 0)
 			if !ok {
-				logger.Error("failed to query primary scheduler, no workers in committee",
+				logger.Error(
+					"failed to query primary scheduler, no workers in committee",
 					"err", err,
 					"height", height,
 				)
@@ -477,7 +522,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 	// Also save entity stats in a csv.
 	fout, err := os.Create(fmt.Sprintf("runtime-%s-%d-%d-stats.csv", runtimeID, startHeight, endHeight))
 	if err != nil {
-		logger.Error("failed to open CSV output file",
+		logger.Error(
+			"failed to open CSV output file",
 			"err", err,
 		)
 		os.Exit(1)
@@ -485,13 +531,15 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 	defer fout.Close()
 	w := csv.NewWriter(fout)
 	if err = w.Write(stats.entitiesHeader); err != nil {
-		logger.Error("failed to write CSV header",
+		logger.Error(
+			"failed to write CSV header",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 	if err = w.WriteAll(stats.entitiesOutput); err != nil {
-		logger.Error("failed to write CSV body",
+		logger.Error(
+			"failed to write CSV body",
 			"err", err,
 		)
 		os.Exit(1)

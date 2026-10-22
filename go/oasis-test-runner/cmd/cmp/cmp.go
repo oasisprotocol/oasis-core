@@ -129,7 +129,7 @@ func getDuration(
 	}
 
 	query := fmt.Sprintf("%s %s == 1.0", metrics.MetricUp, bi.Metric.String())
-	result, warnings, err := v1api.QueryRange(ctx, query, r)
+	result, warnings, _, err := v1api.QueryRange(ctx, query, r)
 	if err != nil {
 		return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 	}
@@ -242,7 +242,7 @@ func getSummableMetric(
 	// minute period.
 	t := bi.Values[len(bi.Values)-1].Timestamp.Time().Add(time.Minute)
 
-	result, warnings, err := v1api.Query(ctx, query, t)
+	result, warnings, _, err := v1api.Query(ctx, query, t)
 	if err != nil {
 		return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 	}
@@ -297,7 +297,7 @@ func getNetwork(
 	bytesTotalMax := map[string]float64{}
 	for _, rxtx := range []string{metrics.MetricNetReceiveBytesTotal, metrics.MetricNetTransmitBytesTotal} {
 		query := fmt.Sprintf("(%s %s)", rxtx, labels.String())
-		result, warnings, err := v1api.QueryRange(ctx, query, r)
+		result, warnings, _, err := v1api.QueryRange(ctx, query, r)
 		if err != nil {
 			return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 		}
@@ -366,7 +366,7 @@ func getCoarseBenchmarkInstances(
 		"max(%s %s) by (%s) == 1.0",
 		metrics.MetricUp, ls.String(), metrics.MetricsLabelInstance,
 	)
-	result, warnings, err := v1api.QueryRange(ctx, query, r)
+	result, warnings, _, err := v1api.QueryRange(ctx, query, r)
 	if err != nil {
 		cmpLogger.Error("error querying Prometheus", "err", err)
 		os.Exit(1)
