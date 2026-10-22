@@ -1,1 +1,2 @@
-CVE-2021-43668 # the vulnerability does not affect us as we don't use LevelDB
+CVE-2021-43668 # The vulnerability does not affect us as we don't use LevelDB.
+CVE-2026-84445 # Ignore until google.golang.org/grpc releases a fix for v1.84.0.
