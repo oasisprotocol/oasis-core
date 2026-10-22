@@ -10,6 +10,10 @@ import (
 const (
 	// maxBatchBytes is the maximum size of a batch in bytes.
 	maxBatchBytes = 31 * 1024 * 1024 // 31MiB
+
+	// dequeBaseCap is the minimal number of items that can always be stored
+	// in the deque without resizing.
+	dequeBaseCap = 512
 )
 
 type checkTxQueue struct {
@@ -22,8 +26,11 @@ type checkTxQueue struct {
 }
 
 func newCheckTxQueue(maxSize, maxBatchSize int) *checkTxQueue {
+	txs := new(deque.Deque[*PendingCheckTransaction])
+	txs.SetBaseCap(dequeBaseCap)
+
 	return &checkTxQueue{
-		txs:          deque.New[*PendingCheckTransaction](0, 512),
+		txs:          txs,
 		maxSize:      maxSize,
 		maxBatchSize: maxBatchSize,
 	}
