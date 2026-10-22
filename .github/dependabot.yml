@@ -1,6 +1,5 @@
 version: 2
 updates:
-
   # Manage Github Actions versions.
   - package-ecosystem: github-actions
     directory: /
@@ -19,7 +18,7 @@ updates:
       - c:deps
       - c:testing
 
-  # Manage Go pacakge versions.
+  # Manage Go package versions.
   - package-ecosystem: gomod
     directory: go/
     schedule:
@@ -28,15 +27,24 @@ updates:
       time: "07:00"
     commit-message:
       prefix: "go:"
+    groups:
+      # Update all dependencies in a single PR.
+      go:
+        # Update all dependencies, unless explicitly ignored.
+        patterns:
+          - "*"
+        # Excluded dependencies are updated in separate PRs.
+        # Commented out because it requires at least one entry to be valid.
+        # exclude-patterns: []
     labels:
       - c:deps
       - golang
     ignore:
-      # CometBFT is manualy kept up to date.
+      # CometBFT is manually kept up to date.
       - dependency-name: github.com/cometbft/cometbft
       - dependency-name: github.com/cometbft/cometbft-db
 
-  # Disable updates for upgrade tets.
+  # Disable updates for upgrade tests.
   # We keep these manually updated to match upgrade versions.
   - package-ecosystem: gomod
     directories:
@@ -53,7 +61,7 @@ updates:
       # Don't update any dependencies.
       - dependency-name: "*"
 
-  # Manage Rust pacakge versions.
+  # Manage Rust package versions.
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -76,7 +84,7 @@ updates:
         # Excluded dependencies are updated in separate PRs.
         # Commented out because it requires at least one entry to be valid.
         # exclude-patterns: []
-    # Ignored depenednecies are ignored by dependabot.
+    # Ignored dependencies are ignored by dependabot.
     # Commented out because it requires at least one entry to be valid.
     # ignore: []
     labels:
