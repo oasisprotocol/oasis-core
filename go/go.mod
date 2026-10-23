@@ -48,11 +48,11 @@ require (
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.25.0
-	github.com/prometheus/common v0.72.0
+	github.com/prometheus/common v0.72.1
 	github.com/prometheus/procfs v0.22.0
 	github.com/seccomp/libseccomp-golang v0.12.0
 	github.com/spf13/cast v1.6.0
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.12.1
