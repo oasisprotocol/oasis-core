@@ -32,13 +32,6 @@ var validBundleTemporaryName = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
 // handleBundleManagement handles bundle management local RPCs.
 func (rh *roflHostHandler) handleBundleManagement(rq *enclaverpc.Request) (any, error) {
 	switch rq.Method {
-	case rofl.MethodBundleWrite:
-		// Write bundle data to temporary file.
-		var args rofl.BundleWriteRequest
-		if err := cbor.Unmarshal(rq.Args, &args); err != nil {
-			return nil, err
-		}
-		return rh.handleBundleWrite(&args)
 	case rofl.MethodBundleTemporaryWrite:
 		// Write bundle data to temporary file.
 		var args rofl.BundleTemporaryWriteRequest
@@ -121,23 +114,6 @@ func (rh *roflHostHandler) handleLogManagement(ctx context.Context, rq *enclaver
 	default:
 		return nil, fmt.Errorf("method not supported")
 	}
-}
-
-func (rh *roflHostHandler) handleBundleWrite(rq *rofl.BundleWriteRequest) (*rofl.BundleWriteResponse, error) {
-	if err := rh.ensureComponentPermissions(runtimeConfig.PermissionBundleAdd); err != nil {
-		return nil, err
-	}
-
-	tmpPath, err := rh.getBundleTemporaryPath(rq.TemporaryName)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := rh.getBundleManager().WriteTemporary(tmpPath, rq.Create, rq.Data); err != nil {
-		return nil, err
-	}
-
-	return &rofl.BundleWriteResponse{}, nil
 }
 
 func (rh *roflHostHandler) handleBundleTemporaryWrite(rq *rofl.BundleTemporaryWriteRequest) (*rofl.BundleTemporaryWriteResponse, error) {
