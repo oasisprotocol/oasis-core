@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -256,6 +257,9 @@ type RuntimeFixture struct {
 
 	GovernanceModel registry.RuntimeGovernanceModel `json:"governance_model"`
 
+	// KeyManagerAccessPolicy is an optional key manager access policy.
+	KeyManagerAccessPolicy *quote.Policy `json:"kma_policy,omitempty"`
+
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 
 	ExcludeFromGenesis bool `json:"exclude_from_genesis,omitempty"`
@@ -286,24 +290,25 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	}
 
 	return net.NewRuntime(&RuntimeCfg{
-		ID:                 f.ID,
-		Kind:               f.Kind,
-		Entity:             entity,
-		Keymanager:         km,
-		TEEHardware:        netFixture.TEE.Hardware,
-		MrSigner:           netFixture.TEE.MrSigner,
-		Executor:           f.Executor,
-		TxnScheduler:       f.TxnScheduler,
-		Storage:            f.Storage,
-		AdmissionPolicy:    admissionPolicy,
-		Staking:            f.Staking,
-		GenesisRound:       f.GenesisRound,
-		GenesisStateRoot:   f.GenesisStateRoot,
-		Pruner:             f.Pruner,
-		ExcludeFromGenesis: f.ExcludeFromGenesis,
-		KeepBundles:        f.KeepBundles,
-		GovernanceModel:    f.GovernanceModel,
-		Deployments:        f.Deployments,
+		ID:                     f.ID,
+		Kind:                   f.Kind,
+		Entity:                 entity,
+		Keymanager:             km,
+		TEEHardware:            netFixture.TEE.Hardware,
+		MrSigner:               netFixture.TEE.MrSigner,
+		KeyManagerAccessPolicy: f.KeyManagerAccessPolicy,
+		Executor:               f.Executor,
+		TxnScheduler:           f.TxnScheduler,
+		Storage:                f.Storage,
+		AdmissionPolicy:        admissionPolicy,
+		Staking:                f.Staking,
+		GenesisRound:           f.GenesisRound,
+		GenesisStateRoot:       f.GenesisStateRoot,
+		Pruner:                 f.Pruner,
+		ExcludeFromGenesis:     f.ExcludeFromGenesis,
+		KeepBundles:            f.KeepBundles,
+		GovernanceModel:        f.GovernanceModel,
+		Deployments:            f.Deployments,
 	})
 }
 
