@@ -25,6 +25,9 @@ jobs:
     # NOTE: This name appears in GitHub's Checks API.
     name: lint
     runs-on: ubuntu-latest
+    env:
+      # Use clang-21 to avoid mbedtls bindgen issues.
+      LIBCLANG_PATH: /usr/lib/llvm-21/lib
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
