@@ -597,7 +597,7 @@ func (t *txPool) checkTxBatch(ctx context.Context) error {
 	stateSeqNums := make(map[string]uint64)
 	for i, pct := range goodPcts {
 		idx := batchIndices[i]
-		res := results[idx]
+		res := &results[idx]
 
 		// XXXX: Temporary workaround for an Oasis SDK bug that incorrectly
 		// increments the sender's state sequence number during transaction
