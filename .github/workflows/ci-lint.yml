@@ -25,6 +25,9 @@ jobs:
     # NOTE: This name appears in GitHub's Checks API.
     name: lint
     runs-on: ubuntu-latest
+    env:
+      # Use clang-21 to avoid mbedtls bindgen issues.
+      LIBCLANG_PATH: /usr/lib/llvm-21/lib
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -39,10 +42,10 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - name: Set up Node.js 12
+      - name: Set up Node.js 26
         uses: actions/setup-node@v7
         with:
-          node-version: "12.x"
+          node-version: "26.x"
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
