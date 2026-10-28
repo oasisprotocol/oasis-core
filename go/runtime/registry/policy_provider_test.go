@@ -46,10 +46,14 @@ func TestConsensusQuotePolicyProvider(t *testing.T) {
 	policy := &quote.Policy{
 		PCS: &pcs.QuotePolicy{TCBValidityPeriod: 30},
 	}
+	kmaPolicy := &quote.Policy{
+		PCS: &pcs.QuotePolicy{FMSPCWhitelist: []string{"00606A000000"}},
+	}
 
 	constraints := node.SGXConstraints{
-		Versioned: cbor.NewVersioned(node.LatestSGXConstraintsVersion),
-		Policy:    policy,
+		Versioned:              cbor.NewVersioned(node.LatestSGXConstraintsVersion),
+		Policy:                 policy,
+		KeyManagerAccessPolicy: kmaPolicy,
 	}
 	reg := &mockRegistry{
 		rt: &registry.Runtime{
@@ -58,18 +62,37 @@ func TestConsensusQuotePolicyProvider(t *testing.T) {
 			},
 		},
 	}
-	provider := &QuotePolicyProvider{Consensus: &mockConsensus{registry: reg}}
 
-	t.Run("RONL", func(t *testing.T) {
-		p, err := provider.Get(context.Background(), common.Namespace{}, component.ID_RONL, rtVersion)
-		require.NoError(t, err)
-		require.Equal(t, policy, p, "RONL should get the policy from the runtime descriptor")
-	})
-
-	t.Run("ROFL", func(t *testing.T) {
-		compID := component.ID{Kind: component.ROFL, Name: "test"}
-		p, err := provider.Get(context.Background(), common.Namespace{}, compID, rtVersion)
-		require.NoError(t, err)
-		require.Nil(t, p, "ROFL has no policy on the consensus layer")
-	})
+	for _, tc := range []struct {
+		name         string
+		compID       component.ID
+		useKMAPolicy bool
+		expected     *quote.Policy
+	}{
+		{
+			name:     "RONL/default policy",
+			compID:   component.ID_RONL,
+			expected: policy,
+		},
+		{
+			name:         "RONL/key manager access policy",
+			compID:       component.ID_RONL,
+			useKMAPolicy: true,
+			expected:     kmaPolicy,
+		},
+		{
+			name:   "ROFL",
+			compID: component.ID{Kind: component.ROFL, Name: "test"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &QuotePolicyProvider{
+				Consensus:    &mockConsensus{registry: reg},
+				UseKMAPolicy: tc.useKMAPolicy,
+			}
+			p, err := provider.Get(context.Background(), common.Namespace{}, tc.compID, rtVersion)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, p)
+		})
+	}
 }
