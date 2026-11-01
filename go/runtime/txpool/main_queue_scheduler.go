@@ -169,6 +169,12 @@ func (s *mainQueueScheduler) forward(sender string, seq uint64) {
 		case tx.seq < seq:
 			s.remove(tx, seqHeap)
 		case tx.seq == seq:
+			if tx.maxHeapIndex != -1 {
+				break
+			}
+			if _, ok := s.scheduled[tx.sender]; ok {
+				break
+			}
 			s.maxHeap.push(tx)
 		default:
 		}

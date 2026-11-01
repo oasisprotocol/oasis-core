@@ -353,6 +353,7 @@ func TestForward(t *testing.T) {
 		for _, tc := range testCases {
 			s.forward(testTxs[0].sender, tc.seq)
 
+			s.reset()
 			txs := s.schedule(100)
 			require.Len(t, txs, tc.len)
 		}
@@ -463,6 +464,45 @@ func TestSchedule(t *testing.T) {
 		txs = append(txs, extra...)
 		require.Equal(t, len(testSchedule), len(txs))
 		require.Equal(t, testSchedule, txs)
+	})
+
+	t.Run("New txs during schedule", func(t *testing.T) {
+		s := newMainQueueScheduler(10)
+
+		err := s.add(testTxs[7], 0)
+		require.NoError(t, err)
+
+		s.reset()
+		require.Len(t, s.schedule(10), 1)
+
+		err = s.add(testTxs[6], 0)
+		require.NoError(t, err)
+		err = s.add(testTxs[5], 0)
+		require.NoError(t, err)
+
+		s.handleTxUsed(testTxs[7].meta.hash)
+
+		s.reset()
+		require.Len(t, s.schedule(10), 2)
+	})
+
+	t.Run("Partial inclusion", func(t *testing.T) {
+		s := newMainQueueScheduler(10)
+
+		err := s.add(testTxs[7], 0)
+		require.NoError(t, err)
+		err = s.add(testTxs[6], 0)
+		require.NoError(t, err)
+		err = s.add(testTxs[5], 0)
+		require.NoError(t, err)
+
+		s.reset()
+		require.Len(t, s.schedule(10), 3)
+
+		s.handleTxUsed(testTxs[7].meta.hash)
+
+		s.reset()
+		require.Len(t, s.schedule(10), 2)
 	})
 }
 
