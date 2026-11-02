@@ -48,7 +48,7 @@ require (
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.25.0
-	github.com/prometheus/common v0.72.1
+	github.com/prometheus/common v0.73.0
 	github.com/prometheus/procfs v0.23.0
 	github.com/seccomp/libseccomp-golang v0.12.0
 	github.com/spf13/cast v1.6.0
@@ -63,8 +63,8 @@ require (
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800
-	google.golang.org/grpc v1.84.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1
+	google.golang.org/grpc v1.85.0
 	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -110,6 +110,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
@@ -166,6 +167,7 @@ require (
 	github.com/olekukonko/errors v1.2.0 // indirect
 	github.com/olekukonko/ll v0.1.6 // indirect
 	github.com/onsi/gomega v1.36.3 // indirect
+	github.com/pandatix/go-abnf v0.5.1 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect
