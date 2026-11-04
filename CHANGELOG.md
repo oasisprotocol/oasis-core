@@ -12,6 +12,28 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 26.4 (2026-11-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- go/p2p: Empty message queue when there are no peers
+  ([#6603](https://github.com/oasisprotocol/oasis-core/issues/6603))
+
+- go/runtime/txpool: Report queueing failures to the submitter
+  ([#6624](https://github.com/oasisprotocol/oasis-core/issues/6624))
+
+  Transactions rejected by the scheduling queue could be reported as accepted,
+  causing clients to wait for inclusion instead of receiving the queue error.
+
+- go/runtime/txpool: Fix forward method
+  ([#6625](https://github.com/oasisprotocol/oasis-core/issues/6625))
+
 ## 26.3 (2026-10-12)
 
 | Protocol          | Version   |
