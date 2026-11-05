@@ -40,7 +40,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.9.2
 	github.com/libp2p/go-libp2p v0.51.0
 	github.com/libp2p/go-libp2p-pubsub v0.19.0
-	github.com/mdlayher/vsock v1.3.0
+	github.com/mdlayher/vsock v1.4.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/nxadm/tail v1.4.11
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729
@@ -140,7 +140,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
-	github.com/mdlayher/socket v0.6.0 // indirect
+	github.com/mdlayher/socket v0.8.0 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
