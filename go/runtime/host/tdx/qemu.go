@@ -45,6 +45,9 @@ const (
 
 // QemuConfig is the configuration of the QEMU-based TDX runtime provisioner.
 type QemuConfig struct {
+	// QemuPath is the path to the QEMU system binary.
+	QemuPath string
+
 	// DataDir is the node data directory.
 	DataDir string
 	// HostInfo provides information about the host environment.
@@ -168,8 +171,13 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 	resources := tdxCfg.Resources
 	firmware := cfg.Component.ExplodedPath(tdxCfg.Firmware)
 
+	qemuPath := p.cfg.QemuPath
+	if qemuPath == "" {
+		qemuPath = defaultQemuSystemPath
+	}
+
 	pcfg := process.Config{
-		Path: defaultQemuSystemPath,
+		Path: qemuPath,
 		Args: []string{
 			"-accel", "kvm",
 			"-m", fmt.Sprintf("%d", resources.Memory),
