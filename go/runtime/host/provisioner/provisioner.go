@@ -168,6 +168,7 @@ func createProvisioner(
 	}
 
 	provisioners[component.TEEKindTDX], err = hostTdx.NewQemuProvisioner(hostTdx.QemuConfig{
+		QemuPath:              config.GlobalConfig.Runtime.TDX.QemuPath,
 		DataDir:               dataDir,
 		HostInfo:              hostInfo,
 		CommonStore:           commonStore,
