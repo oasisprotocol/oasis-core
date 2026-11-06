@@ -30,6 +30,9 @@ import (
 )
 
 const (
+	stage2FormatRaw   = "raw"
+	stage2FormatQCOW2 = "qcow2"
+
 	// defaultQemuSystemPath is the default QEMU system binary path.
 	defaultQemuSystemPath = "/usr/bin/qemu-system-x86_64"
 	// defaultQemuImgPath is the default qemu-bin binary path.
@@ -137,6 +140,10 @@ func (p *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 			CID: cid,
 		}
 	case *QemuExtraConfig:
+		if extraCfg == nil {
+			return nil, fmt.Errorf("invalid provisioner configuration")
+		}
+
 		// Otherwise just allocate the configured CID to ensure it is free and in range.
 		err := p.cidPool.AllocateExact(extraCfg.CID)
 		if err != nil {
@@ -146,7 +153,11 @@ func (p *qemuProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		return nil, fmt.Errorf("invalid provisioner configuration")
 	}
 
-	return p.sandbox.NewRuntime(cfg)
+	rt, err := p.sandbox.NewRuntime(cfg)
+	if err != nil {
+		p.cleanup(cfg)
+	}
+	return rt, err
 }
 
 // Implements host.Provisioner.
@@ -217,8 +228,8 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			switch stage2Format {
 			case "":
 				// Default to raw format.
-				stage2Format = "raw"
-			case "raw", "qcow2":
+				stage2Format = stage2FormatRaw
+			case stage2FormatRaw, stage2FormatQCOW2:
 				// These formats are supported as-is.
 			default:
 				return process.Config{}, fmt.Errorf("format '%s' is not supported", stage2Format)
@@ -237,7 +248,7 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 				if err != nil {
 					return process.Config{}, err
 				}
-				stage2Format = "qcow2"
+				stage2Format = stage2FormatQCOW2
 				snapshotMode = "off"
 			}
 
@@ -373,7 +384,7 @@ func (p *qemuProvisioner) createPersistentOverlayImage(image string, format stri
 			defaultQemuImgPath,
 			"rebase",
 			"-u",
-			"-f", "qcow2",
+			"-f", stage2FormatQCOW2,
 			"-b", image,
 			"-F", format,
 			volume.Path,
@@ -403,7 +414,7 @@ func (p *qemuProvisioner) createPersistentOverlayImage(image string, format stri
 		cmd := exec.Command( //nolint: gosec
 			defaultQemuImgPath,
 			"create",
-			"-f", "qcow2",
+			"-f", stage2FormatQCOW2,
 			"-b", image,
 			"-F", format,
 			volume.Path,
