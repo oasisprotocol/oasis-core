@@ -187,25 +187,55 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 		qemuPath = defaultQemuSystemPath
 	}
 
+	// Fully specify the machine type to ensure reproducible measurements.
+	machine := "q35"
+	machine += ",usb=off,vmport=off,smm=off,pic=off,pit=off,smbios-entry-point-type=64"
+	machine += ",kernel-irqchip=split,confidential-guest-support=tdx,hpet=off,max-ram-below-4g=4G"
+
+	// Fully specify the CPU topology to ensure reproducible measurements.
+	smp := fmt.Sprintf("cpus=%d,maxcpus=%d,sockets=1,cores=%d,threads=1", resources.CPUCount, resources.CPUCount, resources.CPUCount)
+
+	// Assign deterministic PCI addresses to devices to ensure reproducible measurements.
+	serial := "virtio-serial-pci,id=serial0,bus=pcie.0,addr=0x1,max_ports=1"
+	vsock := fmt.Sprintf("vhost-vsock-pci,id=vsock0,bus=pcie.0,addr=0x2,guest-cid=%d", cid)
+	disk := "virtio-blk-pci,drive=drive0,id=disk0,bus=pcie.0,addr=0x3,bootindex=1"
+	nicSlot := 3
+	if tdxCfg.HasKernel() && tdxCfg.HasStage2() {
+		nicSlot++
+	}
+	nic := fmt.Sprintf("virtio-net-pci,netdev=net0,id=nic0,bus=pcie.0,addr=0x%x,romfile=", nicSlot)
+
+	//nolint: goconst // Constants would reduce readability below.
 	pcfg := process.Config{
 		Path: qemuPath,
 		Args: []string{
 			"-accel", "kvm",
 			"-m", fmt.Sprintf("%d", resources.Memory),
-			"-smp", fmt.Sprintf("%d", resources.CPUCount),
+			"-smp", smp,
 			"-name", fmt.Sprintf("oasis-%s-%s", cfg.ID, cfg.Component.ID()),
 			"-cpu", "host",
-			"-machine", "q35,kernel-irqchip=split,confidential-guest-support=tdx,hpet=off",
+			"-machine", machine,
 			"-bios", firmware,
 			"-nographic",
 			"-nodefaults",
+			"-no-user-config",
+			"-boot", "menu=off,strict=on",
+			// PCI memory hole determinism.
+			"-global", "q35-pcihost.pci-hole64-size=32G",
+			"-fw_cfg", "name=opt/ovmf/X-PciMmio64Mb,string=32768",
+			// SMBIOS determinism.
+			"-smbios", "type=0,vendor=Oasis,version=1,date=01/01/2026,uefi=on",
+			"-smbios", "type=1,manufacturer=Oasis,product=ROFL,version=1",
+			"-smbios", "type=3,manufacturer=Oasis,version=1",
+			"-smbios", "type=4,sock_pfx=CPU,manufacturer=Oasis,version=1,processor-id=1",
+			"-smbios", "type=17,manufacturer=Oasis,loc_pfx=DIMM,speed=0",
 			// Serial port.
 			"-serial", "stdio",
-			"-device", "virtio-serial,max_ports=1",
+			"-device", serial,
 			// TDX remote attestation via VSOCK.
 			"-object", `{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`,
 			// VSOCK.
-			"-device", fmt.Sprintf("vhost-vsock-pci,guest-cid=%d", cid),
+			"-device", vsock,
 		},
 	}
 
@@ -252,10 +282,13 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 				snapshotMode = "off"
 			}
 
+			// Escape the stage 2 image path to avoid misinterpretation of commas in the path.
+			stage2Image = strings.ReplaceAll(stage2Image, ",", ",,")
+
 			pcfg.Args = append(pcfg.Args,
 				// Stage 2 drive.
 				"-drive", fmt.Sprintf("format=%s,file=%s,if=none,id=drive0,snapshot=%s", stage2Format, stage2Image, snapshotMode),
-				"-device", "virtio-blk-pci,drive=drive0",
+				"-device", disk,
 			)
 		}
 
@@ -283,7 +316,7 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 		)
 	}
 	pcfg.Args = append(pcfg.Args,
-		"-device", "virtio-net-pci,netdev=net0",
+		"-device", nic,
 	)
 
 	// Logging.
