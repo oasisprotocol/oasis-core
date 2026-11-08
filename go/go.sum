@@ -345,8 +345,6 @@ github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729 h1:yf
 github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729/go.mod h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s=
 github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 h1:1102pQc2SEPp5+xrS26wEaeb26sZy6k9/ZXlZN+eXE4=
 github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7/go.mod h1:UqoUn6cHESlliMhOnKLWr+CBH+e3bazUPvFj1XZwAjs=
-github.com/oasisprotocol/rpc-codec v0.0.0-20260821192426-8771fbee5115 h1:cb83/uaHH2xQbEXY2dQNL6OikDBfBjWVc8V4OTxDgMc=
-github.com/oasisprotocol/rpc-codec v0.0.0-20260821192426-8771fbee5115/go.mod h1:y0ZG72hAWdyswyeVaP4uWt9yt6NbaqNhuNVMNGLgZ3g=
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661 h1:MB73kGMtuMGS+6VDoU/mitzff7Cu+aZo9ta5wabuxVA=
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661/go.mod h1:SwBxaVibf6Sr2IZ6M3WnUue0yp8dPLAo1riQRNQ60+g=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
@@ -428,6 +426,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/powerman/rpc-codec v1.3.0 h1:TVZvznzx+qEJ+ks+Ed46Gyef0DQrJVJfGt8m1FBF3ls=
+github.com/powerman/rpc-codec v1.3.0/go.mod h1:zx1rlLqVuZ5mjJ4WNBPzNTu3R4PUSiThlhQebMSLCmo=
 github.com/prometheus/client_golang v1.25.0 h1:cDtW1TcFsMi1RJc8khwCKB4VhzwV04aKqbYtNOXuiK0=
 github.com/prometheus/client_golang v1.25.0/go.mod h1:j2X/4/kaQHLPnmyEU8zjmkndo1T317VpCIQEml8LTKk=
 github.com/prometheus/client_model v0.6.3 h1:O0jaTVAYNxTHYInEPFJt5I3+sN8zqBtVMPTB1qyxiEo=
