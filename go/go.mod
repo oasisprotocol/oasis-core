@@ -4,9 +4,6 @@ go 1.27.0
 
 replace (
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.18-oasis3
-	// v1.22.2 doesn't work with Go 1.27.0 due to a recursive loop when
-	// unmarshaling a server request.
-	github.com/powerman/rpc-codec => github.com/oasisprotocol/rpc-codec v0.0.0-20260821192426-8771fbee5115
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
@@ -46,7 +43,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v1.1.5
-	github.com/powerman/rpc-codec v1.2.2
+	github.com/powerman/rpc-codec v1.3.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/common v0.73.1
 	github.com/prometheus/procfs v0.23.0
