@@ -253,7 +253,7 @@ func testDelegations(t *testing.T, state *stakingTestsState, staking api.Backend
 	// Incoming delegations to accounts.
 	//
 	// NOTE: testEscrow/testSelfEscrow tests reclaim all active shares from
-	// account 1's escrow, so we omit accout 1 from these checks.
+	// account 1's escrow, so we omit account 1 from these checks.
 	expectedDelegationsTo := map[int][]int{
 		// Delegations to account 1.
 		1: {1},
