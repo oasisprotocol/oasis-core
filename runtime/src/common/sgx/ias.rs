@@ -7,9 +7,9 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
 use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
-use rsa::{pkcs1::DecodeRsaPublicKey, pkcs1v15::Pkcs1v15Sign, RsaPublicKey};
+use rsa::{pkcs1::DecodeRsaPublicKey, PublicKey};
 use sgx_isa::{AttributesFlags, Report};
-use sha2::{digest::Update as _, Digest, Sha256};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use x509_parser::prelude::*;
 
@@ -476,38 +476,37 @@ fn validate_avr_signature(
 
     // Validate the actual signature.
     let leaf_pk = extract_certificate_rsa_public_key(&leaf)?;
-    let scheme = Pkcs1v15Sign::new::<sha2::Sha256>();
-    let digest = Sha256::new().chain(message).finalize();
+    let digest = Sha256::new().chain_update(message).finalize();
     let signature = BASE64_STANDARD.decode(signature)?;
     leaf_pk
-        .verify(scheme, &digest, &signature)
+        .pkcs1v15_verify_prehash::<Sha256>(&digest, &signature)
         .map_err(|_| AVRError::InvalidSignature)?;
     Ok(())
 }
 
-fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RsaPublicKey> {
+fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<PublicKey> {
     let cert_spki = &cert.tbs_certificate.subject_pki;
     if cert_spki.algorithm.algorithm != OID_PKCS1_RSAENCRYPTION {
         return Err(anyhow!("invalid certificate public key algorithm"));
     }
 
-    match RsaPublicKey::from_pkcs1_der(&cert_spki.subject_public_key.data) {
+    match PublicKey::from_pkcs1_der(&cert_spki.subject_public_key.data) {
         Ok(pk) => Ok(pk),
         Err(err) => Err(anyhow!("invalid certificate public key: {:?}", err)),
     }
 }
 
-fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPublicKey) -> bool {
+fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &PublicKey) -> bool {
     if cert.signature_algorithm.algorithm != OID_PKCS1_SHA256WITHRSA {
         return false;
     }
-    let scheme = Pkcs1v15Sign::new::<sha2::Sha256>();
+
     let digest = Sha256::new()
-        .chain(cert.tbs_certificate.as_ref())
+        .chain_update(cert.tbs_certificate.as_ref())
         .finalize();
 
     public_key
-        .verify(scheme, &digest, &cert.signature_value.data)
+        .pkcs1v15_verify_prehash::<Sha256>(&digest, &cert.signature_value.data)
         .is_ok()
 }
 
