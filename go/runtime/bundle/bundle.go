@@ -86,6 +86,11 @@ func (bnd *Bundle) Validate() error {
 			needFiles = append(needFiles,
 				[]bundleFile{
 					{
+						descr:    fmt.Sprintf("%s: TDX platform profile", id),
+						fn:       tdx.Platform,
+						optional: true,
+					},
+					{
 						descr: fmt.Sprintf("%s: TDX virtual firmware", id),
 						fn:    tdx.Firmware,
 					},
