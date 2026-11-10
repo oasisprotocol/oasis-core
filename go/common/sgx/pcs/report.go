@@ -162,6 +162,23 @@ func (r *TdReport) ReportData() []byte {
 
 // AsEnclaveIdentity converts the report body into an enclave identity.
 func (r *TdReport) AsEnclaveIdentity() sgx.EnclaveIdentity {
+	return ComputeTdEnclaveIdentity(
+		r.mrTd[:],
+		r.rtmr0[:],
+		r.rtmr1[:],
+		r.rtmr2[:],
+		r.rtmr3[:],
+	)
+}
+
+// ComputeTdEnclaveIdentity computes the enclave identity from the TD report fields.
+func ComputeTdEnclaveIdentity(
+	mrTd []byte,
+	rtmr0 []byte,
+	rtmr1 []byte,
+	rtmr2 []byte,
+	rtmr3 []byte,
+) sgx.EnclaveIdentity {
 	var zeroMrSigner sgx.MrSigner
 	// TODO: Change the EnclaveIdentity structure to allow specifying all the different things.
 
@@ -175,11 +192,11 @@ func (r *TdReport) AsEnclaveIdentity() sgx.EnclaveIdentity {
 	//
 	var mrEnclave sgx.MrEnclave
 	h := tuplehash.New256(32, []byte(TdEnclaveIdentityContext))
-	_, _ = h.Write(r.mrTd[:])
-	_, _ = h.Write(r.rtmr0[:])
-	_, _ = h.Write(r.rtmr1[:])
-	_, _ = h.Write(r.rtmr2[:])
-	_, _ = h.Write(r.rtmr3[:])
+	_, _ = h.Write(mrTd[:])
+	_, _ = h.Write(rtmr0[:])
+	_, _ = h.Write(rtmr1[:])
+	_, _ = h.Write(rtmr2[:])
+	_, _ = h.Write(rtmr3[:])
 	rawMrEnclave := h.Sum(nil)
 	copy(mrEnclave[:], rawMrEnclave[:])
 
