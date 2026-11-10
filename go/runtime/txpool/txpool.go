@@ -227,6 +227,12 @@ func (t *txPool) SubmitTxNoWait(tx []byte, local bool) error {
 }
 
 func (t *txPool) submitTx(tx []byte, local bool, discard bool, wait bool) (*PendingCheckTransaction, error) {
+	// Reject empty transactions.
+	if len(tx) == 0 {
+		t.logger.Debug("ignoring empty transaction")
+		return nil, fmt.Errorf("invalid transaction")
+	}
+
 	// Skip recently seen transactions.
 	hash := hash.NewFromBytes(tx)
 	if _, ok := t.seenCache.Peek(hash); ok {
