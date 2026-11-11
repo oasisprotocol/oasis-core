@@ -259,8 +259,12 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			case "":
 				// Default to raw format.
 				stage2Format = stage2FormatRaw
-			case stage2FormatRaw, stage2FormatQCOW2:
-				// These formats are supported as-is.
+			case stage2FormatQCOW2:
+				if err := p.validateQcow2Image(stage2Image); err != nil {
+					return process.Config{}, fmt.Errorf("invalid base image: %w", err)
+				}
+			case stage2FormatRaw:
+				// This format is supported as-is.
 			default:
 				return process.Config{}, fmt.Errorf("format '%s' is not supported", stage2Format)
 			}
@@ -383,6 +387,43 @@ func (p *qemuProvisioner) createNetworkingConfig(cfg host.Config) ([]string, err
 
 	netArgs := []string{"-netdev", strings.Join(netdevOpts, ",")}
 	return netArgs, nil
+}
+
+// validateQcow2Image validates the QCOW2 images.
+func (p *qemuProvisioner) validateQcow2Image(image string) error {
+	cmd := exec.Command(
+		defaultQemuImgPath,
+		"info",
+		"--format", stage2FormatQCOW2,
+		"--output", "json",
+		image,
+	)
+	var out strings.Builder
+	cmd.Stderr = &out
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to query base image: %s\n%w", out.String(), err)
+	}
+	var info struct {
+		VirtualSize     int    `json:"virtual-size"`
+		Format          string `json:"format"`
+		BackingFilename string `json:"backing-filename"`
+		FormatSpecific  struct {
+			Data struct {
+				DataFile string `json:"data-file"`
+			} `json:"data"`
+		} `json:"format-specific"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &info); err != nil {
+		return fmt.Errorf("malformed base image metadata: %w", err)
+	}
+	if info.Format != stage2FormatQCOW2 {
+		return fmt.Errorf("unsupported base image format")
+	}
+	if info.BackingFilename != "" || info.FormatSpecific.Data.DataFile != "" {
+		return fmt.Errorf("base image is not self-contained")
+	}
+	return nil
 }
 
 // createPersistentOverlayImage creates a persistent overlay image for the given backing image and
