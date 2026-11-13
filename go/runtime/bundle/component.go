@@ -223,6 +223,11 @@ func (s *SGXMetadata) Validate() error {
 //
 // Note that changes to these fields may change the TD measurements.
 type TDXMetadata struct {
+	// Platform is the name of the platform profile file. It should rarely change and multiple
+	// components may use the same platform.
+	//
+	// It may be empty for legacy firmware.
+	Platform string `json:"platform,omitempty"`
 	// Firmware is the name of the virtual firmware file. It should rarely change and multiple
 	// components may use the same firmware.
 	Firmware string `json:"firmware"`
@@ -263,6 +268,11 @@ func (t *TDXMetadata) Validate() error {
 		return err
 	}
 	return nil
+}
+
+// HasPlatform returns true iff the TDX metadata indicates there is a platform profile present.
+func (t *TDXMetadata) HasPlatform() bool {
+	return t.Platform != ""
 }
 
 // HasKernel returns true iff the TDX metadata indicates there is a kernel present.

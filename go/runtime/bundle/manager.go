@@ -543,7 +543,7 @@ func (m *Manager) downloadBundle(runtimeID common.Namespace, manifestHash hash.H
 
 	for _, baseURLs := range [][]string{m.runtimeBaseURLs[runtimeID], m.globalBaseURLs} {
 		for _, baseURL := range baseURLs {
-			if err := m.tryDownloadBundle(manifestHash, baseURL); err != nil {
+			if err := m.tryDownloadBundle(runtimeID, manifestHash, baseURL); err != nil {
 				errs = errors.Join(errs, err)
 				continue
 			}
@@ -555,7 +555,7 @@ func (m *Manager) downloadBundle(runtimeID common.Namespace, manifestHash hash.H
 	return errs
 }
 
-func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) error {
+func (m *Manager) tryDownloadBundle(runtimeID common.Namespace, manifestHash hash.Hash, baseURL string) error {
 	metaURL, err := url.JoinPath(baseURL, manifestHash.Hex())
 	if err != nil {
 		m.logger.Error("failed to construct metadata URL",
@@ -588,7 +588,10 @@ func (m *Manager) tryDownloadBundle(manifestHash hash.Hash, baseURL string) erro
 	}
 	defer os.Remove(src)
 
-	manifest, err := m.explodeBundle(src, WithBundleManifestHash(manifestHash))
+	manifest, err := m.explodeBundle(src,
+		WithBundleManifestHash(manifestHash),
+		WithBundleRuntimeID(runtimeID),
+	)
 	if err != nil {
 		m.logger.Error("failed to explode bundle",
 			"err", err,

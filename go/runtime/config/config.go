@@ -207,6 +207,9 @@ type TdxConfig struct {
 	CidStart uint32 `yaml:"cid_start,omitempty"`
 	// CidCount is the number of CIDs allocated to VMs.
 	CidCount uint32 `yaml:"cid_count,omitempty"`
+
+	// QemuPath is the QEMU binary path (defaults to the system QEMU).
+	QemuPath string `yaml:"qemu_path,omitempty"`
 }
 
 // LogConfig is the runtime log configuration.
