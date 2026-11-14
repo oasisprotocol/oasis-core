@@ -99,21 +99,17 @@ func (p *Proposal) Sign(signer signature.Signer, runtimeID common.Namespace) err
 	}
 	p.Signature = *sig
 
-	// TODO: Sign the batch once most of the compute nodes have been upgraded to a version
-	// that supports batch signatures.
-	if false {
-		batchSigCtx, err := ProposalBatchSignatureContext.WithSuffix(runtimeID.String())
-		if err != nil {
-			return fmt.Errorf("roothash/commitment: batch signature context error: %w", err)
-		}
-
-		signature, err := signature.Sign(signer, batchSigCtx, cbor.Marshal(p.Batch))
-		if err != nil {
-			return err
-		}
-
-		p.BatchSignature = &signature.Signature
+	batchSigCtx, err := ProposalBatchSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return fmt.Errorf("roothash/commitment: batch signature context error: %w", err)
 	}
+
+	signature, err := signature.Sign(signer, batchSigCtx, cbor.Marshal(p.Batch))
+	if err != nil {
+		return err
+	}
+
+	p.BatchSignature = &signature.Signature
 
 	return nil
 }
