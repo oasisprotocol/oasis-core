@@ -12,6 +12,43 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 26.5 (2026-11-16)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- Add TDX QEMU path configuration option
+  ([#6634](https://github.com/oasisprotocol/oasis-core/issues/6634))
+
+  It is now possible to configure the path to the QEMU binary for the QEMU TDX
+  provisioner via the `runtime.tdx.qemu_path` option.
+
+### Features
+
+- go/runtime/host/tdx: More deterministic launch configuration
+  ([#6634](https://github.com/oasisprotocol/oasis-core/issues/6634))
+
+  More launch options are made deterministic in order to support deterministic
+  measurements on recent OVMF versions.
+
+### Bug Fixes
+
+- go/runtime/txpool: Reject empty transactions
+  ([#6642](https://github.com/oasisprotocol/oasis-core/issues/6642))
+
+### Internal Changes
+
+- go: Bump github.com/powerman/rpc-codec from 1.2.2 to 1.3.0
+  ([#6635](https://github.com/oasisprotocol/oasis-core/issues/6635))
+
+- rust: Bump rsa to from 0.10.0-rc.19 to 0.10.0
+  ([#6639](https://github.com/oasisprotocol/oasis-core/issues/6639))
+
 ## 26.4 (2026-11-04)
 
 | Protocol          | Version   |
