@@ -74,7 +74,7 @@ cfg-if = "1.0"
 
 # TDX dependencies.
 libc = { version = "0.2.158", optional = true }
-nix = { version = "0.31.3", features = [
+nix = { version = "0.32.0", features = [
     "ioctl",
     "mount",
     "signal",
