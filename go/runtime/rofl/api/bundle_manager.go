@@ -6,10 +6,6 @@ const (
 	// LocalRPCEndpointBundleManager is the name of the local RPC endpoint for the bundle manager.
 	LocalRPCEndpointBundleManager = "bundle-manager"
 
-	// MethodBundleWrite is the name of the BundleWrite method.
-	//
-	// Deprecated. Use method BundleTemporaryWrite instead.
-	MethodBundleWrite = "BundleWrite"
 	// MethodBundleTemporaryWrite is the name of the BundleTemporaryWrite method.
 	MethodBundleTemporaryWrite = "BundleTemporaryWrite"
 	// MethodBundleTemporaryDelete is the name of the BundleTemporaryDelete method.
@@ -21,23 +17,6 @@ const (
 	// MethodBundleList is the name of the BundleList method.
 	MethodBundleList = "BundleList"
 )
-
-// BundleWriteRequest is a request to host to store a chunk of the bundle to a temporary file.
-//
-// The `PermissionBundleAdd` permission is required to call this method.
-type BundleWriteRequest struct {
-	// TemporaryName is a temporary name to identify the chunk later.
-	TemporaryName string `json:"temporary_name"`
-	// Create is the optional flag which specifies that the bundle should be recreated. If the
-	// bundle exists and this flag is set to true, it will be truncated. If the flag is set to
-	// false, any content will be appended to the existing bundle.
-	Create bool `json:"create,omitempty"`
-	// Data that should be appended to the bundle.
-	Data []byte `json:"data"`
-}
-
-// BundleWriteResponse is the response from the BundleWrite method.
-type BundleWriteResponse struct{}
 
 // BundleTemporaryWriteRequest is a request to host to store a chunk of the bundle to a temporary file.
 //
