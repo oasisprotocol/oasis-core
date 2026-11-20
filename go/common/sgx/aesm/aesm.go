@@ -299,10 +299,12 @@ func (c *Client) GetTargetInfo(ctx context.Context, keyID *AttestationKeyID) ([]
 	// that reported it. This is stupid, but it is how it is.
 	timeout := uint32(localAESMTimeout.Nanoseconds() / 1000)
 	noPubKey := false
+	zeroBufSize := uint64(0)
 	resp, err := c.transact(ctx, &Request{
 		InitQuoteExReq: &Request_InitQuoteExRequest{
 			AttKeyId:  keyID.raw,
 			BPubKeyId: &noPubKey,
+			BufSize:   &zeroBufSize,
 			Timeout:   &timeout,
 		},
 	})
