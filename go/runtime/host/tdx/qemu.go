@@ -244,11 +244,11 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 	if tdxCfg.HasKernel() {
 		kernelImage := cfg.Component.ExplodedPath(tdxCfg.Kernel)
 
-		pcfg.Args = append(pcfg.Args, "-kernel", kernelImage)
+		pcfg.Args = append(pcfg.Args, "-kernel", escapeQemuPath(kernelImage))
 		if tdxCfg.HasInitRD() {
 			initrdImage := cfg.Component.ExplodedPath(tdxCfg.InitRD)
 
-			pcfg.Args = append(pcfg.Args, "-initrd", initrdImage)
+			pcfg.Args = append(pcfg.Args, "-initrd", escapeQemuPath(initrdImage))
 		}
 
 		// Configure stage 2 image.
@@ -287,7 +287,7 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 			}
 
 			// Escape the stage 2 image path to avoid misinterpretation of commas in the path.
-			stage2Image = strings.ReplaceAll(stage2Image, ",", ",,")
+			stage2Image = escapeQemuPath(stage2Image)
 
 			pcfg.Args = append(pcfg.Args,
 				// Stage 2 drive.
@@ -336,6 +336,11 @@ func (p *qemuProvisioner) getSandboxConfig(cfg host.Config, _ sandbox.Connector,
 	pcfg.Stderr = logWrapper
 
 	return pcfg, nil
+}
+
+// escapeQemuPath escapes a path for use in QEMU arguments.
+func escapeQemuPath(path string) string {
+	return strings.ReplaceAll(path, ",", ",,")
 }
 
 // createNetworkingConfig generates QEMU networking configuration for a component.
