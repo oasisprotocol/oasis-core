@@ -13,8 +13,9 @@ func TestQuote(t *testing.T) {
 	SetAllowDebugEnclaves()
 	defer UnsetAllowDebugEnclaves()
 
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	raw, sig, certs := loadAVR(t, 4)
-	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, now)
 	require.NoError(t, err, "DecodeAVR")
 
 	rawQuote := avr.ISVEnclaveQuoteBody
@@ -78,10 +79,10 @@ func TestQuote(t *testing.T) {
 	quotePolicy := &QuotePolicy{
 		GIDBlacklist: []uint32{},
 	}
-	_, err = bundle.Open(quotePolicy, IntelTrustRoots, time.Now())
+	_, err = bundle.Open(quotePolicy, IntelTrustRoots, now)
 	require.NoError(t, err, "AVRBundle.Open")
 
 	quotePolicy.GIDBlacklist = []uint32{quote.Body.GID}
-	_, err = bundle.Open(quotePolicy, IntelTrustRoots, time.Now())
+	_, err = bundle.Open(quotePolicy, IntelTrustRoots, now)
 	require.Error(t, err, "AVRBundle.Open should fail with blacklisted GID")
 }

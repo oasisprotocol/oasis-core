@@ -22,7 +22,8 @@ func testAVRv4(t *testing.T) {
 
 	raw, sig, certs := loadAVR(t, 4)
 
-	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, now)
 	require.NoError(t, err, "DecodeAVR")
 
 	require.Equal(t, "323119119247496566074708526703373820736", avr.ID, "id")
@@ -50,7 +51,8 @@ func testAVRv5(t *testing.T) {
 
 	raw, sig, certs := loadAVR(t, 5)
 
-	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, now)
 	require.NoError(t, err, "DecodeAVR")
 
 	require.Equal(t, "325753020347524304899139732345489823748", avr.ID, "id")
