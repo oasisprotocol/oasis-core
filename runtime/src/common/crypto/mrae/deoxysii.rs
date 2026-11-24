@@ -15,8 +15,8 @@ pub trait Opener: Send + Sync {
     fn box_open(
         &self,
         nonce: &[u8; NONCE_SIZE],
-        ciphertext: Vec<u8>,
-        additional_data: Vec<u8>,
+        ciphertext: impl AsMut<[u8]>,
+        additional_data: impl AsRef<[u8]>,
         peers_public_key: &PublicKey,
     ) -> Result<Vec<u8>>;
 }
@@ -54,8 +54,8 @@ pub fn generate_key_pair() -> (PublicKey, StaticSecret) {
 /// for a given public and private key tuple.
 pub fn box_seal(
     nonce: &[u8; NONCE_SIZE],
-    plaintext: Vec<u8>,
-    additional_data: Vec<u8>,
+    plaintext: impl AsRef<[u8]>,
+    additional_data: impl AsRef<[u8]>,
     peers_public_key: &PublicKey,
     private_key: &StaticSecret,
 ) -> Result<Vec<u8>> {
@@ -73,8 +73,8 @@ pub fn box_seal(
 /// data must match the value passed to `box_seal`.
 pub fn box_open(
     nonce: &[u8; NONCE_SIZE],
-    ciphertext: Vec<u8>,
-    additional_data: Vec<u8>,
+    ciphertext: impl AsMut<[u8]>,
+    additional_data: impl AsRef<[u8]>,
     peers_public_key: &PublicKey,
     private_key: &StaticSecret,
 ) -> Result<Vec<u8>> {

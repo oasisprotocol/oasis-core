@@ -463,8 +463,8 @@ impl Opener for Identity {
     fn box_open(
         &self,
         nonce: &[u8; deoxysii::NONCE_SIZE],
-        ciphertext: Vec<u8>,
-        additional_data: Vec<u8>,
+        ciphertext: impl AsMut<[u8]>,
+        additional_data: impl AsRef<[u8]>,
         peers_public_key: &x25519_dalek::PublicKey,
     ) -> Result<Vec<u8>> {
         let inner = self.inner.read().unwrap();
