@@ -1584,12 +1584,9 @@ mod tests {
         }
 
         // Secret for epoch 3 should not exist.
-        kdf.inner
-            .read()
-            .unwrap()
-            .ephemeral_secrets
-            .get(&3)
-            .map(|_| panic!("ephemeral secret for epoch 3 should not exist"));
+        if kdf.inner.read().unwrap().ephemeral_secrets.contains_key(&3) {
+            panic!("ephemeral secret for epoch 3 should not exist")
+        }
 
         // Insert enough secrets so that the oldest one is removed.
         for epoch in 1..(EPHEMERAL_SECRET_CACHE_SIZE + 2) as EpochTime {
@@ -1600,12 +1597,9 @@ mod tests {
         }
 
         // Secret for epoch 1 should be removed.
-        kdf.inner
-            .read()
-            .unwrap()
-            .ephemeral_secrets
-            .get(&1)
-            .map(|_| panic!("ephemeral secret for epoch 1 should not exist"));
+        if kdf.inner.read().unwrap().ephemeral_secrets.contains_key(&1) {
+            panic!("ephemeral secret for epoch 1 should not exist")
+        }
 
         // Secret for epoch 2 should change.
         {

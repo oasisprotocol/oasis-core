@@ -414,7 +414,7 @@ mod tests {
     type CommitteeChanged = churp::CommitteeChanged<Group>;
 
     fn prepare_shareholders(ids: &[u64]) -> Vec<PrimeField> {
-        ids.into_iter().map(|&id| id.into()).collect()
+        ids.iter().map(|&id| id.into()).collect()
     }
 
     fn verify_shareholders(shareholders: &[Arc<Shareholder>], threshold: u8, full_share: bool) {
@@ -469,11 +469,11 @@ mod tests {
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for alice in committee.iter() {
-            let handoff = DealingPhase::new(threshold, alice.clone(), committee.clone()).unwrap();
+            let handoff = DealingPhase::new(threshold, *alice, committee.clone()).unwrap();
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), HandoffKind::DealingPhase);
+                let share = dealer.make_share(*alice, HandoffKind::DealingPhase);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 
@@ -512,8 +512,7 @@ mod tests {
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for (i, alice) in committee.iter().enumerate() {
-            let handoff =
-                CommitteeUnchanged::new(threshold, alice.clone(), committee.clone()).unwrap();
+            let handoff = CommitteeUnchanged::new(threshold, *alice, committee.clone()).unwrap();
 
             let shareholder = shareholders.get(i).unwrap().clone();
 
@@ -522,21 +521,21 @@ mod tests {
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), HandoffKind::CommitteeUnchanged);
+                let share = dealer.make_share(*alice, HandoffKind::CommitteeUnchanged);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-                assert!(handoff.needs_bivariate_share(&bob).unwrap());
-                let done = handoff.add_bivariate_share(&bob, verifiable_share).unwrap();
+                assert!(handoff.needs_bivariate_share(bob).unwrap());
+                let done = handoff.add_bivariate_share(bob, verifiable_share).unwrap();
 
                 if j + 1 < dealers.len() {
                     // Proactivization still in progress.
                     assert!(!done);
-                    assert!(!handoff.needs_bivariate_share(&bob).unwrap());
+                    assert!(!handoff.needs_bivariate_share(bob).unwrap());
                 } else {
                     // Proactivization done.
                     assert!(done);
-                    assert!(handoff.needs_bivariate_share(&bob).is_err());
+                    assert!(handoff.needs_bivariate_share(bob).is_err());
                 }
             }
 
@@ -562,8 +561,7 @@ mod tests {
         let mut handoffs = Vec::with_capacity(committee.len());
 
         for alice in committee.iter() {
-            let handoff =
-                CommitteeChanged::new(threshold, alice.clone(), committee.clone()).unwrap();
+            let handoff = CommitteeChanged::new(threshold, *alice, committee.clone()).unwrap();
 
             // Fetch verification matrix from the old committee.
             assert!(handoff.needs_verification_matrix().unwrap());
@@ -580,7 +578,7 @@ mod tests {
 
                 assert!(handoff.needs_share_reduction_switch_point(&bob).unwrap());
                 let bij = shareholder.switch_point(alice);
-                let point = SwitchPoint::new(bob.clone(), bij);
+                let point = SwitchPoint::new(bob, bij);
                 let done = handoff.add_share_reduction_switch_point(point).unwrap();
 
                 if j + 1 < num_points {
@@ -596,21 +594,21 @@ mod tests {
 
             // Proactivization.
             for (j, (bob, dealer)) in zip(committee.iter(), dealers.iter()).enumerate() {
-                let share = dealer.make_share(alice.clone(), HandoffKind::CommitteeChanged);
+                let share = dealer.make_share(*alice, HandoffKind::CommitteeChanged);
                 let vm = dealer.verification_matrix().clone();
                 let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-                assert!(handoff.needs_bivariate_share(&bob).unwrap());
-                let done = handoff.add_bivariate_share(&bob, verifiable_share).unwrap();
+                assert!(handoff.needs_bivariate_share(bob).unwrap());
+                let done = handoff.add_bivariate_share(bob, verifiable_share).unwrap();
 
                 if j + 1 < dealers.len() {
                     // Proactivization still in progress.
                     assert!(!done);
-                    assert!(!handoff.needs_bivariate_share(&bob).unwrap());
+                    assert!(!handoff.needs_bivariate_share(bob).unwrap());
                 } else {
                     // Proactivization done.
                     assert!(done);
-                    assert!(handoff.needs_bivariate_share(&bob).is_err());
+                    assert!(handoff.needs_bivariate_share(bob).is_err());
                 }
             }
 
@@ -639,8 +637,8 @@ mod tests {
                 assert!(handoff
                     .needs_full_share_distribution_switch_point(&bob)
                     .unwrap());
-                let bij = shareholder.switch_point(&alice);
-                let point = SwitchPoint::new(bob.clone(), bij);
+                let bij = shareholder.switch_point(alice);
+                let point = SwitchPoint::new(bob, bij);
                 let done = handoff
                     .add_full_share_distribution_switch_point(point)
                     .unwrap();

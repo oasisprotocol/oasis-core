@@ -52,7 +52,7 @@ pub trait Cache {
 
     /// Get the read syncer backing this cache.
     #[cfg(test)]
-    fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
+    fn get_read_syncer(&self) -> &dyn ReadSync;
 
     /// Create a new internal node and returns a pointer to it.
     fn new_internal_node(

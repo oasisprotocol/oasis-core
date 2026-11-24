@@ -90,14 +90,14 @@ mod tests {
         // Test incorrect context.
         let sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE1", b"Mr. Enclave");
         let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE2", &sealed_b);
-        assert_eq!(unsealed_b.is_err(), true);
+        assert!(unsealed_b.is_err());
     }
 
     #[test]
     fn test_incorrect_ciphertext_a() {
         let sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
         let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b[..2]);
-        assert_eq!(unsealed_b.is_err(), true);
+        assert!(unsealed_b.is_err());
     }
 
     #[test]
@@ -105,6 +105,6 @@ mod tests {
         let mut sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
         sealed_b[0] = sealed_b[0].wrapping_add(1);
         let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b);
-        assert_eq!(unsealed_b.is_err(), true);
+        assert!(unsealed_b.is_err());
     }
 }

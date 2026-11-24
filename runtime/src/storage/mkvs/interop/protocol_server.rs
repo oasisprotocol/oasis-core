@@ -134,14 +134,14 @@ impl ReadSync for ProtocolServerReadSyncer {
     }
 
     fn sync_get(&mut self, request: GetRequest) -> Result<ProofResponse> {
-        Ok(self.client.sync_get(&request)?)
+        self.client.sync_get(&request)
     }
 
     fn sync_get_prefixes(&mut self, request: GetPrefixesRequest) -> Result<ProofResponse> {
-        Ok(self.client.sync_get_prefixes(&request)?)
+        self.client.sync_get_prefixes(&request)
     }
 
     fn sync_iterate(&mut self, request: IterateRequest) -> Result<ProofResponse> {
-        Ok(self.client.sync_iterate(&request)?)
+        self.client.sync_iterate(&request)
     }
 }

@@ -358,8 +358,8 @@ impl Cache for LRUCache {
     }
 
     #[cfg(test)]
-    fn get_read_syncer(&self) -> &Box<dyn ReadSync> {
-        &self.read_syncer
+    fn get_read_syncer(&self) -> &dyn ReadSync {
+        &*self.read_syncer
     }
 
     fn new_internal_node(

@@ -644,7 +644,7 @@ mod tests {
     }
 
     fn prepare_shareholders(ids: &[u64]) -> Vec<PrimeField> {
-        ids.into_iter().map(|&id| id.into()).collect()
+        ids.iter().map(|&id| id.into()).collect()
     }
 
     fn add_point(
@@ -676,7 +676,7 @@ mod tests {
         let vm = VerificationMatrix::from(&bp);
         let me = prepare_shareholder(1);
 
-        for full_share in vec![false, true] {
+        for full_share in [false, true] {
             let mut sp = SwitchPoints::<Group>::new(threshold, full_share, me, vm.clone()).unwrap();
             let me = 1;
             let mut sh = 2;
@@ -799,8 +799,8 @@ mod tests {
         }
 
         // Happy path.
-        for full_share in vec![false, true] {
-            for zero_hole in vec![false, true] {
+        for full_share in [false, true] {
+            for zero_hole in [false, true] {
                 let mut bs = BivariateShares::<Group>::new(
                     threshold,
                     zero_hole,

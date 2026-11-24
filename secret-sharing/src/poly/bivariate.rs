@@ -269,7 +269,7 @@ mod tests {
     type BivariatePolynomial = super::BivariatePolynomial<PrimeField>;
 
     fn scalar(value: i64) -> PrimeField {
-        scalars(&vec![value])[0]
+        scalars(&[value])[0]
     }
 
     fn scalars(values: &[i64]) -> Vec<PrimeField> {
@@ -389,9 +389,9 @@ mod tests {
         let bp = BivariatePolynomial::with_coefficients(b.clone());
 
         // Test coefficients within bounds.
-        for i in 0..b.len() {
-            for j in 0..b[i].len() {
-                assert_eq!(bp.coefficient(i, j), Some(&b[i][j]));
+        for (i, bi) in b.iter().enumerate() {
+            for (j, bij) in bi.iter().enumerate() {
+                assert_eq!(bp.coefficient(i, j), Some(bij));
             }
         }
 

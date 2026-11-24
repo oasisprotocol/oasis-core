@@ -473,7 +473,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Include root node.
         let root_ptr = tree.cache.borrow().get_pending_root();
         let root_node = root_ptr.borrow().get_node();
-        pb.include(&*root_node.borrow());
+        pb.include(&root_node.borrow());
         // Ensure proof matches Go side.
         let proof = pb.build();
         assert_eq!(
@@ -483,7 +483,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         // Include root.left node.
         let root_left = noderef_as!(root_node, Internal).left.borrow().get_node();
-        pb.include(&*root_left.borrow());
+        pb.include(&root_left.borrow());
         // Ensure proof matches Go side.
         let proof = pb.build();
         assert_eq!(
@@ -493,23 +493,23 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         // Include root.left.left node.
         let root_left2 = noderef_as!(root_left, Internal).left.borrow().get_node();
-        pb.include(&*root_left2.borrow());
+        pb.include(&root_left2.borrow());
 
         // Include root.left.left.left node.
         let root_left3: Rc<RefCell<NodeBox>> =
             noderef_as!(root_left2, Internal).left.borrow().get_node();
-        pb.include(&*root_left3.borrow());
+        pb.include(&root_left3.borrow());
 
         // Include root.left.left.left.right node.
         let root_left3_right = noderef_as!(root_left3, Internal).right.borrow().get_node();
-        pb.include(&*root_left3_right.borrow());
+        pb.include(&root_left3_right.borrow());
 
         // Include root.left.left.left.right.left leaf node.
         let bottom = noderef_as!(root_left3_right, Internal)
             .left
             .borrow()
             .get_node();
-        pb.include(&*bottom.borrow());
+        pb.include(&bottom.borrow());
         // Ensure proof matches Go side.
         let proof = pb.build();
         assert_eq!(
@@ -604,10 +604,10 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Include root node.
         let root_ptr = tree.cache.borrow().get_pending_root();
         let root_node = root_ptr.borrow().get_node();
-        pb.include(&*root_node.borrow());
+        pb.include(&root_node.borrow());
         // Include root.left node.
         pb.include(
-            &*noderef_as!(root_node, Internal)
+            &noderef_as!(root_node, Internal)
                 .left
                 .borrow()
                 .get_node()
@@ -646,7 +646,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
             "a940b9ded7621a2b10497c846f46dc7778397979551d71bee2c07a9319e6aa45",
         );
 
-        for tc in vec![
+        for tc in [
             // Note: Tree::get_proof doesn't support version 0 proofs.
             // We test only version 1 proofs here.
             (

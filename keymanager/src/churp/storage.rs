@@ -409,7 +409,7 @@ mod tests {
         let restored = storage
             .load_bivariate_polynomial::<PrimeField>(churp_id + 1, epoch)
             .expect("bivariate polynomial should be loaded");
-        assert!(None == restored);
+        assert!(restored.is_none());
 
         // Invalid epoch, decryption should fail.
         let res = storage.load_bivariate_polynomial::<PrimeField>(churp_id, epoch + 1);

@@ -379,7 +379,7 @@ mod test {
         let invalid_signed_pk = SignedPublicKey {
             key: x25519::PublicKey::from([2u8; 32]),
             checksum: signed_pk.checksum.clone(),
-            signature: signed_pk.signature.clone(),
+            signature: signed_pk.signature,
             expiration: signed_pk.expiration,
         };
         let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
@@ -391,9 +391,9 @@ mod test {
 
         // Verify the signature with different checksum.
         let invalid_signed_pk = SignedPublicKey {
-            key: signed_pk.key.clone(),
+            key: signed_pk.key,
             checksum: [2u8; 32].to_vec(),
-            signature: signed_pk.signature.clone(),
+            signature: signed_pk.signature,
             expiration: signed_pk.expiration,
         };
         let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
@@ -405,9 +405,9 @@ mod test {
 
         // Verify the signature with invalid checksum.
         let invalid_signed_pk = SignedPublicKey {
-            key: signed_pk.key.clone(),
+            key: signed_pk.key,
             checksum: [1u8; 30].to_vec(),
-            signature: signed_pk.signature.clone(),
+            signature: signed_pk.signature,
             expiration: signed_pk.expiration,
         };
         let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
@@ -419,9 +419,9 @@ mod test {
 
         // Verify the signature with different expiration epoch.
         let invalid_signed_pk = SignedPublicKey {
-            key: signed_pk.key.clone(),
+            key: signed_pk.key,
             checksum: signed_pk.checksum.clone(),
-            signature: signed_pk.signature.clone(),
+            signature: signed_pk.signature,
             expiration: Some(100),
         };
         let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, Some(15), &pk);

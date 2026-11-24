@@ -563,7 +563,7 @@ mod tests {
     type Polynomial = super::Polynomial<PrimeField>;
 
     fn scalar(value: i64) -> PrimeField {
-        scalars(&vec![value])[0]
+        scalars(&[value])[0]
     }
 
     fn scalars(values: &[i64]) -> Vec<PrimeField> {
@@ -648,8 +648,8 @@ mod tests {
         let p = Polynomial::with_coefficients(a.clone());
 
         // Test coefficients within bounds.
-        for i in 0..a.len() {
-            assert_eq!(p.coefficient(i), Some(&a[i]));
+        for (i, ai) in a.iter().enumerate() {
+            assert_eq!(p.coefficient(i), Some(ai));
         }
 
         // Test coefficients out of bounds.
@@ -675,13 +675,13 @@ mod tests {
         let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
 
         let r = f.eval(&scalar(0));
-        assert_eq!(r, scalar(1 + 2 * 0 + 3 * 0 * 0));
+        assert_eq!(r, scalar(1)); // 1 + 2 * 0 + 3 * 0 * 0
 
         let r = f.eval(&scalar(1));
-        assert_eq!(r, scalar(1 + 2 * 1 + 3 * 1 * 1));
+        assert_eq!(r, scalar(6)); // 1 + 2 * 1 + 3 * 1 * 1
 
         let r = f.eval(&scalar(2));
-        assert_eq!(r, scalar(1 + 2 * 2 + 3 * 2 * 2));
+        assert_eq!(r, scalar(17)); // 1 + 2 * 2 + 3 * 2 * 2
     }
 
     #[test]
@@ -821,25 +821,29 @@ mod tests {
             let h = Polynomial::with_coefficients(scalars(&coefficients_h));
 
             // Test scalar mul.
+            #[allow(clippy::clone_on_copy)]
             let v = f.clone() * s.clone();
             assert_eq!(v.a, h.a);
 
+            #[allow(clippy::op_ref)]
             let v = f.clone() * &s.clone();
             assert_eq!(v.a, h.a);
 
+            #[allow(clippy::clone_on_copy)]
             let v = &f.clone() * s.clone();
             assert_eq!(v.a, h.a);
 
+            #[allow(clippy::op_ref)]
             let v = &f.clone() * &s.clone();
             assert_eq!(v.a, h.a);
 
             // Test scalar mul assign.
             let mut v = f.clone();
-            v *= s.clone();
+            v *= s;
             assert_eq!(v.a, h.a);
 
             let mut v = f.clone();
-            v *= &s.clone();
+            v *= &s;
             assert_eq!(v.a, h.a);
         }
     }

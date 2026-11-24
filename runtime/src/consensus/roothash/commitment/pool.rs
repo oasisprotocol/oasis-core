@@ -459,7 +459,8 @@ mod tests {
         };
 
         // Test invalid commitments.
-        let tcs: Vec<(&str, fn(&mut ExecutorCommitment), Error)> = vec![
+        type TestCase = (&'static str, fn(&mut ExecutorCommitment), Error);
+        let tcs: Vec<TestCase> = vec![
             (
                 "BlockBadRound",
                 |ec: &mut ExecutorCommitment| ec.header.header.round -= 1,
@@ -555,7 +556,7 @@ mod tests {
             }),
             Message::Registry(Versioned {
                 version: 0,
-                inner: RegistryMessage::UpdateRuntime(Box::new(Runtime::default())),
+                inner: RegistryMessage::UpdateRuntime(Box::default()),
             }),
         ];
         let msg_hash = Message::messages_hash(&ec_with_msgs.messages);
@@ -608,7 +609,7 @@ mod tests {
             .to_dd_result()
             .downcast_ref::<ExecutorCommitment>();
         assert_eq!(dd_ec, Some(&ec), "DD should return the correct commitment");
-        assert_eq!(false, pool.discrepancy);
+        assert!(!pool.discrepancy);
     }
 
     fn generate_executor_commitment(
@@ -619,9 +620,9 @@ mod tests {
         let parent_blk = Block::new_empty_block(&child_blk, 1, HeaderType::Normal);
 
         // TODO: Add tests with some emitted messages.
-        let msgs_hash = Message::messages_hash(&vec![]);
+        let msgs_hash = Message::messages_hash(&[]);
         // TODO: Add tests with some incoming messages.
-        let in_msgs_hash = Message::in_messages_hash(&vec![]);
+        let in_msgs_hash = Message::in_messages_hash(&[]);
 
         let ec = ExecutorCommitment {
             header: ExecutorCommitmentHeader {

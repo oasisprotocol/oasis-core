@@ -559,9 +559,9 @@ pub(super) mod test {
         );
 
         let (keys, values) = generate_key_value_pairs_ex("T".to_owned(), 100);
-        let items: Vec<(Vec<u8>, Vec<u8>)> = keys.into_iter().zip(values.into_iter()).collect();
+        let items: Vec<(Vec<u8>, Vec<u8>)> = keys.into_iter().zip(values).collect();
         for (key, value) in &items {
-            tree.insert(&key, &value).unwrap();
+            tree.insert(key, value).unwrap();
         }
 
         let (write_log, hash) = tree.commit_both(Default::default(), 0).expect("commit");
@@ -581,7 +581,7 @@ pub(super) mod test {
 
         let mut it = remote_tree.iter();
         it.set_prefetch(1000);
-        test_iterator_with(&items, it, &vec![]);
+        test_iterator_with(&items, it, &[]);
 
         let cache = remote_tree.cache.borrow();
         let stats = cache
@@ -618,7 +618,7 @@ pub(super) mod test {
         assert_eq!(iterations, items.len(), "iterator should go over all items");
 
         for (seek, pos) in tests {
-            it.seek(&seek);
+            it.seek(seek);
             if *pos == -1 {
                 assert!(!it.is_valid(), "iterator should not be valid after seek");
                 continue;
