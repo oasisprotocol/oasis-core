@@ -75,9 +75,9 @@ CARGO_CLIPPY_FLAGS := -D warnings \
 
 lint-rust:
 	@$(ECHO) "$(CYAN)*** Running cargo clippy linters...$(OFF)"
-	@cargo clippy -- $(CARGO_CLIPPY_FLAGS)
-	@cargo clippy --features debug-mock-sgx -- $(CARGO_CLIPPY_FLAGS)
-	@cargo clippy --features tdx -- $(CARGO_CLIPPY_FLAGS)
+	@cargo clippy --all-targets -- $(CARGO_CLIPPY_FLAGS)
+	@cargo clippy --all-targets --features debug-mock-sgx -- $(CARGO_CLIPPY_FLAGS)
+	@cargo clippy --all-targets --features tdx -- $(CARGO_CLIPPY_FLAGS)
 
 lint-go:
 	@$(MAKE) -C go lint
