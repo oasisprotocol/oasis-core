@@ -50,7 +50,7 @@ curve25519-dalek = { version = "5.0.0", features = [
 ] }
 x25519-dalek = { version = "3.0.0", features = ["static_secrets", "zeroize"] }
 ed25519-dalek = { version = "3.0.0", features = ["rand_core", "digest"] }
-deoxysii = "0.2.4"
+deoxysii = "0.2.5"
 tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
 sp800-185 = "0.2.0"
 zeroize = "1.7"
