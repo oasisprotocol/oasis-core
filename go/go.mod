@@ -11,8 +11,8 @@ replace (
 	// v1.18.0+ has broken handling of bound flags.
 	github.com/spf13/viper => github.com/spf13/viper v1.17.0
 
-	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/curve25519-voi/primitives/x25519 v0.0.0-20251114093237-2ab5a27a1729
-	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20251114093237-2ab5a27a1729
+	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/curve25519-voi/primitives/x25519 v0.0.0-20261124131029-91a58be5f96f
+	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20261124131029-91a58be5f96f
 )
 
 require (
@@ -40,7 +40,7 @@ require (
 	github.com/mdlayher/vsock v1.4.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/nxadm/tail v1.4.11
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20261124131029-91a58be5f96f
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/powerman/rpc-codec v1.3.0
