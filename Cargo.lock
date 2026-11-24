@@ -799,12 +799,12 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "deoxysii"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fab9d9a7e9ff7a4762c5c378deb4158d6aaeaeab86952ecf64221159dcd20809"
+checksum = "8aaee50170659556fdf8824e5600af44610060bb6f7b9c56504ae37ecfa7a05d"
 dependencies = [
  "subtle",
- "thiserror 1.0.69",
+ "thiserror 2.0.21",
  "zeroize",
 ]
 
