@@ -237,7 +237,7 @@ mod test {
                 is_secure: true,
                 generation: 0,
                 rotation_epoch: 0,
-                checksum: checksum,
+                checksum,
                 nodes: vec![signer1, signer2],
                 policy: Some(SignedPolicySGX {
                     policy: PolicySGX {

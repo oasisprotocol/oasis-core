@@ -140,13 +140,7 @@ mod tests {
 
         // Benchmark box sealing.
         b.iter(|| {
-            let _sealed = black_box(box_seal(
-                &nonce,
-                text.to_vec(),
-                aad.to_vec(),
-                &b_pub,
-                &a_priv,
-            ));
+            let _sealed = black_box(box_seal(&nonce, text, aad, &b_pub, &a_priv));
         });
     }
 
@@ -167,18 +161,12 @@ mod tests {
         rng.fill_bytes(&mut aad);
 
         // Seal the payload.
-        let sealed = box_seal(&nonce, text.to_vec(), aad.to_vec(), &b_pub, &a_priv);
+        let sealed = box_seal(&nonce, text, aad, &b_pub, &a_priv);
         let ciphertext = sealed.unwrap();
 
         // Benchmark box opening.
         b.iter(|| {
-            let _opened = black_box(box_open(
-                &nonce,
-                ciphertext.clone(),
-                aad.to_vec(),
-                &a_pub,
-                &b_priv,
-            ));
+            let _opened = black_box(box_open(&nonce, ciphertext.clone(), aad, &a_pub, &b_priv));
         });
     }
 }

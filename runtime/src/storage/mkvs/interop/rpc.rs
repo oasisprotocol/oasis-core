@@ -60,7 +60,7 @@ impl StorageClient {
         };
         StorageClient {
             client: Client::with_transport(transport),
-            socket_path: socket_path,
+            socket_path,
         }
     }
 

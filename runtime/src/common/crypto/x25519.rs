@@ -163,7 +163,7 @@ mod tests {
         );
 
         // Encode/decode public key.
-        let enc = cbor::to_vec(pk.clone());
+        let enc = cbor::to_vec(pk);
         let dec: PublicKey = cbor::from_slice(&enc).expect("deserialization should succeed");
         assert_eq!(
             pk.0.to_bytes(),

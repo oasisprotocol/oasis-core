@@ -323,7 +323,8 @@ mod tests {
             signature: Signature::default(),
         };
 
-        let tcs: Vec<(&str, fn(&mut ExecutorCommitment), bool)> = vec![
+        type TestCase = (&'static str, fn(&mut ExecutorCommitment), bool);
+        let tcs: Vec<TestCase> = vec![
             (
                 "Ok",
                 |ec: &mut ExecutorCommitment| {

@@ -104,7 +104,7 @@ mod test {
 
     #[test]
     fn test_version_u64() {
-        for v in vec![
+        for v in [
             Version::default(),
             Version {
                 major: 0,

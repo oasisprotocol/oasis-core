@@ -145,9 +145,9 @@ mod tests {
             start_value,
             current_value,
         };
-        assert_eq!(nonce.increment().is_err(), true);
+        assert!(nonce.increment().is_err());
         // Try again.
-        assert_eq!(nonce.increment().is_err(), true);
+        assert!(nonce.increment().is_err());
     }
 
     #[test]
@@ -161,6 +161,6 @@ mod tests {
         let first_expected = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 254];
         nonce.increment().unwrap();
         assert_eq!(nonce.to_vec(), first_expected.to_vec());
-        assert_eq!(nonce.increment().is_err(), true);
+        assert!(nonce.increment().is_err());
     }
 }

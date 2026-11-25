@@ -190,7 +190,7 @@ mod test {
         let res = crypto::unpack_encrypted_secret_nonce(&data).expect("data should unpack");
         assert_eq!((encrypted_secret, nonce), res);
 
-        let res = crypto::unpack_encrypted_secret_nonce(&vec![1, 2, 3]);
+        let res = crypto::unpack_encrypted_secret_nonce(&[1, 2, 3]);
         assert_eq!(None, res);
     }
 }

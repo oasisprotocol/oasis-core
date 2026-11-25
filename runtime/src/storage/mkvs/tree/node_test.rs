@@ -19,7 +19,7 @@ fn test_serialization_leaf() {
         .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
-    assert_eq!(true, decoded_leaf_node.clean);
+    assert!(decoded_leaf_node.clean);
     assert_eq!(leaf_node.key, decoded_leaf_node.key);
     assert_eq!(leaf_node.value, decoded_leaf_node.value);
 }
@@ -39,8 +39,8 @@ fn test_serialization_internal() {
     let label_bit_length = 24 as Depth;
 
     let int_node = InternalNode {
-        label: label,
-        label_bit_length: label_bit_length,
+        label,
+        label_bit_length,
         leaf_node: Rc::new(RefCell::new(NodePointer {
             clean: true,
             hash: leaf_node.get_hash(),
@@ -69,7 +69,7 @@ fn test_serialization_internal() {
         .unmarshal_binary(marshaled.as_slice())
         .expect("unmarshal");
 
-    assert_eq!(true, decoded_int_node.clean);
+    assert!(decoded_int_node.clean);
     assert_eq!(int_node.label, decoded_int_node.label);
     assert_eq!(int_node.label_bit_length, decoded_int_node.label_bit_length);
     assert_eq!(
@@ -84,12 +84,12 @@ fn test_serialization_internal() {
         int_node.right.borrow().hash,
         decoded_int_node.right.borrow().hash
     );
-    assert_eq!(true, decoded_int_node.leaf_node.borrow().clean);
-    assert_eq!(true, decoded_int_node.left.borrow().clean);
-    assert_eq!(true, decoded_int_node.right.borrow().clean);
-    assert_eq!(true, decoded_int_node.leaf_node.borrow().node.is_some());
-    assert_eq!(false, decoded_int_node.left.borrow().node.is_some());
-    assert_eq!(false, decoded_int_node.right.borrow().node.is_some());
+    assert!(decoded_int_node.leaf_node.borrow().clean);
+    assert!(decoded_int_node.left.borrow().clean);
+    assert!(decoded_int_node.right.borrow().clean);
+    assert!(decoded_int_node.leaf_node.borrow().node.is_some());
+    assert!(!decoded_int_node.left.borrow().node.is_some());
+    assert!(!decoded_int_node.right.borrow().node.is_some());
 }
 
 #[test]
@@ -148,10 +148,10 @@ fn test_depth_type() {
     assert_eq! {3, (17 as Depth).to_bytes()};
 
     let mut dt: Depth = 0;
-    assert_eq! {[0x0a as u8, 0x00].to_vec(), (10 as Depth).marshal_binary().unwrap()};
+    assert_eq! {[0x0a_u8, 0x00].to_vec(), (10 as Depth).marshal_binary().unwrap()};
     dt.unmarshal_binary(&[0x0a, 0x00]).expect("unmarshal");
     assert_eq! {(10 as Depth), dt};
-    assert_eq! {[0x04 as u8, 0x01].to_vec(), (260 as Depth).marshal_binary().unwrap()};
+    assert_eq! {[0x04_u8, 0x01].to_vec(), (260 as Depth).marshal_binary().unwrap()};
     dt.unmarshal_binary(&[0x04, 0x01]).expect("unmarshal");
     assert_eq! {(260 as Depth), dt};
 }

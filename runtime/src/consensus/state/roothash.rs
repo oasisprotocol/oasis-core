@@ -152,24 +152,24 @@ mod test {
             .expect("runtime state query should work");
         println!("{:?}", runtime_state);
         assert_eq!(runtime_state.runtime.id, runtime_id);
-        assert_eq!(runtime_state.suspended, false);
+        assert!(!runtime_state.suspended);
         assert_eq!(runtime_state.genesis_block.header.round, 1);
         assert_eq!(
             runtime_state.genesis_block.header.io_root,
-            Hash::digest_bytes(format!("genesis").as_bytes())
+            Hash::digest_bytes("genesis".as_bytes())
         );
         assert_eq!(
             runtime_state.genesis_block.header.state_root,
-            Hash::digest_bytes(format!("genesis").as_bytes())
+            Hash::digest_bytes("genesis".as_bytes())
         );
         assert_eq!(runtime_state.last_block.header.round, 10);
         assert_eq!(
             runtime_state.last_block.header.io_root,
-            Hash::digest_bytes(format!("io 10").as_bytes())
+            Hash::digest_bytes("io 10".as_bytes())
         );
         assert_eq!(
             runtime_state.last_block.header.state_root,
-            Hash::digest_bytes(format!("state 10").as_bytes())
+            Hash::digest_bytes("state 10".as_bytes())
         );
         assert_eq!(runtime_state.last_block_height, 90);
         assert_eq!(runtime_state.last_normal_round, 10);

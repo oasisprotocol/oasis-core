@@ -97,10 +97,7 @@ mod tests {
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
-        let shareholders = shares
-            .into_iter()
-            .map(|share| Shareholder::new(share))
-            .collect::<Vec<_>>();
+        let shareholders = shares.into_iter().map(Shareholder::new).collect::<Vec<_>>();
 
         // Fetch shares.
         let shares = shareholders
@@ -160,10 +157,7 @@ mod tests {
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
-        let shareholders = shares
-            .into_iter()
-            .map(|share| Shareholder::new(share))
-            .collect::<Vec<_>>();
+        let shareholders = shares.into_iter().map(Shareholder::new).collect::<Vec<_>>();
 
         // Fetch shares.
         let shares = shareholders
@@ -220,10 +214,7 @@ mod tests {
         let shares = (1..=num_shareholders)
             .map(|x| dealer.make_share(PrimeField::from_u64(x)))
             .collect::<Vec<_>>();
-        let mut shareholders = shares
-            .into_iter()
-            .map(|share| Shareholder::new(share))
-            .collect::<Vec<_>>();
+        let mut shareholders = shares.into_iter().map(Shareholder::new).collect::<Vec<_>>();
 
         // Fetch shares.
         let shares = shareholders

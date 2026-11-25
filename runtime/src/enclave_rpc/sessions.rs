@@ -578,7 +578,7 @@ mod test {
         let now = 0;
         for (peer_id, session_id, num_sessions, num_peers, created) in test_vector {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
             let res = sessions.add(session, now);
             match created {
@@ -615,7 +615,7 @@ mod test {
         for (peer_id, session_id, create) in test_vector {
             if create {
                 let session = sessions
-                    .create_responder(peer_id.clone(), session_id.clone())
+                    .create_responder(peer_id.clone(), *session_id)
                     .unwrap();
                 let _ = sessions.add(session, now);
             }
@@ -649,13 +649,11 @@ mod test {
         let maybe_s = sessions.find_any();
         assert!(maybe_s.is_none(), "session should not be found");
 
-        let mut now = 0;
-        for (peer_id, session_id) in test_vector {
+        for (now, (peer_id, session_id)) in test_vector.into_iter().enumerate() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
-            let _ = sessions.add(session, now);
-            now += 1
+            let _ = sessions.add(session, now as i64);
         }
 
         // No sessions in use.
@@ -720,13 +718,11 @@ mod test {
         let maybe_s = sessions.find_one(&peer_ids[0..2]);
         assert!(maybe_s.is_none(), "session should not be found");
 
-        let mut now = 0;
-        for (peer_id, session_id) in test_vector {
+        for (now, (peer_id, session_id)) in test_vector.into_iter().enumerate() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
-            let _ = sessions.add(session, now);
-            now += 1
+            let _ = sessions.add(session, now as i64);
         }
 
         // Peers without sessions.
@@ -789,13 +785,11 @@ mod test {
                                              // Max sessions reached.
         ];
 
-        let mut now = 0;
-        for (peer_id, session_id) in test_vector.clone() {
+        for (now, (peer_id, session_id)) in test_vector.clone().into_iter().enumerate() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
-            let _ = sessions.add(session, now);
-            now += 1;
+            let _ = sessions.add(session, now as i64);
         }
 
         // Removing one session from an unknown peer should have no effect,
@@ -824,7 +818,7 @@ mod test {
 
         // Removing another session should fail as one global session slot
         // is available.
-        for peer_id in vec![&peer_ids[0], &peer_ids[1]] {
+        for peer_id in [&peer_ids[0], &peer_ids[1]] {
             let res = sessions.remove_from(peer_id);
             assert!(res.is_ok(), "remove_from should succeed");
             let maybe_s_owned = res.unwrap();
@@ -861,7 +855,7 @@ mod test {
         let mut now = 0;
         for (peer_id, session_id) in test_vector.clone() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
             let _ = sessions.add(session, now);
             now += 1;
@@ -920,7 +914,7 @@ mod test {
         let now = 0;
         for (peer_id, session_id, _, _) in test_vector.clone() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
             let _ = sessions.add(session, now);
         }
@@ -952,7 +946,7 @@ mod test {
         let now = 0;
         for (peer_id, session_id) in test_vector.clone() {
             let session = sessions
-                .create_responder(peer_id.clone(), session_id.clone())
+                .create_responder(peer_id.clone(), *session_id)
                 .unwrap();
             let _ = sessions.add(session, now);
         }

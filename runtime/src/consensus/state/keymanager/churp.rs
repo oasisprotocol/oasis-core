@@ -117,14 +117,14 @@ mod test {
         applications.insert(
             signer1,
             Application {
-                checksum: checksum.clone(),
+                checksum,
                 reconstructed: false,
             },
         );
         applications.insert(
             signer2,
             Application {
-                checksum: checksum.clone(),
+                checksum,
                 reconstructed: true,
             },
         );

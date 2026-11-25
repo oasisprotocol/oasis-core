@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_multiplier() {
         // No values.
-        let m = Multiplier::<usize>::new(&vec![]);
+        let m = Multiplier::<usize>::new(&[]);
         for i in 0..10 {
             let product = m.get_product(i);
             assert_eq!(product, None);
@@ -189,7 +189,7 @@ mod tests {
 
         // Many values.
         let values = vec![1, 2, 3, 4, 5];
-        let total = values.iter().fold(1, |acc, x| acc * x);
+        let total = values.iter().product();
         let products = values.iter().map(|x| total / x);
         let m = Multiplier::new(&values);
 

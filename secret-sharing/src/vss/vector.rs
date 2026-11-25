@@ -105,7 +105,7 @@ mod tests {
     use crate::{poly::Polynomial, vss::VerificationVector};
 
     fn scalar(value: i64) -> p384::Scalar {
-        scalars(&vec![value])[0]
+        scalars(&[value])[0]
     }
 
     fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
@@ -120,15 +120,15 @@ mod tests {
 
     #[test]
     fn test_from() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&vec![1, 2, 3]));
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
         let vv: VerificationVector<p384::ProjectivePoint> = VerificationVector::from(&p);
         assert_eq!(vv.v.len(), 3);
     }
 
     #[test]
     fn test_is_from() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&vec![1, 2, 3]));
-        let q = Polynomial::<p384::Scalar>::with_coefficients(scalars(&vec![1, 0, 3]));
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let q = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 0, 3]));
         let vv: VerificationVector<p384::ProjectivePoint> = VerificationVector::from(&p);
         assert!(vv.is_from(&p));
         assert!(!vv.is_from(&q));
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&vec![1, 2, 3]));
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
         let vv: VerificationVector<p384::ProjectivePoint> = VerificationVector::from(&p);
         let x2 = scalar(2);
         let x3 = scalar(3);

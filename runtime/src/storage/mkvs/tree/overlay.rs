@@ -361,7 +361,7 @@ mod test {
 
         // Test that all keys can be fetched from an empty overlay.
         for (k, expected_v) in &items {
-            let v = overlay.get(&k).unwrap();
+            let v = overlay.get(k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 
@@ -416,7 +416,7 @@ mod test {
 
         // Test that all keys can be fetched from an updated overlay.
         for (k, expected_v) in &items {
-            let v = overlay.get(&k).unwrap();
+            let v = overlay.get(k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 
@@ -429,7 +429,7 @@ mod test {
 
         // Test that all keys can be fetched from an updated tree.
         for (k, expected_v) in &items {
-            let v = tree.get(&k).unwrap();
+            let v = tree.get(k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 

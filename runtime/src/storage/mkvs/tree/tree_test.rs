@@ -59,8 +59,8 @@ fn test_basic() {
 
     // Insert two keys and check committed tree.
     assert_eq!(tree.insert(key_zero, value_zero).expect("insert"), None);
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), false);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(!tree.cache_contains_key(key_one));
     let value = tree.get(key_zero).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_zero);
 
@@ -71,8 +71,8 @@ fn test_basic() {
             .as_slice(),
         value_zero
     );
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), false);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(!tree.cache_contains_key(key_one));
     let value = tree.get(key_zero).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_zero);
 
@@ -93,8 +93,8 @@ fn test_basic() {
 
     // Check overwriting modifications.
     assert_eq!(tree.insert(key_one, value_one).expect("insert"), None);
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), true);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(tree.cache_contains_key(key_one));
     let value = tree.get(key_one).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_one);
 
@@ -105,8 +105,8 @@ fn test_basic() {
             .as_slice(),
         value_zero
     );
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), true);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(tree.cache_contains_key(key_one));
     let value = tree.get(key_zero).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_zero_alt);
     let value = tree.get(key_one).expect("get").expect("get_some");
@@ -120,15 +120,15 @@ fn test_basic() {
         value_one
     );
     assert_eq!(tree.remove(key_one).expect("remove"), None);
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), false);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(!tree.cache_contains_key(key_one));
     assert_eq!(None, tree.get(key_one).expect("get"));
     let value = tree.get(key_zero).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_zero_alt);
 
     assert_eq!(tree.insert(key_one, value_one_alt).expect("insert"), None);
-    assert_eq!(tree.cache_contains_key(key_zero), true);
-    assert_eq!(tree.cache_contains_key(key_one), true);
+    assert!(tree.cache_contains_key(key_zero));
+    assert!(tree.cache_contains_key(key_one));
     let value = tree.get(key_zero).expect("get").expect("get_some");
     assert_eq!(value.as_slice(), value_zero_alt);
     let value = tree.get(key_one).expect("get").expect("get_some");
@@ -177,7 +177,7 @@ fn test_basic() {
     assert_eq!(log[1].kind(), LogEntryKind::Insert);
 
     tree.remove(key_one).expect("remove");
-    assert_eq!(true, tree.get(key_one).expect("get").is_none());
+    assert!(tree.get(key_one).expect("get").is_none());
 
     let (log, hash) = tree.commit_both(Default::default(), 0).expect("commit");
     assert_eq!(
@@ -194,8 +194,8 @@ fn test_basic() {
     );
     assert_eq!(log[0].kind(), LogEntryKind::Delete);
     tree.remove(key_zero).expect("remove");
-    assert_eq!(tree.cache_contains_key(key_zero), false);
-    assert_eq!(tree.cache_contains_key(key_one), false);
+    assert!(!tree.cache_contains_key(key_zero));
+    assert!(!tree.cache_contains_key(key_one));
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn test_long_keys() {
     }
 
     for i in 0..keys.len() {
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), true);
+        assert!(tree.cache_contains_key(keys[i].as_slice()));
         let value = tree
             .get(keys[i].as_slice())
             .expect("get")
@@ -229,7 +229,7 @@ fn test_long_keys() {
     for i in (1..keys.len()).rev() {
         tree.remove(keys[i].as_slice()).expect("remove");
 
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), false);
+        assert!(!tree.cache_contains_key(keys[i].as_slice()));
         assert_eq!(None, tree.get(keys[i].as_slice()).expect("get"));
 
         let hash = Tree::commit(&mut tree, Default::default(), 0).expect("commit");
@@ -252,22 +252,22 @@ fn test_empty_keys() {
         let empty_key = b"";
         let empty_value = b"empty value";
 
-        assert_eq!(tree.cache_contains_key(empty_key), false);
+        assert!(!tree.cache_contains_key(empty_key));
         tree.insert(empty_key, empty_value).expect("insert");
 
-        assert_eq!(tree.cache_contains_key(empty_key), true);
+        assert!(tree.cache_contains_key(empty_key));
         let value = tree.get(empty_key).expect("get").expect("get_some");
         assert_eq!(empty_value, value.as_slice());
 
         tree.remove(empty_key).expect("remove");
 
-        assert_eq!(tree.cache_contains_key(empty_key), false);
+        assert!(!tree.cache_contains_key(empty_key));
         assert_eq!(None, tree.get(empty_key).expect("get"));
     }
 
     fn test_zeroth_discriminator_bit(tree: &mut Tree) {
-        let key1 = &[0x7f as u8, 0xab];
-        let key2 = &[0xff as u8, 0xab];
+        let key1 = &[0x7f_u8, 0xab];
+        let key2 = &[0xff_u8, 0xab];
         let value1 = b"value 1";
         let value2 = b"value 2";
 
@@ -390,11 +390,11 @@ fn test_remove() {
     let mut roots: Vec<Hash> = Vec::new();
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), false);
+        assert!(!tree.cache_contains_key(keys[i].as_slice()));
         tree.insert(keys[i].as_slice(), values[i].as_slice())
             .expect("insert");
 
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), true);
+        assert!(tree.cache_contains_key(keys[i].as_slice()));
         let value = tree
             .get(keys[i].as_slice())
             .expect("get")
@@ -408,10 +408,10 @@ fn test_remove() {
     assert_eq!(format!("{:?}", roots[roots.len() - 1]), ALL_ITEMS_ROOT);
 
     for i in (1..keys.len()).rev() {
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), true);
+        assert!(tree.cache_contains_key(keys[i].as_slice()));
         tree.remove(keys[i].as_slice()).expect("remove");
 
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), false);
+        assert!(!tree.cache_contains_key(keys[i].as_slice()));
         assert_eq!(None, tree.get(keys[i].as_slice()).expect("get"));
 
         let hash = Tree::commit(&mut tree, Default::default(), 0).expect("commit");
@@ -424,11 +424,11 @@ fn test_remove() {
 
     // Now re-insert keys n..0, remove them in order 0..n.
     for i in (0..keys.len()).rev() {
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), false);
+        assert!(!tree.cache_contains_key(keys[i].as_slice()));
         tree.insert(keys[i].as_slice(), values[i].as_slice())
             .expect("insert");
 
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), true);
+        assert!(tree.cache_contains_key(keys[i].as_slice()));
         let value = tree
             .get(keys[i].as_slice())
             .expect("get")
@@ -438,12 +438,12 @@ fn test_remove() {
         let _ = Tree::commit(&mut tree, Default::default(), 0).expect("commit");
     }
 
-    for i in 0..keys.len() {
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), true);
-        tree.remove(keys[i].as_slice()).expect("remove");
+    for key in keys {
+        assert!(tree.cache_contains_key(key.as_slice()));
+        tree.remove(key.as_slice()).expect("remove");
 
-        assert_eq!(tree.cache_contains_key(keys[i].as_slice()), false);
-        assert_eq!(None, tree.get(keys[i].as_slice()).expect("get"));
+        assert!(!tree.cache_contains_key(key.as_slice()));
+        assert_eq!(None, tree.get(key.as_slice()).expect("get"));
 
         let _ = Tree::commit(&mut tree, Default::default(), 0).expect("commit");
     }
@@ -668,7 +668,7 @@ fn test_syncer_prefetch_prefixes() {
 
     // Prefetch keys starting with prefix "key".
     remote_tree
-        .prefetch_prefixes(&vec![b"key".to_vec().into()], 1000)
+        .prefetch_prefixes(&[b"key".to_vec().into()], 1000)
         .expect("prefetch_prefixes");
 
     for i in 0..keys.len() {

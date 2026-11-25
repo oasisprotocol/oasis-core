@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_trusted_policy_signers() {
         // Prepare data for tests.
-        let public_keys = vec![
+        let public_keys = [
             OasisPublicKey::from(
                 "af2c61c73142d1718fb51a7e151680ab4fea5ed0a95108e4e9d6719a6ef6186e",
             ), // trusted
@@ -143,7 +143,7 @@ mod tests {
                 "17504048e11cbc8bc164785379f993f1a6934c3a9f10a78b178b59e85cd7c4c4",
             ),
         ];
-        let signatures = vec![
+        let signatures = [
             SignatureBundle {
                 public_key: public_keys[1], // trusted
                 ..Default::default()

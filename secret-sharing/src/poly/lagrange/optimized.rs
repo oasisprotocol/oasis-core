@@ -153,7 +153,7 @@ mod tests {
     type PrimeField = p384::Scalar;
 
     fn scalar(value: i64) -> PrimeField {
-        scalars(&vec![value])[0]
+        scalars(&[value])[0]
     }
 
     fn scalars(values: &[i64]) -> Vec<PrimeField> {

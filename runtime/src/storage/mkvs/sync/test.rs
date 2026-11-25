@@ -24,7 +24,7 @@ fn test_nil_pointers() {
     ];
 
     for entry in write_log.iter() {
-        tree.insert(&entry.key, &entry.value.as_ref().unwrap())
+        tree.insert(&entry.key, entry.value.as_ref().unwrap())
             .expect("insert");
     }
 

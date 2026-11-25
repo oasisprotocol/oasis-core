@@ -115,7 +115,7 @@ mod tests {
 
             // Duplicate shares.
             let xs = (1..=n)
-                .flat_map(|x| std::iter::repeat(x).take(2))
+                .flat_map(|x| std::iter::repeat_n(x, 2))
                 .map(PrimeField::from_u64)
                 .collect();
             let shares = dealer.make_shares(xs, kind);
@@ -180,7 +180,7 @@ mod tests {
 
             // Duplicate shares.
             let xs = (1..=n)
-                .flat_map(|x| std::iter::repeat(x).take(2))
+                .flat_map(|x| std::iter::repeat_n(x, 2))
                 .map(PrimeField::from_u64)
                 .collect();
             let shares = dealer.make_shares(xs, kind);

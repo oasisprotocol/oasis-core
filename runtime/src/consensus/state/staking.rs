@@ -271,7 +271,6 @@ mod test {
                     },
                     ..Default::default()
                 },
-                ..Default::default()
             },
             Account {
                 general: GeneralAccount {
@@ -286,7 +285,6 @@ mod test {
                     },
                     ..Default::default()
                 },
-                ..Default::default()
             },
             Account {
                 general: GeneralAccount {
@@ -301,7 +299,6 @@ mod test {
                     },
                     ..Default::default()
                 },
-                ..Default::default()
             },
         ];
         assert_eq!(
