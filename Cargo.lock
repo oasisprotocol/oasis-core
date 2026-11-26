@@ -135,9 +135,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.104"
+version = "1.0.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+checksum = "2cb931c189b85683d69a5cfad41d4d418671e1ac413dd209f3f2fc31e3cfd902"
 
 [[package]]
 name = "arbitrary"
@@ -1438,9 +1438,9 @@ dependencies = [
 
 [[package]]
 name = "honggfuzz"
-version = "0.5.62"
+version = "0.5.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "378465388ac845720910efa26a6f46f93d744debe65710b82f0e5310058c6703"
+checksum = "1ac5316deb24258182ef142eb4563e61e629b2749cf1b99dd6ba4988d1c0d2bb"
 dependencies = [
  "arbitrary",
  "lazy_static",
