@@ -10,6 +10,8 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -34,7 +36,7 @@ func InitializeTestRoothashState(ctx context.Context, mkvs mkvs.Tree) error {
 		Runtime: &registry.Runtime{
 			ID: runtimeID,
 		},
-		Suspended: false,
+		Suspended: true,
 		GenesisBlock: &block.Block{Header: block.Header{
 			Round:     1,
 			IORoot:    hash.NewFromBytes([]byte("genesis")),
@@ -48,6 +50,26 @@ func InitializeTestRoothashState(ctx context.Context, mkvs mkvs.Tree) error {
 		LastBlockHeight:  1,
 		LastNormalRound:  1,
 		LastNormalHeight: 1,
+		Committee: &scheduler.Committee{
+			RuntimeID: runtimeID,
+			Kind:      scheduler.KindComputeExecutor,
+			Members: []*scheduler.CommitteeNode{
+				{
+					Role: scheduler.RoleWorker,
+				},
+			},
+		},
+		CommitmentPool: &commitment.Pool{
+			HighestRank: 1,
+			Discrepancy: true,
+		},
+		NextTimeout: 1,
+		LivenessStatistics: &api.LivenessStatistics{
+			TotalRounds:        1,
+			LiveRounds:         []uint64{1, 2, 3},
+			FinalizedProposals: []uint64{4, 5, 6},
+			MissedProposals:    []uint64{7, 8, 9},
+		},
 	}
 	if err := state.SetRuntimeState(ctx, runtimeState); err != nil {
 		return err
@@ -57,8 +79,8 @@ func InitializeTestRoothashState(ctx context.Context, mkvs mkvs.Tree) error {
 	for i := 0; i < 10; i++ {
 		runtimeState.LastBlock = &block.Block{Header: block.Header{
 			Round:     uint64(i + 1),
-			IORoot:    hash.NewFromBytes([]byte(fmt.Sprintf("io %d", i+1))),
-			StateRoot: hash.NewFromBytes([]byte(fmt.Sprintf("state %d", i+1))),
+			IORoot:    hash.NewFromBytes(fmt.Appendf(nil, "io %d", i+1)),
+			StateRoot: hash.NewFromBytes(fmt.Appendf(nil, "state %d", i+1)),
 		}}
 		runtimeState.LastNormalRound = uint64(i + 1)
 		runtimeState.LastBlockHeight = int64(i * 10)

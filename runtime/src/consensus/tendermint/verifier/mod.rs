@@ -441,11 +441,14 @@ impl Verifier {
         let state = self.consensus_state_at(cache, instance, height)?;
 
         // Check if we have already verified this runtime header to avoid re-verification.
-        if let Some((state_root, state_epoch)) =
-            cache.verified_state_roots.get(&runtime_header.round)
+        let hash = runtime_header.encoded_hash();
+
+        if let Some((trusted_hash, trusted_height, trusted_epoch)) =
+            cache.verified_runtime_headers.get(&runtime_header.round)
         {
-            if state_root == &runtime_header.state_root
-                && state_epoch == &epoch
+            if hash == *trusted_hash
+                && height == *trusted_height
+                && epoch == *trusted_epoch
                 && epoch == cache.last_verified_epoch
             {
                 // Header and epoch matches, no need to perform re-verification.
@@ -466,7 +469,7 @@ impl Verifier {
         let next_state = self.consensus_state_at(cache, instance, height + 1)?;
 
         // Perform full verification.
-        predicates::verify_state_root(&next_state, &runtime_header)?;
+        predicates::verify_runtime_header(&next_state, &runtime_header)?;
         predicates::verify_epoch(&next_state, epoch)?;
 
         // Verify our own RAK is published in registry once per epoch.
@@ -476,10 +479,10 @@ impl Verifier {
             self.verify_freshness_with_rak(&latest_state, cache)?;
         }
 
-        // Cache verified state root and epoch.
+        // Cache verified data.
         cache
-            .verified_state_roots
-            .put(runtime_header.round, (runtime_header.state_root, epoch));
+            .verified_runtime_headers
+            .put(runtime_header.round, (hash, height, epoch));
 
         // Cache last verified fields.
         cache.last_verified_height = height;
@@ -511,10 +514,16 @@ impl Verifier {
         let state = self.consensus_state_at(cache, instance, height)?;
 
         // Check if we have already verified this runtime header to avoid re-verification.
-        if let Some((state_root, state_epoch)) =
-            cache.verified_state_roots.get(&runtime_header.round)
+        let hash = runtime_header.encoded_hash();
+
+        if let Some((trusted_hash, trusted_height, trusted_epoch)) =
+            cache.verified_runtime_headers.get(&runtime_header.round)
         {
-            if state_root == &runtime_header.state_root && state_epoch == &epoch {
+            if hash == *trusted_hash
+                && height == *trusted_height
+                && epoch == *trusted_epoch
+                && epoch == cache.last_verified_epoch
+            {
                 // Header and epoch matches, no need to perform re-verification.
                 return Ok(state);
             }
@@ -528,13 +537,13 @@ impl Verifier {
         let next_state = self.consensus_state_at(cache, instance, height + 1)?;
 
         // Perform full verification.
-        predicates::verify_state_root(&next_state, &runtime_header)?;
+        predicates::verify_runtime_header(&next_state, &runtime_header)?;
         predicates::verify_epoch(&next_state, epoch)?;
 
-        // Cache verified state root and epoch.
+        // Cache verified data.
         cache
-            .verified_state_roots
-            .put(runtime_header.round, (runtime_header.state_root, epoch));
+            .verified_runtime_headers
+            .put(runtime_header.round, (hash, height, epoch));
 
         Ok(state)
     }

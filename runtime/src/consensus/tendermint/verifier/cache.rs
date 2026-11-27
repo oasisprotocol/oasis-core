@@ -11,7 +11,7 @@ pub struct Cache {
     pub last_verified_round: u64,
     pub last_verified_epoch: u64,
     pub last_verified_block: Option<TMLightBlock>,
-    pub verified_state_roots: lru::LruCache<u64, (Hash, u64)>,
+    pub verified_runtime_headers: lru::LruCache<u64, (Hash, u64, u64)>,
     pub host_node_id: PublicKey,
 }
 
@@ -43,7 +43,7 @@ impl Cache {
             last_verified_round: 0,
             last_verified_epoch: 0,
             last_verified_block: None,
-            verified_state_roots: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
+            verified_runtime_headers: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
             host_node_id,
         }
     }

@@ -88,22 +88,22 @@ pub fn verify_time(runtime_header: &Header, consensus_block: &LightBlockMeta) ->
     Ok(())
 }
 
-/// Verifies that the runtime header has state root consistent with consensus state.
+/// Verifies that the runtime header is consistent with consensus state.
 ///
 /// Assumes the namespace in the runtime header has already been verified via `verify_namespace`.
-pub fn verify_state_root(state: &ConsensusState, runtime_header: &Header) -> Result<(), Error> {
+pub fn verify_runtime_header(state: &ConsensusState, runtime_header: &Header) -> Result<(), Error> {
     let roothash_state = RoothashState::new(&state);
-    let state_root = roothash_state
-        .state_root(runtime_header.namespace)
+    let runtime_state = roothash_state
+        .runtime_state(runtime_header.namespace)
         .map_err(|err| {
-            Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
+            Error::VerificationFailed(anyhow!("failed to retrieve runtime state: {}", err))
         })?;
 
-    if runtime_header.state_root != state_root {
+    if *runtime_header != runtime_state.last_block.header {
         return Err(Error::VerificationFailed(anyhow!(
-            "state root mismatch (expected: {} got: {})",
-            state_root,
-            runtime_header.state_root
+            "runtime header mismatch (expected: {} got: {})",
+            runtime_state.last_block.header.encoded_hash(),
+            runtime_header.encoded_hash(),
         )));
     }
 

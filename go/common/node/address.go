@@ -197,7 +197,7 @@ func (ta *TLSAddress) MarshalText() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("node: error marshalling TLS address' TCP address: %w", err)
 	}
-	return []byte(fmt.Sprintf("%s@%s", pubKeyStr, addrStr)), nil
+	return fmt.Appendf(nil, "%s@%s", pubKeyStr, addrStr), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.

@@ -113,7 +113,6 @@ impl MessageEvent {
 
 /// Per-runtime state.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
-#[cbor(allow_unknown)]
 pub struct RuntimeState {
     /// Latest per-epoch runtime descriptor.
     pub runtime: Runtime,
@@ -137,10 +136,12 @@ pub struct RuntimeState {
 
     /// Committee the executor pool is collecting commitments for.
     #[cbor(optional)]
-    pub commitee: Option<Committee>,
-    // NOTE: Commitment pool deserialization is currently not supported.
-    /// Consensus height at which the round is scheduled for forced finalization.
+    pub committee: Option<Committee>,
+    /// Commitment pool that collects the executor commitments.
     #[cbor(optional)]
+    pub commitment_pool: Option<Pool>,
+    /// Consensus height at which the round is scheduled for forced finalization.
+    #[cbor(optional, rename = "timeout")]
     pub next_timeout: i64,
 
     /// Liveness statistics for the current epoch.

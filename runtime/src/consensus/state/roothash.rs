@@ -41,8 +41,9 @@ impl<T: ImmutableMKVS> ImmutableState<'_, T> {
             .mkvs
             .get(&RuntimeKeyFmt(Hash::digest_bytes(id.as_ref())).encode())
         {
-            Ok(Some(b)) => cbor::from_slice_non_strict(&b)
-                .map_err(|err| StateError::Unavailable(anyhow!(err)).into()),
+            Ok(Some(b)) => {
+                cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)).into())
+            }
             Ok(None) => Err(Error::InvalidRuntime(id)),
             Err(err) => Err(StateError::Unavailable(anyhow!(err)).into()),
         }
@@ -115,9 +116,12 @@ impl<T: ImmutableMKVS> ImmutableState<'_, T> {
 
 #[cfg(test)]
 mod test {
-    use crate::storage::mkvs::{
-        interop::{Fixture, ProtocolServer},
-        Root, RootType, Tree,
+    use crate::{
+        consensus::scheduler,
+        storage::mkvs::{
+            interop::{Fixture, ProtocolServer},
+            Root, RootType, Tree,
+        },
     };
 
     use super::*;
@@ -134,7 +138,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("8e39bf193f8a954ab8f8d7cb6388c591fd0785ea060bbd8e3752e266b54499d3"),
+            hash: Hash::from("16c494d5f219136037ca76a197852e6c2427ca40c57d1223ecb35706df5e0666"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -152,7 +156,7 @@ mod test {
             .expect("runtime state query should work");
         println!("{:?}", runtime_state);
         assert_eq!(runtime_state.runtime.id, runtime_id);
-        assert!(!runtime_state.suspended);
+        assert!(runtime_state.suspended);
         assert_eq!(runtime_state.genesis_block.header.round, 1);
         assert_eq!(
             runtime_state.genesis_block.header.io_root,
@@ -174,6 +178,24 @@ mod test {
         assert_eq!(runtime_state.last_block_height, 90);
         assert_eq!(runtime_state.last_normal_round, 10);
         assert_eq!(runtime_state.last_normal_height, 90);
+
+        let committee = runtime_state.committee.unwrap();
+        assert_eq!(committee.runtime_id, runtime_id);
+        assert_eq!(committee.kind, scheduler::CommitteeKind::ComputeExecutor);
+        assert_eq!(committee.members.len(), 1);
+        assert_eq!(committee.members[0].role, scheduler::Role::Worker);
+
+        let commitment_pool = runtime_state.commitment_pool.unwrap();
+        assert_eq!(commitment_pool.highest_rank, 1);
+        assert!(commitment_pool.discrepancy);
+
+        assert_eq!(runtime_state.next_timeout, 1);
+
+        let liveness_stats = runtime_state.liveness_stats.unwrap();
+        assert_eq!(liveness_stats.total_rounds, 1);
+        assert_eq!(liveness_stats.good_rounds, [1, 2, 3]);
+        assert_eq!(liveness_stats.finalized_proposals, [4, 5, 6]);
+        assert_eq!(liveness_stats.missed_proposals, [7, 8, 9]);
 
         // Test fetching past round roots.
         let past_round_roots = state
